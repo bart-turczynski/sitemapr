@@ -1,0 +1,26 @@
+---
+title: "Introduction to sitemapr"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to sitemapr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(sitemapr)
+```
+
+Replace this vignette with a real introduction to your package: what it does,
+the problem it solves, and a worked example or two.
+
+```{r}
+scaffold_ready()
+```
