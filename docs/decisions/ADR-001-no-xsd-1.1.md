@@ -17,7 +17,7 @@
   profiles).
 - **Layer D — protocol/semantic validation:** the rules XSD cannot express
   (count/size limits, value ranges, cross-field coherence, URL scoping,
-  hreflang/BCP-47, encoding).
+  sitemap-specific hreflang token policy, encoding).
 
 The question raised: should Layer C support **XSD 1.1** (assertions `xs:assert`,
 conditional type assignment `xs:alternative`, `xs:override`), not just XSD 1.0?
