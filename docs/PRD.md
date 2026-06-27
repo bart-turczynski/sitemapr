@@ -1,6 +1,6 @@
-# sitemapr — Product Requirements Document (initial draft)
+# sitemapr — Product Requirements Document
 
-Status: Draft v0.1
+Status: Draft v0.2
 Date: 2026-06-27
 Owner: Bart Turczyński
 Package: `sitemapr` (CRAN name verified free; `bart-turczynski/sitemapr` GitHub namespace free)
@@ -57,26 +57,108 @@ This is a **library**, not the web app. Port the deterministic engine from
 `sitemap-validator`; leave the product infrastructure behind.
 
 ### In scope (v0.1)
-- Discovery: from a bare domain (robots.txt → common-path guessing), a direct
-  sitemap URL, or a local file.
-- Parsing: XML `urlset`, XML `sitemapindex` (recursive), text sitemaps, gzip
-  (`.xml.gz`); per-file, memory-bounded.
-- Extraction into a tidy tibble: `loc`, `lastmod` (POSIXct), `changefreq`,
-  `priority`, plus extension data (`images`, `video`, `news`, `alternates`/
-  hreflang) as list-columns; `source_sitemap` provenance.
-- Structure introspection: index tree (depth, sitemap_url, page_count, gzip).
-- Validation:
-  - **Layer C (schema):** real XSD validation against bundled local profiles;
-    prebuilt profiles for core, core+image, core+news, core+video,
-    core+hreflang, sitemapindex; **runtime-generated profiles** for arbitrary
-    mixed namespace combinations.
-  - **Layer D (protocol/semantic):** per-file limits (≤50,000 URLs, ≤50 MB
-    uncompressed), `priority` ∈ [0.0, 1.0], `changefreq` enum, W3C-datetime
-    `lastmod`, URL host/path scoping (via `rurl`/`pslr`/`punycoder`),
-    hreflang/BCP-47, encoding/escaping, image ≤1000/page, video field rules.
-  - strict (default) and non-strict modes.
-- Findings model: tidy tibble keyed on the layer model — `layer`, `severity`,
-  `rule` (code), `location`, `evidence`, `mode`.
+
+Section references like §8 point at the upstream `sitemap-validator` SPEC.
+
+**Inputs & normalization (§8).** Accept a sitemap URL, a site/root URL, a
+robots.txt URL, a local file (XML/text/`.gz`/`.tar.gz`), or a vector of sitemap
+URLs. Every input is normalized through the `rurl` stack — default scheme to
+`https://`, lowercase scheme/host, strip default ports, resolve `.`/`..`, keep
+query/fragment, reduce a site URL to its origin, rewrite a robots input to
+`…/robots.txt` — and both the original and normalized values are retained.
+
+**Discovery (§10).** From a site/robots input: robots.txt `Sitemap:` directives
+→ generic guessed paths → CMS guessed paths → dedup. The guess catalog is a
+fixed, data-driven list, not open-ended. Output distinguishes accepted vs
+rejected candidates with reasons (a 404 guess is rejected `not-found`, **not** a
+finding), exposed via a `sources` attribute and `sitemap_tree()`.
+
+**Fetch & safety.**
+- Limits (§28 defaults, configurable via args/`options()`, never hardcoded):
+  30 s timeout, ≤5 redirects, ≤25 candidates, ≤50,000 children, ≤50 MB on-wire.
+- `httr2` retry-with-backoff + throttling; default UA
+  `sitemapr/<version> (+<contact-url>)`.
+- A mid-stream timeout discards the partial body and never parses a truncated
+  document (§11.5).
+- **SSRF guard** on every user-supplied and post-redirect URL (§11.2): reject
+  loopback/RFC-1918/link-local/cloud-metadata/unspecified, IPv4-mapped-IPv6, and
+  octal literals, plus non-HTTP(S). Structural only — no DNS resolution, so
+  DNS-rebinding is out of scope (see §9 decision).
+- Classification is **byte-level** (§11.4): content decides format, not the
+  extension or `Content-Type`.
+- Per-source **fetch metadata** (§11.1: requested/final URL, status, redirect
+  chain, content-type, charset, bytes, timing, error class, format, root,
+  namespaces, profile ID) rides on the `sources` attribute.
+
+**Errors — parse vs validate.** Parse APIs (`read_sitemap()`/`sitemap_tree()`)
+signal classed conditions: an entry-point fetch failure is an error; a child
+`4xx`/`5xx` is a warning, skipped, and logged in a `problems` attribute (partial
+parse still succeeds); a missing robots.txt is non-fatal. Only
+`validate_sitemap()` emits findings — the parse APIs never do.
+
+**Parsing (§9, §20).**
+- Formats: XML `urlset`/`sitemapindex` (recursive), text, gzip
+  (`.xml.gz`/`.txt.gz`), and — local files only — `.tar.gz`. Per-file,
+  memory-bounded.
+- Archive extraction is bounded (§11.3: ≤50 MB archive, ≤100 files, ≤200 MB
+  decompressed) and safe: skip dirs/special entries, reject path-traversal, skip
+  non-sitemap files (with an `info`), support inner `.gz`, type empty/malformed
+  tars.
+- Index recursion deduplicates children, detects cycles (self-ref, repeated
+  child, A→B→A), enforces a max depth (3) and the count caps, and preserves the
+  parent→child chain. A `sitemapindex` nested in a `sitemapindex` is
+  non-conformant (`SITEMAP_INDEX_NESTED` warning) but still expanded.
+
+**Output.**
+- `read_sitemap()` → tidy tibble: `loc`, `lastmod` (POSIXct), `changefreq`,
+  `priority`, extension data (`images`/`video`/`news`/`alternates`) as
+  list-columns, and `source_sitemap` provenance (§8.3 values:
+  `submitted-directly`/`submitted-list`/`discovered-robots`/`guessed-path`/
+  `child-of-index`/`extracted-archive`).
+- `sitemap_tree()` → index structure (depth, sitemap_url, page_count, gzip).
+
+**Validation — layer model (§6).** A–F: **A** source access, **B** format
+classification, **C** XSD schema, **D** protocol/semantic, **E** per-URL page
+inspection (v0.2), **F** reporting (assembly of findings, not a pass). v0.1's
+validation layers are **C and D**; A/B happen during fetch/parse and F is the
+findings tibble.
+- **Layer C (schema):** real XSD validation against bundled profiles (core,
+  core+{image,news,video,hreflang}, sitemapindex) plus **runtime-generated
+  profiles** for arbitrary mixed-namespace combinations.
+- **Layer D (protocol/semantic):**
+  - Limits & fields: ≤50,000 URLs / ≤50 MB uncompressed, duplicate-`loc`,
+    `priority` ∈ [0.0, 1.0], `changefreq` enum, W3C-datetime `lastmod` (date-only
+    valid; `info` in strict), invalid-escaping, image ≤1000/page, video field
+    rules; URL scoping via `rurl`/`pslr`/`punycoder`.
+  - **hreflang (§17):** a sitemap-specific token policy, *not* BCP-47/
+    `xs:language` — a custom XSD pattern (`lang`, `lang-REGION`, `lang-Script`,
+    `lang-Script-REGION`, `x-default`) plus a semantic layer (separators,
+    whitespace, casing reported-but-preserved, intra-entry duplicates/conflicts,
+    `x-default`). Cross-URL reciprocity is v0.2; no IANA snapshot shipped. Typed
+    `HREFLANG_*` codes.
+  - **Encoding (§11.6):** BOM → XML declaration → HTTP charset → UTF-8; conflicts
+    emit `info` (a BOM↔declaration clash is `warning` in strict).
+  - **Text sitemaps (§18):** dedicated path, `\n`/`\r\n`/`\r` splitting, URL
+    ≤2048 chars, scheme ∈ {http, https}, host present, per-line errors; blank
+    lines silent in non-strict, `info` (with line number) in strict.
+  - **Unsupported inputs → typed findings** (§9.5, §13.1): HTML-masquerade,
+    `UNSUPPORTED_ROOT`, unknown namespace, malformed gzip/archive.
+
+**Modes (§14.2): `strict` (default) / `non-strict`** — a failure-behavior
+switch, not a rule filter. `strict` fails on schema violations; `non-strict`
+does a best-effort parse when XSD fails but still reports the violations and runs
+safe protocol checks. Independently, some rules are strict-only (date-only
+`lastmod`, blank-line, relative hreflang `href`) and don't fire under
+`non-strict`.
+
+**Findings model (§21).** Tidy tibble — `code`, `severity`
+(`fatal`/`error`/`warning`/`info`), `layer` (`input`/`fetch`/`discovery`/
+`classification`/`decompression`/`schema`/`protocol`/`index-expansion`/`report`),
+`subject_type` + `subject_ref` (stable ref, e.g. `…#entry:42`), `message`,
+`evidence`, `mode`, `is_strict_only`, optional `remediation_hint`. `evidence` is
+a normalized snippet (never raw output): `excerpt` ≤500 chars (≤200 for text
+lines) + `line`/`column`. The `mode`/`is_strict_only` split is the SPEC's own
+model and resolves the earlier ambiguity.
 
 ### Out of scope (not a library concern)
 Report pages, database, queue/worker, object storage, sampling-by-default,
@@ -123,16 +205,21 @@ All confirmed with R `xml2` 1.6.0 (libxml2) during design:
 
 ### Consequent implementation constraints
 - **`schemaLocation` resolves relative to a real file path.** Bundled schemas
-  live in `inst/schemas/`; profiles are loaded by path. Runtime-generated
-  wrappers must be written to a real file (e.g. session temp dir alongside the
-  bundled schemas, or with absolute `schemaLocation`) before validation, then
-  cached keyed on (catalog version, root kind, sorted namespace set) — mirrors
-  `sitemap-validator` SPEC §16.4–16.5.
+  live in `inst/schemas/` (read-only once installed — **never written to at
+  runtime**). Runtime-generated wrappers are written to `tempdir()` and reference
+  the bundled schemas by **absolute** path (`system.file("schemas", …)`), never
+  by a relative path into the installed tree. Wrappers are cached keyed on
+  (catalog version, root kind, sorted namespace set) — mirrors `sitemap-validator`
+  SPEC §16.4–16.5. Common combinations may instead be pre-generated at build time
+  into `inst/` (that write happens before install, so it is allowed).
 - **DOM-based validation → memory.** `xml_validate` parses the whole document;
   the `sitemap-validator` app already hit OOM on BBC's 5.9M-URL set. Adopt
   **per-file discipline from day one** (each file is spec-capped at 50k URLs /
   50 MB); never materialize the expanded tree; stream/chunk protocol counts on
-  large files. This is the one engineering risk that carries over from the TS app.
+  large files. Note this bounds but does not eliminate Layer C's footprint: a
+  single spec-legal 50 MB file must still be DOM-parsed in full for
+  `xml_validate`, so per-validation peak memory is ~the 50 MB cap × libxml2's DOM
+  overhead. This is the one engineering risk that carries over from the TS app.
 
 ---
 
@@ -150,8 +237,9 @@ read_sitemap("https://example.com/sitemap_index.xml", discover = FALSE)
 sitemap_tree("example.com")                       # depth, sitemap_url, page_count, gzip
 
 # Validate — schema (Layer C) + protocol/semantic (Layer D)
-validate_sitemap("example.com", mode = c("strict", "lax"))
-#> tibble: layer, severity, rule, location, evidence, mode
+validate_sitemap("example.com", mode = c("strict", "non-strict"))
+#> tibble: code, severity, layer, subject_type, subject_ref,
+#>         message, evidence, mode, is_strict_only
 ```
 
 Filtering (include/exclude/recent) is intentionally **not** bespoke args — with
@@ -163,11 +251,18 @@ structured list-columns rather than `|`-joined strings.
 ## 5. Dependencies
 - `xml2` — parsing + native XSD validation (libxml2).
 - `httr2` — fetching (gzip, redirects, user-agent).
-- `spiderbar` (Google's robots parser, Rust) or `robotstxt` — robots.txt;
-  replaces the Java robots microservice.
+- robots.txt parsing — **candidate Imports** `spiderbar` (Google's robots parser,
+  Rust) *or* `robotstxt`; exactly one will be chosen (decision open in §9). Either
+  way it replaces the Java robots microservice.
 - `rurl` / `pslr` / `punycoder` — URL normalization, scoping, and validation
   (the moat; replaces `urltools`).
-- base R: `gzfile()`, `untar()` for decompression/archives.
+- base R: `gzfile()` / `gzcon()` for gzip, `untar()` for `.tar.gz` local
+  archives (bounded extraction — see §2 / SPEC §11.3).
+
+All candidate Imports are already on CRAN (verified 2026-06-27: `rurl` 1.2.0,
+`pslr` 1.0.1, `punycoder` 1.1.0, `spiderbar` 0.2.5, `robotstxt` 0.7.15, `xml2`
+1.6.0), so nothing gates the CRAN submission once the robots dependency is
+picked; record the minimum versions in `DESCRIPTION`.
 
 No system Java, no `JAVA_HOME`, no subprocess — a major CRAN portability win.
 
@@ -176,39 +271,85 @@ No system Java, no `JAVA_HOME`, no subprocess — a major CRAN portability win.
 ## 6. Reusable assets from `sitemap-validator`
 - **`schemas/`** → `inst/schemas/` (core, index, core-{image,news,video,
   hreflang}, standalone extensions). Language-agnostic; drop in as-is.
-- **`fixtures/`** → `testthat` corpus (hreflang edge cases, encoding, compressed,
-  XML valid/invalid). Enables offline, CRAN-safe tests.
-- **SPEC.md layer model (A–F)** → findings schema + rule-code taxonomy
-  (`LAYER_SPECIFIC_ISSUE`, e.g. `SCHEMA_INVALID`, `PROTO_DUPLICATE_LOC`,
-  `HREFLANG_*`).
+- **`fixtures/`** → `testthat` corpus. The SPEC §29.1 corpus is the target
+  checklist — beyond hreflang/encoding/compressed/valid-invalid XML it requires
+  recursive index loop, nested index, HTML-at-sitemap-URL, mid-stream truncation,
+  encoding-conflict (BOM vs declaration vs charset), and `lastmod`/`changefreq`/
+  `priority` variants. Enables offline, CRAN-safe tests.
+- **SPEC.md layer model (A–F) + finding-layer codes** → findings schema + stable
+  rule-code taxonomy (`schema`/`protocol`/`classification`/… layers; codes like
+  `UNSUPPORTED_ROOT`, `SITEMAP_INDEX_NESTED`, `HREFLANG_FORMAT_INVALID`). Codes
+  are stable across releases (SPEC §21.5); a change is a documented break.
 - **SPEC §16 mixed-schema model** → runtime profile generation + caching design.
+
+**Licensing of bundled assets.** Everything copied into `inst/` needs clear
+provenance and a CRAN-compatible license. The sitemap.org XSDs carry their own
+terms, and the `schemas/`/`fixtures/` come from the TS `sitemap-validator`. Add
+an `inst/schemas/LICENSE` (or a provenance note in `inst/COPYRIGHTS` /
+`Authors@R` comments) before M4 — left implicit, this is a `R CMD check` /
+CRAN-policy blocker.
 
 ---
 
 ## 7. Milestones (proposed)
 1. **M0 — scaffold + metadata.** Fill DESCRIPTION (Title/Description/Authors),
-   add real deps, replace `R/scaffold.R` and cucumber stub. Seed `inst/schemas/`
-   and `tests/testthat/fixtures/`.
-2. **M1 — parser.** `read_sitemap()` + `sitemap_tree()`: discovery, recursion,
-   gzip/text/XML, tidy tibble with extension list-columns, per-file memory
-   discipline. Offline fixture tests.
+   add real deps **with minimum versions pinned** (all already on CRAN — see §5),
+   replace `R/scaffold.R` and cucumber stub. Seed `inst/schemas/` and
+   `tests/testthat/fixtures/`, and land their license/provenance file (§6) in the
+   same commit as the assets.
+2. **M1 — parser.** `read_sitemap()` + `sitemap_tree()`: discovery (SSRF guard +
+   byte-level sniffing), recursion with cycle detection / depth cap / dedup,
+   gzip/text/XML + `.tar.gz`, tidy tibble with extension list-columns + provenance,
+   per-file memory discipline. Offline fixture tests.
 3. **M2 — schema validator (Layer C).** Bundled profiles + runtime-generated
    mixed profiles + cache; XXE-safe parse options; findings tibble. Multi-
    namespace fixture exercising the strict-wildcard composition.
 4. **M3 — protocol validator (Layer D).** Counts/limits, field rules, URL
-   scoping via the URL stack, hreflang/BCP-47, encoding.
+   scoping via the URL stack, the §17 hreflang token policy, encoding-conflict
+   resolution, text-sitemap rules, and typed unsupported-input findings.
 5. **M4 — docs + CRAN prep.** README, vignette, `cran-comments`, `R CMD check`
-   clean, examples.
+   clean, examples. No upstream-dependency gate remains (all Imports are on
+   CRAN); the only release prerequisites are the asset license (§6) and a clean
+   check against the success criteria (§8).
 6. **(later) v0.2 — page inspection.** Deferred per SPEC scope split.
 
 ---
 
-## 8. Open decisions
+## 8. Success criteria (definition of done)
+Beyond binary CRAN acceptance, v0.1 is "done" when:
+- **Parser parity:** `read_sitemap()` extracts the same `loc` set as `usp` on a
+  shared fixture corpus, plus the extension list-columns `usp` omits.
+- **Validator conformance:** Layer C/D agree with the `sitemap-validator`
+  reference on its own valid/invalid fixtures (matching pass/fail + rule codes).
+- Both comparisons above run **outside CRAN** — they are an acceptance harness
+  (a non-CRAN validation job) whose outputs are frozen into checked-in **golden
+  fixtures**. Neither Python `usp` nor the TS validator becomes a package
+  test/`Suggests` dependency; the in-tree `testthat` suite asserts only against
+  the captured fixtures.
+- **Offline + clean:** `R CMD check --as-cran` passes with no network access in
+  tests (fixtures only) and no notes beyond timing.
+- **Memory bound holds:** a spec-max (50k URL / 50 MB) file validates within the
+  documented per-file footprint without OOM.
+- **Determinism (SPEC §29.3):** the same input under the same schema-catalog
+  version and mode yields an identical finding set — asserted by running each
+  fixture through the pipeline twice and comparing.
+
+---
+
+## 9. Open decisions
 - Name: **resolved → `sitemapr`** (CRAN-free, your-namespace-free; unrelated
   non-R `sitemapr` repos exist in other GitHub namespaces — acceptable noise).
 - Whether to depend on `spiderbar` vs `robotstxt` for discovery (lean
   `spiderbar`: Google's actual parser).
-- Generated-profile cache location (session temp vs `inst/` build-time
-  pre-generation of common combos).
-- How rich to make non-strict mode's partial findings.
-```
+- **SSRF enforcement scope:** does the library itself block private/loopback/
+  metadata targets (SPEC §11.2), or document it as the embedding caller's
+  responsibility? A library that fetches arbitrary user URLs arguably should ship
+  the guard on by default (with an opt-out). Note the reference guard is purely
+  **structural** (URL/IP-literal inspection, no DNS resolution), so a hostname
+  resolving to a private IP — and DNS-rebinding — is *not* caught; decide whether
+  the R port adds resolve-then-check or accepts the same limitation. Decide before
+  M1.
+- Generated-profile cache: **resolved → `tempdir()` at runtime** (keyed cache),
+  with optional build-time pre-generation of common combos into `inst/`. Open
+  sub-question: which combos are worth pre-generating.
+- How rich to make `non-strict` mode's best-effort partial findings.
