@@ -56,6 +56,22 @@ schema_dir <- function() {
   system.file("schemas", package = "sitemapr")
 }
 
+# Short human label for a namespace URI ("core", "image", ...), used to name the
+# scope of a schema finding (e.g. an invalid element in the video extension).
+# Falls back to the raw URI for a namespace with no registered label.
+schema_namespace_label <- function(ns) {
+  labels <- c(
+    "http://www.sitemaps.org/schemas/sitemap/0.9"       = "core",
+    "http://www.google.com/schemas/sitemap-image/1.1"   = "image",
+    "http://www.google.com/schemas/sitemap-video/1.1"   = "video",
+    "http://www.google.com/schemas/sitemap-news/0.9"    = "news",
+    "http://www.google.com/schemas/sitemap-pagemap/1.0" = "pagemap",
+    "http://www.w3.org/1999/xhtml"                      = "hreflang"
+  )
+  out <- unname(labels[ns])
+  ifelse(is.na(out), ns, out)
+}
+
 # The bundled core schema file for a root kind: sitemap.xsd for urlset,
 # siteindex.xsd for sitemapindex, NA for any other (unsupported) root.
 schema_core_file <- function(root_kind) {
