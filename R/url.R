@@ -2,9 +2,15 @@
 #'
 #' Thin wrapper over `rurl::safe_parse_urls()` that pins the canonicalization
 #' options sitemapr relies on (IDNA/Punycode host output, dot-segment + slash
-#' path normalization, lower-cased host). URLs are passed through verbatim;
-#' entrypoint scheme policy (bare domain to `https://`) belongs to a later
-#' unit, not here. The untouched input is preserved in `original_url`.
+#' path normalization, lower-cased host, and RFC 3987 IRI to RFC 3986 URI
+#' mapping of the path/query). The host is IDNA-encoded and the path/query are
+#' percent-encoded (`path_encoding = "encode"`), so a Unicode `loc`/sitemap URL
+#' resolves to its canonical ASCII URI form — the form an HTTP request line
+#' actually carries and the form the identity key must compare on. The mapping
+#' is a no-op for an already-ASCII URL and never double-encodes an existing
+#' `%XX` octet, so query parameters and pre-encoded paths pass through verbatim;
+#' entrypoint scheme policy (bare domain to `https://`) belongs to a later unit,
+#' not here. The untouched input is preserved in `original_url`.
 #'
 #' @param urls Character vector of URL strings.
 #' @return A data.frame with one row per input URL, including at least
@@ -17,7 +23,8 @@ parse_url_adapter <- function(urls) {
     urls,
     host_encoding = "idna",
     path_normalization = "both",
-    case_handling = "lower_host"
+    case_handling = "lower_host",
+    path_encoding = "encode"
   )
 }
 

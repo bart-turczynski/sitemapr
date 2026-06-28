@@ -3,6 +3,25 @@ test_that("parse_url_adapter emits Punycode host for Unicode input", {
   expect_identical(parsed$host, "xn--mnchen-3ya.de")
 })
 
+test_that("parse_url_adapter maps an IRI path to its percent-encoded URI", {
+  parsed <- sitemapr:::parse_url_adapter("https://example.com/パス?q=テスト")
+  expect_identical(parsed$path, "/%E3%83%91%E3%82%B9")
+  expect_identical(parsed$query, "q=%E3%83%86%E3%82%B9%E3%83%88")
+})
+
+test_that("parse_url_adapter leaves an ASCII path/query untouched", {
+  parsed <- sitemapr:::parse_url_adapter(
+    "https://example.com/sitemap.php?page=2&type=products"
+  )
+  expect_identical(parsed$path, "/sitemap.php")
+  expect_identical(parsed$query, "page=2&type=products")
+})
+
+test_that("parse_url_adapter does not double-encode an existing %XX octet", {
+  parsed <- sitemapr:::parse_url_adapter("https://example.com/a%20b/x")
+  expect_identical(parsed$path, "/a%20b/x")
+})
+
 test_that("parse_url_adapter resolves dot-segments in the path", {
   parsed <- sitemapr:::parse_url_adapter(
     "https://example.com/a/../sitemaps/./sitemap.xml"
