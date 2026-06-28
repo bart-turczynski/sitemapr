@@ -150,7 +150,9 @@ fetch_perform_one <- function(url, limits, user_agent) {
 #'   `default_user_agent()`.
 #' @param ssrf_guard Logical; when `TRUE` (default) the structural SSRF guard
 #'   runs on every hop. When `FALSE` the guard is skipped entirely.
-#' @return A one-row data.frame from `source_metadata()`.
+#' @return A one-row data.frame from `source_metadata()`. The raw response body
+#'   is attached as a `"body"` attribute (a raw vector; off the 13-column
+#'   contract) so the parse entry point can dispatch on it without re-fetching.
 #' @keywords internal
 #' @noRd
 fetch_source <- function(url,
@@ -215,7 +217,9 @@ fetch_source <- function(url,
     }
   )
 
+  body <- attr(result, "body")
   result$requested_url <- requested_url
+  attr(result, "body") <- body
   result
 }
 
@@ -301,7 +305,7 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
         url = final_url,
         error_class = error_class
       )
-      return(source_metadata(
+      rec <- source_metadata(
         requested_url = url,
         final_url = final_url,
         status = status,
@@ -312,11 +316,13 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
         timing = elapsed,
         error_class = error_class,
         format = if (length(body) > 0L) sniff_format(body) else NA_character_
-      ))
+      )
+      attr(rec, "body") <- body
+      return(rec)
     }
 
     # 6. Success.
-    return(source_metadata(
+    rec <- source_metadata(
       requested_url = url,
       final_url = final_url,
       status = status,
@@ -327,6 +333,11 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
       timing = elapsed,
       error_class = NA_character_,
       format = sniff_format(body)
-    ))
+    )
+    # The raw body rides along as an attribute (off the 13-column contract) so
+    # the parse entry point (R/read-sitemap.R) can dispatch on it without a
+    # second fetch. Callers that only need metadata simply ignore it.
+    attr(rec, "body") <- body
+    return(rec)
   }
 }
