@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Date-only <lastmod> (no time component) drives the strict-only
+     PROTOCOL_LASTMOD_DATE_ONLY info finding. Used by F.3 + F.4. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/page</loc>
+    <lastmod>2026-01-01</lastmod>
+  </url>
+</urlset>
