@@ -201,3 +201,44 @@ layer and explicitly excluded:
 | DNS resolve-then-check in SSRF guard | Post-v1; ADR-003 |
 | RSS/Atom feed parsing within sitemap index | Out of scope for v1 (UNSUPPORTED_FEED finding instead) |
 | IANA language tag snapshot validation | Cross-URL, post-v1 |
+
+---
+
+## Step-definition authoring notes
+
+Read this before wiring a feature's step definitions (the remaining
+schema / protocol / findings slices). These are the conventions and gotchas the
+already-wired slices (input, fetch, parse, discovery) follow.
+
+### Cucumber compiles step text to an UNESCAPED, anchored regex (SITE-qalrtbes)
+
+Each `given`/`when`/`then` **description string is treated as a regex**, not a
+literal. The `cucumber` package (2.1.x) builds the matcher as
+`^\s*<description>\s*$` via `expression_to_pattern()`, substituting only the
+parameter tokens (`{string}` → `'[^']*'|"[^"]*"`, `{int}`, `{word}`, `{float}`)
+and **escaping nothing else**. So any regex metacharacter in the wording —
+`( ) [ ] { } . + ? * | \ ^ $` — is interpreted as regex.
+
+Consequences and the two ways to handle it:
+
+1. **Keep step wording metachar-free** (preferred when you control the feature
+   text). Example: `input_normalization.feature` says "scheme.host.path" and the
+   step description uses `.` to match the literal `+` in the underlying concept.
+2. **Escape the metacharacter** in the registration when the feature wording
+   must keep it. Example (`setup-steps-discovery.R`): the feature step
+   `When I call sitemap_tree("https://example.com")` carries literal parentheses,
+   so the registration escapes them — `when("I call sitemap_tree\\({string}\\)", …)`.
+   Without the backslashes the `(` / `)` would be parsed as a regex group.
+
+Other points that follow from the anchored full-match:
+
+- **Prefix-overlapping steps are unambiguous.** `^\s*…\s*$` anchoring means
+  `"discovery runs"` does not also match `"discovery runs against a fixture
+  server"`; register both freely.
+- **`{string}` arrives unquoted.** The capture includes the quotes but the value
+  passed to the handler is the inner text.
+- **The last handler argument must be `context`** (an environment shared across
+  a scenario's steps); install `httr2::local_mocked_responses()` inside the
+  `when` that performs the fetch and complete the call before the step returns,
+  since the mock is frame-scoped. See any `setup-steps-*.R` header for the
+  CRAN-safe (`_R_CHECK_DEPENDS_ONLY_`) `requireNamespace("cucumber")` guard.
