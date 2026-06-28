@@ -88,6 +88,16 @@ Codes are namespaced by layer prefix. The full v1 code set is defined as
 implementation proceeds; codes listed here are the **known v1 set** from the
 `sitemap-validator` SPEC and PRD.
 
+### Fetch codes (`FETCH_*`)
+- `FETCH_BODY_CEILING_EXCEEDED` — the per-resource safety ceiling (default
+  500 MB of decompressed/effective bytes) was exceeded; the body is discarded
+  and the source returns a partial result. `fatal`. (See ADR-003 §3.) In
+  `read_sitemap()` / `sitemap_tree()` the same event surfaces as a classed
+  `sitemapr_body_ceiling` condition rather than a findings row.
+- `FETCH_TIMEOUT` — the request exceeded the wall-clock timeout (default 30 s);
+  no usable body. `fatal`. Surfaces as a `sitemapr_timeout` condition in the
+  parse APIs.
+
 ### Schema codes (`SCHEMA_*`)
 - `SCHEMA_INVALID` — document fails XSD validation (Layer C)
 - `SCHEMA_UNKNOWN_NAMESPACE` — namespace not recognized and not imported into
@@ -95,34 +105,56 @@ implementation proceeds; codes listed here are the **known v1 set** from the
 
 ### Protocol codes (`PROTOCOL_*`)
 - `PROTOCOL_URL_COUNT_EXCEEDED` — more than 50 000 URL entries
+- `PROTOCOL_SIZE_EXCEEDED` — sitemap exceeds 50 MB uncompressed (the protocol
+  size limit). Non-fatal: the body is still read so other findings surface.
 - `PROTOCOL_DUPLICATE_LOC` — two entries share the same normalized `loc`
 - `PROTOCOL_PRIORITY_OUT_OF_RANGE` — `priority` outside `[0.0, 1.0]`
 - `PROTOCOL_CHANGEFREQ_INVALID` — `changefreq` not in the enum
 - `PROTOCOL_LASTMOD_INVALID` — `lastmod` not a valid W3C Date-Time value
 - `PROTOCOL_LASTMOD_DATE_ONLY` — date-only `lastmod`; strict-only `info`
+- `PROTOCOL_LASTMOD_ALL_IDENTICAL` — all/most `lastmod` values identical;
+  `warning`. Corpus-level (`subject_type = "document"`): engines may distrust and
+  disregard such dates (Bing).
+- `PROTOCOL_LASTMOD_LOOKS_GENERATED` — `lastmod` ≈ sitemap fetch/generation time
+  across URLs; `info` (→ `warning` in strict). Corpus-level.
 - `PROTOCOL_URL_INVALID_ESCAPE` — invalid percent-encoding in a URL field
 - `PROTOCOL_URL_NOT_ABSOLUTE` — `loc` is not an absolute `http`/`https` URL
 - `PROTOCOL_URL_NO_HOST` — `loc` has no host component
+- `PROTOCOL_URL_TOO_LONG` — `loc` exceeds 2 048 characters (XML; the
+  text-sitemap variant is `PROTOCOL_TEXT_URL_TOO_LONG`)
 - `PROTOCOL_URL_OUT_OF_SCOPE` — `loc` does not share scheme+host+port+path
   prefix with its parent sitemap file
 - `PROTOCOL_URL_FRAGMENT` — `loc` contains a fragment (`info`)
 - `PROTOCOL_URL_USERINFO` — `loc` contains userinfo (`info`)
 - `PROTOCOL_IMAGE_COUNT_EXCEEDED` — more than 1 000 images per page entry
 - `PROTOCOL_VIDEO_FIELD_INVALID` — video extension field fails protocol rules
+  (e.g. `duration` outside 1–28 800 s, `rating` outside 0.0–5.0, more than 32
+  `<video:tag>`, missing required child)
 - `PROTOCOL_NEWS_FIELD_INVALID` — news extension field fails protocol rules
+- `PROTOCOL_NEWS_COUNT_EXCEEDED` — more than 1 000 `<news:news>` entries per file
 - `PROTOCOL_TEXT_URL_TOO_LONG` — text sitemap URL exceeds 2 048 chars
 - `PROTOCOL_TEXT_BLANK_LINE` — blank line in text sitemap; strict-only `info`
 
 ### Hreflang codes (`HREFLANG_*`)
-- `HREFLANG_FORMAT_INVALID` — lang tag does not match the sitemap-specific
-  token pattern (`lang`, `lang-REGION`, `lang-Script`, `lang-Script-REGION`,
-  `x-default`)
-- `HREFLANG_SEPARATOR_INVALID` — separator in lang tag is not a hyphen
+All `layer = "protocol"` (semantic). Schema-layer structural failures of an
+`xhtml:link` surface under the generic `SCHEMA_INVALID` code, never a
+hreflang-prefixed one (see `docs/sitemap-spec.md` §5.4).
+- `HREFLANG_FORMAT_INVALID` — token not in the accepted family (`lang`,
+  `lang-REGION`, `lang-Script`, `lang-Script-REGION`, `x-default`); catches
+  empty, region-only (`US`), arbitrary tokens (`english`)
+- `HREFLANG_SEPARATOR_INVALID` — wrong separator/structure (`en_US`, `en--US`)
+- `HREFLANG_NONSTANDARD_CASE` — casing deviates from convention (lang lowercase,
+  Script Title-case, REGION UPPERCASE); the original value is preserved in
+  evidence
 - `HREFLANG_DUPLICATE` — two `xhtml:link` entries in one `<url>` share the
   same hreflang value
+- `HREFLANG_XDEFAULT_INVALID` — `x-default` present but malformed (`X-DEFAULT`,
+  `x_default`, whitespace-padded) or duplicated
 - `HREFLANG_XDEFAULT_MISSING` — `x-default` absent when other hreflang
   entries are present
-- `HREFLANG_HREF_RELATIVE` — `href` is relative; strict-only
+- `HREFLANG_LINK_ATTR_INVALID` — missing/invalid required attribute (`rel`
+  absent or ≠ `alternate`, `hreflang` or `href` absent)
+- `HREFLANG_HREF_RELATIVE` — `href` is relative; strict-only `warning`
 
 ### Classification / unsupported input codes
 - `UNSUPPORTED_ROOT` — root element is neither `urlset` nor `sitemapindex`

@@ -1,9 +1,10 @@
 # ADR-003: v1 network safety policy
 
-- Status: Accepted
+- Status: Accepted (amended 2026-06-28 — two-axis body-limit model, §3)
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
-- Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions)
+- Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
+  `docs/sitemap-spec.md` (§2 three-axis limit model — authoritative)
 
 ---
 
@@ -98,19 +99,33 @@ the §28 (PRD) values:
 | Max redirects | 5 | Per URL, applied before SSRF recheck |
 | Max discovery candidates | 25 | Guessed-path discovery only |
 | Max index children | 50 000 | Per `sitemapindex` file |
-| Max on-wire body | 50 MB | Content-Length + mid-stream byte count |
+| Sitemap uncompressed size | 50 MB | **Protocol conformance, not a fetch abort.** Measured on uncompressed bytes. Exceeding it is a non-fatal Layer D finding (`PROTOCOL_SIZE_EXCEEDED`); the body is still read so other findings surface. |
+| Per-resource safety ceiling | 500 MB | Hard cap on **decompressed/effective** bytes per fetched resource. Exceeding it discards the body and yields a partial result (`FETCH_BODY_CEILING_EXCEEDED`, `fatal`). The memory backstop that replaces the old on-wire abort. |
 | Max archive size | 50 MB | `.tar.gz` only (local files) |
 | Max archive file count | 100 files | Per archive |
-| Max decompressed size | 200 MB | Across all files in one archive |
+| Max archive decompressed size | 200 MB | Across all files in one archive; intentionally tighter than the 500 MB single-resource ceiling (a multi-file local archive is a different bomb surface) |
 
 There are **no non-overridable hard caps** — every limit can be raised by the
 caller if they accept the consequences. The library does not enforce CRAN
 policy on the caller. Documentation should note the memory implications of
-raising the on-wire or decompressed limits.
+raising the safety ceiling or the archive decompressed limit.
 
-A **mid-stream timeout** (the `on_wire` limit hit during body read) discards
-the partial body. A truncated document is never parsed; an `error`-class
-condition is raised instead with an `error_class` of `sitemapr_truncated`.
+**Body-limit model (amended).** Fetch is **buffered** in v1, not streaming: the
+body is read into memory up to the per-resource safety ceiling. The 50 MB
+sitemap-protocol limit is **not** a fetch-time abort — it is a Layer D
+validation finding (`PROTOCOL_SIZE_EXCEEDED`) computed from the uncompressed
+byte size, so the body is read in full and other findings still surface. The
+earlier "on-wire / mid-stream byte count" framing is superseded: its
+abuse-control rationale (archive-bomb defense) does not bind a no-network CRAN
+library whose callers fetch their own sitemaps (see `docs/sitemap-spec.md` §2).
+
+The hard stop is the **per-resource safety ceiling** (500 MB of decompressed/
+effective bytes). Exceeding it discards the body and produces a partial result:
+`validate_sitemap()` emits a `fatal` `FETCH_BODY_CEILING_EXCEEDED` finding;
+`read_sitemap()` / `sitemap_tree()` (which do not emit findings) raise a classed
+`sitemapr_body_ceiling` condition. A wall-clock timeout (the 30 s request limit)
+remains a distinct `sitemapr_timeout` condition. The `sitemapr_truncated`
+condition tied to the old 50 MB on-wire abort is **retired**.
 
 ### 4. URL-stack ownership
 
