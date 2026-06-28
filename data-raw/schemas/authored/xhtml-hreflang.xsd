@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sitemapr-authored schema. NOT an upstream artifact.
+
+  Purpose: declare just enough of the XHTML namespace
+  (http://www.w3.org/1999/xhtml) to schema-validate the `xhtml:link`
+  alternate-language annotation used in sitemaps, e.g.
+
+      <url>
+        <loc>https://example.com/en/</loc>
+        <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/"/>
+      </url>
+
+  Why authored rather than vendored:
+    - Google documents hreflang alternates in prose, not via a dedicated XSD.
+    - The canonical XHTML schema (w3.org) is a large modularized schema that is
+      impractical to import under libxml2 just to admit a single element.
+  This file therefore declares only the `link` element and the attributes that
+  carry sitemap hreflang semantics, leaving everything else to the host schema.
+
+  Deliberately permissive: the hreflang TOKEN policy (valid BCP-47 / RFC 3066
+  language tags, the x-default value, separator rules, duplicate detection,
+  absolute-href requirements) is enforced in Layer D (protocol validation),
+  NOT here. XSD only asserts the element shape; semantics that exceed XSD 1.0's
+  expressive power are R checks (architecture.md sec. 3, sec. 6).
+
+  Provenance and terms: see inst/schemas/SOURCES.md.
+-->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="http://www.w3.org/1999/xhtml"
+            xmlns="http://www.w3.org/1999/xhtml"
+            elementFormDefault="qualified">
+
+  <xsd:element name="link">
+    <xsd:annotation>
+      <xsd:documentation>
+        The xhtml:link alternate annotation as used inside a sitemap &lt;url&gt;
+        (and, for set-level alternates, directly under &lt;urlset&gt;).
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:attribute name="rel" type="xsd:string" use="required"/>
+      <xsd:attribute name="href" type="xsd:anyURI" use="required"/>
+      <xsd:attribute name="hreflang" type="xsd:string" use="optional"/>
+      <xsd:attribute name="media" type="xsd:string" use="optional"/>
+    </xsd:complexType>
+  </xsd:element>
+
+</xsd:schema>
