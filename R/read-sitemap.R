@@ -165,7 +165,7 @@ read_sitemap <- function(x,
     )
   }
 
-  result <- out$rows
+  result <- project_typed_rows(out$rows)
   attr(result, "sources") <- out$sources
   attr(result, "problems") <- out$problems
   result

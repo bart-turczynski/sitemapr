@@ -320,13 +320,20 @@ test_that("every valid changefreq enum value is accepted", {
   expect_false("PROTOCOL_CHANGEFREQ_INVALID" %in% out$code)
 })
 
-# --- lastmod format (needs the original strings) ---------------------------
+# --- lastmod format (read from the faithful rows$lastmod column) -----------
+
+# Build rows whose faithful `lastmod` column holds the given raw strings.
+rows_with_lastmod <- function(loc, lastmod) {
+  sitemap_rows(loc = loc, lastmod = lastmod)
+}
 
 test_that("a malformed lastmod produces PROTOCOL_LASTMOD_INVALID", {
-  raw <- c("2004-12-23T18:00:15+00:00", "not-a-date")
   out <- validate_protocol(
-    rows_for(c("https://example.com/a", "https://example.com/b")),
-    sitemap_url = sm_url, lastmod_raw = raw
+    rows_with_lastmod(
+      c("https://example.com/a", "https://example.com/b"),
+      c("2004-12-23T18:00:15+00:00", "not-a-date")
+    ),
+    sitemap_url = sm_url
   )
   lm <- out[out$code == "PROTOCOL_LASTMOD_INVALID", ]
   expect_identical(nrow(lm), 1L)
@@ -336,16 +343,16 @@ test_that("a malformed lastmod produces PROTOCOL_LASTMOD_INVALID", {
 
 test_that("a datetime lastmod without a timezone is invalid", {
   out <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url,
-    lastmod_raw = "2004-12-23T18:00:15"
+    rows_with_lastmod("https://example.com/a", "2004-12-23T18:00:15"),
+    sitemap_url = sm_url
   )
   expect_true("PROTOCOL_LASTMOD_INVALID" %in% out$code)
 })
 
 test_that("a date-only lastmod produces strict-only info DATE_ONLY", {
   out <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url,
-    lastmod_raw = "2004-12-23"
+    rows_with_lastmod("https://example.com/a", "2004-12-23"),
+    sitemap_url = sm_url
   )
   do <- out[out$code == "PROTOCOL_LASTMOD_DATE_ONLY", ]
   expect_identical(nrow(do), 1L)
@@ -356,47 +363,31 @@ test_that("a date-only lastmod produces strict-only info DATE_ONLY", {
 
 test_that("a full datetime lastmod is clean and not flagged date-only", {
   out <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url,
-    lastmod_raw = "2004-12-23T18:00:15+00:00"
+    rows_with_lastmod("https://example.com/a", "2004-12-23T18:00:15+00:00"),
+    sitemap_url = sm_url
   )
   expect_false(any(grepl("LASTMOD", out$code)))
 })
 
-test_that("lastmod format checks are skipped when raw strings are absent", {
-  # A malformed lastmod that the parser already collapsed to NA cannot be
-  # re-flagged from the typed column — no raw strings, no format finding.
-  out <- validate_protocol(rows_for("https://example.com/a"),
-                           sitemap_url = sm_url)
-  expect_false(any(grepl("LASTMOD_INVALID|LASTMOD_DATE_ONLY", out$code)))
-})
-
-test_that("an absent (NA/empty) lastmod string is not flagged", {
+test_that("an absent lastmod (NA in the faithful column) is not flagged", {
   out <- validate_protocol(
-    rows_for(c("https://example.com/a", "https://example.com/b")),
-    sitemap_url = sm_url, lastmod_raw = c(NA, "")
+    rows_with_lastmod(
+      c("https://example.com/a", "https://example.com/b"),
+      c(NA_character_, NA_character_)
+    ),
+    sitemap_url = sm_url
   )
   expect_false(any(grepl("LASTMOD", out$code)))
-})
-
-test_that("lastmod_raw of the wrong length is an error", {
-  expect_error(
-    validate_protocol(
-      rows_for(c("https://example.com/a", "https://example.com/b")),
-      lastmod_raw = "2004-12-23"
-    ),
-    class = "sitemapr_protocol_input_error"
-  )
 })
 
 # --- corpus-level lastmod heuristics ---------------------------------------
 
 test_that("uniformly identical lastmods produce ALL_IDENTICAL (warning)", {
-  t <- as.POSIXct("2024-01-01T00:00:00", tz = "UTC")
   out <- validate_protocol(
     sitemap_rows(
       loc = c("https://example.com/a", "https://example.com/b",
               "https://example.com/c"),
-      lastmod = rep(t, 3L)
+      lastmod = rep("2024-01-01T00:00:00Z", 3L)
     ),
     sitemap_url = sm_url
   )
@@ -410,7 +401,7 @@ test_that("varied lastmods do not trip ALL_IDENTICAL", {
   out <- validate_protocol(
     sitemap_rows(
       loc = c("https://example.com/a", "https://example.com/b"),
-      lastmod = as.POSIXct(c("2024-01-01", "2024-06-01"), tz = "UTC")
+      lastmod = c("2024-01-01", "2024-06-01")
     ),
     sitemap_url = sm_url
   )
@@ -421,7 +412,7 @@ test_that("a single dated entry is too small a corpus to flag", {
   out <- validate_protocol(
     sitemap_rows(
       loc = "https://example.com/a",
-      lastmod = as.POSIXct("2024-01-01", tz = "UTC")
+      lastmod = "2024-01-01"
     ),
     sitemap_url = sm_url
   )
@@ -433,7 +424,7 @@ test_that("lastmods clustered at fetch time produce LOOKS_GENERATED (info)", {
   out <- validate_protocol(
     sitemap_rows(
       loc = c("https://example.com/a", "https://example.com/b"),
-      lastmod = c(fetched - 60, fetched - 120)
+      lastmod = c("2024-01-01T11:59:00Z", "2024-01-01T11:58:00Z")
     ),
     sitemap_url = sm_url, fetched_at = fetched
   )
@@ -443,11 +434,10 @@ test_that("lastmods clustered at fetch time produce LOOKS_GENERATED (info)", {
 })
 
 test_that("LOOKS_GENERATED is skipped without a fetch time", {
-  fetched <- as.POSIXct("2024-01-01T12:00:00", tz = "UTC")
   out <- validate_protocol(
     sitemap_rows(
       loc = c("https://example.com/a", "https://example.com/b"),
-      lastmod = c(fetched - 60, fetched - 120)
+      lastmod = c("2024-01-01T11:59:00Z", "2024-01-01T11:58:00Z")
     ),
     sitemap_url = sm_url
   )
@@ -459,7 +449,7 @@ test_that("lastmods far from fetch time do not look generated", {
   out <- validate_protocol(
     sitemap_rows(
       loc = c("https://example.com/a", "https://example.com/b"),
-      lastmod = as.POSIXct(c("2020-01-01", "2021-01-01"), tz = "UTC")
+      lastmod = c("2020-01-01", "2021-01-01")
     ),
     sitemap_url = sm_url, fetched_at = fetched
   )
@@ -469,15 +459,14 @@ test_that("lastmods far from fetch time do not look generated", {
 # --- combined shape + determinism ------------------------------------------
 
 test_that("count, field, and corpus findings combine in one tibble", {
-  t <- as.POSIXct("2024-01-01", tz = "UTC")
   rows <- sitemap_rows(
     loc = c("https://example.com/a", "https://example.com/b"),
     changefreq = c("daily", "sometimes"),
     priority = c(0.5, 2),
-    lastmod = c(t, t)
+    lastmod = c("2024-01-01", "2024-01-01")
   )
   out <- validate_protocol(
-    rows, sitemap_url = sm_url, lastmod_raw = c("2024-01-01", "2024-01-01"),
+    rows, sitemap_url = sm_url,
     byte_size = 60 * 1024^2,
     limits = protocol_limits(max_url_count = 1L)
   )
@@ -491,16 +480,15 @@ test_that("count, field, and corpus findings combine in one tibble", {
 })
 
 test_that("D.2 rules are deterministic across repeated calls", {
-  t <- as.POSIXct("2024-01-01", tz = "UTC")
   rows <- sitemap_rows(
     loc = c("https://example.com/a", "https://example.com/b"),
     changefreq = c("daily", "nope"),
     priority = c(0.5, 2),
-    lastmod = c(t, t)
+    lastmod = c("bad", "2024-01-01")
   )
   call <- function() {
     validate_protocol(
-      rows, sitemap_url = sm_url, lastmod_raw = c("bad", "2024-01-01"),
+      rows, sitemap_url = sm_url,
       byte_size = 60 * 1024^2
     )
   }
