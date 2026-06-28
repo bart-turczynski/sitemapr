@@ -130,6 +130,12 @@ Columns: `loc`, `lastmod` (POSIXct), `changefreq`, `priority`,
 `images` (list-column), `video` (list-column), `news` (list-column),
 `alternates` (list-column), `source_sitemap`.
 
+This typed tibble is a **projection** for callers, not the input to validation.
+The typed/coerced columns (`lastmod` → POSIXct, `priority` → numeric) are lossy
+in dimensions some Layer D field rules must inspect, so validation consumes a
+faithful, string-preserving parse instead — mirroring Layer C, which validates
+the raw doc. See ADR-004.
+
 `source_sitemap` provenance values (v1): `submitted-directly`,
 `submitted-list`, `guessed-path`, `child-of-index`, `extracted-archive`.
 
