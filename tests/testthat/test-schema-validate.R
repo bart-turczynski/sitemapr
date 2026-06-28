@@ -177,7 +177,10 @@ test_that("schema validation spawns no subprocess (pure libxml2)", {
 })
 
 test_that("the package declares no system requirement beyond xml2's", {
-  # No Java, no JAVA_HOME, no SystemRequirements (architecture.md §8).
-  desc <- read.dcf(test_path("..", "..", "DESCRIPTION"))
-  expect_false("SystemRequirements" %in% colnames(desc))
+  # No Java, no JAVA_HOME, no SystemRequirements (architecture.md §8). Read the
+  # installed package metadata rather than the source DESCRIPTION by relative
+  # path: under `R CMD check` the tests run from the `.Rcheck` tree where
+  # `../../DESCRIPTION` does not exist, so the relative read errored there.
+  sysreq <- packageDescription("sitemapr", fields = "SystemRequirements")
+  expect_true(is.na(sysreq))
 })
