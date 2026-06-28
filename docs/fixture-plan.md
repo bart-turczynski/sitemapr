@@ -151,7 +151,9 @@ expected output or condition.
 | HTML page at sitemap URL | `html-masquerade.html` | `UNSUPPORTED_HTML_MASQUERADE` |
 | Unsupported root element | `unsupported-root.xml` | `UNSUPPORTED_ROOT` |
 | Sitemap index child → RSS feed | `index-rss-child.xml` | `UNSUPPORTED_FEED` |
-| Mid-stream truncation | `truncated.xml` | `sitemapr_truncated` condition (not finding) |
+| Truncated / incomplete XML document | `truncated.xml` | Malformed XML → `SCHEMA_INVALID`; never silently parsed. (A mid-stream *stall* is a fetch timeout → `sitemapr_timeout`, not a truncation condition — see `scenario-fixture-map.md`.) |
+| Oversized sitemap (> 50 MB uncompressed) | `oversize.xml.gz` | `PROTOCOL_SIZE_EXCEEDED` finding; body still parsed so other findings surface |
+| Body over 500 MB safety ceiling | synthetic (ceiling lowered in test) | `FETCH_BODY_CEILING_EXCEEDED` (`fatal`); `sitemapr_body_ceiling` condition in parse APIs; partial result |
 
 ### 2.11 Text sitemap scenarios
 
