@@ -81,10 +81,18 @@ Each slice corresponds to a tracer-bullet issue in the issue tracker.
 | `loc` full-URL identity key (for dedup, scoping) | `sitemapr` (assembled from `rurl` components; not `rurl::clean_url`) |
 | Sitemap protocol URL rules (absolute http/https, host present, scoping) | `sitemapr` Layer D |
 
-`rurl::clean_url` is **not** used as the `loc` identity key: it drops port,
-query, fragment, and userinfo, which are meaningful for sitemap duplicate
-detection and fetch URL assembly. `sitemapr` builds its own full-URL canonical
-key from the `rurl` component set.
+`rurl::clean_url` is **not** used as the `loc` identity key (or as the fetch
+URL): it is a display helper that drops port, query, fragment, and userinfo,
+several of which are meaningful for sitemap duplicate detection and fetch URL
+assembly. `sitemapr` builds its own canonical form from the `rurl` component
+set, and the same string serves as both the fetch target and the identity key
+(SITE-vrgszbnu): userinfo, host, path, and **query** are kept (a dynamic
+endpoint or a paginated `sitemapindex` child such as `?page=2` is a distinct
+resource); the scheme's **default port** (`:80`/`:443`) is collapsed so it is
+identity-equivalent to no port; and the **fragment** is dropped, since it is
+never sent over HTTP and identifies no separate fetched resource (RFC 3986
+§3.5). Tracking-parameter stripping is deliberately not attempted — the server
+is the authority for what a query means.
 
 `pslr` and `punycoder` are normally indirect dependencies (through `rurl`).
 They are imported directly only if an implementation need arises for raw Public

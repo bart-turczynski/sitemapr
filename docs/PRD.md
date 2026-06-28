@@ -74,10 +74,12 @@ vector of sitemap URLs. `sitemapr` applies entrypoint policy first (for example:
 missing scheme → `https://`, while preserving an explicit `http://`), then
 delegates URL parsing and component normalization to `rurl`. Normalization
 lowercases scheme/host, maps Unicode hosts to IDNA for fetch/validation, resolves
-`.`/`..`, encodes paths, strips default ports for canonical comparison, keeps
-query/fragment for direct sitemap URLs, reduces a site URL to its origin, and
-retains both original and normalized values. v1 does **not** accept robots.txt as
-an input format.
+`.`/`..`, encodes paths, strips the scheme's default port (`:80`/`:443`) for
+canonical comparison, keeps the query for direct sitemap URLs (a dynamic
+endpoint or paginated index child is a distinct resource) while dropping the
+fragment (never fetched; not a separate resource), reduces a site URL to its
+origin, and retains both original and normalized values. v1 does **not** accept
+robots.txt as an input format.
 
 **Discovery (§10, sitemap-specific subset).** From a site/root input: generic
 guessed sitemap paths → CMS guessed sitemap paths → dedup. There is no robots.txt
@@ -252,11 +254,15 @@ All confirmed with R `xml2` 1.6.0 (libxml2) during design:
   single spec-legal 50 MB file must still be DOM-parsed in full for
   `xml_validate`, so per-validation peak memory is ~the 50 MB cap × libxml2's DOM
   overhead. This is the one engineering risk that carries over from the TS app.
-- **Do not use `rurl::clean_url` as the sitemap `loc` identity.** It is a useful
-  canonical key for generic URL joins, but by design it contains only
+- **Do not use `rurl::clean_url` as the sitemap `loc` identity or fetch URL.** It
+  is a useful display key for generic URL joins, but by design it contains only
   scheme+host+path and excludes port, query, fragment, and userinfo. Sitemap
   duplicate detection, fetch URLs, and scoping need a sitemap-owned normalized
-  full-URL representation assembled from `rurl` components.
+  representation assembled from `rurl` components. That canonical form — used as
+  both the fetch target and the identity key — keeps userinfo, host, path, and
+  **query** (a dynamic or paginated sitemap is a distinct resource), collapses
+  the scheme's **default port**, and drops the **fragment** (never fetched, not
+  a separate resource). Tracking-parameter stripping is not attempted (SITE-vrgszbnu).
 - **Default-https is a sitemapr entrypoint policy.** `rurl` can preserve schemes
   or force a scheme, but `protocol_handling = "https"` rewrites explicit
   `http://` to `https://`. `sitemapr` therefore adds `https://` only to
