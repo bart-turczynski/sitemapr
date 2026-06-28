@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2026-01-15T08:30:00Z</lastmod>
+    <changefreq>daily</changefreq>
+    <!-- priority 2.0 is out of the 0.0-1.0 range: a validator would flag it,
+         but the parser returns it verbatim (parsing never validates). -->
+    <priority>2.0</priority>
+  </url>
+</urlset>
