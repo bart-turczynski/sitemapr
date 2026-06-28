@@ -84,7 +84,7 @@ schema_cached_wrapper <- function(cache_key, imports,
 #'   `inst/schemas`).
 #' @param cache Environment used to memoise generated wrappers by cache key.
 #' @param dir Directory for generated wrappers (default: `tempdir()`).
-#' @return A list with `kind` (`"bundled"` / `"generated"` / `"runtime"` /
+#' @return A list with `kind` (`"bundled"` / `"runtime"` /
 #'   `"unknown-namespace"`), `schema_path` (absolute path, or `NA` when
 #'   unknown), `cache_key`, and `unknown_namespaces`.
 #' @keywords internal

@@ -10,15 +10,20 @@
 # `urlset` root and `siteindex.xsd` for a `sitemapindex` root. Every other
 # (extension) namespace maps 1:1 to a bundled schema file.
 #
-# Resolution prefers pre-composed profiles before runtime generation:
+# Resolution is canonical-schemas-plus-runtime-composition:
 #   1. core-only docs validate directly against the bundled core schema;
-#   2. mixed-namespace docs prefer a pre-composed profile in
-#      `inst/schemas/generated/` if one exists;
-#   3. otherwise the resolver returns a "runtime" decision, leaving wrapper
+#   2. mixed-namespace docs return a "runtime" decision, leaving wrapper
 #      generation to R/schema-profile.R (S6.3);
-#   4. a namespace the catalog does not recognise yields an
+#   3. a namespace the catalog does not recognise yields an
 #      "unknown-namespace" decision (mapped to SCHEMA_UNKNOWN_NAMESPACE in
 #      Layer C, never a generated import).
+#
+# We deliberately do NOT pre-compute every namespace combination: the extension
+# set yields 2^5 subsets per root kind, almost all unseen in the wild, each of
+# which would need its own bundled artifact, provenance, and license review.
+# Composing the handful of combinations a document actually uses at runtime is
+# trivially cheap (a tiny wrapper write, memoised per session) and keeps the
+# shipped schema surface to one canonical file per namespace.
 #
 # Profile cache key is (catalog_version, root_kind, sorted_namespace_set) per
 # architecture.md §6. The catalog version is bumped whenever the bundled file
@@ -42,18 +47,6 @@ schema_extension_catalog <- function() {
     "http://www.google.com/schemas/sitemap-news/0.9"    = "sitemap-news.xsd",
     "http://www.google.com/schemas/sitemap-pagemap/1.0" = "sitemap-pagemap.xsd",
     "http://www.w3.org/1999/xhtml"                      = "xhtml-hreflang.xsd"
-  )
-}
-
-# Short, stable slug per extension namespace, used to name a pre-composed
-# profile in inst/schemas/generated/ deterministically (sorted by slug).
-schema_namespace_slugs <- function() {
-  c(
-    "http://www.google.com/schemas/sitemap-image/1.1"   = "image",
-    "http://www.google.com/schemas/sitemap-video/1.1"   = "video",
-    "http://www.google.com/schemas/sitemap-news/0.9"    = "news",
-    "http://www.google.com/schemas/sitemap-pagemap/1.0" = "pagemap",
-    "http://www.w3.org/1999/xhtml"                      = "hreflang"
   )
 }
 
@@ -102,16 +95,6 @@ schema_cache_key <- function(root_kind, namespaces,
   paste(c(catalog_version, root_kind, ns), collapse = "|")
 }
 
-# Deterministic basename for a pre-composed mixed-namespace profile, e.g.
-# "urlset-image-news.xsd". Extension namespaces are mapped to slugs and sorted
-# so the name is independent of namespace order. Used only to probe for a
-# pre-composed file in inst/schemas/generated/.
-schema_profile_basename <- function(root_kind, extension_namespaces) {
-  slugs <- schema_namespace_slugs()[extension_namespaces]
-  slugs <- sort(slugs[!is.na(slugs)])
-  paste0(paste(c(root_kind, slugs), collapse = "-"), ".xsd")
-}
-
 #' Resolve the Layer C schema profile for a document
 #'
 #' Pure decision logic: given the document's root kind and the set of XML
@@ -126,14 +109,13 @@ schema_profile_basename <- function(root_kind, extension_namespaces) {
 #'   installed `inst/schemas`.
 #' @return A list describing the resolution:
 #'   * `kind` — one of `"bundled"` (validate against the single bundled core
-#'     schema), `"generated"` (a pre-composed profile exists on disk),
-#'     `"runtime"` (a wrapper must be generated, S6.3), or
+#'     schema), `"runtime"` (a wrapper must be generated, S6.3), or
 #'     `"unknown-namespace"` (an unrecognised namespace is present).
 #'   * `cache_key` — the `(catalog_version, root_kind, sorted_namespace_set)`
 #'     key (see [schema_cache_key()]).
 #'   * `root_kind`, `namespaces` — the (sorted) inputs echoed back.
-#'   * `schema_path` — absolute path to the validating schema for `"bundled"`
-#'     and `"generated"`; `NA` for `"runtime"`/`"unknown-namespace"`.
+#'   * `schema_path` — absolute path to the validating schema for `"bundled"`;
+#'     `NA` for `"runtime"`/`"unknown-namespace"`.
 #'   * `imports` — named character vector (namespace -> absolute schema path) of
 #'     every schema a runtime wrapper must `xsd:import`; empty for core-only.
 #'   * `unknown_namespaces` — namespaces not in the catalog (only for
@@ -175,21 +157,9 @@ schema_resolve_profile <- function(root_kind, namespaces,
   }
 
   # Mixed namespaces: a wrapper must import the core schema and each extension
-  # schema. Prefer a pre-composed profile if one was generated at build time.
+  # schema, generated at runtime (R/schema-profile.R, S6.3).
   imports <- c(core_path, file.path(schemas_dir, catalog[extension_ns]))
   names(imports) <- c(schema_core_namespace, extension_ns)
-  composed <- file.path(
-    schemas_dir, "generated",
-    schema_profile_basename(root_kind, extension_ns)
-  )
-  if (file.exists(composed)) {
-    return(utils::modifyList(base, list(
-      kind = "generated",
-      schema_path = composed,
-      imports = imports
-    )))
-  }
-
   utils::modifyList(base, list(
     kind = "runtime",
     imports = imports

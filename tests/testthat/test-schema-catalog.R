@@ -91,17 +91,6 @@ test_that("cache key separates root kinds and catalog versions", {
   ))
 })
 
-test_that("pre-composed profile basename is sorted and order-independent", {
-  expect_identical(
-    schema_profile_basename("urlset", c(news_ns, image_ns)),
-    "urlset-image-news.xsd"
-  )
-  expect_identical(
-    schema_profile_basename("urlset", c(image_ns, news_ns)),
-    schema_profile_basename("urlset", c(news_ns, image_ns))
-  )
-})
-
 test_that("core-only urlset resolves to the bundled core schema", {
   res <- schema_resolve_profile("urlset", core_ns, schemas_dir = "/x")
   expect_identical(res$kind, "bundled")
@@ -135,21 +124,6 @@ test_that("mixed namespaces without a pre-composed file need runtime gen", {
   expect_identical(
     unname(res$imports[[image_ns]]),
     file.path("/no-such-dir", "sitemap-image.xsd")
-  )
-})
-
-test_that("a pre-composed generated profile is preferred over runtime gen", {
-  dir <- withr::local_tempdir()
-  dir.create(file.path(dir, "generated"))
-  composed <- file.path(dir, "generated", "urlset-image-news.xsd")
-  writeLines("<schema/>", composed)
-  res <- schema_resolve_profile(
-    "urlset", c(core_ns, news_ns, image_ns), schemas_dir = dir
-  )
-  expect_identical(res$kind, "generated")
-  expect_identical(res$schema_path, composed)
-  expect_identical(
-    sort(names(res$imports)), sort(c(core_ns, image_ns, news_ns))
   )
 })
 
