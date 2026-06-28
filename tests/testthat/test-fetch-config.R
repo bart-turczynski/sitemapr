@@ -9,7 +9,7 @@ test_that("fetch_limits() returns the ADR-003 defaults with correct types", {
 
   expect_identical(lim$timeout, 30)
   expect_identical(lim$max_redirects, 5L)
-  expect_identical(lim$max_bytes, 52428800L)
+  expect_identical(lim$max_bytes, 524288000L)
 
   expect_type(lim$timeout, "double")
   expect_type(lim$max_redirects, "integer")

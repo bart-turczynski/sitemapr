@@ -6,12 +6,16 @@
 #' non-overridable hard cap: a caller may raise any of them by passing an
 #' argument or setting the option.
 #'
-#' Defaults (ADR-003 §3): request timeout 30 s, max redirects 5, max on-wire
-#' body 50 MB.
+#' Defaults (ADR-003 §3): request timeout 30 s, max redirects 5, per-resource
+#' safety ceiling 500 MB. The 50 MB sitemap-protocol size limit is NOT enforced
+#' here — it is a non-fatal validation finding (`PROTOCOL_SIZE_EXCEEDED`); the
+#' fetch layer only records body size and guards memory with the ceiling.
 #'
 #' @param timeout Per-request timeout in seconds (numeric).
 #' @param max_redirects Maximum number of redirects to follow (integer).
-#' @param max_bytes Maximum on-wire body size in bytes (integer).
+#' @param max_bytes Per-resource safety ceiling in bytes (integer): the hard cap
+#'   on the body read into memory. Exceeding it discards the body and raises a
+#'   `sitemapr_body_ceiling` condition. Default 500 MB.
 #' @return A named list of limits with coerced types.
 #' @keywords internal
 #' @noRd
@@ -20,7 +24,7 @@ fetch_limits <- function(timeout = getOption("sitemapr.timeout", 30),
                            "sitemapr.max_redirects", 5L
                          ),
                          max_bytes = getOption(
-                           "sitemapr.max_bytes", 50L * 1024L^2
+                           "sitemapr.max_bytes", 500L * 1024L^2
                          )) {
   list(
     timeout = as.numeric(timeout),

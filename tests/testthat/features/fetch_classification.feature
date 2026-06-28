@@ -18,11 +18,17 @@ Feature: Fetch and byte-level classification of sources
     When I fetch with a 5-second timeout
     Then the request fails with a timeout condition before the server responds
 
-  Scenario: Mid-stream timeout discards partial body and never parses it
+  Scenario: A mid-body stall times out and never parses a partial body
     Given a fixture server that starts sending a valid XML sitemap then stalls mid-body
-    When the on-wire byte limit is reached during streaming
-    Then sitemapr raises a sitemapr_truncated condition
+    When the request exceeds the configured timeout
+    Then sitemapr raises a sitemapr_timeout condition
     And no partial parse result is returned
+
+  Scenario: A body exceeding the per-resource safety ceiling is discarded
+    Given a fixture server that serves a body larger than the configured safety ceiling
+    When the body is read into memory
+    Then sitemapr raises a sitemapr_body_ceiling condition
+    And the over-ceiling body is discarded unparsed
 
   Scenario: Redirects are followed up to the configured limit
     Given a fixture server that redirects 4 times before serving a sitemap

@@ -13,12 +13,12 @@ License: MIT + file LICENSE
 URL: https://github.com/bart-turczynski/sitemapr
 BugReports: https://github.com/bart-turczynski/sitemapr/issues
 Imports:
+    httr2,
     rlang,
     rurl (>= 1.4.0),
     utils
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Depends:
     R (>= 4.0.0)
 Suggests:
@@ -29,3 +29,4 @@ Suggests:
     withr
 Config/testthat/edition: 3
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
