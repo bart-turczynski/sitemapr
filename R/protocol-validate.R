@@ -14,8 +14,11 @@
 # SITE-nmbmgmba (D.3), SITE-fwdqovyp (D.4), and SITE-htmkvrmo (D.5) slices: the
 # findings constructor, the per-`<loc>` URL rules, the count/field-value rules,
 # the hreflang token policy, the image/video/news extension field rules, and the
-# text-sitemap per-line rules. The remaining Layer D surface —
-# unsupported-input diagnostics — lands in a sibling sub-issue.
+# text-sitemap per-line rules. The D.6 slice (SITE-jlpihcap) adds the
+# `source_meta` argument to `validate_protocol()` and surfaces the
+# unsupported-input + encoding diagnostics, whose producers live in
+# R/classification-validate.R because they carry `layer = "classification"`
+# rather than `"protocol"` (findings-contract.md layer vocabulary).
 #
 # Text sitemaps take a DEDICATED path (sitemap-spec.md §7.2; SPEC §18), never
 # the XML rows path: `validate_text_protocol()` reads the RAW document text, not
@@ -1222,10 +1225,11 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #' rows for a conformant document. Does not assemble the final contract (no
 #' `mode`, no filtering/dedup/sort across sources — those are Layer F).
 #'
-#' This is the D.1–D.4 slice: per-`<loc>` URL rules, count/field-value rules,
-#' the hreflang token policy over the `alternates` list-column, and the
-#' image/video/news extension field rules. Later sub-issues extend it with
-#' text-sitemap and unsupported-input checks.
+#' Covers the per-`<loc>` URL rules, count/field-value rules, the hreflang
+#' token policy over the `alternates` list-column, and the image/video/news
+#' extension field rules. With a `source_meta` argument it also surfaces the D.6
+#' classification diagnostics (`UNSUPPORTED_*` / `ENCODING_*`); text sitemaps
+#' take the dedicated [validate_text_protocol()] path.
 #'
 #' @param rows A parsed row tibble from [sitemap_rows()] / the format parsers.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
@@ -1241,8 +1245,18 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #'   `PROTOCOL_SIZE_EXCEEDED` rule. `NA` skips the size check.
 #' @param fetched_at The sitemap's fetch/generation time (`POSIXct`), for the
 #'   `PROTOCOL_LASTMOD_LOOKS_GENERATED` corpus heuristic. `NA` skips it.
+#' @param source_meta A [source_meta()] object carrying the source's
+#'   classification + encoding signals, for the D.6 unsupported-input and
+#'   encoding-conflict diagnostics (`UNSUPPORTED_*` / `ENCODING_*`, all
+#'   `layer = "classification"`). `NULL` emits none. These run from the metadata
+#'   alone, so they are produced even when `rows` is empty (e.g. an
+#'   `UNSUPPORTED_ROOT` document yields no rows). Acting as the interim
+#'   cross-layer assembler, this function surfaces them alongside the protocol
+#'   findings until Layer F owns assembly.
 #' @param limits Layer D limit thresholds; see [protocol_limits()].
-#' @return A protocol-findings tibble (zero rows when the document conforms).
+#' @return A findings tibble (zero rows when the document conforms and no
+#'   diagnostics apply). Protocol rows carry `layer = "protocol"`; the D.6
+#'   source diagnostics carry `layer = "classification"`.
 #' @keywords internal
 #' @noRd
 validate_protocol <- function(rows, sitemap_url = NA_character_,
@@ -1250,29 +1264,34 @@ validate_protocol <- function(rows, sitemap_url = NA_character_,
                               lastmod_raw = NULL,
                               byte_size = NA_real_,
                               fetched_at = NA,
+                              source_meta = NULL,
                               limits = protocol_limits()) {
-  if (is.null(rows) || nrow(rows) == 0L) {
-    return(empty_protocol_findings())
-  }
-  if (!is.null(lastmod_raw) && length(lastmod_raw) != nrow(rows)) {
-    rlang::abort(
-      sprintf(
-        "`lastmod_raw` must be length %d (the row count), got %d.",
-        nrow(rows), length(lastmod_raw)
-      ),
-      class = "sitemapr_protocol_input_error"
-    )
+  parts <- list(
+    validate_classification(source_meta, subject_ref),
+    validate_encoding(source_meta, subject_ref)
+  )
+
+  if (!is.null(rows) && nrow(rows) > 0L) {
+    if (!is.null(lastmod_raw) && length(lastmod_raw) != nrow(rows)) {
+      rlang::abort(
+        sprintf(
+          "`lastmod_raw` must be length %d (the row count), got %d.",
+          nrow(rows), length(lastmod_raw)
+        ),
+        class = "sitemapr_protocol_input_error"
+      )
+    }
+    parts <- c(parts, list(
+      validate_loc_urls(rows, sitemap_url, subject_ref),
+      validate_url_count(rows, subject_ref, limits$max_url_count),
+      validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
+      validate_field_values(rows, subject_ref, lastmod_raw),
+      validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
+      validate_hreflang(rows, subject_ref),
+      validate_extensions(rows, subject_ref, limits)
+    ))
   }
 
-  parts <- list(
-    validate_loc_urls(rows, sitemap_url, subject_ref),
-    validate_url_count(rows, subject_ref, limits$max_url_count),
-    validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
-    validate_field_values(rows, subject_ref, lastmod_raw),
-    validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
-    validate_hreflang(rows, subject_ref),
-    validate_extensions(rows, subject_ref, limits)
-  )
   parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
   if (length(parts) == 0L) {
     return(empty_protocol_findings())

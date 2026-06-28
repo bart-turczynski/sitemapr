@@ -1081,3 +1081,147 @@ test_that("text validation is deterministic across repeated calls", {
   call <- function() validate_text_protocol(text, base)
   expect_identical(call(), call())
 })
+
+# --- D.6 classification diagnostics: unsupported input ---------------------
+
+test_that("an unsupported root yields a classification UNSUPPORTED_ROOT", {
+  out <- validate_protocol(
+    empty_sitemap_rows(), subject_ref = base,
+    source_meta = source_meta(unsupported_root = "rss")
+  )
+  ur <- out[out$code == "UNSUPPORTED_ROOT", ]
+  expect_identical(nrow(ur), 1L)
+  expect_identical(ur$layer, "classification")
+  expect_identical(ur$severity, "error")
+  expect_identical(ur$subject_type, "source")
+  expect_identical(ur$subject_ref, base)
+  expect_match(ur$message, "<rss>")
+})
+
+test_that("HTML at a sitemap URL yields UNSUPPORTED_HTML_MASQUERADE", {
+  out <- validate_protocol(
+    empty_sitemap_rows(), subject_ref = base,
+    source_meta = source_meta(html_masquerade = TRUE)
+  )
+  hm <- out[out$code == "UNSUPPORTED_HTML_MASQUERADE", ]
+  expect_identical(nrow(hm), 1L)
+  expect_identical(hm$layer, "classification")
+  expect_identical(hm$severity, "error")
+})
+
+test_that("feed children each yield an index-child UNSUPPORTED_FEED", {
+  children <- c("https://example.com/feed.xml", "https://example.com/atom")
+  out <- validate_protocol(
+    empty_sitemap_rows(), subject_ref = base,
+    source_meta = source_meta(feed_children = children)
+  )
+  uf <- out[out$code == "UNSUPPORTED_FEED", ]
+  expect_identical(nrow(uf), 2L)
+  expect_true(all(uf$subject_type == "index-child"))
+  expect_identical(
+    uf$subject_ref,
+    paste0(base, "#index-child:", children)
+  )
+})
+
+test_that("diagnostics are produced even with no rows", {
+  out <- validate_protocol(
+    empty_sitemap_rows(), subject_ref = base,
+    source_meta = source_meta(unsupported_root = "feed")
+  )
+  expect_identical(out$code, "UNSUPPORTED_ROOT")
+})
+
+test_that("no source_meta yields no classification diagnostics", {
+  out <- validate_protocol(rows_for("https://example.com/a"))
+  expect_false(any(out$layer == "classification"))
+  expect_false(any(grepl("^UNSUPPORTED_|^ENCODING_", out$code)))
+})
+
+test_that("an all-default source_meta yields no diagnostics", {
+  out <- validate_protocol(
+    empty_sitemap_rows(), subject_ref = base, source_meta = source_meta()
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("diagnostics co-exist with protocol findings over real rows", {
+  out <- validate_protocol(
+    sitemap_rows(loc = "https://example.com/a", changefreq = "fortnightly"),
+    subject_ref = base,
+    source_meta = source_meta(
+      bom_encoding = "UTF-8", declared_encoding = "UTF-16"
+    )
+  )
+  expect_true("PROTOCOL_CHANGEFREQ_INVALID" %in% out$code)
+  expect_true("ENCODING_BOM_DECLARATION_CONFLICT" %in% out$code)
+  expect_setequal(out$layer, c("protocol", "classification"))
+})
+
+# --- D.6 classification diagnostics: encoding conflicts --------------------
+
+test_that("BOM vs XML declaration is the specialised conflict (info)", {
+  out <- validate_encoding(
+    source_meta(bom_encoding = "UTF-8", declared_encoding = "UTF-16"), base
+  )
+  expect_identical(out$code, "ENCODING_BOM_DECLARATION_CONFLICT")
+  expect_identical(out$severity, "info")
+  expect_false(out$is_strict_only)
+  expect_identical(out$layer, "classification")
+})
+
+test_that("an HTTP-charset disagreement is the general ENCODING_CONFLICT", {
+  out <- validate_encoding(
+    source_meta(declared_encoding = "UTF-8", http_charset = "ISO-8859-1"), base
+  )
+  expect_identical(out$code, "ENCODING_CONFLICT")
+  expect_identical(out$severity, "info")
+})
+
+test_that("a three-way mismatch emits both encoding findings", {
+  out <- validate_encoding(
+    source_meta(
+      bom_encoding = "UTF-16", declared_encoding = "UTF-8",
+      http_charset = "UTF-8"
+    ),
+    base
+  )
+  expect_setequal(
+    out$code,
+    c("ENCODING_BOM_DECLARATION_CONFLICT", "ENCODING_CONFLICT")
+  )
+})
+
+test_that("equivalent encoding spellings do not conflict", {
+  out <- validate_encoding(
+    source_meta(
+      bom_encoding = "UTF-8", declared_encoding = "utf8",
+      http_charset = "utf-8"
+    ),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("a single encoding signal never conflicts", {
+  out <- validate_encoding(source_meta(declared_encoding = "UTF-8"), base)
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("NULL source_meta producers return empty classification findings", {
+  expect_identical(nrow(validate_classification(NULL, base)), 0L)
+  expect_identical(nrow(validate_encoding(NULL, base)), 0L)
+})
+
+test_that("classification diagnostics are deterministic across calls", {
+  meta <- source_meta(
+    unsupported_root = "rss",
+    feed_children = c("https://example.com/a", "https://example.com/b"),
+    bom_encoding = "UTF-8", declared_encoding = "UTF-16"
+  )
+  call <- function() {
+    validate_protocol(empty_sitemap_rows(), subject_ref = base,
+                      source_meta = meta)
+  }
+  expect_identical(call(), call())
+})

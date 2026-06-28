@@ -100,7 +100,8 @@ Layers C and D validate the faithful form. "Parse once → faithful intermediate
   data-flow correction.
 
 ### Negative / accepted trade-offs
-- Until D.6 lands, `validate_protocol()` keeps the interim `lastmod_raw`
+- Until the faithful-parse unwind lands (now scheduled for Layer F — see the
+  Update below), `validate_protocol()` keeps the interim `lastmod_raw`
   parameter — a documented seam, not the final interface.
 - A faithful intermediate is a second internal representation of a parsed
   document alongside the typed tibble. The two must stay consistent; the chosen
@@ -108,6 +109,26 @@ Layers C and D validate the faithful form. "Parse once → faithful intermediate
   not parse twice, so there is a single source of truth.
 
 ---
+
+## Update (2026-06-28 — D.6 / SITE-jlpihcap)
+
+D.6 implemented its diagnostics but **deferred the faithful-parse unwind to
+Layer F** (`validate_sitemap()`, SITE-ymzvnlpr), refining decision point 3 and
+point 4 above. Rationale: the unwind is a single coordinated change across the
+parser (emit a faithful, string-preserving extraction), `read_sitemap()`
+(project that to the typed tibble late), and Layer F (feed the faithful form to
+both Layer C and Layer D). Layer F is the component that holds the raw doc/bytes
+and is the only place the end-to-end flow can be integration-tested. Doing it at
+D.6 — which still has no production caller for `validate_protocol()` — would have
+churned the protocol test suite to construct a faithful shape nothing in
+production emits, with no integration verification, and a partial "swap only
+`validate_protocol()`'s input" half-measure was rejected as worst-of-both
+(test churn without removing the root coercion in the parser).
+
+Net effect on decision point 4: **the `lastmod_raw` side-channel is retired at
+Layer F, not at D.6.** It remains the documented interim seam until then. D.6
+itself adds only the `source_meta` argument (classification + encoding
+diagnostics), which is orthogonal to the faithful parse.
 
 ## Revisit conditions
 - D.6 / Layer F implementation diverges from "parse once, coerce late" (e.g.
