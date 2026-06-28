@@ -10,11 +10,24 @@
 # done here. The rows emitted here carry: code, severity, layer, subject_type,
 # subject_ref, message, evidence, and is_strict_only.
 #
-# This file covers the SITE-fraetonj (D.1) slice: the findings constructor and
-# the per-`<loc>` URL rules. The remaining Layer D surface — count/field-value
-# rules, hreflang policy, extension fields, text-sitemap rules, and
-# unsupported-input diagnostics — lands in sibling sub-issues that extend
-# `validate_protocol()`.
+# This file covers the SITE-fraetonj (D.1) and SITE-ysviepus (D.2) slices: the
+# findings constructor, the per-`<loc>` URL rules, and the count/field-value
+# rules. The remaining Layer D surface — hreflang policy, extension fields,
+# text-sitemap rules, and unsupported-input diagnostics — lands in sibling
+# sub-issues that extend `validate_protocol()`.
+#
+# Field-value rules (D.2) read what the typed row tibble can express directly:
+# `priority` is validated against `[0.0, 1.0]` on the numeric column (the parser
+# deliberately passes out-of-range values through), and `changefreq` against its
+# enum on the character column. `lastmod` is different: the parser coerces it to
+# POSIXct, collapsing a malformed value to `NA` (indistinguishable from absent)
+# and a date-only value to midnight (indistinguishable from a midnight
+# datetime). Its *format* therefore cannot be re-derived from the typed column,
+# so format checks read the ORIGINAL `<lastmod>` strings supplied via
+# `lastmod_raw`; when those are absent the format checks are skipped (the corpus
+# heuristics still run on the typed column). The uncompressed `byte_size` and
+# the `fetched_at` time are likewise external to the rows and gate
+# `PROTOCOL_SIZE_EXCEEDED` and `PROTOCOL_LASTMOD_LOOKS_GENERATED` respectively.
 #
 # URL handling follows the sitemap spec exactly and never reshapes a URL's
 # meaning. A `<loc>` is validated as: absolute `http`/`https`, host present,
@@ -136,6 +149,219 @@ protocol_url_finding <- function(code, severity, subject_type, base, i, loc,
     evidence = list(protocol_evidence(excerpt = loc)),
     is_strict_only = is_strict_only
   )
+}
+
+# One document-level finding row (`subject_type = "document"`, the unfragmented
+# `sitemap://…` base). Used by the count/size and corpus-level lastmod rules.
+protocol_document_finding <- function(code, severity, base, message,
+                                      excerpt = NA_character_,
+                                      is_strict_only = FALSE) {
+  protocol_findings(
+    code = code,
+    severity = severity,
+    subject_type = "document",
+    subject_ref = if (is.null(base)) NA_character_ else base,
+    message = message,
+    evidence = list(protocol_evidence(excerpt = excerpt)),
+    is_strict_only = is_strict_only
+  )
+}
+
+# The `<changefreq>` enumeration (sitemaps.org Protocol 0.9). Case-sensitive,
+# matching the XSD enumeration; a wrong-case value (`Daily`) is invalid.
+protocol_changefreq_values <- c(
+  "always", "hourly", "daily", "weekly", "monthly", "yearly", "never"
+)
+
+# Layer D limit thresholds. Each resolves from its argument, then the matching
+# `getOption("sitemapr.*")`, then the sitemaps.org protocol default. All limits
+# are configurable; none is hardcoded (sitemap-spec.md §2, ADR-003 §3).
+protocol_limits <- function(
+    max_url_count = getOption("sitemapr.max_url_count", 50000L),
+    max_uncompressed_bytes = getOption(
+      "sitemapr.max_uncompressed_bytes", 52428800L
+    ),
+    lastmod_identical_ratio = getOption(
+      "sitemapr.lastmod_identical_ratio", 1
+    ),
+    lastmod_generated_tolerance = getOption(
+      "sitemapr.lastmod_generated_tolerance", 86400
+    )) {
+  list(
+    max_url_count = as.integer(max_url_count),
+    max_uncompressed_bytes = as.numeric(max_uncompressed_bytes),
+    lastmod_identical_ratio = as.numeric(lastmod_identical_ratio),
+    lastmod_generated_tolerance = as.numeric(lastmod_generated_tolerance)
+  )
+}
+
+# Classify each ORIGINAL `<lastmod>` string into "absent", "invalid",
+# "date-only", or "datetime". Reuses parse_lastmod() (R/parse-xml.R) for the
+# valid/invalid split so the parser and this validator can never diverge: a
+# value the parser turns into NA is exactly an invalid value here, and the
+# date-only form is the one the parser accepts as a bare `YYYY-MM-DD`.
+classify_lastmod <- function(raw) {
+  raw <- as.character(raw)
+  trimmed <- trimws(raw)
+  out <- rep("absent", length(raw))
+  present <- !is.na(trimmed) & nzchar(trimmed)
+  if (!any(present)) {
+    return(out)
+  }
+  parsed <- parse_lastmod(raw[present])
+  is_date <- grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", trimmed[present])
+  cls <- ifelse(
+    is.na(parsed),
+    "invalid",
+    ifelse(is_date, "date-only", "datetime")
+  )
+  out[present] <- cls
+  out
+}
+
+# Document-level URL-count rule. More than `limit` URL entries is a non-fatal
+# protocol violation (reading continues; sitemap-spec.md §2 Axis 2).
+validate_url_count <- function(rows, base, limit) {
+  n <- nrow(rows)
+  if (is.na(limit) || n <= limit) {
+    return(empty_protocol_findings())
+  }
+  protocol_document_finding(
+    "PROTOCOL_URL_COUNT_EXCEEDED", "error", base,
+    sprintf(
+      "Sitemap has %d URL entries; the protocol limit is %d.", n, limit
+    )
+  )
+}
+
+# Document-level uncompressed-size rule. `byte_size` is the uncompressed byte
+# count of the source document (NA skips the check). Over `limit` is a non-fatal
+# protocol violation; the body is still read (sitemap-spec.md §2 Axis 1).
+validate_doc_size <- function(byte_size, base, limit) {
+  if (is.na(byte_size) || is.na(limit) || byte_size <= limit) {
+    return(empty_protocol_findings())
+  }
+  protocol_document_finding(
+    "PROTOCOL_SIZE_EXCEEDED", "error", base,
+    sprintf(
+      "Sitemap is %.0f bytes uncompressed; the protocol limit is %.0f.",
+      byte_size, limit
+    )
+  )
+}
+
+# Per-entry field-value rules: priority range, changefreq enum, and lastmod
+# format. `lastmod_raw` is the ORIGINAL `<lastmod>` strings aligned to rows
+# (NULL skips lastmod format checks — the typed POSIXct column cannot be
+# re-validated). Returns a (possibly empty) protocol-findings tibble.
+validate_field_values <- function(rows, base, lastmod_raw = NULL) {
+  out <- list()
+
+  priority <- rows$priority
+  bad_pri <- which(!is.na(priority) & (priority < 0 | priority > 1))
+  for (j in bad_pri) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_PRIORITY_OUT_OF_RANGE", "error", "entry", base, j,
+      as.character(priority[j]),
+      sprintf(
+        "<priority> %s is outside the permitted range [0.0, 1.0].",
+        format(priority[j], trim = TRUE)
+      )
+    )
+  }
+
+  cf <- rows$changefreq
+  bad_cf <- which(!is.na(cf) & !(cf %in% protocol_changefreq_values))
+  for (j in bad_cf) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_CHANGEFREQ_INVALID", "error", "entry", base, j, cf[j],
+      sprintf(
+        "<changefreq> '%s' is not one of: %s.",
+        cf[j], paste(protocol_changefreq_values, collapse = ", ")
+      )
+    )
+  }
+
+  if (!is.null(lastmod_raw)) {
+    cls <- classify_lastmod(lastmod_raw)
+    for (j in which(cls == "invalid")) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_LASTMOD_INVALID", "error", "entry", base, j,
+        as.character(lastmod_raw[j]),
+        sprintf(
+          "<lastmod> '%s' is not a valid W3C Date-Time value.",
+          trimws(as.character(lastmod_raw[j]))
+        )
+      )
+    }
+    for (j in which(cls == "date-only")) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_LASTMOD_DATE_ONLY", "info", "entry", base, j,
+        as.character(lastmod_raw[j]),
+        sprintf(
+          "<lastmod> '%s' is date-only; including a time is recommended.",
+          trimws(as.character(lastmod_raw[j]))
+        ),
+        is_strict_only = TRUE
+      )
+    }
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
+# Corpus-level lastmod-honesty heuristics (sitemap-spec.md §4.1). These scan
+# ALL dated entries of one sitemap, so they are document-level, not per-entry.
+# `fetched_at` is the sitemap's fetch/generation time (NA skips the
+# looks-generated heuristic). Both run off the typed POSIXct `lastmod` column.
+validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
+  lastmod <- rows$lastmod
+  dated <- lastmod[!is.na(lastmod)]
+  out <- list()
+  if (length(dated) < 2L) {
+    return(empty_protocol_findings())
+  }
+
+  counts <- table(as.numeric(dated))
+  modal_ratio <- max(counts) / length(dated)
+
+  if (modal_ratio >= limits$lastmod_identical_ratio) {
+    out[[length(out) + 1L]] <- protocol_document_finding(
+      "PROTOCOL_LASTMOD_ALL_IDENTICAL", "warning", base,
+      sprintf(
+        paste0(
+          "%d of %d dated entries share one <lastmod> value; engines may ",
+          "distrust uniformly identical dates."
+        ),
+        max(counts), length(dated)
+      )
+    )
+  }
+
+  if (!is.na(fetched_at)) {
+    near <- abs(as.numeric(dated) - as.numeric(fetched_at)) <=
+      limits$lastmod_generated_tolerance
+    if (mean(near) >= limits$lastmod_identical_ratio) {
+      out[[length(out) + 1L]] <- protocol_document_finding(
+        "PROTOCOL_LASTMOD_LOOKS_GENERATED", "info", base,
+        sprintf(
+          paste0(
+            "%d of %d dated entries fall within %.0fs of the sitemap's ",
+            "fetch time; <lastmod> looks auto-generated, not content-derived."
+          ),
+          sum(near), length(dated), limits$lastmod_generated_tolerance
+        )
+      )
+    }
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
 }
 
 # Per-`<loc>` URL rules over the parsed rows. Returns a (possibly empty)
@@ -284,8 +510,8 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 #' rows for a conformant document. Does not assemble the final contract (no
 #' `mode`, no filtering/dedup/sort across sources — those are Layer F).
 #'
-#' This is the D.1 slice: it implements the per-`<loc>` URL rules. Later
-#' sub-issues extend it with count/field, hreflang, extension, text-sitemap, and
+#' This is the D.1 + D.2 slice: per-`<loc>` URL rules plus count/field-value
+#' rules. Later sub-issues extend it with hreflang, extension, text-sitemap, and
 #' unsupported-input checks.
 #'
 #' @param rows A parsed row tibble from [sitemap_rows()] / the format parsers.
@@ -294,13 +520,47 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 #' @param subject_ref The document-level `sitemap://…` base for each finding's
 #'   `subject_ref`; defaults to the authority form derived from `sitemap_url`.
 #'   `NA` yields fragment-only refs.
+#' @param lastmod_raw The ORIGINAL `<lastmod>` strings aligned to `rows`, used
+#'   for the `lastmod` format checks the typed POSIXct column cannot express
+#'   (malformed → `NA`, date-only → midnight). `NULL` skips those checks. Must
+#'   be length `nrow(rows)` when supplied.
+#' @param byte_size The uncompressed byte count of the source document, for the
+#'   `PROTOCOL_SIZE_EXCEEDED` rule. `NA` skips the size check.
+#' @param fetched_at The sitemap's fetch/generation time (`POSIXct`), for the
+#'   `PROTOCOL_LASTMOD_LOOKS_GENERATED` corpus heuristic. `NA` skips it.
+#' @param limits Layer D limit thresholds; see [protocol_limits()].
 #' @return A protocol-findings tibble (zero rows when the document conforms).
 #' @keywords internal
 #' @noRd
 validate_protocol <- function(rows, sitemap_url = NA_character_,
-                              subject_ref = sitemap_subject_ref(sitemap_url)) {
+                              subject_ref = sitemap_subject_ref(sitemap_url),
+                              lastmod_raw = NULL,
+                              byte_size = NA_real_,
+                              fetched_at = NA,
+                              limits = protocol_limits()) {
   if (is.null(rows) || nrow(rows) == 0L) {
     return(empty_protocol_findings())
   }
-  validate_loc_urls(rows, sitemap_url, subject_ref)
+  if (!is.null(lastmod_raw) && length(lastmod_raw) != nrow(rows)) {
+    rlang::abort(
+      sprintf(
+        "`lastmod_raw` must be length %d (the row count), got %d.",
+        nrow(rows), length(lastmod_raw)
+      ),
+      class = "sitemapr_protocol_input_error"
+    )
+  }
+
+  parts <- list(
+    validate_loc_urls(rows, sitemap_url, subject_ref),
+    validate_url_count(rows, subject_ref, limits$max_url_count),
+    validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
+    validate_field_values(rows, subject_ref, lastmod_raw),
+    validate_lastmod_corpus(rows, subject_ref, fetched_at, limits)
+  )
+  parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
+  if (length(parts) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, parts)
 }
