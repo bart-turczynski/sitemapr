@@ -117,7 +117,10 @@ test_that("unsupported content raises sitemapr_unsupported_format", {
   )
 })
 
-# ---- single-level index expansion --------------------------------------------
+# ---- index expansion ---------------------------------------------------------
+# Recursive bounded expansion lives in R/index-expansion.R (and is unit-tested
+# in test-index-expansion.R); these cases cover read_sitemap()'s integration of
+# it for the common single-level index.
 
 test_that("a sitemap index expands one level, attributing rows to children", {
   index_url <- "https://example.com/sitemap_index.xml"

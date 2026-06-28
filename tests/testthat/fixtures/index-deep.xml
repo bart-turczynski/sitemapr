@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Root of a chain nested deeper than the depth limit. The step serves
+     deep-1 -> deep-2 -> deep-3 (each a sitemapindex) and deep-3 references
+     deep-4; with max_depth 3 the depth-4 node is never fetched. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/deep-1.xml</loc></sitemap>
+</sitemapindex>

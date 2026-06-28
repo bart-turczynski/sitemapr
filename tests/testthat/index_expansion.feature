@@ -10,7 +10,7 @@ Feature: Bounded sitemapindex traversal
     And the tree depth for child rows is 1
 
   Scenario: sitemap_tree shows depth, parent, and provenance for index children
-    Given fixture "index-simple.xml"
+    Given the index fixture "index-simple.xml"
     When I call sitemap_tree on the index
     Then each child row carries depth 1
     And parent_sitemap references the index URL
@@ -54,6 +54,6 @@ Feature: Bounded sitemapindex traversal
     And rows from the nested index's children are still present in the result
 
   Scenario: Parent-to-child chain is preserved in sitemap_tree
-    Given fixture "index-simple.xml"
+    Given the index fixture "index-simple.xml"
     When I call sitemap_tree on the index
     Then the tree rows form a connected parent-child chain from root to each leaf

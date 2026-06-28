@@ -8,7 +8,8 @@ sitemap_tree(
   x,
   user_agent = default_user_agent(),
   limits = discovery_limits(),
-  net_limits = fetch_limits()
+  net_limits = fetch_limits(),
+  index_limits = NULL
 )
 }
 \arguments{
@@ -23,12 +24,16 @@ package User-Agent.}
 
 \item{net_limits}{Network limits for the per-candidate fetches, as from
 \code{fetch_limits()}.}
+
+\item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
+Defaults to \code{index_limits()}.}
 }
 \value{
-A tibble with one row per evaluated candidate and columns \code{depth},
-\code{parent_sitemap}, \code{sitemap_url}, \code{page_count}, \code{gzip}, \code{status}, \code{reason},
-and \code{provenance}. Accepted rows carry a \code{page_count}/\code{gzip}; rejected rows
-carry their rejection \code{reason} and \code{NA} page count.
+A tibble with one row per evaluated candidate (and per expanded index
+child) and columns \code{depth}, \code{parent_sitemap}, \code{sitemap_url}, \code{page_count},
+\code{gzip}, \code{status}, \code{reason}, and \code{provenance}. Accepted rows carry a
+\code{page_count}/\code{gzip}; rejected rows carry their rejection \code{reason} and \code{NA}
+page count.
 }
 \description{
 From a site-root URL, tries the guessed-path catalog (every generic guess
@@ -40,7 +45,9 @@ robots.txt is not consulted in v1.
 }
 \details{
 Each accepted candidate's page count and gzip flag are taken from the body
-fetched during discovery, so no source is requested twice. v1 discovery rows
-are all depth 0 with no parent; recursive index expansion contributes the
-deeper, parented rows separately.
+fetched during discovery, so no source is requested twice. Discovered
+candidates are depth-0 rows with no parent; an accepted candidate that is a
+\code{sitemapindex} is expanded recursively (cycle-safe, depth- and count-capped),
+contributing deeper rows parented to the index, with provenance
+\code{"child-of-index"}.
 }

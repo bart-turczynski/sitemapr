@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A child is itself a sitemapindex. The step serves nested-index.xml as a
+     sitemapindex whose own child is a leaf urlset: the nested index emits a
+     SITEMAP_INDEX_NESTED warning but is still expanded. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/nested-index.xml</loc></sitemap>
+</sitemapindex>
