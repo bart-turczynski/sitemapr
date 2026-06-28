@@ -10,11 +10,24 @@
 # done here. The rows emitted here carry: code, severity, layer, subject_type,
 # subject_ref, message, evidence, and is_strict_only.
 #
-# This file covers the SITE-fraetonj (D.1) and SITE-ysviepus (D.2) slices: the
-# findings constructor, the per-`<loc>` URL rules, and the count/field-value
-# rules. The remaining Layer D surface — hreflang policy, extension fields,
-# text-sitemap rules, and unsupported-input diagnostics — lands in sibling
-# sub-issues that extend `validate_protocol()`.
+# This file covers the SITE-fraetonj (D.1), SITE-ysviepus (D.2), and
+# SITE-nmbmgmba (D.3) slices: the findings constructor, the per-`<loc>` URL
+# rules, the count/field-value rules, and the hreflang token policy. The
+# remaining Layer D surface — extension fields, text-sitemap rules, and
+# unsupported-input diagnostics — lands in sibling sub-issues that extend
+# `validate_protocol()`.
+#
+# The hreflang policy (D.3) is sitemap-specific, NOT generic
+# BCP-47/`xs:language` (PRD §17; sitemap-spec.md §5.4): it accepts only `lang`,
+# `lang-REGION`, `lang-Script`, `lang-Script-REGION`, and `x-default`, where
+# `lang` is ISO 639-1 (2 alpha), `REGION` ISO 3166-1 alpha-2 (2 alpha), and
+# `Script` ISO 15924 (4 alpha). No IANA registry snapshot is shipped, so the
+# subtags are matched by alpha-length and position, not against a code list;
+# casing (lang lowercase, Script Title-case, REGION UPPERCASE, `x-default`
+# exactly lowercase) is checked for reporting but the ORIGINAL value is always
+# preserved in evidence. The schema layer (XSD) owns structural failures of an
+# `xhtml:link` under the generic `SCHEMA_INVALID` code; the eight `HREFLANG_*`
+# codes here are purely semantic.
 #
 # Field-value rules (D.2) read what the typed row tibble can express directly:
 # `priority` is validated against `[0.0, 1.0]` on the numeric column (the parser
@@ -364,6 +377,331 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
   do.call(rbind, out)
 }
 
+# --- Hreflang token policy (D.3) -------------------------------------------
+
+# Read the `rel`/`hreflang`/`href` attributes off one `xml2::as_list()`
+# `<xhtml:link>` element (an empty list carrying those values as R attributes).
+# `exact = TRUE` guards against R's partial attribute-name matching. Each field
+# is the raw character value or `NULL` when the attribute is absent.
+hreflang_link_attrs <- function(link) {
+  list(
+    rel = attr(link, "rel", exact = TRUE),
+    hreflang = attr(link, "hreflang", exact = TRUE),
+    href = attr(link, "href", exact = TRUE)
+  )
+}
+
+# A 2-/4-alpha subtag test (case-insensitive); the building block of the family
+# structure check below.
+hreflang_is_alpha2 <- function(s) grepl("^[A-Za-z]{2}$", s)
+hreflang_is_alpha4 <- function(s) grepl("^[A-Za-z]{4}$", s)
+
+# Assign a role (`"lang"`, `"region"`, `"script"`) to each hyphen-separated
+# subtag by position and alpha-length, or return `NULL` when the structure fits
+# no accepted family. With no IANA snapshot the subtags are matched by shape
+# only; the one place casing carries meaning structurally is a standalone
+# all-UPPERCASE 2-letter token, which reads as a region used alone (e.g. `US`)
+# and is therefore rejected here as a non-family token (the caller maps `NULL`
+# to `HREFLANG_FORMAT_INVALID`).
+hreflang_roles <- function(parts) {
+  n <- length(parts)
+  if (n == 1L) {
+    if (!hreflang_is_alpha2(parts[1])) {
+      return(NULL)
+    }
+    if (parts[1] == toupper(parts[1]) && parts[1] != tolower(parts[1])) {
+      return(NULL)
+    }
+    return("lang")
+  }
+  if (n == 2L) {
+    if (!hreflang_is_alpha2(parts[1])) {
+      return(NULL)
+    }
+    if (hreflang_is_alpha2(parts[2])) {
+      return(c("lang", "region"))
+    }
+    if (hreflang_is_alpha4(parts[2])) {
+      return(c("lang", "script"))
+    }
+    return(NULL)
+  }
+  is_lsr <- n == 3L &&
+    hreflang_is_alpha2(parts[1]) &&
+    hreflang_is_alpha4(parts[2]) &&
+    hreflang_is_alpha2(parts[3])
+  if (is_lsr) {
+    return(c("lang", "script", "region"))
+  }
+  NULL
+}
+
+# TRUE when every subtag matches the convention for its role: lang lowercase,
+# region UPPERCASE, script Title-case.
+hreflang_case_ok <- function(parts, roles) {
+  for (i in seq_along(parts)) {
+    p <- parts[i]
+    ok <- switch(roles[i],
+      lang = identical(p, tolower(p)),
+      region = identical(p, toupper(p)),
+      script = identical(
+        p, paste0(toupper(substr(p, 1L, 1L)), tolower(substr(p, 2L, nchar(p))))
+      )
+    )
+    if (!ok) {
+      return(FALSE)
+    }
+  }
+  TRUE
+}
+
+# Classify one ORIGINAL `hreflang` value into a single primary code (precedence
+# matters; the first applicable wins): `"valid"`, `"valid-xdefault"`,
+# `"HREFLANG_XDEFAULT_INVALID"`, `"HREFLANG_FORMAT_INVALID"`,
+# `"HREFLANG_SEPARATOR_INVALID"`, or `"HREFLANG_NONSTANDARD_CASE"`. An
+# `x-default`-like value (case-folded, `_` to `-`) must be EXACTLY `x-default`
+# to be clean; any near miss is `XDEFAULT_INVALID`. Otherwise: empty or
+# whitespace-padded gives `FORMAT_INVALID`; `_`, `--`, an edge `-`, or internal
+# whitespace gives `SEPARATOR_INVALID`; a structure outside the accepted
+# families gives `FORMAT_INVALID`; a well-structured token with off-convention
+# casing gives `NONSTANDARD_CASE`.
+classify_hreflang_token <- function(raw) {
+  raw <- as.character(raw)
+  trimmed <- trimws(raw)
+  if (identical(tolower(gsub("_", "-", trimmed, fixed = TRUE)), "x-default")) {
+    if (identical(raw, "x-default")) {
+      return("valid-xdefault")
+    }
+    return("HREFLANG_XDEFAULT_INVALID")
+  }
+  if (!nzchar(trimmed) || !identical(raw, trimmed)) {
+    return("HREFLANG_FORMAT_INVALID")
+  }
+  bad_sep <- grepl("_", trimmed, fixed = TRUE) ||
+    grepl("--", trimmed, fixed = TRUE) ||
+    grepl("(^-)|(-$)|[[:space:]]", trimmed)
+  if (bad_sep) {
+    return("HREFLANG_SEPARATOR_INVALID")
+  }
+  parts <- strsplit(trimmed, "-", fixed = TRUE)[[1]]
+  roles <- hreflang_roles(parts)
+  if (is.null(roles)) {
+    return("HREFLANG_FORMAT_INVALID")
+  }
+  if (!hreflang_case_ok(parts, roles)) {
+    return("HREFLANG_NONSTANDARD_CASE")
+  }
+  "valid"
+}
+
+# One per-`<xhtml:link>` hreflang finding (`subject_type = "entry"`, ref
+# `…#entry:i:link:m`). `i` is the 1-based row/entry index, `m` the 1-based link
+# index within that entry.
+protocol_hreflang_finding <- function(code, severity, base, i, m, excerpt,
+                                      message, is_strict_only = FALSE) {
+  protocol_findings(
+    code = code,
+    severity = severity,
+    subject_type = "entry",
+    subject_ref = protocol_ref_fragment(
+      base, sprintf("#entry:%d:link:%d", i, m)
+    ),
+    message = message,
+    evidence = list(protocol_evidence(excerpt = excerpt)),
+    is_strict_only = is_strict_only
+  )
+}
+
+# One entry-level hreflang finding (ref `…#entry:i`), for set-level rules
+# such as the missing `x-default`.
+protocol_hreflang_set_finding <- function(code, severity, base, i, message) {
+  protocol_findings(
+    code = code,
+    severity = severity,
+    subject_type = "entry",
+    subject_ref = protocol_ref_fragment(base, sprintf("#entry:%d", i)),
+    message = message,
+    evidence = list(protocol_evidence()),
+    is_strict_only = FALSE
+  )
+}
+
+# Severity for the per-token classifier codes: structural/format failures are
+# errors, a casing deviation is a warning.
+hreflang_token_severity <- function(code) {
+  if (identical(code, "HREFLANG_NONSTANDARD_CASE")) "warning" else "error"
+}
+
+# Build the LINK_ATTR_INVALID message from the specific attribute problems.
+hreflang_attr_message <- function(rel, hreflang_missing, href_missing) {
+  reasons <- character(0)
+  if (is.null(rel)) {
+    reasons <- c(reasons, "rel is absent")
+  } else if (!identical(as.character(rel), "alternate")) {
+    reasons <- c(reasons, sprintf("rel='%s' is not 'alternate'", rel))
+  }
+  if (hreflang_missing) {
+    reasons <- c(reasons, "hreflang is absent")
+  }
+  if (href_missing) {
+    reasons <- c(reasons, "href is absent or empty")
+  }
+  sprintf(
+    "<xhtml:link> has invalid required attributes: %s.",
+    paste(reasons, collapse = "; ")
+  )
+}
+
+# Hreflang token policy over the `alternates` list-column. Each row's entry is
+# `NULL` (no alternates) or a list of `xml2::as_list()`-converted `<xhtml:link>`
+# elements. Per-link checks (attributes, token format/separator/case, relative
+# href) and per-`<url>` set checks (duplicate token, duplicate / missing
+# `x-default`) are emitted as protocol findings. Returns a (possibly empty)
+# protocol-findings tibble.
+validate_hreflang <- function(rows, base) {
+  alternates <- rows$alternates
+  out <- list()
+
+  for (i in seq_len(nrow(rows))) {
+    alts <- alternates[[i]]
+    if (is.null(alts) || length(alts) == 0L) {
+      next
+    }
+
+    nlink <- length(alts)
+    token_norm <- rep(NA_character_, nlink)
+    is_xdefault <- rep(FALSE, nlink)
+    xdefault_clean <- rep(FALSE, nlink)
+    any_hreflang <- FALSE
+
+    for (m in seq_len(nlink)) {
+      a <- hreflang_link_attrs(alts[[m]])
+      rel <- a$rel
+      hl <- a$hreflang
+      hf <- a$href
+
+      hreflang_missing <- is.null(hl)
+      href_missing <- is.null(hf) || !nzchar(trimws(as.character(hf)))
+      rel_bad <- is.null(rel) || !identical(as.character(rel), "alternate")
+
+      if (rel_bad || hreflang_missing || href_missing) {
+        out[[length(out) + 1L]] <- protocol_hreflang_finding(
+          "HREFLANG_LINK_ATTR_INVALID", "error", base, i, m,
+          if (hreflang_missing) NA_character_ else as.character(hl),
+          hreflang_attr_message(rel, hreflang_missing, href_missing)
+        )
+      }
+
+      if (!hreflang_missing) {
+        any_hreflang <- TRUE
+        raw <- as.character(hl)
+        code <- classify_hreflang_token(raw)
+        if (identical(
+          tolower(gsub("_", "-", trimws(raw), fixed = TRUE)), "x-default"
+        )) {
+          is_xdefault[m] <- TRUE
+          xdefault_clean[m] <- identical(code, "valid-xdefault")
+        } else {
+          token_norm[m] <- tolower(trimws(raw))
+        }
+        if (!code %in% c("valid", "valid-xdefault")) {
+          out[[length(out) + 1L]] <- protocol_hreflang_finding(
+            code, hreflang_token_severity(code), base, i, m, raw,
+            hreflang_token_message(code, raw)
+          )
+        }
+      }
+
+      if (!href_missing && loc_absoluteness(as.character(hf)) == "relative") {
+        out[[length(out) + 1L]] <- protocol_hreflang_finding(
+          "HREFLANG_HREF_RELATIVE", "warning", base, i, m, as.character(hf),
+          sprintf(
+            "hreflang href '%s' is relative; an absolute URL is required.", hf
+          ),
+          is_strict_only = TRUE
+        )
+      }
+    }
+
+    # Duplicate non-`x-default` tokens: each repeat past the first occurrence is
+    # flagged against its own link, naming the first.
+    seen <- new.env(parent = emptyenv())
+    for (m in which(!is.na(token_norm))) {
+      key <- token_norm[m]
+      if (is.null(seen[[key]])) {
+        assign(key, m, envir = seen)
+      } else {
+        out[[length(out) + 1L]] <- protocol_hreflang_finding(
+          "HREFLANG_DUPLICATE", "warning", base, i, m, key,
+          sprintf(
+            "hreflang '%s' duplicates link %d in this <url>.",
+            key, get(key, envir = seen)
+          )
+        )
+      }
+    }
+
+    # More than one clean `x-default` is a duplicate (malformed ones are already
+    # reported as XDEFAULT_INVALID by the per-token classifier above).
+    xclean <- which(xdefault_clean)
+    for (m in xclean[-1]) {
+      out[[length(out) + 1L]] <- protocol_hreflang_finding(
+        "HREFLANG_XDEFAULT_INVALID", "error", base, i, m, "x-default",
+        "x-default appears more than once in this <url>; only one is permitted."
+      )
+    }
+
+    # `x-default` is recommended whenever any alternate is annotated; "absent"
+    # means no `x-default`-like value at all (a malformed attempt is reported,
+    # not treated as missing).
+    if (any_hreflang && !any(is_xdefault)) {
+      out[[length(out) + 1L]] <- protocol_hreflang_set_finding(
+        "HREFLANG_XDEFAULT_MISSING", "info", base, i,
+        paste0(
+          "No x-default hreflang annotation; one is recommended when ",
+          "alternate-language links are present."
+        )
+      )
+    }
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
+# The human-readable message for one per-token classifier code.
+hreflang_token_message <- function(code, raw) {
+  switch(code,
+    HREFLANG_FORMAT_INVALID = sprintf(
+      paste0(
+        "hreflang '%s' is not an accepted language token (lang, lang-REGION, ",
+        "lang-Script, lang-Script-REGION, or x-default)."
+      ),
+      raw
+    ),
+    HREFLANG_SEPARATOR_INVALID = sprintf(
+      paste0(
+        "hreflang '%s' has an invalid separator or structure; subtags must be ",
+        "hyphen-separated (e.g. en-US, not en_US)."
+      ),
+      raw
+    ),
+    HREFLANG_NONSTANDARD_CASE = sprintf(
+      paste0(
+        "hreflang '%s' deviates from the conventional casing (lang lowercase, ",
+        "Script Title-case, REGION UPPERCASE)."
+      ),
+      raw
+    ),
+    HREFLANG_XDEFAULT_INVALID = sprintf(
+      "hreflang '%s' is a malformed x-default; it must be exactly 'x-default'.",
+      raw
+    )
+  )
+}
+
 # Per-`<loc>` URL rules over the parsed rows. Returns a (possibly empty)
 # protocol-findings tibble. `sitemap_url` is the sitemap's own absolute URL,
 # used for scope; `NA` skips the scope check (undefined without an origin).
@@ -510,9 +848,10 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 #' rows for a conformant document. Does not assemble the final contract (no
 #' `mode`, no filtering/dedup/sort across sources — those are Layer F).
 #'
-#' This is the D.1 + D.2 slice: per-`<loc>` URL rules plus count/field-value
-#' rules. Later sub-issues extend it with hreflang, extension, text-sitemap, and
-#' unsupported-input checks.
+#' This is the D.1 + D.2 + D.3 slice: per-`<loc>` URL rules, count/field-value
+#' rules, and the hreflang token policy over the `alternates` list-column. Later
+#' sub-issues extend it with extension, text-sitemap, and unsupported-input
+#' checks.
 #'
 #' @param rows A parsed row tibble from [sitemap_rows()] / the format parsers.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
@@ -556,7 +895,8 @@ validate_protocol <- function(rows, sitemap_url = NA_character_,
     validate_url_count(rows, subject_ref, limits$max_url_count),
     validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
     validate_field_values(rows, subject_ref, lastmod_raw),
-    validate_lastmod_corpus(rows, subject_ref, fetched_at, limits)
+    validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
+    validate_hreflang(rows, subject_ref)
   )
   parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
   if (length(parts) == 0L) {

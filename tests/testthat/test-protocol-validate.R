@@ -506,3 +506,212 @@ test_that("D.2 rules are deterministic across repeated calls", {
   }
   expect_identical(call(), call())
 })
+
+# --- D.3 hreflang token policy ---------------------------------------------
+
+# Build one as_list()-shaped <xhtml:link>: an empty list carrying the supplied
+# attributes (NULL = attribute absent), matching collect_extension()'s output.
+mk_link <- function(rel = "alternate", hreflang = NULL, href = NULL) {
+  x <- list()
+  if (!is.null(rel)) attr(x, "rel") <- rel
+  if (!is.null(hreflang)) attr(x, "hreflang") <- hreflang
+  if (!is.null(href)) attr(x, "href") <- href
+  x
+}
+
+# A single-row tibble whose `alternates` column holds the given list of links.
+rows_with_alts <- function(links, loc = "https://example.com/a") {
+  sitemap_rows(loc = loc, alternates = list(links))
+}
+
+# Codes for one entry's alternates set.
+hreflang_codes <- function(links) {
+  validate_hreflang(rows_with_alts(links), base)$code
+}
+
+# A clean alternate-language link.
+alt <- function(hreflang, href = paste0("https://example.com/", hreflang)) {
+  mk_link(hreflang = hreflang, href = href)
+}
+
+# --- token classifier ------------------------------------------------------
+
+test_that("the accepted hreflang families classify as valid", {
+  for (tok in c("en", "en-US", "en-Latn", "zh-Hans-CN", "x-default")) {
+    expect_identical(classify_hreflang_token(tok), {
+      if (identical(tok, "x-default")) "valid-xdefault" else "valid"
+    })
+  }
+})
+
+test_that("empty and arbitrary tokens are FORMAT_INVALID", {
+  for (tok in c("", "english", "123", "e", "eng")) {
+    expect_identical(
+      classify_hreflang_token(tok), "HREFLANG_FORMAT_INVALID"
+    )
+  }
+})
+
+test_that("a standalone uppercase 2-letter token reads as region-only", {
+  expect_identical(classify_hreflang_token("US"), "HREFLANG_FORMAT_INVALID")
+})
+
+test_that("a lowercase standalone 2-letter token passes as a lang", {
+  expect_identical(classify_hreflang_token("us"), "valid")
+})
+
+test_that("a whitespace-padded token is FORMAT_INVALID", {
+  expect_identical(classify_hreflang_token(" en"), "HREFLANG_FORMAT_INVALID")
+  expect_identical(classify_hreflang_token("en "), "HREFLANG_FORMAT_INVALID")
+})
+
+test_that("underscore and bad separators are SEPARATOR_INVALID", {
+  for (tok in c("en_US", "en--US", "-en", "en-", "en US")) {
+    expect_identical(
+      classify_hreflang_token(tok), "HREFLANG_SEPARATOR_INVALID"
+    )
+  }
+})
+
+test_that("off-convention casing is NONSTANDARD_CASE", {
+  # A standalone miscased lang must be mixed-case to read as a lang; an
+  # all-uppercase standalone 2-letter is region-only (covered above).
+  for (tok in c("En", "en-us", "EN-US", "en-latn", "en-LATN-US")) {
+    expect_identical(
+      classify_hreflang_token(tok), "HREFLANG_NONSTANDARD_CASE"
+    )
+  }
+})
+
+test_that("malformed x-default near misses are XDEFAULT_INVALID", {
+  for (tok in c("X-DEFAULT", "x_default", "X_Default", " x-default")) {
+    expect_identical(
+      classify_hreflang_token(tok), "HREFLANG_XDEFAULT_INVALID"
+    )
+  }
+})
+
+# --- per-entry findings -----------------------------------------------------
+
+test_that("a clean hreflang set with x-default produces no findings", {
+  out <- validate_hreflang(
+    rows_with_alts(list(alt("en"), alt("de"), alt("x-default"))), base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("an underscore-separated tag produces HREFLANG_FORMAT/SEPARATOR", {
+  cc <- hreflang_codes(list(alt("en_US"), alt("x-default")))
+  expect_true("HREFLANG_SEPARATOR_INVALID" %in% cc)
+})
+
+test_that("missing x-default with present alternates is flagged", {
+  cc <- hreflang_codes(list(alt("en"), alt("de")))
+  expect_true("HREFLANG_XDEFAULT_MISSING" %in% cc)
+})
+
+test_that("x-default present suppresses the missing finding", {
+  cc <- hreflang_codes(list(alt("en"), alt("x-default")))
+  expect_false("HREFLANG_XDEFAULT_MISSING" %in% cc)
+})
+
+test_that("a malformed x-default is not treated as missing", {
+  cc <- hreflang_codes(list(alt("en"), alt("X-DEFAULT")))
+  expect_true("HREFLANG_XDEFAULT_INVALID" %in% cc)
+  expect_false("HREFLANG_XDEFAULT_MISSING" %in% cc)
+})
+
+test_that("a duplicate hreflang token is flagged once, naming the first", {
+  out <- validate_hreflang(
+    rows_with_alts(list(alt("en"), alt("en"), alt("x-default"))), base
+  )
+  dup <- out[out$code == "HREFLANG_DUPLICATE", ]
+  expect_identical(nrow(dup), 1L)
+  expect_match(dup$message, "link 1")
+})
+
+test_that("duplicate clean x-default is XDEFAULT_INVALID, not DUPLICATE", {
+  out <- validate_hreflang(
+    rows_with_alts(list(alt("en"), alt("x-default"), alt("x-default"))), base
+  )
+  expect_identical(
+    out$code[out$code != "HREFLANG_XDEFAULT_MISSING"],
+    "HREFLANG_XDEFAULT_INVALID"
+  )
+  expect_false("HREFLANG_DUPLICATE" %in% out$code)
+})
+
+test_that("a missing required attribute is HREFLANG_LINK_ATTR_INVALID", {
+  expect_true(
+    "HREFLANG_LINK_ATTR_INVALID" %in%
+      hreflang_codes(list(mk_link(hreflang = "en"))) # no href
+  )
+  expect_true(
+    "HREFLANG_LINK_ATTR_INVALID" %in%
+      hreflang_codes(list(mk_link(rel = NULL, hreflang = "en", href = "/x")))
+  )
+  expect_true(
+    "HREFLANG_LINK_ATTR_INVALID" %in%
+      hreflang_codes(list(mk_link(rel = "stylesheet",
+                                  hreflang = "en", href = "https://e.com/x")))
+  )
+})
+
+test_that("a relative href is HREFLANG_HREF_RELATIVE and strict-only", {
+  out <- validate_hreflang(
+    rows_with_alts(list(mk_link(hreflang = "en", href = "/en"),
+                        alt("x-default"))),
+    base
+  )
+  hr <- out[out$code == "HREFLANG_HREF_RELATIVE", ]
+  expect_identical(nrow(hr), 1L)
+  expect_identical(hr$severity, "warning")
+  expect_true(hr$is_strict_only)
+})
+
+test_that("hreflang findings are scoped to the entry and link", {
+  out <- validate_hreflang(
+    rows_with_alts(list(alt("en"), alt("english"))), base
+  )
+  fmt <- out[out$code == "HREFLANG_FORMAT_INVALID", ]
+  expect_identical(fmt$subject_ref, paste0(base, "#entry:1:link:2"))
+  miss <- out[out$code == "HREFLANG_XDEFAULT_MISSING", ]
+  expect_identical(miss$subject_ref, paste0(base, "#entry:1"))
+})
+
+test_that("hreflang evidence preserves the original off-case value", {
+  out <- validate_hreflang(rows_with_alts(list(alt("en-us"))), base)
+  case <- out[out$code == "HREFLANG_NONSTANDARD_CASE", ]
+  expect_identical(case$evidence[[1]]$excerpt, "en-us")
+})
+
+test_that("rows without alternates produce no hreflang findings", {
+  out <- validate_hreflang(
+    sitemap_rows(loc = c("https://example.com/a", "https://example.com/b")),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("hreflang findings carry the protocol layer and entry subject", {
+  out <- validate_hreflang(rows_with_alts(list(alt("en"))), base)
+  expect_identical(unique(out$layer), "protocol")
+  expect_identical(unique(out$subject_type), "entry")
+})
+
+test_that("validate_protocol wires in the hreflang policy", {
+  rows <- sitemap_rows(
+    loc = "https://example.com/a",
+    alternates = list(list(alt("en"), alt("en")))
+  )
+  out <- validate_protocol(rows, sitemap_url = sm_url)
+  expect_true("HREFLANG_DUPLICATE" %in% out$code)
+})
+
+test_that("hreflang policy is deterministic across repeated calls", {
+  rows <- rows_with_alts(
+    list(alt("en"), alt("en_US"), mk_link(hreflang = "de"))
+  )
+  call <- function() validate_hreflang(rows, base)
+  expect_identical(call(), call())
+})
