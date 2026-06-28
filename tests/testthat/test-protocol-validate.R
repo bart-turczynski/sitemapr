@@ -715,3 +715,250 @@ test_that("hreflang policy is deterministic across repeated calls", {
   call <- function() validate_hreflang(rows, base)
   expect_identical(call(), call())
 })
+
+# --- D.4 extension field rules (image / video / news) ----------------------
+
+# Build as_list()-shaped extension nodes: a leaf child is list("text"); an
+# element is a (possibly repeat-named) named list of children; XML attributes
+# are R attributes.
+leaf <- function(text) list(as.character(text))
+leaf_attr <- function(text, ...) {
+  x <- leaf(text)
+  a <- list(...)
+  for (nm in names(a)) attr(x, nm) <- a[[nm]]
+  x
+}
+
+# A minimally-valid <video:video> element; override/add children via `...`.
+# A flat (non-recursive) merge so leaf lists are replaced wholesale and repeated
+# child names (e.g. several `tag`s) are preserved.
+mk_video <- function(...) {
+  base_children <- list(
+    thumbnail_loc = leaf("https://e.com/t.jpg"),
+    title = leaf("Title"),
+    description = leaf("Desc"),
+    content_loc = leaf("https://e.com/v.mp4")
+  )
+  overrides <- list(...)
+  kept <- base_children[!names(base_children) %in% names(overrides)]
+  c(kept, overrides)
+}
+
+# A minimally-valid <news:news> element; override via `...`.
+mk_news <- function(language = "en", publication_date = "2024-01-01") {
+  list(
+    publication = list(name = leaf("Pub"), language = leaf(language)),
+    publication_date = leaf(publication_date),
+    title = leaf("Headline")
+  )
+}
+
+# A one-row tibble with the given list of extension elements on `column`.
+rows_with_ext <- function(column, els, loc = "https://example.com/a") {
+  args <- list(loc = loc)
+  args[[column]] <- list(els)
+  do.call(sitemap_rows, args)
+}
+
+ext_codes <- function(column, els) {
+  validate_extensions(rows_with_ext(column, els), base, protocol_limits())$code
+}
+
+# --- image ------------------------------------------------------------------
+
+test_that("an image set within the per-URL cap produces no findings", {
+  imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 1000L)
+  expect_identical(nrow(validate_extensions(
+    rows_with_ext("images", imgs), base, protocol_limits()
+  )), 0L)
+})
+
+test_that("more than 1000 images per URL is PROTOCOL_IMAGE_COUNT_EXCEEDED", {
+  imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 1001L)
+  out <- validate_extensions(rows_with_ext("images", imgs), base,
+                             protocol_limits())
+  expect_identical(out$code, "PROTOCOL_IMAGE_COUNT_EXCEEDED")
+  expect_identical(out$subject_ref, paste0(base, "#entry:1"))
+})
+
+test_that("the image cap is configurable via limits", {
+  imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 3L)
+  out <- validate_extensions(
+    rows_with_ext("images", imgs), base,
+    protocol_limits(max_images_per_url = 2L)
+  )
+  expect_identical(out$code, "PROTOCOL_IMAGE_COUNT_EXCEEDED")
+})
+
+# --- video ------------------------------------------------------------------
+
+test_that("a clean video produces no findings", {
+  expect_length(ext_codes("video", list(mk_video())), 0L)
+})
+
+test_that("an out-of-range or non-integer duration is flagged", {
+  for (d in c("0", "40000", "40.5", "abc")) {
+    cc <- ext_codes("video", list(mk_video(duration = leaf(d))))
+    expect_identical(cc, "PROTOCOL_VIDEO_FIELD_INVALID")
+  }
+})
+
+test_that("a valid duration at the bounds passes", {
+  for (d in c("1", "28800")) {
+    expect_length(ext_codes("video", list(mk_video(duration = leaf(d)))), 0L)
+  }
+})
+
+test_that("an out-of-range rating is flagged", {
+  for (r in c("6.0", "-1", "abc")) {
+    expect_identical(
+      ext_codes("video", list(mk_video(rating = leaf(r)))),
+      "PROTOCOL_VIDEO_FIELD_INVALID"
+    )
+  }
+})
+
+test_that("more than 32 video tags is flagged and configurable", {
+  tags <- stats::setNames(
+    rep(list(leaf("t")), 33L), rep("tag", 33L)
+  )
+  v <- do.call(mk_video, tags)
+  expect_identical(
+    ext_codes("video", list(v)), "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+  out <- validate_extensions(
+    rows_with_ext("video", list(v)), base,
+    protocol_limits(max_video_tags = 50L)
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("a too-long video description is flagged", {
+  long <- paste(rep("x", 2049L), collapse = "")
+  expect_identical(
+    ext_codes("video", list(mk_video(description = leaf(long)))),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+})
+
+test_that("a bad enum-like video value is flagged, a good one passes", {
+  expect_identical(
+    ext_codes("video", list(mk_video(family_friendly = leaf("maybe")))),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+  expect_length(
+    ext_codes("video", list(mk_video(live = leaf("yes")))), 0L
+  )
+})
+
+test_that("restriction/platform need a valid relationship attribute", {
+  expect_identical(
+    ext_codes("video", list(mk_video(restriction = leaf("US")))),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+  expect_length(
+    ext_codes("video", list(mk_video(
+      restriction = leaf_attr("US", relationship = "allow")
+    ))),
+    0L
+  )
+  expect_identical(
+    ext_codes("video", list(mk_video(
+      platform = leaf_attr("web", relationship = "maybe")
+    ))),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+})
+
+test_that("multiple video violations yield multiple findings", {
+  v <- mk_video(duration = leaf("0"), rating = leaf("9"))
+  out <- validate_extensions(rows_with_ext("video", list(v)), base,
+                             protocol_limits())
+  expect_identical(nrow(out), 2L)
+  expect_identical(unique(out$code), "PROTOCOL_VIDEO_FIELD_INVALID")
+  expect_identical(out$subject_ref[1], paste0(base, "#entry:1:video:1"))
+})
+
+# --- news -------------------------------------------------------------------
+
+test_that("a clean news element produces no findings", {
+  expect_length(ext_codes("news", list(mk_news())), 0L)
+})
+
+test_that("valid news languages pass, invalid ones are flagged", {
+  for (lang in c("en", "eng", "zh-cn", "zh-tw")) {
+    expect_length(ext_codes("news", list(mk_news(language = lang))), 0L)
+  }
+  for (lang in c("english", "e", "EN")) {
+    expect_identical(
+      ext_codes("news", list(mk_news(language = lang))),
+      "PROTOCOL_NEWS_FIELD_INVALID"
+    )
+  }
+})
+
+test_that("an invalid news publication_date is flagged", {
+  expect_identical(
+    ext_codes("news", list(mk_news(publication_date = "not-a-date"))),
+    "PROTOCOL_NEWS_FIELD_INVALID"
+  )
+  expect_length(
+    ext_codes("news", list(
+      mk_news(publication_date = "2024-01-01T12:00:00Z")
+    )),
+    0L
+  )
+})
+
+test_that("news field findings are scoped to the entry and member", {
+  out <- validate_extensions(
+    rows_with_ext("news", list(mk_news(language = "english"))), base,
+    protocol_limits()
+  )
+  expect_identical(out$subject_ref, paste0(base, "#entry:1:news:1"))
+})
+
+test_that("more than 1000 news entries per file is a document finding", {
+  # Spread 1001 news entries across two URLs to prove the count is per-file.
+  rows <- sitemap_rows(
+    loc = c("https://example.com/a", "https://example.com/b"),
+    news = list(
+      rep(list(mk_news()), 600L),
+      rep(list(mk_news()), 401L)
+    )
+  )
+  out <- validate_extensions(rows, base, protocol_limits())
+  cc <- out[out$code == "PROTOCOL_NEWS_COUNT_EXCEEDED", ]
+  expect_identical(nrow(cc), 1L)
+  expect_identical(cc$subject_type, "document")
+  expect_identical(cc$subject_ref, base)
+})
+
+# --- integration + determinism ---------------------------------------------
+
+test_that("validate_protocol wires in the extension rules", {
+  rows <- sitemap_rows(
+    loc = "https://example.com/a",
+    video = list(list(mk_video(duration = leaf("0"))))
+  )
+  out <- validate_protocol(rows, sitemap_url = sm_url)
+  expect_true("PROTOCOL_VIDEO_FIELD_INVALID" %in% out$code)
+})
+
+test_that("rows without extension data produce no extension findings", {
+  out <- validate_extensions(
+    sitemap_rows(loc = c("https://example.com/a", "https://example.com/b")),
+    base, protocol_limits()
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("extension rules are deterministic across repeated calls", {
+  rows <- sitemap_rows(
+    loc = "https://example.com/a",
+    video = list(list(mk_video(rating = leaf("9")))),
+    news = list(list(mk_news(language = "english")))
+  )
+  call <- function() validate_extensions(rows, base, protocol_limits())
+  expect_identical(call(), call())
+})

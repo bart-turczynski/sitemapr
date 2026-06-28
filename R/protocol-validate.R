@@ -10,12 +10,21 @@
 # done here. The rows emitted here carry: code, severity, layer, subject_type,
 # subject_ref, message, evidence, and is_strict_only.
 #
-# This file covers the SITE-fraetonj (D.1), SITE-ysviepus (D.2), and
-# SITE-nmbmgmba (D.3) slices: the findings constructor, the per-`<loc>` URL
-# rules, the count/field-value rules, and the hreflang token policy. The
-# remaining Layer D surface — extension fields, text-sitemap rules, and
-# unsupported-input diagnostics — lands in sibling sub-issues that extend
-# `validate_protocol()`.
+# This file covers the SITE-fraetonj (D.1), SITE-ysviepus (D.2),
+# SITE-nmbmgmba (D.3), and SITE-fwdqovyp (D.4) slices: the findings constructor,
+# the per-`<loc>` URL rules, the count/field-value rules, the hreflang token
+# policy, and the image/video/news extension field rules. The remaining Layer D
+# surface — text-sitemap rules and unsupported-input diagnostics — lands in
+# sibling sub-issues that extend `validate_protocol()`.
+#
+# The extension rules (D.4) read the `images`/`video`/`news` list-columns,
+# whose entries are `xml2::as_list()` conversions of the extension elements
+# (child text in `[[1]]`, repeated children as repeated names, XML attributes as
+# R attributes). Only the value/cap rules XSD cannot express are checked here:
+# per-`<url>` image count, per-file news count, the bounded `<video:*>`
+# optionals (duration/rating/tag-count/description/enums/relationship), and the
+# `<news:language>`/`<news:publication_date>` value formats. Required-child
+# presence and structural one-of constraints remain the schema layer's job.
 #
 # The hreflang policy (D.3) is sitemap-specific, NOT generic
 # BCP-47/`xs:language` (PRD §17; sitemap-spec.md §5.4): it accepts only `lang`,
@@ -199,12 +208,18 @@ protocol_limits <- function(
     ),
     lastmod_generated_tolerance = getOption(
       "sitemapr.lastmod_generated_tolerance", 86400
-    )) {
+    ),
+    max_images_per_url = getOption("sitemapr.max_images_per_url", 1000L),
+    max_news_per_file = getOption("sitemapr.max_news_per_file", 1000L),
+    max_video_tags = getOption("sitemapr.max_video_tags", 32L)) {
   list(
     max_url_count = as.integer(max_url_count),
     max_uncompressed_bytes = as.numeric(max_uncompressed_bytes),
     lastmod_identical_ratio = as.numeric(lastmod_identical_ratio),
-    lastmod_generated_tolerance = as.numeric(lastmod_generated_tolerance)
+    lastmod_generated_tolerance = as.numeric(lastmod_generated_tolerance),
+    max_images_per_url = as.integer(max_images_per_url),
+    max_news_per_file = as.integer(max_news_per_file),
+    max_video_tags = as.integer(max_video_tags)
   )
 }
 
@@ -369,6 +384,235 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
         )
       )
     }
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
+# --- Extension field rules (D.4): image / video / news ---------------------
+
+# Fixed value ranges for the bounded `<video:*>` optionals (sitemap-spec.md
+# §5.3). These are value constraints, not size limits (cf. the priority range
+# and changefreq enum), so unlike the per-extension count caps in
+# `protocol_limits()` they are not configurable.
+protocol_video_duration_range <- c(1L, 28800L)
+protocol_video_rating_range <- c(0, 5)
+protocol_video_description_max <- 2048L
+protocol_video_bool_values <- c("yes", "no")
+protocol_video_rel_values <- c("allow", "deny")
+
+# `<news:language>` exceptions: the two region-qualified codes Google accepts in
+# addition to the bare ISO 639 2-/3-letter codes (sitemap-spec.md §5.2).
+protocol_news_lang_exceptions <- c("zh-cn", "zh-tw")
+
+# Read the trimmed text of an extension element's first `name` child, or `NA`
+# when the child is absent or empty. Children of an `as_list()` element are
+# named list members (namespace prefix stripped); a leaf's text sits in `[[1]]`.
+ext_child_text <- function(el, name) {
+  idx <- which(names(el) == name)
+  if (length(idx) == 0L) {
+    return(NA_character_)
+  }
+  child <- el[[idx[1]]]
+  if (length(child) == 0L || !is.character(child[[1]])) {
+    return(NA_character_)
+  }
+  trimws(child[[1]])
+}
+
+# How many `name` children the element has (repeated elements repeat the name).
+ext_child_count <- function(el, name) sum(names(el) == name)
+
+# TRUE when the element has at least one `name` child.
+ext_has_child <- function(el, name) any(names(el) == name)
+
+# An attribute of the element's first `name` child, or `NULL` when absent.
+ext_child_attr <- function(el, name, attrname) {
+  idx <- which(names(el) == name)
+  if (length(idx) == 0L) {
+    return(NULL)
+  }
+  attr(el[[idx[1]]], attrname, exact = TRUE)
+}
+
+# One extension field/count finding scoped to a member of an entry (ref
+# `…#entry:i:kind:m`, e.g. `…#entry:3:video:1`).
+protocol_ext_finding <- function(code, base, i, kind, m, message,
+                                 excerpt = NA_character_) {
+  protocol_findings(
+    code = code,
+    severity = "error",
+    subject_type = "entry",
+    subject_ref = protocol_ref_fragment(
+      base, sprintf("#entry:%d:%s:%d", i, kind, m)
+    ),
+    message = message,
+    evidence = list(protocol_evidence(excerpt = excerpt)),
+    is_strict_only = FALSE
+  )
+}
+
+# `<news:language>` is valid when it is a bare ISO 639 2-/3-letter code or one
+# of the region-qualified exceptions. (Case-sensitive: Google emits lowercase.)
+news_language_ok <- function(lang) {
+  grepl("^[a-z]{2,3}$", lang) || lang %in% protocol_news_lang_exceptions
+}
+
+# Value-rule violations for one `<news:news>` element, as a character vector of
+# messages (empty = clean). Required-child presence is the schema layer's job;
+# here only the value formats XSD cannot express are checked.
+validate_news_element <- function(n) {
+  msgs <- character(0)
+
+  pub_idx <- which(names(n) == "publication")
+  if (length(pub_idx) > 0L) {
+    lang <- ext_child_text(n[[pub_idx[1]]], "language")
+    if (!is.na(lang) && !news_language_ok(lang)) {
+      msgs <- c(msgs, sprintf(
+        "<news:language> '%s' is not a valid ISO 639 language code.", lang
+      ))
+    }
+  }
+
+  pdate <- ext_child_text(n, "publication_date")
+  if (!is.na(pdate) && is.na(parse_lastmod(pdate))) {
+    msgs <- c(msgs, sprintf(
+      "<news:publication_date> '%s' is not a valid W3C date-time value.", pdate
+    ))
+  }
+
+  msgs
+}
+
+# Value-rule violations for one `<video:video>` element, as a character vector
+# of messages (empty = clean). Covers the bounded optionals (sitemap-spec.md
+# §5.3); required-child presence and the content_loc/player_loc one-of rule
+# are structural and left to the schema layer.
+validate_video_element <- function(v, max_tags) {
+  msgs <- character(0)
+
+  dur <- ext_child_text(v, "duration")
+  if (!is.na(dur)) {
+    d <- suppressWarnings(as.numeric(dur))
+    rng <- protocol_video_duration_range
+    if (is.na(d) || d != round(d) || d < rng[1] || d > rng[2]) {
+      msgs <- c(msgs, sprintf(
+        "<video:duration> '%s' must be an integer between %d and %d seconds.",
+        dur, rng[1], rng[2]
+      ))
+    }
+  }
+
+  rat <- ext_child_text(v, "rating")
+  if (!is.na(rat)) {
+    r <- suppressWarnings(as.numeric(rat))
+    rng <- protocol_video_rating_range
+    if (is.na(r) || r < rng[1] || r > rng[2]) {
+      msgs <- c(msgs, sprintf(
+        "<video:rating> '%s' must be a number between %.1f and %.1f.",
+        rat, rng[1], rng[2]
+      ))
+    }
+  }
+
+  ntag <- ext_child_count(v, "tag")
+  if (ntag > max_tags) {
+    msgs <- c(msgs, sprintf(
+      "<video:tag> count %d exceeds the limit of %d per video.", ntag, max_tags
+    ))
+  }
+
+  desc <- ext_child_text(v, "description")
+  if (!is.na(desc) && nchar(desc) > protocol_video_description_max) {
+    msgs <- c(msgs, sprintf(
+      "<video:description> is %d characters; the limit is %d.",
+      nchar(desc), protocol_video_description_max
+    ))
+  }
+
+  for (enum in c("family_friendly", "requires_subscription", "live")) {
+    val <- ext_child_text(v, enum)
+    if (!is.na(val) && !val %in% protocol_video_bool_values) {
+      msgs <- c(msgs, sprintf(
+        "<video:%s> '%s' must be 'yes' or 'no'.", enum, val
+      ))
+    }
+  }
+
+  for (rel in c("restriction", "platform")) {
+    if (ext_has_child(v, rel)) {
+      a <- ext_child_attr(v, rel, "relationship")
+      if (is.null(a) || !as.character(a) %in% protocol_video_rel_values) {
+        msgs <- c(msgs, sprintf(
+          "<video:%s> requires a relationship=\"allow\" or \"deny\" attribute.",
+          rel
+        ))
+      }
+    }
+  }
+
+  msgs
+}
+
+# Extension field/count rules over the `images`/`video`/`news` list-columns.
+# Per-`<url>` image count and per-video/per-news value rules are entry-scoped;
+# the news count is per-FILE and document-scoped. Returns a (possibly empty)
+# protocol-findings tibble.
+validate_extensions <- function(rows, base, limits) {
+  images <- rows$images
+  video <- rows$video
+  news <- rows$news
+  out <- list()
+  total_news <- 0L
+
+  for (i in seq_len(nrow(rows))) {
+    imgs <- images[[i]]
+    if (!is.null(imgs) && length(imgs) > limits$max_images_per_url) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_IMAGE_COUNT_EXCEEDED", "error", "entry", base, i,
+        NA_character_,
+        sprintf(
+          "<url> has %d <image:image> entries; the limit is %d per URL.",
+          length(imgs), limits$max_images_per_url
+        )
+      )
+    }
+
+    vids <- video[[i]]
+    if (!is.null(vids)) {
+      for (m in seq_along(vids)) {
+        for (msg in validate_video_element(vids[[m]], limits$max_video_tags)) {
+          out[[length(out) + 1L]] <- protocol_ext_finding(
+            "PROTOCOL_VIDEO_FIELD_INVALID", base, i, "video", m, msg
+          )
+        }
+      }
+    }
+
+    nws <- news[[i]]
+    if (!is.null(nws)) {
+      total_news <- total_news + length(nws)
+      for (m in seq_along(nws)) {
+        for (msg in validate_news_element(nws[[m]])) {
+          out[[length(out) + 1L]] <- protocol_ext_finding(
+            "PROTOCOL_NEWS_FIELD_INVALID", base, i, "news", m, msg
+          )
+        }
+      }
+    }
+  }
+
+  if (total_news > limits$max_news_per_file) {
+    out[[length(out) + 1L]] <- protocol_document_finding(
+      "PROTOCOL_NEWS_COUNT_EXCEEDED", "error", base,
+      sprintf(
+        "Sitemap has %d <news:news> entries; the limit is %d per file.",
+        total_news, limits$max_news_per_file
+      )
+    )
   }
 
   if (length(out) == 0L) {
@@ -848,10 +1092,10 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 #' rows for a conformant document. Does not assemble the final contract (no
 #' `mode`, no filtering/dedup/sort across sources — those are Layer F).
 #'
-#' This is the D.1 + D.2 + D.3 slice: per-`<loc>` URL rules, count/field-value
-#' rules, and the hreflang token policy over the `alternates` list-column. Later
-#' sub-issues extend it with extension, text-sitemap, and unsupported-input
-#' checks.
+#' This is the D.1–D.4 slice: per-`<loc>` URL rules, count/field-value rules,
+#' the hreflang token policy over the `alternates` list-column, and the
+#' image/video/news extension field rules. Later sub-issues extend it with
+#' text-sitemap and unsupported-input checks.
 #'
 #' @param rows A parsed row tibble from [sitemap_rows()] / the format parsers.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
@@ -896,7 +1140,8 @@ validate_protocol <- function(rows, sitemap_url = NA_character_,
     validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
     validate_field_values(rows, subject_ref, lastmod_raw),
     validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
-    validate_hreflang(rows, subject_ref)
+    validate_hreflang(rows, subject_ref),
+    validate_extensions(rows, subject_ref, limits)
   )
   parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
   if (length(parts) == 0L) {
