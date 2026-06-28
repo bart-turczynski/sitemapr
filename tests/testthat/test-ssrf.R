@@ -143,11 +143,20 @@ test_that("hex-hextet mapped private ::ffff:c0a8:1 is rejected", {
   expect_identical(res$reason, "ipv4-mapped")
 })
 
-test_that("compressed single-hextet mapped ::ffff:1 decodes to 0.0.0.1", {
-  # High hextet implicitly 0, low hextet 1 -> 0.0.0.1 (unspecified 0.0.0.0/8).
-  res <- guard("http://[::ffff:1]/")
+test_that("mapped ::ffff:0:1 (h7=0,h8=1) decodes to 0.0.0.1", {
+  # Both IPv4 hextets present: h6=ffff, h7=0, h8=1 -> 0.0.0.1 (0.0.0.0/8).
+  res <- guard("http://[::ffff:0:1]/")
   expect_false(res$allowed)
   expect_identical(res$reason, "ipv4-mapped")
+})
+
+test_that("::ffff:1 is a plain IPv6 address, not an IPv4-mapped form", {
+  # ::ffff:1 expands to 0:0:0:0:0:0:ffff:1 (ffff in the 7th group, not the
+  # 6th), so it is NOT IPv4-mapped — a real stack routes it to that literal
+  # IPv6 address, never to 0.0.0.1. The guard treats it as a normal address.
+  res <- guard("http://[::ffff:1]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
 })
 
 test_that("fully-expanded hex-hextet mapped loopback is rejected", {
@@ -171,6 +180,106 @@ test_that("hex-hextet mapped form is case-insensitive", {
 test_that("hex-hextet mapped PUBLIC address still passes", {
   # 5db8:d822 == 93.184.216.34 (example.com), public.
   res <- guard("http://[::ffff:5db8:d822]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+# ---- IPv4-translated ::ffff:0:0:0/96 (SITE-lgpgudfb hardening) ---------------
+
+test_that("IPv4-translated of loopback is rejected (hex + dotted)", {
+  expect_identical(guard("http://[::ffff:0:7f00:1]/")$reason, "ipv4-translated")
+  expect_identical(
+    guard("http://[::ffff:0:127.0.0.1]/")$reason, "ipv4-translated"
+  )
+})
+
+test_that("IPv4-translated of a private address is rejected", {
+  # c0a8:0001 == 192.168.0.1
+  res <- guard("http://[::ffff:0:c0a8:1]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "ipv4-translated")
+})
+
+test_that("IPv4-translated of a PUBLIC address is allowed", {
+  res <- guard("http://[::ffff:0:8.8.8.8]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+# ---- IPv4-compatible ::/96 (deprecated SIIT form) ----------------------------
+
+test_that("IPv4-compatible of loopback is rejected (hex + dotted)", {
+  expect_identical(guard("http://[::7f00:1]/")$reason, "ipv4-compatible")
+  expect_identical(guard("http://[::127.0.0.1]/")$reason, "ipv4-compatible")
+})
+
+test_that("IPv4-compatible of a private address is rejected", {
+  res <- guard("http://[::c0a8:1]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "ipv4-compatible")
+})
+
+test_that("IPv4-compatible of a PUBLIC address is allowed", {
+  res <- guard("http://[::8.8.8.8]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+test_that("the :: and ::1 specials are NOT read as IPv4-compatible", {
+  # :: -> unspecified, ::1 -> loopback; the compatible decoder must defer to
+  # these rather than reading them as 0.0.0.0 / 0.0.0.1.
+  expect_identical(guard("http://[::]/")$reason, "unspecified")
+  expect_identical(guard("http://[::1]/")$reason, "loopback")
+})
+
+# ---- NAT64 well-known prefix 64:ff9b::/96 ------------------------------------
+
+test_that("NAT64 WKP embedding loopback is rejected (hex + dotted)", {
+  expect_identical(guard("http://[64:ff9b::7f00:1]/")$reason, "nat64")
+  expect_identical(guard("http://[64:ff9b::127.0.0.1]/")$reason, "nat64")
+})
+
+test_that("NAT64 WKP embedding the cloud-metadata IP is rejected", {
+  # a9fe:a9fe == 169.254.169.254
+  res <- guard("http://[64:ff9b::a9fe:a9fe]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "nat64")
+})
+
+test_that("NAT64 WKP embedding a PUBLIC address is allowed", {
+  res <- guard("http://[64:ff9b::8.8.8.8]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+# ---- NAT64 local-use prefix 64:ff9b:1::/48 (RFC 6052 §2.2 bit packing) -------
+
+test_that("NAT64 /48 decodes the IPv4 across the reserved u-byte (private)", {
+  # 192.168.0.1: a.b -> h4=c0a8, u+c -> h5=0000, d -> h6=0100.
+  res <- guard("http://[64:ff9b:1:c0a8:0:100::]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "nat64")
+})
+
+test_that("NAT64 /48 decodes the cloud-metadata IP", {
+  # 169.254.169.254: h4=a9fe, h5=00a9, h6=fe00.
+  res <- guard("http://[64:ff9b:1:a9fe:a9:fe00::]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "nat64")
+})
+
+test_that("NAT64 /48 embedding a PUBLIC address is allowed", {
+  # 8.8.8.8: h4=0808, h5=0008, h6=0800.
+  res <- guard("http://[64:ff9b:1:808:8:800::]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+# ---- embedding decoder does not over-block normal IPv6 -----------------------
+
+test_that("a non-embedding IPv6 with a dotted tail is allowed", {
+  # 2001:db8::1.2.3.4 is a documentation-range address, not an embedding prefix.
+  res <- guard("http://[2001:db8::1.2.3.4]/")
   expect_true(res$allowed)
   expect_true(is.na(res$reason))
 })

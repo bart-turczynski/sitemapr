@@ -42,8 +42,18 @@ any of the following:
 - **Cloud metadata:** `100.64.0.0/10` (CGNAT), and well-known metadata
   hostnames (`169.254.169.254`, `metadata.google.internal`, `fd00:ec2::254`)
 - **Unspecified:** `0.0.0.0/8` (IPv4), `::` (IPv6)
-- **IPv4-mapped-IPv6:** `::ffff:10.x.x.x`, `::ffff:192.168.x.x`, etc.
-  (prevents IPv6-notation bypass of IPv4 range checks)
+- **IPv6→IPv4 embedding prefixes:** every IPv6 spelling that embeds a 32-bit
+  IPv4 address is decoded and the embedded address re-checked against the IPv4
+  ranges above (a *public* embedded address is still allowed). Covered forms:
+  IPv4-mapped `::ffff:a.b.c.d` (`::ffff:0:0/96`); IPv4-translated
+  `::ffff:0:a.b.c.d` (`::ffff:0:0:0/96`); deprecated IPv4-compatible `::a.b.c.d`
+  (`::/96`, excluding `::`/`::1`); NAT64 well-known `64:ff9b::a.b.c.d`
+  (`64:ff9b::/96`); and NAT64 local-use `64:ff9b:1::/48` (RFC 6052 §2.2 packing,
+  IPv4 split across the reserved u-byte). Dotted, hex-hextet, and fully-expanded
+  spellings are all handled, since `rurl` normalizes them inconsistently. This
+  prevents IPv6-notation bypass of the IPv4 range checks. *Arbitrary
+  deployment-configured NAT64 prefixes are not covered (only the two
+  IANA-assigned ones); DNS resolve-then-check remains out of scope (below).*
 - **Numeric/octal literals:** reject hosts encoded as raw decimal integers,
   hex integers, or octal octets (e.g., `0x7f000001`, `017700000001`,
   `2130706433`)
