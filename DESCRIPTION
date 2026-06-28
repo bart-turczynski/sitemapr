@@ -1,13 +1,17 @@
 Package: sitemapr
 Type: Package
-Title: One Line Description in Title Case
+Title: Parse and Validate XML Sitemaps
 Version: 0.0.0.9000
 Authors@R:
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: A single paragraph describing what the package does and why it is
-    useful. End the description with a full stop. Replace this placeholder text
-    before submitting to CRAN.
+    person("Bart", "Turczynski", , "b.turczynski@tidio.net", role = c("aut", "cre"))
+Description: A deterministic toolkit for reading and validating XML, text, and
+    index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC
+    standards. It parses sitemap sources into tidy tibbles, expands sitemap
+    indexes, and reports schema and protocol findings with stable, reproducible
+    output.
 License: MIT + file LICENSE
+Imports:
+    rurl (>= 1.4.0)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
