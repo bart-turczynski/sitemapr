@@ -11,7 +11,7 @@
 # name enough to distinguish the sitemap roots from other XML/HTML.
 #
 # The returned value is ONE string from this closed set:
-#   "empty", "gzip", "tar", "xml-urlset", "xml-sitemapindex", "xml",
+#   "empty", "gzip", "tar", "xml-urlset", "xml-sitemapindex", "feed", "xml",
 #   "html", "text", "binary"
 # The feature `fetch_classification.feature` pins "xml-urlset" and "gzip" as
 # non-negotiable; the remaining names follow docs/architecture.md / docs/PRD.md.
@@ -134,13 +134,32 @@ sniff_strip_prologue <- function(s) {
       next
     }
     # <!DOCTYPE ...> or other declaration-style markup (but NOT a comment, which
-    # is handled above). Consume up to the next ">".
+    # is handled above). A DOCTYPE may carry an internal subset in brackets,
+    # e.g. `<!DOCTYPE urlset [ <!ENTITY xxe SYSTEM "..."> ]>`: its declarations
+    # themselves contain ">" — so a naive "consume to the first >" stops inside
+    # the subset and strands "]>...<root>". When a "[" opens before the closing
+    # ">", skip from "[" to the matching "]" and then to the following ">".
     if (startsWith(s, "<!")) {
-      end <- regexpr(">", s, fixed = TRUE)
-      if (end < 0L) {
+      gt <- regexpr(">", s, fixed = TRUE)
+      if (gt < 0L) {
         return("")
       }
-      s <- substring(s, end + 1L)
+      open <- regexpr("[", s, fixed = TRUE)
+      has_subset <- open > 0L && open < gt
+      if (has_subset) {
+        close <- regexpr("]", substring(s, open + 1L), fixed = TRUE)
+        if (close < 0L) {
+          return("") # unterminated internal subset
+        }
+        close_abs <- open + close
+        after_gt <- regexpr(">", substring(s, close_abs + 1L), fixed = TRUE)
+        if (after_gt < 0L) {
+          return("") # subset closed but no trailing ">"
+        }
+        s <- substring(s, close_abs + after_gt + 1L)
+        next
+      }
+      s <- substring(s, gt + 1L)
       next
     }
     return(s)
@@ -191,6 +210,15 @@ sniff_format <- function(bytes) {
     }
     if (grepl("^<([a-z0-9_.-]+:)?sitemapindex([[:space:]>/]|$)", root)) {
       return("xml-sitemapindex")
+    }
+
+    # RSS / Atom feed roots. Checked after the sitemap roots (so a urlset or
+    # sitemapindex always wins) and before the HTML / generic-xml catch-alls.
+    if (grepl("^<([a-z0-9_.-]+:)?rss([[:space:]>/]|$)", root)) {
+      return("feed")
+    }
+    if (grepl("^<([a-z0-9_.-]+:)?feed([[:space:]>/]|$)", root)) {
+      return("feed")
     }
 
     # HTML markers. Check after the sitemap roots so an XML sitemap is never
