@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Served at https://example.com/index-self-ref.xml: lists itself (a cycle,
+     must not be followed) alongside a normal child that still expands. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/index-self-ref.xml</loc></sitemap>
+  <sitemap><loc>https://example.com/child-1.xml</loc></sitemap>
+</sitemapindex>

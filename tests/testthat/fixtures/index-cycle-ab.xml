@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Index A, served at https://example.com/index-cycle-ab.xml. Points to index
+     B (https://example.com/index-b.xml), which the step serves pointing back at
+     A: an A -> B -> A cycle caught at the second visit of A. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/index-b.xml</loc></sitemap>
+</sitemapindex>
