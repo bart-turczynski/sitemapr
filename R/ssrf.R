@@ -9,7 +9,21 @@
 # matcher below always evaluates and is independently testable. The reason codes
 # returned are machine-readable and stable:
 #   "loopback", "private", "link-local", "cloud-metadata", "unspecified",
-#   "ipv4-mapped", "numeric-literal", "scheme"; NA when allowed.
+#   "ipv4-mapped", "ipv4-translated", "ipv4-compatible", "nat64",
+#   "numeric-literal", "scheme"; NA when allowed.
+#
+# IPv6->IPv4 embedding (ADR-003 §1). Several IPv6 spellings embed a 32-bit IPv4
+# address; left undecoded each is a bypass of the IPv4 range checks. We decode
+# all of them and re-run the IPv4 classifier on the embedded address (a PUBLIC
+# embedded address is still allowed — only blocked v4 ranges are rejected):
+#   prefix             form             reason code
+#   ::ffff:0:0/96      IPv4-mapped      "ipv4-mapped"
+#   ::ffff:0:0:0/96    IPv4-translated  "ipv4-translated"
+#   ::/96              IPv4-compatible  "ipv4-compatible" (deprecated SIIT)
+#   64:ff9b::/96       NAT64 well-known "nat64"
+#   64:ff9b:1::/48     NAT64 local-use  "nat64" (RFC 6052 §2.2 packing)
+# DNS resolve-then-check and arbitrary (deployment-configured) NAT64 prefixes
+# remain out of scope per ADR-003 §1.
 
 # ---- helpers: IPv4 -----------------------------------------------------------
 
@@ -95,93 +109,137 @@ ssrf_strip_brackets <- function(s) {
   s
 }
 
-# Extract the embedded IPv4 dotted-quad tail of an IPv4-mapped IPv6 address
-# (e.g. "::ffff:192.168.1.1" -> "192.168.1.1"). Returns NA_character_ if `s` is
-# not an IPv4-mapped form. Accepts both "::ffff:a.b.c.d" and the fully expanded
-# "0:0:0:0:0:ffff:a.b.c.d" spellings, case-insensitively.
-ssrf_ipv4_mapped_tail <- function(s) {
-  low <- tolower(s)
-  m <- regmatches(
-    low,
-    regexpr("(^|:)ffff:([0-9]{1,3}(\\.[0-9]{1,3}){3})$", low)
-  )
-  if (length(m) == 0L) {
-    return(NA_character_)
+# Expand an IPv6 literal (brackets already stripped) into a numeric vector of
+# exactly 8 hextets (each 0..65535), or NULL when `s` is not a well-formed IPv6
+# literal. Handles `::` zero-compression (at most one run) and a trailing
+# dotted-quad IPv4 tail (folded into the final two hextets). Hextets are stored
+# as doubles so downstream arithmetic stays clear of R's signed-32-bit overflow.
+# This single expander unifies every spelling rurl may or may not normalize, so
+# the embedding detector below works off bit positions rather than fragile
+# per-form regexes.
+ssrf_ipv6_hextets <- function(s) {
+  if (length(s) != 1L || is.na(s) || !nzchar(s)) {
+    return(NULL)
   }
-  # Pull the trailing dotted-quad out of the matched fragment.
-  quad <- sub("^.*ffff:", "", m)
-  quad
+  low <- tolower(s)
+  if (!grepl(":", low, fixed = TRUE) || !grepl("^[0-9a-f:.]+$", low)) {
+    return(NULL)
+  }
+
+  # Fold a trailing dotted-quad (IPv4 tail) into two hex hextets.
+  m <- regexpr("[0-9]{1,3}(\\.[0-9]{1,3}){3}$", low)
+  if (m != -1L) {
+    quad <- regmatches(low, m)
+    if (!ssrf_is_dotted_quad(quad)) {
+      return(NULL)
+    }
+    n <- ssrf_ipv4_to_num(quad)
+    low <- paste0(
+      substr(low, 1L, m - 1L),
+      sprintf("%x:%x", n %/% 65536, n %% 65536)
+    )
+  }
+
+  # Split out the (at most one) "::" zero-compression run.
+  if (grepl("::", low, fixed = TRUE)) {
+    if (length(gregexpr("::", low, fixed = TRUE)[[1L]]) > 1L) {
+      return(NULL)
+    }
+    pos <- regexpr("::", low, fixed = TRUE)
+    left_s <- substr(low, 1L, pos - 1L)
+    right_s <- substr(low, pos + 2L, nchar(low))
+    left <- if (nzchar(left_s)) {
+      strsplit(left_s, ":", fixed = TRUE)[[1L]]
+    } else {
+      character(0L)
+    }
+    right <- if (nzchar(right_s)) {
+      strsplit(right_s, ":", fixed = TRUE)[[1L]]
+    } else {
+      character(0L)
+    }
+    fill <- 8L - length(left) - length(right)
+    if (fill < 1L) {
+      return(NULL)
+    }
+    groups <- c(left, rep("0", fill), right)
+  } else {
+    groups <- strsplit(low, ":", fixed = TRUE)[[1L]]
+    if (length(groups) != 8L) {
+      return(NULL)
+    }
+  }
+
+  if (length(groups) != 8L || !all(grepl("^[0-9a-f]{1,4}$", groups))) {
+    return(NULL)
+  }
+  as.numeric(strtoi(groups, base = 16L))
 }
 
-# Decode the HEX-HEXTET spelling of an IPv4-mapped IPv6 address into a dotted
-# quad. The same `::ffff:a.b.c.d` mapping can also be written with the IPv4 tail
-# as two 16-bit hextets, e.g. "::ffff:7f00:1" == "::ffff:127.0.0.1", which rurl
-# does NOT normalize. We match `ffff:HHHH:HHHH` (each hextet 1-4 hex digits,
-# zero-padded or short), or the compressed single-hextet form `ffff:HHHH` where
-# the high hextet is implicitly 0 (e.g. "::ffff:1" == 0.0.0.1). The high hextet
-# is the top 16 bits, the low hextet the bottom 16 bits, of the 32-bit IPv4.
-# Returns NA_character_ when `s` is not an `::ffff:` hex-hextet mapped form.
-# Only the `::ffff:` prefix is handled (ADR-003 matrix); NAT64 / other prefixes
-# are intentionally out of scope.
-ssrf_ipv4_mapped_hex_tail <- function(s) {
-  low <- tolower(s)
-  # Two-hextet form: ...ffff:HHHH:HHHH
-  m2 <- regmatches(
-    low, regexpr("(^|:)ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$", low)
-  )
-  if (length(m2) > 0L) {
-    hextets <- sub("^.*ffff:", "", m2)
-    parts <- strsplit(hextets, ":", fixed = TRUE)[[1L]]
-    hi <- strtoi(parts[[1L]], base = 16L)
-    lo <- strtoi(parts[[2L]], base = 16L)
-  } else {
-    # Compressed single-hextet form: ...ffff:HHHH (high hextet implicitly 0).
-    m1 <- regmatches(low, regexpr("(^|:)ffff:([0-9a-f]{1,4})$", low))
-    if (length(m1) == 0L) {
-      return(NA_character_)
-    }
-    hi <- 0L
-    lo <- strtoi(sub("^.*ffff:", "", m1), base = 16L)
+# Given the 8 expanded hextets, detect an IPv6->IPv4 embedding prefix and return
+# the embedded dotted-quad plus its reason code as `list(quad, reason)`, or NULL
+# when no embedding prefix matches. Last-32-bit forms read the IPv4 from h7/h8;
+# the NAT64 local-use /48 packs the IPv4 across the RFC 6052 §2.2 bit layout
+# (octets at bits 48-63 and 72-95, skipping the reserved u-byte at bits 64-71).
+ssrf_embedded_ipv4 <- function(h) {
+  quad <- function(n) {
+    paste(
+      c(n %/% 16777216, (n %/% 65536) %% 256, (n %/% 256) %% 256, n %% 256),
+      collapse = "."
+    )
   }
-  # Build the dotted quad with plain arithmetic (n can reach 2^32 - 1, which
-  # overflows R's signed 32-bit integer, so avoid bit ops / integer coercion).
-  n <- hi * 65536 + lo
-  o1 <- n %/% 16777216
-  o2 <- (n %/% 65536) %% 256
-  o3 <- (n %/% 256) %% 256
-  o4 <- n %% 256
-  paste(c(o1, o2, o3, o4), collapse = ".")
+  tail32 <- h[7L] * 65536 + h[8L]
+
+  # IPv4-mapped: five zero hextets then ffff, IPv4 in the last 32 bits.
+  if (all(h[1:5] == 0) && h[6L] == 0xffff) {
+    return(list(quad(tail32), "ipv4-mapped"))
+  }
+  # IPv4-translated: four zero hextets, then ffff and a zero hextet.
+  if (all(h[1:4] == 0) && h[5L] == 0xffff && h[6L] == 0) {
+    return(list(quad(tail32), "ipv4-translated"))
+  }
+  # NAT64 well-known prefix, IPv4 in the last 32 bits.
+  if (h[1L] == 0x64 && h[2L] == 0xff9b && all(h[3:6] == 0)) {
+    return(list(quad(tail32), "nat64"))
+  }
+  # NAT64 local-use prefix; IPv4 split per RFC 6052 §2.2 around the u-byte.
+  if (h[1L] == 0x64 && h[2L] == 0xff9b && h[3L] == 1) {
+    o <- c(h[4L] %/% 256, h[4L] %% 256, h[5L] %% 256, h[6L] %/% 256)
+    return(list(paste(o, collapse = "."), "nat64"))
+  }
+  # IPv4-compatible (deprecated): six zero hextets. Excludes the unspecified
+  # and loopback specials, which must not be read as 0.0.0.0 / 0.0.0.1.
+  if (all(h[1:6] == 0) && !(h[7L] == 0 && h[8L] <= 1)) {
+    return(list(quad(tail32), "ipv4-compatible"))
+  }
+  NULL
 }
 
 # Classify an IPv6 literal (brackets already stripped) against ADR-003 ranges.
 ssrf_classify_ipv6 <- function(s) {
   low <- tolower(s)
 
-  # IPv4-mapped IPv6: reject if the embedded v4 address is in any blocked range
-  # (bypass prevention, ADR-003). Reported as "ipv4-mapped".
-  tail <- ssrf_ipv4_mapped_tail(low)
-  if (!is.na(tail) && ssrf_is_dotted_quad(tail)) {
-    if (!is.na(ssrf_classify_ipv4(tail))) {
-      return("ipv4-mapped")
-    }
-  }
-  # Same mapping written with the IPv4 tail as hex hextets (rurl does not
-  # normalize this spelling), e.g. "::ffff:7f00:1" == "::ffff:127.0.0.1".
-  hex_tail <- ssrf_ipv4_mapped_hex_tail(low)
-  if (!is.na(hex_tail) && ssrf_is_dotted_quad(hex_tail)) {
-    if (!is.na(ssrf_classify_ipv4(hex_tail))) {
-      return("ipv4-mapped")
-    }
-  }
-
-  # Loopback ::1
+  # Pure-literal specials first, so an embedding decoder can never mislabel them
+  # (e.g. read "::1" as the IPv4-compatible address 0.0.0.1).
   if (low == "::1") {
     return("loopback")
   }
-  # Unspecified ::
   if (low == "::") {
     return("unspecified")
   }
+
+  # IPv6->IPv4 embedding prefixes: decode and reject if the embedded v4 falls in
+  # a blocked range (bypass prevention, ADR-003). A public embedded address is
+  # allowed, matching the IPv4-literal policy.
+  h <- ssrf_ipv6_hextets(low)
+  if (!is.null(h)) {
+    emb <- ssrf_embedded_ipv4(h)
+    if (!is.null(emb) && ssrf_is_dotted_quad(emb[[1L]]) &&
+          !is.na(ssrf_classify_ipv4(emb[[1L]]))) {
+      return(emb[[2L]])
+    }
+  }
+
   # Link-local fe80::/10 — first hextet 0xfe80..0xfebf.
   if (grepl("^fe[89ab][0-9a-f]?:", low) || grepl("^fe[89ab][0-9a-f]?$", low)) {
     return("link-local")
