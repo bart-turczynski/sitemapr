@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- priority 0.0 and 1.0 are valid boundaries -> no priority finding. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/low</loc><priority>0.0</priority></url>
+  <url><loc>https://example.com/high</loc><priority>1.0</priority></url>
+</urlset>

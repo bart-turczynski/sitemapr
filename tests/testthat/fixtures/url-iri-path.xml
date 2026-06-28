@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- IRI with a Unicode path (literal U+00E9): accepted (no URL finding); its
+     identity key uses the percent-encoded RFC 3986 URI form via
+     parse_url_adapter(path_encoding = "encode"). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/café</loc></url>
+</urlset>

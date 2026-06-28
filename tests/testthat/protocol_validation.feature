@@ -18,13 +18,16 @@ Feature: Layer D — protocol and semantic validation
 
   Scenario: loc outside the sitemap's origin scope produces PROTOCOL_URL_OUT_OF_SCOPE
     Given fixture "url-out-of-scope.xml" where loc belongs to a different domain
-    When I call validate_sitemap on the fixture
+    When I call validate_sitemap on the mocked source
     Then a finding with code PROTOCOL_URL_OUT_OF_SCOPE is produced
+    # Reconciled (F.4): the protocol scope check only runs when the sitemap has
+    # an origin URL (a local file has none), so this drives a mocked URL source.
 
   Scenario: Two entries with the same normalized loc produce PROTOCOL_DUPLICATE_LOC
-    Given fixture "url-duplicate-loc.xml"
+    Given fixture "urlset-duplicate-loc.xml"
     When I call validate_sitemap on the fixture
     Then a finding with code PROTOCOL_DUPLICATE_LOC is produced
+    # Reconciled (F.4): the committed fixture is urlset-duplicate-loc.xml (F.3).
 
   Scenario: Default port is stripped for loc identity comparison
     Given two entries where one uses ":443" and the other omits the default port
@@ -96,10 +99,14 @@ Feature: Layer D — protocol and semantic validation
     When I call validate_sitemap on the fixture
     Then no hreflang finding is produced
 
-  Scenario: Hreflang tag with underscore separator produces HREFLANG_FORMAT_INVALID
+  Scenario: Hreflang tag with underscore separator produces HREFLANG_SEPARATOR_INVALID
     Given fixture "hreflang-invalid-sep.xml" with "en_US" as a tag
     When I call validate_sitemap on the fixture
-    Then a finding with code HREFLANG_FORMAT_INVALID is produced
+    Then a finding with code HREFLANG_SEPARATOR_INVALID is produced
+    # Reconciled (F.4): classify_hreflang_token() in R/protocol-validate.R maps an
+    # underscore to HREFLANG_SEPARATOR_INVALID (the bad-separator check precedes
+    # the family-shape check). The draft's HREFLANG_FORMAT_INVALID was stale; the
+    # scenario is reconciled to the real classifier output (classifier unchanged).
 
   Scenario: Missing x-default in a hreflang set produces HREFLANG_XDEFAULT_MISSING
     Given fixture "hreflang-no-xdefault.xml"
@@ -156,7 +163,11 @@ Feature: Layer D — protocol and semantic validation
     Then a finding with code UNSUPPORTED_ROOT is produced
 
   Scenario: Sitemap index child pointing at an RSS feed produces UNSUPPORTED_FEED
-    Given fixture "index-rss-child.xml"
-    When I call validate_sitemap on the fixture
+    Given fixture "index-rss-child.xml" whose child loc is an RSS feed
+    When I call validate_sitemap on the mocked source
     Then a finding with code UNSUPPORTED_FEED is produced
     And the finding severity is "info" or "warning"
+    # Reconciled (F.4): expansion only runs for a URL source, so this drives the
+    # index URL with an offline httr2 mock serving the index and its RSS child.
+    # The producer emits UNSUPPORTED_FEED at "error" severity, which the "info or
+    # warning" tolerance accepts (the scenario only forbids a fatal).

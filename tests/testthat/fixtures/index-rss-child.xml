@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A sitemapindex whose only child <loc> is fetched (offline mock) and sniffed
+     as an RSS feed -> UNSUPPORTED_FEED. The child body is served as <rss> by
+     the cucumber step's httr2 mock; expansion only runs for a URL source, so the
+     step drives validate_sitemap() on the index URL, not this local file. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/feed.xml</loc></sitemap>
+</sitemapindex>
