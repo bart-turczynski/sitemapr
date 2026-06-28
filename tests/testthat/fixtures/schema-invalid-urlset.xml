@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Schema-invalid: <priority> appears before <loc>, violating the tUrl
+     element order (loc must be the first child of <url>). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <priority>0.5</priority>
+    <loc>https://example.com/misordered</loc>
+  </url>
+</urlset>

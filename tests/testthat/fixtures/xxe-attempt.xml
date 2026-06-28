@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- XXE attempt: declares an external SYSTEM entity and references it inside
+     <loc>. XXE-safe parsing (no NOENT/DTDLOAD) must NOT expand &xxe; to the
+     file contents; the reference yields empty text instead. -->
+<!DOCTYPE urlset [
+  <!ENTITY xxe SYSTEM "file:///etc/hostname">
+]>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/&xxe;</loc>
+  </url>
+</urlset>

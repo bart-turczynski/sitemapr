@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Uses a namespace the schema catalog does not recognise
+     (https://example.com/ns/custom). Layer C must emit
+     SCHEMA_UNKNOWN_NAMESPACE rather than attempt validation or import. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:custom="https://example.com/ns/custom">
+  <url>
+    <loc>https://example.com/page</loc>
+    <custom:thing>data</custom:thing>
+  </url>
+</urlset>

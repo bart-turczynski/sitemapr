@@ -1,0 +1,29 @@
+# Test fixture provenance
+
+These fixtures live under `tests/` and are NOT installed or shipped in the
+package (`inst/`); they exist only to drive the offline test suite.
+
+Unless noted otherwise below, every fixture in this directory is
+**sitemapr-authored, clean-room** content created for this project and is
+covered by the package license (MIT). The XML/text files describe synthetic
+`example.com` sitemaps; they reproduce no third-party document.
+
+## Schema-validation fixtures (Layer C)
+
+Authored for the schema-validation slice (SITE-qcjvesdw). Each exercises a
+specific resolution/validation path against the bundled clean-room XSD
+profiles; none is copied or adapted from an upstream corpus.
+
+| Fixture | Purpose |
+|---|---|
+| `valid-minimal.xml` | minimal valid core `urlset` |
+| `valid-index.xml` | valid core `sitemapindex` |
+| `schema-invalid-urlset.xml` | misplaced `<priority>` before `<loc>` (invalid) |
+| `ns-image.xml` | core + image extension |
+| `ns-news.xml` | core + news extension |
+| `ns-video.xml` | core + video extension |
+| `ns-hreflang.xml` | core + xhtml:link hreflang alternates |
+| `ns-all-four.xml` | core + image + video + news + hreflang (runtime profile) |
+| `ns-video-invalid-in-mixed.xml` | valid siblings, invalid video child (scoping) |
+| `ns-unknown.xml` | namespace absent from the catalog |
+| `xxe-attempt.xml` | external SYSTEM entity; must not expand |
