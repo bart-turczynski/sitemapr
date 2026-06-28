@@ -176,11 +176,25 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   given(
     "a sitemap index that references a child URL returning 404",
     function(context) {
-      # Index expansion (read_sitemap traversal, partial results, and the
-      # `problems` attribute) lands in a downstream slice (SITE-mzbuuyfy). The
-      # fetch slice only proves a child 4xx surfaces as a non-fatal warning
-      # (covered by test-fetch.R); the index-level assembly is not built yet.
-      testthat::skip("pending index-expansion slice (SITE-mzbuuyfy)")
+      # Sets up the shared index-expansion context (consumed by the generic
+      # "I call read_sitemap on the index" step in setup-steps-index.R): an
+      # index listing one resolvable child and one child that 404s.
+      context$index_url <- "https://example.com/sitemap.xml"
+      context$failed_child <- "https://example.com/missing.xml"
+      context$body_map <- list2env(list(
+        "https://example.com/sitemap.xml" = paste0(
+          "<sitemapindex xmlns=",
+          "\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+          "<sitemap><loc>https://example.com/child-1.xml</loc></sitemap>",
+          "<sitemap><loc>https://example.com/missing.xml</loc></sitemap>",
+          "</sitemapindex>"
+        ),
+        "https://example.com/child-1.xml" = paste0(
+          "<urlset xmlns=",
+          "\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+          "<url><loc>https://example.com/a</loc></url></urlset>"
+        )
+      ))
     }
   )
 
@@ -296,9 +310,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     fetch_capture(context, url = "https://example.com/sitemap.xml")
   })
 
-  when("I call read_sitemap on the index", function(context) {
-    testthat::skip("pending index-expansion slice (SITE-mzbuuyfy)")
-  })
+  # "I call read_sitemap on the index" is registered once, generically, by the
+  # index-expansion slice (setup-steps-index.R); both this feature and
+  # index_expansion.feature share it.
 
   # --- THEN ------------------------------------------------------------------
 
@@ -411,10 +425,17 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     }
   )
 
-  # The child-4xx scenario is skipped at its `given` step (index expansion is a
-  # downstream slice); these `then` steps exist only so the scenario parses.
+  # Child-4xx scenario (now activated by the index-expansion slice): a child 404
+  # surfaces as a non-fatal warning, the parse result keeps the good children's
+  # rows, and the failed child is recorded in the `problems` attribute. The
+  # context is set up by the shared `given`/`when` steps (setup-steps-index.R).
   then("a warning-class condition is raised for the child", function(context) {
-    testthat::skip("pending index-expansion slice (SITE-mzbuuyfy)")
+    raised <- vapply(
+      context$warnings,
+      function(w) inherits(w, "sitemapr_http_error"),
+      logical(1)
+    )
+    expect_true(any(raised))
   })
 
   then(
@@ -423,11 +444,13 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "children"
     ),
     function(context) {
-      testthat::skip("pending index-expansion slice (SITE-mzbuuyfy)")
+      expect_true("https://example.com/a" %in% context$result$loc)
     }
   )
 
   then("the failed child appears in the problems attribute", function(context) {
-    testthat::skip("pending index-expansion slice (SITE-mzbuuyfy)")
+    problems <- context$problems
+    expect_true(any(grepl(context$failed_child, problems$subject_ref,
+                          fixed = TRUE)))
   })
 }
