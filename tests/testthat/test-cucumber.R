@@ -1,6 +1,6 @@
-# Runs every .feature file in this directory as part of `R CMD check`. In R the
-# BDD specs execute inside the normal test pass, so there is no separate verify
-# step the way the Python/TypeScript templates need for behave/cucumber-js.
+# Runs active top-level .feature files as part of `R CMD check`. The feature
+# drafts in features/ are acceptance criteria for the fp tracer-bullet tickets
+# and should be activated as those implementations land.
 test_that("acceptance specs pass", {
   skip_if_not_installed("cucumber")
   # Working directory during the test run is tests/testthat/, where the .feature
