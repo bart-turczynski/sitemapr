@@ -58,7 +58,7 @@ Feature: Parse classified content into tidy rows
 
   Scenario: source_sitemap column reflects provenance for all formats
     Given a sitemap index with two child XML files
-    When I call read_sitemap on the index
+    When I call read_sitemap on the sitemap index
     Then each row's source_sitemap value is the URL of the child that contributed it
     And rows from the index itself (if any) carry the index URL
 
