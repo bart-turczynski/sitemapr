@@ -88,3 +88,117 @@ discovery_candidates <- function(root, catalog = discovery_catalog(),
 
   tibble::as_tibble(cand)
 }
+
+# Classify one candidate's fetch outcome into (status, reason, http_status).
+# Accepted on a 2xx; otherwise rejected with a reason that distinguishes a
+# missing guess (`not-found`) from other HTTP and transport outcomes. A 404 is
+# an ordinary rejected candidate, NEVER a finding (docs/sitemap-spec.md §9).
+classify_candidate <- function(kind, source, rec) {
+  ok_reason <- if (identical(kind, "cms")) {
+    paste0("catalog-", source)
+  } else {
+    "catalog-generic"
+  }
+
+  if (is.na(rec$error_class)) {
+    return(list(status = "accepted", reason = ok_reason,
+                http_status = as.integer(rec$status)))
+  }
+
+  status <- as.integer(rec$status)
+  reason <- if (!is.na(status) && status == 404L) {
+    "not-found"
+  } else if (!is.na(status)) {
+    paste0("http-", status)
+  } else {
+    "unreachable"
+  }
+  list(status = "rejected", reason = reason, http_status = status)
+}
+
+# Fetch one candidate, suppressing the expected non-2xx warning (a missing
+# guessed path is normal during discovery), and turn a transport/SSRF/timeout
+# ABORT into a rejected outcome instead of letting it fail the whole discovery.
+# Returns list(rec, status, reason, http_status, final_url); `rec` is the fetch
+# record (carrying the body attribute) for an evaluated response, else NULL.
+fetch_candidate <- function(candidate_url, kind, source, user_agent, limits) {
+  rec <- tryCatch(
+    withCallingHandlers(
+      fetch_source(candidate_url, user_agent = user_agent, limits = limits),
+      sitemapr_http_error = function(w) invokeRestart("muffleWarning")
+    ),
+    sitemapr_ssrf_blocked = function(e) {
+      structure(list(reason = "blocked"), class = "discovery_abort")
+    },
+    error = function(e) {
+      structure(list(reason = "unreachable"), class = "discovery_abort")
+    }
+  )
+
+  if (inherits(rec, "discovery_abort")) {
+    return(list(rec = NULL, status = "rejected", reason = rec$reason,
+                http_status = NA_integer_, final_url = NA_character_))
+  }
+
+  cls <- classify_candidate(kind, source, rec)
+  list(
+    rec = rec, status = cls$status, reason = cls$reason,
+    http_status = cls$http_status, final_url = as.character(rec$final_url)
+  )
+}
+
+#' Evaluate guessed-path candidates against a site root
+#'
+#' Builds the candidate set for `root` (`discovery_candidates()`) and fetches
+#' each one, classifying it as `accepted` (a 2xx response) or `rejected` (a 404
+#' becomes reason `not-found`; other non-2xx become `http-<status>`; an SSRF
+#' block becomes `blocked`; a timeout or transport failure becomes
+#' `unreachable`). A missing guess is a rejected candidate, never a finding, and
+#' a single unreachable guess never fails the whole discovery. Every row carries
+#' `guessed-path` provenance. robots.txt is never fetched — it is absent from
+#' the catalog (ADR-002).
+#'
+#' The fetch record for each evaluated response (carrying the body attribute) is
+#' returned in the `records` attribute, parallel to the result rows, so the
+#' `sitemap_tree()` assembler can populate page-count/gzip for accepted
+#' candidates without a second fetch.
+#'
+#' @param root A single site-root URL (character). A bare host is accepted.
+#' @param catalog The guess catalog, as from `discovery_catalog()`.
+#' @param limits Discovery limits, as from `discovery_limits()`.
+#' @param user_agent The User-Agent header for HTTP fetches.
+#' @param net_limits Network limits for the per-candidate fetches, as from
+#'   `fetch_limits()`.
+#' @return A tibble with one row per evaluated candidate and columns
+#'   `candidate_url`, `catalog_path`, `kind`, `source`, `provenance`, `status`,
+#'   `reason`, `http_status`, and `final_url`, ordered by catalog precedence.
+#'   The `records` attribute holds the parallel list of fetch records.
+#' @keywords internal
+#' @noRd
+discover_candidates <- function(root, catalog = discovery_catalog(),
+                                limits = discovery_limits(),
+                                user_agent = default_user_agent(),
+                                net_limits = fetch_limits()) {
+  cand <- discovery_candidates(root, catalog = catalog, limits = limits)
+
+  outcomes <- lapply(seq_len(nrow(cand)), function(i) {
+    fetch_candidate(
+      cand$candidate_url[[i]], cand$kind[[i]], cand$source[[i]],
+      user_agent = user_agent, limits = net_limits
+    )
+  })
+
+  result <- tibble::tibble(
+    candidate_url = cand$candidate_url,
+    catalog_path = cand$catalog_path,
+    kind = cand$kind,
+    source = cand$source,
+    provenance = "guessed-path",
+    status = vapply(outcomes, `[[`, character(1L), "status"),
+    reason = vapply(outcomes, `[[`, character(1L), "reason"),
+    http_status = vapply(outcomes, `[[`, integer(1L), "http_status"),
+    final_url = vapply(outcomes, `[[`, character(1L), "final_url")
+  )
+  attr(result, "records") <- lapply(outcomes, `[[`, "rec")
+  result
+}
