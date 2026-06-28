@@ -25,7 +25,7 @@ Feature: Stable findings output contract
     Then every row in the layer column is one of the values in the layer vocabulary
 
   Scenario: subject_ref follows the stable URI scheme
-    Given fixture "url-duplicate-loc.xml" which produces an entry-level finding
+    Given fixture "urlset-duplicate-loc.xml" which produces an entry-level finding
     When I call validate_sitemap on the fixture
     Then the subject_ref value begins with "sitemap://"
     And the fragment portion follows the "#entry:<n>" pattern
