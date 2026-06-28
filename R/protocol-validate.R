@@ -11,11 +11,17 @@
 # subject_ref, message, evidence, and is_strict_only.
 #
 # This file covers the SITE-fraetonj (D.1), SITE-ysviepus (D.2),
-# SITE-nmbmgmba (D.3), and SITE-fwdqovyp (D.4) slices: the findings constructor,
-# the per-`<loc>` URL rules, the count/field-value rules, the hreflang token
-# policy, and the image/video/news extension field rules. The remaining Layer D
-# surface — text-sitemap rules and unsupported-input diagnostics — lands in
-# sibling sub-issues that extend `validate_protocol()`.
+# SITE-nmbmgmba (D.3), SITE-fwdqovyp (D.4), and SITE-htmkvrmo (D.5) slices: the
+# findings constructor, the per-`<loc>` URL rules, the count/field-value rules,
+# the hreflang token policy, the image/video/news extension field rules, and the
+# text-sitemap per-line rules. The remaining Layer D surface —
+# unsupported-input diagnostics — lands in a sibling sub-issue.
+#
+# Text sitemaps take a DEDICATED path (sitemap-spec.md §7.2; SPEC §18), never
+# the XML rows path: `validate_text_protocol()` reads the RAW document text, not
+# the parsed rows, because the row tibble has already dropped blank lines and
+# line numbers (R/parse-text.R). It is a standalone producer parallel to
+# `validate_protocol()`; the Layer F assembler routes text sources to it.
 #
 # The extension rules (D.4) read the `images`/`video`/`news` list-columns,
 # whose entries are `xml2::as_list()` conversions of the extension elements
@@ -1073,6 +1079,130 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
           "PROTOCOL_DUPLICATE_LOC", "warning", "entry", base, j, loc[j],
           sprintf(
             "<loc> duplicates entry %d (identity key '%s').", first_entry, key
+          )
+        )
+      }
+    }
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
+# --- Text-sitemap rules (D.5) ------------------------------------------------
+
+# Text-sitemap evidence: like protocol_evidence() but the excerpt is clamped to
+# the contract's tighter 200-char cap for text lines (findings-contract.md;
+# sitemap-spec.md §7.2) and the 1-based line number is always recorded.
+protocol_text_evidence <- function(excerpt, line) {
+  if (!is.na(excerpt)) {
+    excerpt <- substr(excerpt, 1L, 200L)
+  }
+  list(excerpt = excerpt, line = as.integer(line), column = NA_integer_)
+}
+
+# One text-sitemap finding row, scoped to a 1-based line via the `#line:<n>`
+# subject_ref fragment (findings-contract.md). A text line is an `entry`.
+protocol_text_finding <- function(code, severity, base, line, excerpt, message,
+                                  is_strict_only = FALSE) {
+  protocol_findings(
+    code = code,
+    severity = severity,
+    subject_type = "entry",
+    subject_ref = protocol_ref_fragment(base, paste0("#line:", line)),
+    message = message,
+    evidence = list(protocol_text_evidence(excerpt, line)),
+    is_strict_only = is_strict_only
+  )
+}
+
+#' Validate a text sitemap against protocol/semantic rules (Layer D)
+#'
+#' The text-format counterpart of [validate_protocol()] and a standalone
+#' finding-producer: text sitemaps never go through the XML rows path
+#' (sitemap-spec.md §7.2). It reads the RAW document because the parsed row
+#' tibble has already dropped blank lines and line numbers (R/parse-text.R).
+#'
+#' Each line (split on `\n` / `\r\n` / `\r`, matching the parser, then trimmed)
+#' is checked: a blank/whitespace-only line emits a strict-only
+#' `PROTOCOL_TEXT_BLANK_LINE` `info`; a non-absolute line emits
+#' `PROTOCOL_URL_NOT_ABSOLUTE`; an absolute line missing a host emits
+#' `PROTOCOL_URL_NO_HOST`; an over-long line emits `PROTOCOL_TEXT_URL_TOO_LONG`.
+#' Findings are scoped to their 1-based line via the `#line:<n>` subject_ref and
+#' carry a ≤ 200-char excerpt. Like the XML producer it does not assemble the
+#' final contract (no `mode`, filtering, dedup, or sort — those are Layer F).
+#'
+#' @param text The raw text-sitemap document: a character string/vector or raw
+#'   bytes (decoded as UTF-8), the same input [parse_sitemap_text()] accepts.
+#' @param subject_ref The document-level `sitemap://…` base for each finding's
+#'   `subject_ref`. `NA` yields fragment-only refs.
+#' @return A protocol-findings tibble (zero rows when every line conforms).
+#' @keywords internal
+#' @noRd
+validate_text_protocol <- function(text, subject_ref = NA_character_) {
+  s <- text_as_string(text)
+  if (!nzchar(s)) {
+    return(empty_protocol_findings())
+  }
+  lines <- strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
+  trimmed <- trimws(lines)
+  blank <- !nzchar(trimmed)
+  out <- list()
+
+  for (i in which(blank)) {
+    out[[length(out) + 1L]] <- protocol_text_finding(
+      "PROTOCOL_TEXT_BLANK_LINE", "info", subject_ref, i, NA_character_,
+      sprintf(
+        "Line %d is blank; blank lines are skipped (reported only in strict).",
+        i
+      ),
+      is_strict_only = TRUE
+    )
+  }
+
+  url_idx <- which(!blank)
+  if (length(url_idx) == 0L) {
+    if (length(out) == 0L) {
+      return(empty_protocol_findings())
+    }
+    return(do.call(rbind, out))
+  }
+
+  vals <- trimmed[url_idx]
+  kind <- loc_absoluteness(vals)
+
+  # Non-absolute lines get a single clear finding; the host/length checks below
+  # assume an absolute http(s) URL.
+  for (k in which(kind != "http(s)")) {
+    i <- url_idx[k]
+    out[[length(out) + 1L]] <- protocol_text_finding(
+      "PROTOCOL_URL_NOT_ABSOLUTE", "error", subject_ref, i, vals[k],
+      sprintf("Line %d: '%s' is not an absolute http/https URL.", i, vals[k])
+    )
+  }
+
+  abs_k <- which(kind == "http(s)")
+  if (length(abs_k) > 0L) {
+    parsed <- parse_url_adapter(vals[abs_k])
+    for (m in seq_along(abs_k)) {
+      i <- url_idx[abs_k[m]]
+      l <- vals[abs_k[m]]
+      host <- as.character(parsed$host[m])
+      if (is.na(host) || !nzchar(host)) {
+        out[[length(out) + 1L]] <- protocol_text_finding(
+          "PROTOCOL_URL_NO_HOST", "error", subject_ref, i, l,
+          sprintf("Line %d: '%s' has no host component.", i, l)
+        )
+        next
+      }
+      if (nchar(l) >= 2048L) {
+        out[[length(out) + 1L]] <- protocol_text_finding(
+          "PROTOCOL_TEXT_URL_TOO_LONG", "warning", subject_ref, i, l,
+          sprintf(
+            "Line %d: URL is %d characters; sitemap URLs must be under 2048.",
+            i, nchar(l)
           )
         )
       }
