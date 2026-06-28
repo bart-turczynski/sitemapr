@@ -370,36 +370,36 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   # ---- THEN: XXE safety + in-process ----------------------------------------
 
-  # XXE-safety proof. The pipeline never resolves an external entity: the
-  # `&xxe;` reference is preserved LITERALLY in the captured evidence and is
-  # never replaced by the contents of file:///etc/hostname. (The fixture's
-  # DOCTYPE-with-internal-subset means the byte sniffer classifies it as a text
-  # sitemap rather than XML — see worklog — so it is never even parsed as XML;
-  # entity expansion therefore cannot occur. The literal `&xxe;` surviving in
-  # the evidence is the observable proof.)
-  validate_xxe_excerpts <- function(context) {
-    unlist(lapply(context$result$evidence, function(ev) {
+  # XXE-safety proof. The fixture is a DOCTYPE-with-internal-subset urlset, now
+  # correctly sniffed as XML (sniff_strip_prologue skips the internal subset).
+  # The XXE-safe XML parse never resolves the external entity: `&xxe;` expands
+  # to nothing — it is neither replaced by the contents of file:///etc/hostname
+  # nor carried through as a literal reference — and the entity-bearing DOCTYPE
+  # surfaces as a single SCHEMA_INVALID finding rather than being validated
+  # as-is.
+  validate_xxe_text <- function(context) {
+    excerpts <- unlist(lapply(context$result$evidence, function(ev) {
       ex <- ev$excerpt
       if (is.null(ex) || is.na(ex)) character(0) else ex
     }))
+    c(excerpts, context$result$message)
   }
 
   then("no entity expansion occurs", function(context) {
-    excerpts <- validate_xxe_excerpts(context)
-    # The unexpanded entity reference survives verbatim.
-    expect_true(any(grepl("&xxe;", excerpts, fixed = TRUE)))
+    text <- validate_xxe_text(context)
+    # Neither the expanded external file contents nor a literal `&xxe;`
+    # reference leaks into any finding's evidence or message.
+    expect_false(any(grepl("&xxe;", text, fixed = TRUE)))
+    expect_false(any(grepl("/etc/hostname", text, fixed = TRUE)))
   })
 
   then(
-    "the document is treated as if the entity reference is empty",
+    "a SCHEMA_INVALID finding reports the entity references are not expanded",
     function(context) {
-      # No finding's loc/excerpt is the EXPANDED entity, i.e. no usable
-      # absolute URL was synthesised from the external file: every loc-bearing
-      # line keeps the literal `&xxe;` and none resolves to a fetched host.
-      excerpts <- validate_xxe_excerpts(context)
-      loc_lines <- excerpts[grepl("<loc>", excerpts, fixed = TRUE)]
-      expect_gt(length(loc_lines), 0L)
-      expect_true(all(grepl("&xxe;", loc_lines, fixed = TRUE)))
+      res <- context$result
+      hit <- res$code == "SCHEMA_INVALID" &
+        grepl("not expanded", res$message, fixed = TRUE)
+      expect_true(any(hit))
     }
   )
 

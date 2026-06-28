@@ -60,7 +60,7 @@ Feature: Layer C — XSD schema validation
     Given a fixture XML document containing an external entity declaration
     When I call validate_sitemap on the fixture
     Then no entity expansion occurs
-    And the document is treated as if the entity reference is empty
+    And a SCHEMA_INVALID finding reports the entity references are not expanded
 
   Scenario: Schema validation is in-process without Java or subprocess
     Given any valid sitemap fixture
