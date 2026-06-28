@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mixed document where the image, news, and hreflang annotations are valid
+     but the <video:video> carries an undeclared child element
+     (<video:not_a_field>). Layer C must flag SCHEMA_INVALID scoped to the
+     video extension, leaving the valid siblings unaffected. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/story</loc>
+    <image:image>
+      <image:loc>https://example.com/img/story.jpg</image:loc>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://example.com/thumbs/story.jpg</video:thumbnail_loc>
+      <video:title>Story video</video:title>
+      <video:description>The story, in video form.</video:description>
+      <video:not_a_field>this element is not in the video schema</video:not_a_field>
+    </video:video>
+    <news:news>
+      <news:publication>
+        <news:name>Example News</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-06-01</news:publication_date>
+      <news:title>The story</news:title>
+    </news:news>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/story"/>
+  </url>
+</urlset>
