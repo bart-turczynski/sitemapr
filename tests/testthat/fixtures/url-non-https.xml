@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Non-http(s) scheme (ftp://) -> PROTOCOL_URL_NOT_ABSOLUTE. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>ftp://example.com/file.txt</loc></url>
+</urlset>

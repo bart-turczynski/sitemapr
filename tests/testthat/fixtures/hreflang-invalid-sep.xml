@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Underscore separator "en_US": the live classifier maps "_" to
+     HREFLANG_SEPARATOR_INVALID (see classify_hreflang_token() in
+     R/protocol-validate.R; the bad-separator check precedes the family-shape
+     check). The scenario's expected code was reconciled to the real output. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/en/</loc>
+    <xhtml:link rel="alternate" hreflang="en_US"
+                href="https://example.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default"
+                href="https://example.com/"/>
+  </url>
+</urlset>
