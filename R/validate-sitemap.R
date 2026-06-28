@@ -210,7 +210,11 @@ validate_index_parts <- function(src, schema, doc, user_agent, limits,
   parts[[length(parts) + 1L]] <-
     index_findings_from_problems(ex$problems, src$base)
 
-  feeds <- index_feed_children(ex$problems)
+  # A child the expander fetched and sniffed as an RSS/Atom feed -> one
+  # UNSUPPORTED_FEED per child via the existing source_meta/classification path.
+  # (A TOP-LEVEL feed source — src$format == "feed" at the entrypoint, no index
+  # — is OUT OF SCOPE for v1: the XML branch yields UNSUPPORTED_ROOT for it.)
+  feeds <- index_feed_children(ex$sources)
   if (length(feeds) > 0L) {
     parts[[length(parts) + 1L]] <- validate_classification(
       source_meta(feed_children = feeds), src$base
@@ -227,16 +231,14 @@ validate_index_parts <- function(src, schema, doc, user_agent, limits,
   parts
 }
 
-# Child <loc> URLs whose expansion problem flags an RSS/Atom feed. The current
-# expander records no feed-specific problem, so this returns none today; the
-# hook keeps the UNSUPPORTED_FEED wiring in place for when it does.
-index_feed_children <- function(problems) {
-  if (is.null(problems) || nrow(problems) == 0L) {
+# Final URLs of the expansion `sources` records the byte-sniffer classified as
+# an RSS/Atom feed ("feed"). These drive one UNSUPPORTED_FEED finding each.
+index_feed_children <- function(sources) {
+  if (is.null(sources) || nrow(sources) == 0L) {
     return(character(0))
   }
-  is_feed <- problems$category == "classification" &
-    grepl("feed", problems$message, ignore.case = TRUE)
-  problems$subject_ref[is_feed]
+  is_feed <- as.character(sources$format) == "feed"
+  as.character(sources$final_url[is_feed])
 }
 
 #' Validate a sitemap source against the schema, protocol, and classification

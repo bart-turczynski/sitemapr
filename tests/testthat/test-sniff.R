@@ -119,6 +119,27 @@ test_that("XML decl plus comment before the root still finds urlset", {
   expect_identical(sniff(charToRaw(body)), "xml-urlset")
 })
 
+test_that("urlset behind a DOCTYPE with an internal subset is xml-urlset", {
+  # The xxe-attempt.xml shape: the internal subset's ENTITY declaration contains
+  # its own ">", so a naive "consume to first >" would strand "]>...<urlset>"
+  # and misroute to the text classifier. The bracket-skip must reach the root.
+  body <- paste0(
+    "<?xml version=\"1.0\"?>",
+    "<!DOCTYPE urlset [ <!ENTITY xxe SYSTEM \"file:///etc/hostname\"> ]>",
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    "<url><loc>https://example.com/</loc></url></urlset>"
+  )
+  expect_identical(sniff(charToRaw(body)), "xml-urlset")
+})
+
+test_that("DOCTYPE with no internal subset before urlset still works", {
+  body <- paste0(
+    "<!DOCTYPE urlset SYSTEM \"sitemap.dtd\">",
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"></urlset>"
+  )
+  expect_identical(sniff(charToRaw(body)), "xml-urlset")
+})
+
 # ---- xml-sitemapindex --------------------------------------------------------
 
 test_that("XML sitemapindex classifies as xml-sitemapindex", {
@@ -129,15 +150,25 @@ test_that("XML sitemapindex classifies as xml-sitemapindex", {
   expect_identical(sniff(charToRaw(body)), "xml-sitemapindex")
 })
 
+# ---- feed (RSS / Atom) -------------------------------------------------------
+
+test_that("an RSS root classifies as feed", {
+  body <- '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>'
+  expect_identical(sniff(charToRaw(body)), "feed")
+})
+
+test_that("an Atom feed root classifies as feed", {
+  body <- paste0(
+    "<feed xmlns=\"http://www.w3.org/2005/Atom\"><entry/></feed>"
+  )
+  expect_identical(sniff(charToRaw(body)), "feed")
+})
+
 # ---- generic xml -------------------------------------------------------------
 
 test_that("well-formed XML with an unrelated root classifies as xml", {
-  body <- '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>'
+  body <- '<?xml version="1.0"?><catalog><book/></catalog>'
   expect_identical(sniff(charToRaw(body)), "xml")
-})
-
-test_that("XML root with no declaration still classifies as xml", {
-  expect_identical(sniff(charToRaw("<feed xmlns='x'><entry/></feed>")), "xml")
 })
 
 # ---- html --------------------------------------------------------------------

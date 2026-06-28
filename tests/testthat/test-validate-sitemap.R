@@ -65,6 +65,44 @@ test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
   expect_true("PROTOCOL_TEXT_URL_TOO_LONG" %in% out$code)
 })
 
+test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
+  root <- "https://example.com/sitemap.xml"
+  child <- "https://example.com/feed.xml"
+  index_body <- paste0(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+    "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    "  <sitemap><loc>", child, "</loc></sitemap>\n",
+    "</sitemapindex>\n"
+  )
+  rss_body <- paste0(
+    "<?xml version=\"1.0\"?>\n",
+    "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>\n"
+  )
+  map <- list()
+  map[[root]] <- index_body
+  map[[child]] <- rss_body
+
+  httr2::local_mocked_responses(function(req) {
+    body <- map[[req$url]]
+    if (is.null(body)) {
+      return(httr2::response(status_code = 404, url = req$url))
+    }
+    httr2::response(
+      status_code = 200, url = req$url,
+      headers = list("Content-Type" = "application/xml; charset=UTF-8"),
+      body = charToRaw(body)
+    )
+  })
+
+  out <- validate_sitemap(root)
+  expect_identical(names(out), contract_cols)
+  expect_true("UNSUPPORTED_FEED" %in% out$code)
+  row <- out[out$code == "UNSUPPORTED_FEED", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$layer, "classification")
+  expect_identical(row$subject_type, "index-child")
+})
+
 test_that("validation is deterministic for a fixture and mode", {
   a <- validate_sitemap(fixture("urlset-duplicate-loc.xml"), mode = "strict")
   b <- validate_sitemap(fixture("urlset-duplicate-loc.xml"), mode = "strict")
