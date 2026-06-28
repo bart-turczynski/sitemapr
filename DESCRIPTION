@@ -16,6 +16,7 @@ Imports:
     httr2,
     rlang,
     rurl (>= 1.4.0),
+    tibble,
     utils
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
