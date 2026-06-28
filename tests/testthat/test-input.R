@@ -112,3 +112,41 @@ test_that("URLs differing only by port are distinct", {
   expect_equal(nrow(rec), 2L)
   expect_equal(length(unique(rec$loc_key)), 2L)
 })
+
+test_that("normalized_url preserves a contentful query (SITE-vrgszbnu)", {
+  rec <- sitemapr:::create_source_records(
+    "https://example.com/sitemap.php?page=2"
+  )
+  # The fetch URL must keep the query, or a dynamic sitemap is fetched wrong.
+  expect_equal(rec$normalized_url, "https://example.com/sitemap.php?page=2")
+})
+
+test_that("normalized_url preserves a non-default port", {
+  rec <- sitemapr:::create_source_records(
+    "https://example.com:8443/sitemap.xml"
+  )
+  expect_equal(rec$normalized_url, "https://example.com:8443/sitemap.xml")
+})
+
+test_that("normalized_url drops the fragment (never fetched)", {
+  rec <- sitemapr:::create_source_records(
+    "https://example.com/sitemap.xml#section"
+  )
+  expect_equal(rec$normalized_url, "https://example.com/sitemap.xml")
+})
+
+test_that("a default port is identity-equivalent to no port", {
+  rec <- sitemapr:::create_source_records(c(
+    "https://example.com:443/sitemap.xml",
+    "https://example.com/sitemap.xml"
+  ))
+  # The two collapse to one source record after dedup on the identity key.
+  expect_equal(nrow(rec), 1L)
+})
+
+test_that("normalized_url equals the identity key for a sitemap source", {
+  rec <- sitemapr:::create_source_records(
+    "https://example.com:8443/sitemap.xml?page=2"
+  )
+  expect_equal(rec$normalized_url, rec$loc_key)
+})

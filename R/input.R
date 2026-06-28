@@ -92,7 +92,12 @@ strip_file_scheme <- function(x) {
 #' @keywords internal
 #' @noRd
 build_origin <- function(scheme, host, port) {
-  port_part <- ifelse(is.na(port), "", paste0(":", port))
+  # Drop the scheme's default port, matching `build_loc_key()` canonicalization
+  # so a `:443`/`:80` site root and its bare form share one origin.
+  is_default_port <- (scheme == "http" & port == 80L) |
+    (scheme == "https" & port == 443L)
+  drop_port <- is.na(port) | (!is.na(is_default_port) & is_default_port)
+  port_part <- ifelse(drop_port, "", paste0(":", port))
   paste0(scheme, "://", host, port_part)
 }
 
@@ -230,8 +235,11 @@ normalize_one <- function(raw, as, provenance) {
       stringsAsFactors = FALSE
     ))
   } else {
-    normalized_url <- parsed$clean_url[[1L]]
+    # The canonical sitemap URL is both the fetch target and the identity key:
+    # `clean_url` would drop a contentful query or a non-default port and so
+    # fetch the wrong resource (SITE-vrgszbnu).
     loc_key <- build_loc_key(parsed)[[1L]]
+    normalized_url <- loc_key
   }
 
   source_record_row(
