@@ -5,4 +5,8 @@ linters: linters_with_defaults(
     # once the package has real code if you want the extra coverage.
     object_usage_linter = NULL
   )
+# data-raw/ holds reproducibility/dev scripts (schema build + parity oracle),
+# not package source. They legitimately carry long canonical URLs and provenance
+# prose; hold them to functional correctness, not package style.
+exclusions: list("data-raw")
 encoding: "UTF-8"

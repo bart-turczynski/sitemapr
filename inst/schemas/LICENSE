@@ -1,19 +1,19 @@
-Bundled XML Schema (XSD) files in this directory are third-party assets,
-except where marked sitemapr-authored. See SOURCES.md for per-file source,
-retrieval date, checksum, and terms.
+The XML Schema (XSD) files in this directory are clean-room
+sitemapr-authored and are covered by the sitemapr package license (MIT;
+see the package LICENSE file).
 
-Summary:
-  * sitemap.xsd, siteindex.xsd
-      Source: sitemaps.org (Sitemap Protocol 0.9).
-      Terms:  Attribution-ShareAlike Creative Commons License (sitemaps.org).
-  * sitemap-image.xsd, sitemap-video.xsd, sitemap-news.xsd, sitemap-pagemap.xsd
-      Source: Google (published sitemap extension reference schemas).
-      Terms:  Copyright Google Inc. Published as the reference schemas that
-              public sitemaps point at via xsi:schemaLocation.
-  * xhtml-hreflang.xsd
-      sitemapr-authored; covered by the sitemapr package license.
+They implement the element models of public specifications:
+  * sitemap.xsd, siteindex.xsd      — Sitemap Protocol 0.9 (sitemaps.org)
+  * sitemap-image.xsd               — Google image sitemap extension 1.1
+  * sitemap-video.xsd               — Google video sitemap extension 1.1
+  * sitemap-news.xsd                — Google news sitemap extension 0.9
+  * sitemap-pagemap.xsd             — Google PageMap sitemap extension 1.0
+  * xhtml-hreflang.xsd              — minimal xhtml:link for hreflang alternates
 
-CRAN note: confirm the Google schema redistribution terms are compatible with
-the package license before submission. This file documents provenance so the
-review can be made explicitly rather than discovered late.
+Element names, types, cardinalities, enumerations, and patterns are the
+functional facts of those protocols, preserved for validation parity; the
+schema text (documentation and structure) is original to this package. No
+third-party schema files are copied or redistributed, so no third-party
+copyright or license (Google 'All Rights Reserved'; sitemaps.org CC BY-SA)
+attaches to this package. See SOURCES.md for per-file provenance.
 
