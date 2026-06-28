@@ -962,3 +962,122 @@ test_that("extension rules are deterministic across repeated calls", {
   call <- function() validate_extensions(rows, base, protocol_limits())
   expect_identical(call(), call())
 })
+
+# --- Text-sitemap rules (D.5) ----------------------------------------------
+
+txt_codes <- function(text) validate_text_protocol(text, base)$code
+
+test_that("a clean text sitemap produces no findings", {
+  out <- validate_text_protocol(
+    "https://example.com/a\nhttps://example.com/b", base
+  )
+  expect_s3_class(out, "tbl_df")
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("an empty document produces no findings", {
+  expect_identical(nrow(validate_text_protocol("", base)), 0L)
+})
+
+test_that("LF, CRLF, and lone-CR all split lines", {
+  for (sep in c("\n", "\r\n", "\r")) {
+    text <- paste("https://example.com/a", "/relative", sep = sep)
+    expect_identical(txt_codes(text), "PROTOCOL_URL_NOT_ABSOLUTE", info = sep)
+  }
+})
+
+test_that("a relative line is PROTOCOL_URL_NOT_ABSOLUTE", {
+  expect_identical(txt_codes("/page/one"), "PROTOCOL_URL_NOT_ABSOLUTE")
+})
+
+test_that("a non-http(s) scheme line is PROTOCOL_URL_NOT_ABSOLUTE", {
+  expect_identical(
+    txt_codes("ftp://example.com/x"), "PROTOCOL_URL_NOT_ABSOLUTE"
+  )
+})
+
+test_that("an absolute line with no host is PROTOCOL_URL_NO_HOST", {
+  expect_identical(txt_codes("http://"), "PROTOCOL_URL_NO_HOST")
+})
+
+test_that("a >2048-char URL is PROTOCOL_TEXT_URL_TOO_LONG (warning)", {
+  long <- paste0("https://example.com/", strrep("a", 2048L))
+  out <- validate_text_protocol(long, base)
+  expect_identical(out$code, "PROTOCOL_TEXT_URL_TOO_LONG")
+  expect_identical(out$severity, "warning")
+})
+
+test_that("the 2048-char boundary matches the XML rule (must be < 2048)", {
+  # sitemaps.org: URLs must be *less than* 2048 chars, so 2048 is flagged and
+  # 2047 passes (mirrors validate_loc_urls()' `>= 2048L`).
+  at_limit <- paste0("https://example.com/", strrep("a", 2048L - 20L))
+  expect_identical(nchar(at_limit), 2048L)
+  expect_identical(txt_codes(at_limit), "PROTOCOL_TEXT_URL_TOO_LONG")
+
+  under <- paste0("https://example.com/", strrep("a", 2047L - 20L))
+  expect_identical(nchar(under), 2047L)
+  expect_identical(nrow(validate_text_protocol(under, base)), 0L)
+})
+
+test_that("a blank line is a strict-only PROTOCOL_TEXT_BLANK_LINE info", {
+  out <- validate_text_protocol(
+    "https://example.com/a\n\nhttps://example.com/b", base
+  )
+  expect_identical(out$code, "PROTOCOL_TEXT_BLANK_LINE")
+  expect_identical(out$severity, "info")
+  expect_true(out$is_strict_only)
+})
+
+test_that("a whitespace-only line is also a blank line", {
+  out <- validate_text_protocol("   \t  ", base)
+  expect_identical(out$code, "PROTOCOL_TEXT_BLANK_LINE")
+})
+
+test_that("blank-line findings carry the 1-based line number", {
+  out <- validate_text_protocol(
+    "https://example.com/a\n\n\nhttps://example.com/b", base
+  )
+  lines <- vapply(out$evidence, function(e) e$line, integer(1))
+  expect_identical(sort(lines), c(2L, 3L))
+})
+
+test_that("text findings are scoped to the line via #line:<n>", {
+  out <- validate_text_protocol("/relative", base)
+  expect_identical(out$subject_ref, paste0(base, "#line:1"))
+  expect_identical(out$subject_type, "entry")
+})
+
+test_that("the too-long excerpt is clamped to 200 chars", {
+  long <- paste0("https://example.com/", strrep("a", 4000L))
+  out <- validate_text_protocol(long, base)
+  expect_identical(nchar(out$evidence[[1]]$excerpt), 200L)
+})
+
+test_that("surrounding whitespace is trimmed before URL checks", {
+  expect_identical(nrow(validate_text_protocol("  https://example.com/a  ",
+                                               base)), 0L)
+})
+
+test_that("multiple lines yield one finding each, in line order", {
+  out <- validate_text_protocol(
+    paste("/rel", "https://example.com/ok", "ftp://h/x", sep = "\n"), base
+  )
+  expect_identical(out$code, c("PROTOCOL_URL_NOT_ABSOLUTE",
+                               "PROTOCOL_URL_NOT_ABSOLUTE"))
+})
+
+test_that("raw bytes are accepted as input", {
+  out <- validate_text_protocol(charToRaw("/relative"), base)
+  expect_identical(out$code, "PROTOCOL_URL_NOT_ABSOLUTE")
+})
+
+test_that("a missing subject_ref yields a fragment-only ref", {
+  out <- validate_text_protocol("/relative")
+  expect_identical(out$subject_ref, "#line:1")
+})
+
+test_that("text validation is deterministic across repeated calls", {
+  text <- "https://example.com/a\n\n/rel\nhttp://"
+  call <- function() validate_text_protocol(text, base)
+  expect_identical(call(), call())
+})
