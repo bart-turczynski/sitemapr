@@ -5,6 +5,10 @@ backing fixture (or explains why it is synthetic) and to the v1 fp issue it
 exercises. The intent is to keep acceptance scenarios thin and traceable; edge-
 case matrices live in `testthat`, not here.
 
+These feature files are pending acceptance drafts from the planning phase. They
+are not part of the active `R CMD check` Cucumber run until their mapped fp
+tracer-bullet tickets add the package behavior and step definitions.
+
 **Design principles:**
 - Every scenario either references a fixture file or is explicitly marked
   "synthetic" (the fixture is a generated/stubbed object in step definitions).
