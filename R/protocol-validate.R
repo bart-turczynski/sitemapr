@@ -47,17 +47,16 @@
 # `xhtml:link` under the generic `SCHEMA_INVALID` code; the eight `HREFLANG_*`
 # codes here are purely semantic.
 #
-# Field-value rules (D.2) read what the typed row tibble can express directly:
-# `priority` is validated against `[0.0, 1.0]` on the numeric column (the parser
-# deliberately passes out-of-range values through), and `changefreq` against its
-# enum on the character column. `lastmod` is different: the parser coerces it to
-# POSIXct, collapsing a malformed value to `NA` (indistinguishable from absent)
-# and a date-only value to midnight (indistinguishable from a midnight
-# datetime). Its *format* therefore cannot be re-derived from the typed column,
-# so format checks read the ORIGINAL `<lastmod>` strings supplied via
-# `lastmod_raw`; when those are absent the format checks are skipped (the corpus
-# heuristics still run on the typed column). The uncompressed `byte_size` and
-# the `fetched_at` time are likewise external to the rows and gate
+# Field-value rules (D.2) read the FAITHFUL row tibble (ADR-004): `lastmod` and
+# `priority` arrive as the raw `<lastmod>`/`<priority>` strings, so the original
+# text is available where format matters. `priority` is validated against
+# `[0.0, 1.0]` by parsing the raw string to numeric once (the parser
+# deliberately passes out-of-range values through); `changefreq` against its
+# enum on the character column. `lastmod` format is classified directly from the
+# raw column (`classify_lastmod()`), distinguishing malformed and date-only
+# values that a POSIXct coercion would have collapsed; the corpus heuristics
+# parse the raw column to POSIXct once internally. The uncompressed `byte_size`
+# and the `fetched_at` time are external to the rows and gate
 # `PROTOCOL_SIZE_EXCEEDED` and `PROTOCOL_LASTMOD_LOOKS_GENERATED` respectively.
 #
 # URL handling follows the sitemap spec exactly and never reshapes a URL's
@@ -288,21 +287,21 @@ validate_doc_size <- function(byte_size, base, limit) {
 }
 
 # Per-entry field-value rules: priority range, changefreq enum, and lastmod
-# format. `lastmod_raw` is the ORIGINAL `<lastmod>` strings aligned to rows
-# (NULL skips lastmod format checks — the typed POSIXct column cannot be
-# re-validated). Returns a (possibly empty) protocol-findings tibble.
-validate_field_values <- function(rows, base, lastmod_raw = NULL) {
+# format. Reads the FAITHFUL row tibble (ADR-004): `lastmod` and `priority` are
+# the raw `<lastmod>`/`<priority>` strings. Returns a (possibly empty)
+# protocol-findings tibble.
+validate_field_values <- function(rows, base) {
   out <- list()
 
-  priority <- rows$priority
-  bad_pri <- which(!is.na(priority) & (priority < 0 | priority > 1))
+  pri <- suppressWarnings(as.numeric(rows$priority))
+  bad_pri <- which(!is.na(pri) & (pri < 0 | pri > 1))
   for (j in bad_pri) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_PRIORITY_OUT_OF_RANGE", "error", "entry", base, j,
-      as.character(priority[j]),
+      trimws(as.character(rows$priority[j])),
       sprintf(
         "<priority> %s is outside the permitted range [0.0, 1.0].",
-        format(priority[j], trim = TRUE)
+        trimws(as.character(rows$priority[j]))
       )
     )
   }
@@ -319,29 +318,28 @@ validate_field_values <- function(rows, base, lastmod_raw = NULL) {
     )
   }
 
-  if (!is.null(lastmod_raw)) {
-    cls <- classify_lastmod(lastmod_raw)
-    for (j in which(cls == "invalid")) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_LASTMOD_INVALID", "error", "entry", base, j,
-        as.character(lastmod_raw[j]),
-        sprintf(
-          "<lastmod> '%s' is not a valid W3C Date-Time value.",
-          trimws(as.character(lastmod_raw[j]))
-        )
+  lm <- rows$lastmod
+  cls <- classify_lastmod(lm)
+  for (j in which(cls == "invalid")) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_LASTMOD_INVALID", "error", "entry", base, j,
+      as.character(lm[j]),
+      sprintf(
+        "<lastmod> '%s' is not a valid W3C Date-Time value.",
+        trimws(as.character(lm[j]))
       )
-    }
-    for (j in which(cls == "date-only")) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_LASTMOD_DATE_ONLY", "info", "entry", base, j,
-        as.character(lastmod_raw[j]),
-        sprintf(
-          "<lastmod> '%s' is date-only; including a time is recommended.",
-          trimws(as.character(lastmod_raw[j]))
-        ),
-        is_strict_only = TRUE
-      )
-    }
+    )
+  }
+  for (j in which(cls == "date-only")) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_LASTMOD_DATE_ONLY", "info", "entry", base, j,
+      as.character(lm[j]),
+      sprintf(
+        "<lastmod> '%s' is date-only; including a time is recommended.",
+        trimws(as.character(lm[j]))
+      ),
+      is_strict_only = TRUE
+    )
   }
 
   if (length(out) == 0L) {
@@ -353,9 +351,10 @@ validate_field_values <- function(rows, base, lastmod_raw = NULL) {
 # Corpus-level lastmod-honesty heuristics (sitemap-spec.md §4.1). These scan
 # ALL dated entries of one sitemap, so they are document-level, not per-entry.
 # `fetched_at` is the sitemap's fetch/generation time (NA skips the
-# looks-generated heuristic). Both run off the typed POSIXct `lastmod` column.
+# looks-generated heuristic). The raw `lastmod` column is parsed to POSIXct once
+# here (parse-once, use-late; ADR-004).
 validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
-  lastmod <- rows$lastmod
+  lastmod <- parse_lastmod(rows$lastmod)
   dated <- lastmod[!is.na(lastmod)]
   out <- list()
   if (length(dated) < 2L) {
@@ -1231,16 +1230,14 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #' classification diagnostics (`UNSUPPORTED_*` / `ENCODING_*`); text sitemaps
 #' take the dedicated [validate_text_protocol()] path.
 #'
-#' @param rows A parsed row tibble from [sitemap_rows()] / the format parsers.
+#' @param rows A faithful parsed row tibble from [sitemap_rows()] / the format
+#'   parsers — `lastmod` and `priority` are the raw `<lastmod>`/`<priority>`
+#'   strings (ADR-004), so format rules read the original text directly.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
 #'   comparison. `NA` skips the scope check.
 #' @param subject_ref The document-level `sitemap://…` base for each finding's
 #'   `subject_ref`; defaults to the authority form derived from `sitemap_url`.
 #'   `NA` yields fragment-only refs.
-#' @param lastmod_raw The ORIGINAL `<lastmod>` strings aligned to `rows`, used
-#'   for the `lastmod` format checks the typed POSIXct column cannot express
-#'   (malformed → `NA`, date-only → midnight). `NULL` skips those checks. Must
-#'   be length `nrow(rows)` when supplied.
 #' @param byte_size The uncompressed byte count of the source document, for the
 #'   `PROTOCOL_SIZE_EXCEEDED` rule. `NA` skips the size check.
 #' @param fetched_at The sitemap's fetch/generation time (`POSIXct`), for the
@@ -1261,7 +1258,6 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #' @noRd
 validate_protocol <- function(rows, sitemap_url = NA_character_,
                               subject_ref = sitemap_subject_ref(sitemap_url),
-                              lastmod_raw = NULL,
                               byte_size = NA_real_,
                               fetched_at = NA,
                               source_meta = NULL,
@@ -1272,20 +1268,11 @@ validate_protocol <- function(rows, sitemap_url = NA_character_,
   )
 
   if (!is.null(rows) && nrow(rows) > 0L) {
-    if (!is.null(lastmod_raw) && length(lastmod_raw) != nrow(rows)) {
-      rlang::abort(
-        sprintf(
-          "`lastmod_raw` must be length %d (the row count), got %d.",
-          nrow(rows), length(lastmod_raw)
-        ),
-        class = "sitemapr_protocol_input_error"
-      )
-    }
     parts <- c(parts, list(
       validate_loc_urls(rows, sitemap_url, subject_ref),
       validate_url_count(rows, subject_ref, limits$max_url_count),
       validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
-      validate_field_values(rows, subject_ref, lastmod_raw),
+      validate_field_values(rows, subject_ref),
       validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
       validate_hreflang(rows, subject_ref),
       validate_extensions(rows, subject_ref, limits)

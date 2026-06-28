@@ -44,10 +44,10 @@ test_that("an empty urlset yields the zero-row schema", {
   )
   rows <- parse_sitemap_xml(empty)$rows
   expect_identical(nrow(rows), 0L)
-  expect_s3_class(rows$lastmod, "POSIXct")
+  expect_type(rows$lastmod, "character")
 })
 
-test_that("core fields (lastmod, changefreq, priority) are parsed", {
+test_that("core fields are parsed into the faithful (raw character) form", {
   xml <- paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url>',
     "<loc>https://a/</loc><lastmod>2026-01-02T03:04:05Z</lastmod>",
@@ -55,14 +55,11 @@ test_that("core fields (lastmod, changefreq, priority) are parsed", {
     "</url></urlset>"
   )
   rows <- parse_sitemap_xml(xml)$rows
-  expect_s3_class(rows$lastmod, "POSIXct")
-  expect_identical(attr(rows$lastmod, "tzone"), "UTC")
-  expect_equal(
-    rows$lastmod[[1L]],
-    as.POSIXct("2026-01-02 03:04:05", tz = "UTC")
-  )
+  expect_type(rows$lastmod, "character")
+  expect_identical(rows$lastmod[[1L]], "2026-01-02T03:04:05Z")
   expect_identical(rows$changefreq, "daily")
-  expect_identical(rows$priority, 0.8)
+  expect_type(rows$priority, "character")
+  expect_identical(rows$priority, "0.8")
 })
 
 test_that("lastmod accepts date-only and timezone offsets, NA on garbage", {

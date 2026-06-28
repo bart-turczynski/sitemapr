@@ -120,16 +120,18 @@ parse_urlset <- function(root, source_sitemap) {
   loc <- trimws(xml2::xml_text(
     xml2::xml_find_first(url_nodes, xpath_child_local("loc"))
   ))
-  lastmod <- parse_lastmod(xml2::xml_text(
+  lastmod <- trimws(xml2::xml_text(
     xml2::xml_find_first(url_nodes, xpath_child_local("lastmod"))
   ))
+  lastmod[!nzchar(lastmod)] <- NA_character_
   changefreq <- trimws(xml2::xml_text(
     xml2::xml_find_first(url_nodes, xpath_child_local("changefreq"))
   ))
   changefreq[!nzchar(changefreq)] <- NA_character_
-  priority <- parse_priority(xml2::xml_text(
+  priority <- trimws(xml2::xml_text(
     xml2::xml_find_first(url_nodes, xpath_child_local("priority"))
   ))
+  priority[!nzchar(priority)] <- NA_character_
 
   sitemap_rows(
     loc = loc,

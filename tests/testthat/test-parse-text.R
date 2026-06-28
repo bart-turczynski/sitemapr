@@ -16,7 +16,7 @@ test_that("a text sitemap parses to the contract row tibble", {
 test_that("every non-loc column is NA / per-row NULL", {
   rows <- parse_sitemap_text("https://a/\nhttps://b/")
   expect_true(all(is.na(rows$lastmod)))
-  expect_s3_class(rows$lastmod, "POSIXct")
+  expect_type(rows$lastmod, "character")
   expect_true(all(is.na(rows$changefreq)))
   expect_true(all(is.na(rows$priority)))
   expect_null(rows$images[[1L]])
@@ -51,7 +51,7 @@ test_that("CRLF and lone-CR line endings are accepted", {
 test_that("an empty or all-blank document yields the zero-row schema", {
   expect_identical(nrow(parse_sitemap_text("")), 0L)
   expect_identical(nrow(parse_sitemap_text("\n  \n\t\n")), 0L)
-  expect_s3_class(parse_sitemap_text("")$lastmod, "POSIXct")
+  expect_type(parse_sitemap_text("")$lastmod, "character")
 })
 
 test_that("raw UTF-8 bytes are decoded and parsed", {
