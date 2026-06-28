@@ -11,6 +11,7 @@ Description: A deterministic toolkit for reading and validating XML, text, and
     output.
 License: MIT + file LICENSE
 Imports:
+    rlang,
     rurl (>= 1.4.0)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
