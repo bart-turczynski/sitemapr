@@ -4,7 +4,12 @@
 \alias{read_sitemap}
 \title{Read a sitemap into a tidy tibble of URLs}
 \usage{
-read_sitemap(x, user_agent = default_user_agent(), limits = fetch_limits())
+read_sitemap(
+  x,
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+)
 }
 \arguments{
 \item{x}{A single source: a sitemap URL (character) or a path to a local
@@ -14,6 +19,10 @@ sitemap file (\code{.xml}, \code{.txt}, \code{.gz}, or \code{.tar.gz}).}
 package User-Agent.}
 
 \item{limits}{Network limits for HTTP fetches, as from \code{fetch_limits()}.}
+
+\item{index_limits}{Sitemapindex-expansion bounds (recursion depth and
+per-index child-count cap), as from \code{index_limits()}. Defaults to
+\code{index_limits()}.}
 }
 \value{
 A tibble of URL rows with \code{sources} and \code{problems} attributes.
@@ -35,7 +44,7 @@ skipped archive members or unfetchable index children). \code{read_sitemap()}
 never returns a validation findings tibble; use \code{validate_sitemap()}
 for that.
 
-A top-level sitemap index has its children fetched a single level deep so
-their rows carry per-child provenance; recursive, cycle-safe expansion is
-provided separately.
+A top-level sitemap index is expanded recursively (cycle-safe, depth- and
+count-capped) so every reachable child sitemap's rows carry per-child
+provenance; the bounds are configurable via \code{index_limits}.
 }

@@ -14,11 +14,12 @@
 # `sitemapr_entrypoint_error` identifying the URL and HTTP status; unsupported
 # content becomes `sitemapr_unsupported_format`.
 #
-# Index expansion here is intentionally SINGLE-LEVEL: a top-level sitemapindex
-# has its children fetched once so their rows carry per-child provenance. Safe
-# RECURSIVE expansion (depth limit, cycle detection, child caps, and the
-# `sitemap_tree()` output) is the separate index-expansion slice
-# (SITE-mzbuuyfy); a nested index here is recorded as a problem, not descended.
+# A top-level sitemapindex is expanded RECURSIVELY by the index-expansion engine
+# (R/index-expansion.R): each child is fetched and parsed so its rows carry
+# per-child provenance, with cycle detection, a depth cap, a child-count cap,
+# and child deduplication. Bounded-traversal events (cycles, depth/count caps,
+# nested indexes) are recorded as `problems`, never findings — the stable
+# INDEX_* finding codes are `validate_sitemap()`'s job (Layer F).
 
 # Dispatch one already-fetched document's bytes to the right format parser,
 # returning the normalized list(kind, rows, children) shape that the XML parser
@@ -83,86 +84,10 @@ read_sitemap_local <- function(path) {
   list(rows = parsed$rows, sources = meta, problems = empty_problems())
 }
 
-# Single-level expansion of a top-level sitemapindex: fetch each child once,
-# parse it, and attribute its rows to the child URL. Child fetch/parse failures
-# and nested indexes become warning problems (partial result), never errors.
-expand_index_once <- function(children, parent_rec, user_agent, limits) {
-  rows_parts <- list()
-  source_parts <- list(parent_rec)
-  problem_parts <- list()
-
-  add_problem <- function(category, ref, message) {
-    parse_problems(
-      severity = "warning", category = category,
-      subject_ref = ref, message = message
-    )
-  }
-
-  for (child_url in children$loc) {
-    crec <- tryCatch(
-      fetch_source(child_url, user_agent = user_agent, limits = limits),
-      error = function(e) {
-        problem_parts[[length(problem_parts) + 1L]] <<- add_problem(
-          "fetch", child_url,
-          sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
-        )
-        NULL
-      }
-    )
-    if (is.null(crec)) {
-      next
-    }
-    source_parts[[length(source_parts) + 1L]] <- crec
-
-    if (!is.na(crec$error_class)) {
-      problem_parts[[length(problem_parts) + 1L]] <- add_problem(
-        "fetch", crec$final_url,
-        sprintf(
-          "Child sitemap %s returned HTTP %s; skipped.",
-          crec$final_url, crec$status
-        )
-      )
-      next
-    }
-
-    cparsed <- tryCatch(
-      parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
-      error = function(e) {
-        problem_parts[[length(problem_parts) + 1L]] <<- add_problem(
-          "classification", crec$final_url,
-          sprintf("Child sitemap %s could not be parsed; skipped.",
-                  crec$final_url)
-        )
-        NULL
-      }
-    )
-    if (is.null(cparsed)) {
-      next
-    }
-    if (identical(cparsed$kind, "sitemapindex")) {
-      problem_parts[[length(problem_parts) + 1L]] <- add_problem(
-        "index-expansion", crec$final_url,
-        "Nested sitemap index encountered; deep expansion is deferred."
-      )
-      next
-    }
-    rows_parts[[length(rows_parts) + 1L]] <- cparsed$rows
-  }
-
-  rows <- if (length(rows_parts) > 0L) {
-    do.call(rbind, rows_parts)
-  } else {
-    empty_sitemap_rows()
-  }
-  list(
-    rows = rows,
-    sources = do.call(rbind, source_parts),
-    problems = combine_problems(problem_parts)
-  )
-}
-
-# Fetch and dispatch a URL source. Returns list(rows, sources, problems).
-read_sitemap_url <- function(url, user_agent, limits) {
+# Fetch and dispatch a URL source. Returns list(rows, sources, problems). A
+# top-level sitemapindex is handed to the recursive index-expansion engine; the
+# root's own fetch record is prepended to the engine's per-child source records.
+read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
   rec <- fetch_source(url, user_agent = user_agent, limits = limits)
   if (!is.na(rec$error_class)) {
     rlang::abort(
@@ -177,7 +102,12 @@ read_sitemap_url <- function(url, user_agent, limits) {
 
   parsed <- parse_dispatch(attr(rec, "body"), source_sitemap = rec$final_url)
   if (identical(parsed$kind, "sitemapindex")) {
-    return(expand_index_once(parsed$children, rec, user_agent, limits))
+    ex <- expand_index(
+      rec$final_url, parsed$children, depth = 0L,
+      user_agent = user_agent, limits = idx_limits, net_limits = limits
+    )
+    sources <- if (is.null(ex$sources)) rec else rbind(rec, ex$sources)
+    return(list(rows = ex$rows, sources = sources, problems = ex$problems))
   }
   list(rows = parsed$rows, sources = rec, problems = empty_problems())
 }
@@ -197,33 +127,42 @@ read_sitemap_url <- function(url, user_agent, limits) {
 #' never returns a validation findings tibble; use `validate_sitemap()`
 #' for that.
 #'
-#' A top-level sitemap index has its children fetched a single level deep so
-#' their rows carry per-child provenance; recursive, cycle-safe expansion is
-#' provided separately.
+#' A top-level sitemap index is expanded recursively (cycle-safe, depth- and
+#' count-capped) so every reachable child sitemap's rows carry per-child
+#' provenance; the bounds are configurable via `index_limits`.
 #'
 #' @param x A single source: a sitemap URL (character) or a path to a local
 #'   sitemap file (`.xml`, `.txt`, `.gz`, or `.tar.gz`).
 #' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
 #'   package User-Agent.
 #' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
+#' @param index_limits Sitemapindex-expansion bounds (recursion depth and
+#'   per-index child-count cap), as from `index_limits()`. Defaults to
+#'   `index_limits()`.
 #' @return A tibble of URL rows with `sources` and `problems` attributes.
 #'   An entry-point fetch failure or unsupported content raises a classed error
 #'   condition.
 #' @export
 read_sitemap <- function(x,
                          user_agent = default_user_agent(),
-                         limits = fetch_limits()) {
+                         limits = fetch_limits(),
+                         index_limits = NULL) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(
       "`x` must be a single non-empty source: a URL or a local file path.",
       class = "sitemapr_bad_input"
     )
   }
+  if (is.null(index_limits)) {
+    index_limits <- index_limits()
+  }
 
   out <- if (file.exists(x)) {
     read_sitemap_local(x)
   } else {
-    read_sitemap_url(x, user_agent = user_agent, limits = limits)
+    read_sitemap_url(
+      x, user_agent = user_agent, limits = limits, idx_limits = index_limits
+    )
   }
 
   result <- out$rows

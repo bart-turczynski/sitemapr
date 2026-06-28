@@ -74,12 +74,34 @@ test_that("an accepted candidate row carries status, page_count, and gzip", {
 test_that("a sitemapindex hit counts its child sitemaps as the page_count", {
   httr2::local_mocked_responses(tree_mock(list(
     "https://example.com/sitemap_index.xml" =
-      tree_index("https://example.com/a.xml", "https://example.com/b.xml")
+      tree_index("https://example.com/a.xml", "https://example.com/b.xml"),
+    "https://example.com/a.xml" = tree_urlset("https://a/1"),
+    "https://example.com/b.xml" = tree_urlset("https://b/1")
   )))
   tree <- sitemap_tree("https://example.com")
   row <- tree[tree$sitemap_url == "https://example.com/sitemap_index.xml", ]
   expect_identical(row$status, "accepted")
   expect_identical(row$page_count, 2L)
+})
+
+test_that("an accepted index candidate is expanded into depth-1 child rows", {
+  httr2::local_mocked_responses(tree_mock(list(
+    "https://example.com/sitemap_index.xml" =
+      tree_index("https://example.com/a.xml", "https://example.com/b.xml"),
+    "https://example.com/a.xml" = tree_urlset("https://a/1"),
+    "https://example.com/b.xml" = tree_urlset("https://b/1")
+  )))
+  tree <- sitemap_tree("https://example.com")
+  kids <- tree[tree$depth == 1L, ]
+  expect_setequal(
+    kids$sitemap_url,
+    c("https://example.com/a.xml", "https://example.com/b.xml")
+  )
+  expect_true(all(
+    kids$parent_sitemap == "https://example.com/sitemap_index.xml"
+  ))
+  expect_true(all(kids$provenance == "child-of-index"))
+  expect_true(all(kids$status == "accepted"))
 })
 
 test_that("rejected rows carry status rejected, reason, and NA page_count", {
