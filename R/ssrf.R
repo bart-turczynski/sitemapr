@@ -275,6 +275,7 @@ ssrf_result <- function(allowed, reason = NA_character_) {
 #'   of `original_url`). Used solely to detect numeric/hex/octal IPv4 literal
 #'   obfuscation, which rurl normalizes away. Optional; defaults to `host`.
 #' @return A list: `list(allowed = <logical>, reason = <character>)`.
+#' @noRd
 ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
   # 1. Scheme gate — only http/https allowed.
   scheme_l <- if (is.na(scheme)) "" else tolower(scheme)
@@ -345,6 +346,7 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
 #'
 #' @param parsed_row A one-row data.frame from `parse_url_adapter()`.
 #' @return A list: `list(allowed = <logical>, reason = <character>)`.
+#' @noRd
 ssrf_check_parsed <- function(parsed_row) {
   host <- as.character(parsed_row$host)[[1L]]
   scheme <- as.character(parsed_row$scheme)[[1L]]

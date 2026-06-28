@@ -16,4 +16,5 @@ Replace it with your package's real code.
 }
 \examples{
 scaffold_ready()
+
 }

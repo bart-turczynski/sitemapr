@@ -20,7 +20,7 @@ repos:
         name: verify (mirrors CI)
         entry: Rscript -e
         args:
-          - 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }; rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
+          - 'source("tools/check-docs.R"); lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }; rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
         language: system
         pass_filenames: false
         always_run: true
