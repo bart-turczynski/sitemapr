@@ -108,3 +108,109 @@ test_that("a mismatched default port (http:443) is not collapsed", {
   )
   expect_true(grepl(":443", key, fixed = TRUE))
 })
+
+# --- ADR-005: rurl fast-path gate ------------------------------------------
+# parse_url_adapter() routes plain-ASCII no-op URLs through a cheap regex split
+# and only invokes rurl where canonicalization can change the URL. The fast path
+# must be byte-identical to rurl on every column sitemapr consumes.
+
+test_that("parse_url_adapter fast path matches rurl on read columns", {
+  read_cols <- c(
+    "original_url", "scheme", "host", "port",
+    "path", "query", "user", "is_ip_host"
+  )
+  corpus <- c(
+    # fast-eligible
+    "https://example.com/p/q",
+    "https://example.com/search?q=a&b=c",
+    "HTTPS://Example.COM/Path",
+    "https://example.com:8080/p",
+    "https://example.com:443/p",
+    "https://sub.example.co.uk/a/b/c",
+    "https://example.com/tilde~ok-dash_dot.html",
+    "https://example.com/",
+    "https://example.com",
+    "https://localhost/p",
+    "https://example.com/a?x=1#frag",
+    # must defer to rurl
+    "https://example.com/café",
+    "https://café.com/p",
+    "https://example.com/p%41q",
+    "https://example.com/a/../b",
+    "https://example.com/a//b",
+    "https://example.com/(paren)",
+    "https://example.com/p?u=1+2",
+    "https://example.com/a?k=v;w=z",
+    "https://1.2.3.4/x",
+    "https://2130706433/x",
+    "https://user:pw@example.com/p",
+    "ftp://example.com/p",
+    "https://example.com/a b",
+    "not a url",
+    NA_character_
+  )
+  fast <- sitemapr:::parse_url_adapter(corpus)
+  slow <- sitemapr:::rurl_parse(corpus)
+  for (col in read_cols) {
+    expect_identical(
+      as.character(fast[[col]]),
+      as.character(slow[[col]]),
+      info = col
+    )
+  }
+})
+
+test_that("parse_url_adapter fast path is differentially equivalent to rurl", {
+  skip_on_cran()
+  set.seed(42)
+  read_cols <- c(
+    "original_url", "scheme", "host", "port",
+    "path", "query", "user", "is_ip_host"
+  )
+  scheme <- c("https", "http", "HTTP", "ftp", "")
+  host <- c(
+    "example.com", "sub.ex.co.uk", "localhost", "1.2.3.4", "2130706433",
+    "xn--caf-dma.com", "café.com", "EXAMPLE.COM", "a-b.example.io", "[::1]"
+  )
+  port <- c("", ":80", ":443", ":8080", ":x")
+  path <- c(
+    "", "/", "/a/b", "/a/../b", "/a//b", "/p%41",
+    "/(x)", "/t~_-.d", "/é", "/a;b", "/a b"
+  )
+  query <- c("", "?q=1", "?a=1&b=2", "?u=1+2", "?k=v;w", "?x=%20", "?z=9&ok=y")
+  frag <- c("", "#f", "#sec 1")
+  gen <- function() {
+    paste0(
+      sample(scheme, 1), if (runif(1) < 0.85) "://" else ":",
+      if (runif(1) < 0.1) "user:pw@" else "",
+      sample(host, 1), sample(port, 1),
+      sample(path, 1), sample(query, 1), sample(frag, 1)
+    )
+  }
+  urls <- c(vapply(seq_len(2000L), function(i) gen(), character(1)), "http://")
+  fast <- sitemapr:::parse_url_adapter(urls)
+  slow <- sitemapr:::rurl_parse(urls)
+  for (col in read_cols) {
+    expect_identical(
+      as.character(fast[[col]]),
+      as.character(slow[[col]]),
+      info = col
+    )
+  }
+})
+
+test_that("url_needs_rurl flags exactly the non-no-op URLs", {
+  expect_false(sitemapr:::url_needs_rurl("https://example.com/a/b?x=1&y=2"))
+  expect_true(sitemapr:::url_needs_rurl("https://example.com/café"))
+  expect_true(sitemapr:::url_needs_rurl("https://example.com/p%20q"))
+  expect_true(sitemapr:::url_needs_rurl("https://user@example.com/p"))
+  expect_true(sitemapr:::url_needs_rurl("https://example.com/(x)"))
+})
+
+test_that("an IP-literal host is never resolved on the fast path", {
+  # is_ip_host feeds SSRF checks (R/ssrf.R); the fast path must defer every
+  # IP-literal form to rurl rather than guess.
+  expect_null(sitemapr:::url_fast_components("https://1.2.3.4/x"))
+  expect_null(sitemapr:::url_fast_components("https://2130706433/x"))
+  expect_null(sitemapr:::url_fast_components("https://[::1]/x"))
+})
