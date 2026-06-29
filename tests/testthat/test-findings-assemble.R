@@ -19,7 +19,7 @@ test_that("empty input yields a zero-row 10-column contract tibble", {
   out <- assemble_findings(list(), "strict")
 
   expect_s3_class(out, "tbl_df")
-  expect_equal(nrow(out), 0L)
+  expect_identical(nrow(out), 0L)
   expect_identical(names(out), contract_cols)
 })
 
@@ -28,7 +28,7 @@ test_that("a list of only zero-row parts also yields the empty contract", {
     list(empty_protocol_findings(), empty_schema_findings()),
     "strict"
   )
-  expect_equal(nrow(out), 0L)
+  expect_identical(nrow(out), 0L)
   expect_identical(names(out), contract_cols)
 })
 
@@ -75,11 +75,11 @@ test_that("non-strict drops is_strict_only rows; strict keeps them", {
   )
 
   strict <- assemble_findings(parts, "strict")
-  expect_equal(nrow(strict), 1L)
+  expect_identical(nrow(strict), 1L)
   expect_identical(strict$code, "PROTOCOL_LASTMOD_DATE_ONLY")
 
   non_strict <- assemble_findings(parts, "non-strict")
-  expect_equal(nrow(non_strict), 0L)
+  expect_identical(nrow(non_strict), 0L)
 })
 
 test_that("non-strict downgrades schema error to warning; strict leaves it", {
@@ -231,7 +231,7 @@ test_that("exact-duplicate rows are de-duplicated, first kept", {
     is_strict_only = FALSE
   )
   out <- assemble_findings(list(one, one), "strict")
-  expect_equal(nrow(out), 1L)
+  expect_identical(nrow(out), 1L)
 })
 
 test_that("assembling the same parts twice is row-for-row identical", {

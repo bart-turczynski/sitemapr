@@ -310,7 +310,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "an INDEX_CYCLE_DETECTED warning finding is produced",
     function(context) {
       p <- context$problems
-      hit <- p$category == "index-expansion" & grepl("cycle", p$message)
+      hit <- p$category == "index-expansion" &
+        grepl("cycle", p$message, fixed = TRUE)
       testthat::expect_true(any(hit))
       testthat::expect_true(all(p$severity[hit] == "warning"))
     }
@@ -334,7 +335,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       p <- context$problems
       testthat::expect_true(any(
         p$category == "index-expansion" &
-          grepl("cycle", p$message) &
+          grepl("cycle", p$message, fixed = TRUE) &
           p$subject_ref == context$index_url
       ))
     }

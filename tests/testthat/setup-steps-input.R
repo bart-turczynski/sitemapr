@@ -77,15 +77,15 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # --- THEN ------------------------------------------------------------------
 
   then("the source record has provenance {string}", function(p, context) {
-    expect_equal(context$result$provenance[[1L]], p)
+    expect_identical(context$result$provenance[[1L]], p)
   })
 
   then("the normalized URL preserves the https scheme", function(context) {
-    expect_equal(context$result$scheme[[1L]], "https")
+    expect_identical(context$result$scheme[[1L]], "https")
   })
 
   then("the normalized URL retains the http scheme", function(context) {
-    expect_equal(context$result$scheme[[1L]], "http")
+    expect_identical(context$result$scheme[[1L]], "http")
   })
 
   then("no scheme substitution occurs", function(context) {
@@ -93,7 +93,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   expect_original_retained <- function(context) {
-    expect_equal(context$result$original_input[[1L]], context$input[[1L]])
+    expect_identical(context$result$original_input[[1L]], context$input[[1L]])
   }
 
   then(
@@ -106,28 +106,28 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   then("the original input {string} is retained", function(x, context) {
-    expect_equal(context$result$original_input[[1L]], x)
+    expect_identical(context$result$original_input[[1L]], x)
   })
 
   then("the normalized URL is {string}", function(url, context) {
-    expect_equal(context$result$normalized_url[[1L]], url)
+    expect_identical(context$result$normalized_url[[1L]], url)
   })
 
   then(
     "the normalized host is the Punycode form {string}",
     function(host, context) {
-      expect_equal(context$result$host[[1L]], host)
+      expect_identical(context$result$host[[1L]], host)
     }
   )
 
   then("the original Unicode host is retained", function(context) {
     # Assert against the runtime-captured input, never a hardcoded literal, to
     # keep non-ASCII out of this source file.
-    expect_equal(context$result$original_input[[1L]], context$input[[1L]])
+    expect_identical(context$result$original_input[[1L]], context$input[[1L]])
   })
 
   then("the normalized path is {string}", function(path, context) {
-    expect_equal(context$result$path[[1L]], path)
+    expect_identical(context$result$path[[1L]], path)
   })
 
   then("no network request is made", function(context) {
@@ -135,7 +135,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   then("there are {int} source records", function(n, context) {
-    expect_equal(nrow(context$result), n)
+    expect_identical(nrow(context$result), n)
   })
 
   then("each has provenance {string}", function(p, context) {
@@ -145,7 +145,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "there is {int} source record after deduplication",
     function(n, context) {
-      expect_equal(nrow(context$result), n)
+      expect_identical(nrow(context$result), n)
     }
   )
 
@@ -168,7 +168,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "identity key"
     ),
     function(context) {
-      expect_equal(nrow(context$result), 2L)
+      expect_identical(nrow(context$result), 2L)
     }
   )
 }
