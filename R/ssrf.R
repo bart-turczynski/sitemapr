@@ -27,6 +27,15 @@
 
 # ---- helpers: IPv4 -----------------------------------------------------------
 
+# Is `p` a single canonical IPv4 octet: 1-3 ASCII digits, value 0-255, with no
+# leading-zero ambiguity (a leading zero like "017" is an octal obfuscation
+# form, rejected here)?
+ssrf_octet_ok <- function(p) {
+  grepl("^[0-9]{1,3}$", p) &&
+    !(nchar(p) > 1L && substr(p, 1L, 1L) == "0") &&
+    as.integer(p) <= 255L
+}
+
 # Is `s` a plain dotted-quad of four decimal octets (0-255)? Returns TRUE only
 # for the canonical form rurl emits for an IPv4 host (e.g. "127.0.0.1"). Octal,
 # hex, and short/raw-integer forms are NOT dotted-quads and return FALSE.
@@ -35,23 +44,7 @@ ssrf_is_dotted_quad <- function(s) {
     return(FALSE)
   }
   parts <- strsplit(s, ".", fixed = TRUE)[[1L]]
-  if (length(parts) != 4L) {
-    return(FALSE)
-  }
-  # Each octet: 1-3 ASCII digits, value 0-255, no leading-zero ambiguity
-  # (a leading zero like "017" is an octal obfuscation form, rejected here).
-  for (p in parts) {
-    if (!grepl("^[0-9]{1,3}$", p)) {
-      return(FALSE)
-    }
-    if (nchar(p) > 1L && substr(p, 1L, 1L) == "0") {
-      return(FALSE)
-    }
-    if (as.integer(p) > 255L) {
-      return(FALSE)
-    }
-  }
-  TRUE
+  length(parts) == 4L && all(vapply(parts, ssrf_octet_ok, logical(1L)))
 }
 
 # Convert a validated dotted-quad to its 32-bit unsigned integer (as numeric, to
@@ -69,34 +62,33 @@ ssrf_in_cidr <- function(n, base, bits) {
   n >= base_num & n < (base_num + size)
 }
 
-# Classify a dotted-quad IPv4 address against the ADR-003 blocked ranges.
-# Returns a reason code string, or NA_character_ if the address is allowed.
+# The ADR-003 blocked IPv4 CIDR matrix as a (base, bits, reason) table; ranges
+# are mutually disjoint so first-match order is immaterial. Kept as data so the
+# whole matrix is reviewable in one place. The 169.254.0.0/16 link-local block
+# is handled separately because one address inside it (the cloud-metadata
+# endpoint) maps to a distinct reason.
+ssrf_ipv4_blocked <- list(
+  list(base = "127.0.0.0", bits = 8L, reason = "loopback"),
+  list(base = "10.0.0.0", bits = 8L, reason = "private"),
+  list(base = "172.16.0.0", bits = 12L, reason = "private"),
+  list(base = "192.168.0.0", bits = 16L, reason = "private"),
+  list(base = "100.64.0.0", bits = 10L, reason = "cloud-metadata"),
+  list(base = "0.0.0.0", bits = 8L, reason = "unspecified")
+)
+
 ssrf_classify_ipv4 <- function(s) {
   n <- ssrf_ipv4_to_num(s)
 
-  if (ssrf_in_cidr(n, "127.0.0.0", 8L)) {
-    return("loopback")
-  }
-  if (
-    ssrf_in_cidr(n, "10.0.0.0", 8L) ||
-      ssrf_in_cidr(n, "172.16.0.0", 12L) ||
-      ssrf_in_cidr(n, "192.168.0.0", 16L)
-  ) {
-    return("private")
-  }
   if (ssrf_in_cidr(n, "169.254.0.0", 16L)) {
     # 169.254.169.254 is the cloud-metadata endpoint; it lives inside the
     # link-local /16. Report it as cloud-metadata for caller clarity.
-    if (s == "169.254.169.254") {
-      return("cloud-metadata")
+    return(if (s == "169.254.169.254") "cloud-metadata" else "link-local")
+  }
+  # Classify against the blocked CIDR matrix; NA_character_ when allowed.
+  for (r in ssrf_ipv4_blocked) {
+    if (ssrf_in_cidr(n, r$base, r$bits)) {
+      return(r$reason)
     }
-    return("link-local")
-  }
-  if (ssrf_in_cidr(n, "100.64.0.0", 10L)) {
-    return("cloud-metadata")
-  }
-  if (ssrf_in_cidr(n, "0.0.0.0", 8L)) {
-    return("unspecified")
   }
   NA_character_
 }
@@ -111,14 +103,63 @@ ssrf_strip_brackets <- function(s) {
   s
 }
 
+# Fold a trailing dotted-quad IPv4 tail in an IPv6 literal into two hex hextets,
+# returning the rewritten string. Returns `low` unchanged when there is no tail,
+# or NULL when a tail is present but is not a canonical dotted-quad.
+ssrf_fold_ipv4_tail <- function(low) {
+  m <- regexpr("[0-9]{1,3}(\\.[0-9]{1,3}){3}$", low)
+  if (m == -1L) {
+    return(low)
+  }
+  quad <- regmatches(low, m)
+  if (!ssrf_is_dotted_quad(quad)) {
+    return(NULL)
+  }
+  n <- ssrf_ipv4_to_num(quad)
+  paste0(substr(low, 1L, m - 1L), sprintf("%x:%x", n %/% 65536, n %% 65536))
+}
+
+# Resolve an IPv6 literal into its vector of exactly 8 hextet strings: expand
+# the (at most one) "::" zero-compression run, or split a fully-written literal
+# on ":". Returns NULL when "::" appears more than once, when expansion cannot
+# reach 8 hextets, or when a fully-written literal does not have 8 groups.
+ssrf_expand_zero_run <- function(low) {
+  if (!grepl("::", low, fixed = TRUE)) {
+    groups <- strsplit(low, ":", fixed = TRUE)[[1L]]
+    return(if (length(groups) == 8L) groups else NULL)
+  }
+  if (length(gregexpr("::", low, fixed = TRUE)[[1L]]) > 1L) {
+    return(NULL)
+  }
+  pos <- regexpr("::", low, fixed = TRUE)
+  left_s <- substr(low, 1L, pos - 1L)
+  right_s <- substr(low, pos + 2L, nchar(low))
+  left <- if (nzchar(left_s)) {
+    strsplit(left_s, ":", fixed = TRUE)[[1L]]
+  } else {
+    character(0L)
+  }
+  right <- if (nzchar(right_s)) {
+    strsplit(right_s, ":", fixed = TRUE)[[1L]]
+  } else {
+    character(0L)
+  }
+  fill <- 8L - length(left) - length(right)
+  if (fill < 1L) {
+    return(NULL)
+  }
+  c(left, rep("0", fill), right)
+}
+
 # Expand an IPv6 literal (brackets already stripped) into a numeric vector of
 # exactly 8 hextets (each 0..65535), or NULL when `s` is not a well-formed IPv6
-# literal. Handles `::` zero-compression (at most one run) and a trailing
-# dotted-quad IPv4 tail (folded into the final two hextets). Hextets are stored
-# as doubles so downstream arithmetic stays clear of R's signed-32-bit overflow.
-# This single expander unifies every spelling rurl may or may not normalize, so
-# the embedding detector below works off bit positions rather than fragile
-# per-form regexes.
+# literal. Hextets are stored as doubles so downstream arithmetic stays clear of
+# R's signed-32-bit overflow. This single expander unifies every spelling rurl
+# may or may not normalize, so the embedding detector works off bit positions
+# rather than fragile per-form regexes. The dotted-quad-tail fold and "::"
+# expansion are factored into ssrf_fold_ipv4_tail / ssrf_expand_zero_run; the
+# residual cyclocomp here is the input-shape gauntlet (length/NA/charset/hextet
+# validation) and is an accepted advisory exception for this literal parser.
 ssrf_ipv6_hextets <- function(s) {
   if (length(s) != 1L || is.na(s) || !nzchar(s)) {
     return(NULL)
@@ -128,54 +169,26 @@ ssrf_ipv6_hextets <- function(s) {
     return(NULL)
   }
 
-  # Fold a trailing dotted-quad (IPv4 tail) into two hex hextets.
-  m <- regexpr("[0-9]{1,3}(\\.[0-9]{1,3}){3}$", low)
-  if (m != -1L) {
-    quad <- regmatches(low, m)
-    if (!ssrf_is_dotted_quad(quad)) {
-      return(NULL)
-    }
-    n <- ssrf_ipv4_to_num(quad)
-    low <- paste0(
-      substr(low, 1L, m - 1L),
-      sprintf("%x:%x", n %/% 65536, n %% 65536)
-    )
+  low <- ssrf_fold_ipv4_tail(low)
+  if (is.null(low)) {
+    return(NULL)
   }
 
-  # Split out the (at most one) "::" zero-compression run.
-  if (grepl("::", low, fixed = TRUE)) {
-    if (length(gregexpr("::", low, fixed = TRUE)[[1L]]) > 1L) {
-      return(NULL)
-    }
-    pos <- regexpr("::", low, fixed = TRUE)
-    left_s <- substr(low, 1L, pos - 1L)
-    right_s <- substr(low, pos + 2L, nchar(low))
-    left <- if (nzchar(left_s)) {
-      strsplit(left_s, ":", fixed = TRUE)[[1L]]
-    } else {
-      character(0L)
-    }
-    right <- if (nzchar(right_s)) {
-      strsplit(right_s, ":", fixed = TRUE)[[1L]]
-    } else {
-      character(0L)
-    }
-    fill <- 8L - length(left) - length(right)
-    if (fill < 1L) {
-      return(NULL)
-    }
-    groups <- c(left, rep("0", fill), right)
-  } else {
-    groups <- strsplit(low, ":", fixed = TRUE)[[1L]]
-    if (length(groups) != 8L) {
-      return(NULL)
-    }
-  }
-
-  if (length(groups) != 8L || !all(grepl("^[0-9a-f]{1,4}$", groups))) {
+  # ssrf_expand_zero_run guarantees a length-8 result or NULL, so the only
+  # residual check is that every hextet is 1-4 hex digits.
+  groups <- ssrf_expand_zero_run(low)
+  if (is.null(groups) || !all(grepl("^[0-9a-f]{1,4}$", groups))) {
     return(NULL)
   }
   as.numeric(strtoi(groups, base = 16L))
+}
+
+# Render a 32-bit unsigned integer as a dotted-quad string ("." between octets).
+ssrf_num_to_quad <- function(n) {
+  paste(
+    c(n %/% 16777216, (n %/% 65536) %% 256, (n %/% 256) %% 256, n %% 256),
+    collapse = "."
+  )
 }
 
 # Given the 8 expanded hextets, detect an IPv6->IPv4 embedding prefix and return
@@ -183,26 +196,27 @@ ssrf_ipv6_hextets <- function(s) {
 # when no embedding prefix matches. Last-32-bit forms read the IPv4 from h7/h8;
 # the NAT64 local-use /48 packs the IPv4 across the RFC 6052 §2.2 bit layout
 # (octets at bits 48-63 and 72-95, skipping the reserved u-byte at bits 64-71).
+#
+# Cyclomatic-complexity note: this stays one function by design. Each `if` below
+# is a distinct RFC-defined embedding prefix; the body is a flat security spec
+# table, not control-flow tangle. Splitting it would scatter the bit-layout
+# mapping across helpers and make the SSRF matrix harder to review, so the
+# elevated cyclocomp here is an accepted readability/security trade-off
+# (ADR-003; cyclocomp is advisory and not enforced by lint or R CMD check).
 ssrf_embedded_ipv4 <- function(h) {
-  quad <- function(n) {
-    paste(
-      c(n %/% 16777216, (n %/% 65536) %% 256, (n %/% 256) %% 256, n %% 256),
-      collapse = "."
-    )
-  }
   tail32 <- h[7L] * 65536 + h[8L]
 
   # IPv4-mapped: five zero hextets then ffff, IPv4 in the last 32 bits.
   if (all(h[1:5] == 0) && h[6L] == 0xffff) {
-    return(list(quad(tail32), "ipv4-mapped"))
+    return(list(ssrf_num_to_quad(tail32), "ipv4-mapped"))
   }
   # IPv4-translated: four zero hextets, then ffff and a zero hextet.
   if (all(h[1:4] == 0) && h[5L] == 0xffff && h[6L] == 0) {
-    return(list(quad(tail32), "ipv4-translated"))
+    return(list(ssrf_num_to_quad(tail32), "ipv4-translated"))
   }
   # NAT64 well-known prefix, IPv4 in the last 32 bits.
   if (h[1L] == 0x64 && h[2L] == 0xff9b && all(h[3:6] == 0)) {
-    return(list(quad(tail32), "nat64"))
+    return(list(ssrf_num_to_quad(tail32), "nat64"))
   }
   # NAT64 local-use prefix; IPv4 split per RFC 6052 §2.2 around the u-byte.
   if (h[1L] == 0x64 && h[2L] == 0xff9b && h[3L] == 1) {
@@ -212,9 +226,29 @@ ssrf_embedded_ipv4 <- function(h) {
   # IPv4-compatible (deprecated): six zero hextets. Excludes the unspecified
   # and loopback specials, which must not be read as 0.0.0.0 / 0.0.0.1.
   if (all(h[1:6] == 0) && !(h[7L] == 0 && h[8L] <= 1)) {
-    return(list(quad(tail32), "ipv4-compatible"))
+    return(list(ssrf_num_to_quad(tail32), "ipv4-compatible"))
   }
   NULL
+}
+
+# IPv6->IPv4 embedding prefixes: decode the literal, and if it embeds an IPv4
+# address that itself falls in a blocked range, return the embedding's reason
+# code (bypass prevention, ADR-003). A public embedded address is allowed,
+# matching the IPv4-literal policy; NA when there is no blocked embedding. The
+# bit-layout decoding lives in ssrf_ipv6_hextets / ssrf_embedded_ipv4.
+ssrf_embedded_reason <- function(low) {
+  h <- ssrf_ipv6_hextets(low)
+  if (is.null(h)) {
+    return(NA_character_)
+  }
+  emb <- ssrf_embedded_ipv4(h)
+  if (is.null(emb) || !ssrf_is_dotted_quad(emb[[1L]])) {
+    return(NA_character_)
+  }
+  if (is.na(ssrf_classify_ipv4(emb[[1L]]))) {
+    return(NA_character_)
+  }
+  emb[[2L]]
 }
 
 # Classify an IPv6 literal (brackets already stripped) against ADR-003 ranges.
@@ -230,19 +264,9 @@ ssrf_classify_ipv6 <- function(s) {
     return("unspecified")
   }
 
-  # IPv6->IPv4 embedding prefixes: decode and reject if the embedded v4 falls in
-  # a blocked range (bypass prevention, ADR-003). A public embedded address is
-  # allowed, matching the IPv4-literal policy.
-  h <- ssrf_ipv6_hextets(low)
-  if (!is.null(h)) {
-    emb <- ssrf_embedded_ipv4(h)
-    if (
-      !is.null(emb) &&
-        ssrf_is_dotted_quad(emb[[1L]]) &&
-        !is.na(ssrf_classify_ipv4(emb[[1L]]))
-    ) {
-      return(emb[[2L]])
-    }
+  embedded <- ssrf_embedded_reason(low)
+  if (!is.na(embedded)) {
+    return(embedded)
   }
 
   # Link-local fe80::/10 — first hextet 0xfe80..0xfebf.
@@ -261,6 +285,40 @@ ssrf_classify_ipv6 <- function(s) {
 # Build the small result record the fetch engine consumes.
 ssrf_result <- function(allowed, reason = NA_character_) {
   list(allowed = allowed, reason = reason)
+}
+
+# Does the raw (pre-normalization) host use a numeric/hex/octal obfuscation
+# form that is NOT a canonical dotted-quad? rurl normalizes such literals into a
+# clean dotted-quad, so the obfuscation is only visible in the raw host. The
+# stricter ADR-003 interpretation applies: any all-numeric / hex / leading-zero
+# octal literal that is not a canonical dotted-quad is rejected outright.
+ssrf_numeric_literal_blocked <- function(raw_host) {
+  raw <- ssrf_strip_brackets(if (is.na(raw_host)) "" else raw_host)
+  if (
+    !nzchar(raw) || grepl(":", raw, fixed = TRUE) || ssrf_is_dotted_quad(raw)
+  ) {
+    return(FALSE)
+  }
+  grepl("^0[xX][0-9a-fA-F]+$", raw) || # hex single-integer form
+    grepl("^[0-9]+$", raw) || # raw decimal single-integer form
+    grepl("^0[0-7]+(\\.0?[0-7]*){1,3}$", raw) # octal-style dotted form
+}
+
+# Range/name matching on the normalized host (brackets already stripped).
+# Returns an ssrf_result: blocked with a reason code for a matched IP range or
+# the well-known metadata hostname; allowed otherwise. Registered names other
+# than the metadata host pass (DNS resolve-then-check is deferred, ADR-003 §1).
+ssrf_classify_literal <- function(bare) {
+  reason <- if (grepl(":", bare, fixed = TRUE)) {
+    ssrf_classify_ipv6(bare) # IPv6 literal (contains a colon)
+  } else if (ssrf_is_dotted_quad(bare)) {
+    ssrf_classify_ipv4(bare) # IPv4 dotted-quad
+  } else if (tolower(bare) == "metadata.google.internal") {
+    "cloud-metadata"
+  } else {
+    NA_character_
+  }
+  ssrf_result(is.na(reason), reason)
 }
 
 #' Structural SSRF check on already-parsed URL components
@@ -293,56 +351,15 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
     return(ssrf_result(TRUE))
   }
 
-  # 2. Numeric-literal obfuscation (ADR-003): reject non-dotted-quad numeric
-  #    encodings (raw decimal, hex, octal). rurl normalizes these into a clean
-  #    dotted-quad host, so we inspect the raw, pre-normalization host. The
-  #    stricter interpretation is used: any all-numeric / hex / leading-zero
-  #    octal literal that is NOT a canonical dotted-quad is rejected outright.
-  raw <- ssrf_strip_brackets(if (is.na(raw_host)) "" else raw_host)
-  if (nzchar(raw) && !grepl(":", raw, fixed = TRUE)) {
-    is_canonical_quad <- ssrf_is_dotted_quad(raw)
-    looks_hex <- grepl("^0[xX][0-9a-fA-F]+$", raw)
-    looks_decimal_int <- grepl("^[0-9]+$", raw)
-    # Octal-style dotted form (any octet with a leading zero) or hex/decimal
-    # single-integer forms are obfuscation. A canonical dotted-quad is fine.
-    looks_octal_dotted <- grepl("^0[0-7]+(\\.0?[0-7]*){1,3}$", raw)
-    if (
-      !is_canonical_quad &&
-        (looks_hex || looks_decimal_int || looks_octal_dotted)
-    ) {
-      return(ssrf_result(FALSE, "numeric-literal"))
-    }
+  # 2. Numeric-literal obfuscation (ADR-003): reject raw decimal/hex/octal
+  #    encodings that rurl would normalize into a dotted-quad. Inspected on the
+  #    raw, pre-normalization host.
+  if (ssrf_numeric_literal_blocked(raw_host)) {
+    return(ssrf_result(FALSE, "numeric-literal"))
   }
 
-  # 3. IP-literal range matching on the normalized host.
-  bare <- ssrf_strip_brackets(host)
-
-  # IPv6 literal (contains a colon).
-  if (grepl(":", bare, fixed = TRUE)) {
-    reason <- ssrf_classify_ipv6(bare)
-    if (!is.na(reason)) {
-      return(ssrf_result(FALSE, reason))
-    }
-    return(ssrf_result(TRUE))
-  }
-
-  # IPv4 dotted-quad.
-  if (ssrf_is_dotted_quad(bare)) {
-    reason <- ssrf_classify_ipv4(bare)
-    if (!is.na(reason)) {
-      return(ssrf_result(FALSE, reason))
-    }
-    return(ssrf_result(TRUE))
-  }
-
-  # 4. Registered-name hosts: block only the well-known metadata hostnames.
-  #    All other names pass the structural guard (DNS resolve-then-check is
-  #    deferred to post-v1 per ADR-003 §1).
-  if (tolower(bare) == "metadata.google.internal") {
-    return(ssrf_result(FALSE, "cloud-metadata"))
-  }
-
-  ssrf_result(TRUE)
+  # 3. IP-literal range matching and metadata-name check on the normalized host.
+  ssrf_classify_literal(ssrf_strip_brackets(host))
 }
 
 #' Structural SSRF check driven by a `parse_url_adapter()` row
