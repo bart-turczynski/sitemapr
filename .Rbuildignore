@@ -1,4 +1,5 @@
 # R build/dev artifacts
+^README\.Rmd$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.Rhistory$
