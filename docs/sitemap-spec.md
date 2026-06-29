@@ -331,16 +331,28 @@ Rules XSD 1.0 cannot express (SPEC §19):
 
 1. **Counts/sizes** — Axis 1 & 2 (§2): URL count > 50,000, uncompressed size
    > 50 MB, `<loc>` length, per-extension caps.
-2. **Duplicate `<loc>`** within one sitemap → `PROTOCOL_DUPLICATE_LOC` (on the
-   sitemapr-owned normalized full-URL key, *not* `rurl::clean_url` —
-   `architecture.md` §5).
+2. **Duplicate / equivalent `<loc>`** — a **sitemapr lint**, not a protocol
+   rule (sitemaps.org is silent on duplicates and on URL comparison; ADR-005).
+   Two tiers by confidence, both `warning`: byte-identical repeats →
+   `PROTOCOL_DUPLICATE_LOC`; non-identical raw forms that share the
+   RFC-3986/3987-canonical key → `PROTOCOL_URL_EQUIVALENT` (names the resolved
+   URL). The
+   canonical key is `sitemapr`-owned (assembled from `rurl` components, *not*
+   `rurl::clean_url` — `architecture.md` §5).
 3. **Field rules** — `lastmod` / `changefreq` / `priority` (§4); must run
    **independently in non-strict** where XSD may not have run.
 4. **URL rules** — absolute http/https, host present, scope (same host +
-   same-or-lower directory), invalid escapes; `data:`/`file:` `<loc>` never
-   fetched; cross-domain host-mismatch detection for both `urlset` and
-   `sitemapindex` (SPEC ROADMAP `S05-PROTO-XML`).
-5. **Encoding/escaping** — entity escaping, BOM handling, encoding conflicts (§3).
+   same-or-lower directory), malformed percent-escapes
+   (`PROTOCOL_URL_INVALID_ESCAPE`); `data:`/`file:` `<loc>` never fetched;
+   cross-domain host-mismatch detection for both `urlset` and `sitemapindex`
+   (SPEC ROADMAP `S05-PROTO-XML`).
+5. **URL encoding conformance** — sitemaps.org mandates URLs be "URL-escaped"
+   and follow RFC-3986 (URIs) / RFC-3987 (IRIs). A `<loc>` whose canonical form
+   differs from its raw bytes → `PROTOCOL_URL_NOT_ESCAPED` (`info` for a valid
+   IRI whose URI form crawlers fetch; `warning` for characters illegal in both a
+   URI and an IRI). ADR-005.
+6. **Document encoding/escaping** — XML entity escaping (Layer C), BOM handling,
+   UTF-8 / encoding conflicts (§3).
 
 ### 7.2 Text sitemaps (dedicated path, never XML — SPEC §18)
 - Non-empty; split on `\n` / `\r\n` / `\r`.

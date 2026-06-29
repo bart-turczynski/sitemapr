@@ -94,6 +94,23 @@ never sent over HTTP and identifies no separate fetched resource (RFC 3986
 §3.5). Tracking-parameter stripping is deliberately not attempted — the server
 is the authority for what a query means.
 
+The canonical form is a **comparison key and a `resolves-to` hint, never a
+replacement** for the user's URL: `read_sitemap()` and every finding's
+`subject_ref` carry the original `<loc>` bytes (ADR-004 posture). Validation
+reports the *delta* between raw and canonical — it does not rewrite the sitemap
+(ADR-005). That delta drives two checks: `<loc>` equivalence (a sitemapr lint —
+byte-identical → `PROTOCOL_DUPLICATE_LOC`; canonical-equal but raw differs →
+`PROTOCOL_URL_EQUIVALENT`; both `warning`) and URL encoding conformance
+(`PROTOCOL_URL_NOT_ESCAPED`, per RFC-3986/3987).
+
+**`rurl` is invoked only where it can change the answer** (ADR-005). A raw
+`<loc>` that is pure ASCII with no `%` and no character RFC-3986 would
+percent-encode is already canonical; its key is built from a cheap `curl`-level
+parse, skipping `rurl`'s ~70×-costlier per-URL IDNA/PSL/IRI machinery. `rurl`
+runs for URLs with a byte ≥ 0x80, a `%`, or an escape-triggering ASCII char.
+The fast path is taken **only where `rurl` is provably a no-op**, so the result
+is byte-identical to running `rurl` on every URL.
+
 `pslr` and `punycoder` are normally indirect dependencies (through `rurl`).
 They are imported directly only if an implementation need arises for raw Public
 Suffix List or Punycode/IDNA operations outside a full URL parse.

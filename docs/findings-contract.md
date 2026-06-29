@@ -107,7 +107,11 @@ implementation proceeds; codes listed here are the **known v1 set** from the
 - `PROTOCOL_URL_COUNT_EXCEEDED` — more than 50 000 URL entries
 - `PROTOCOL_SIZE_EXCEEDED` — sitemap exceeds 50 MB uncompressed (the protocol
   size limit). Non-fatal: the body is still read so other findings surface.
-- `PROTOCOL_DUPLICATE_LOC` — two entries share the same normalized `loc`
+- `PROTOCOL_DUPLICATE_LOC` — two entries share a **byte-identical** `loc`
+  (`warning`). A sitemapr lint: sitemaps.org is silent on duplicates (ADR-005).
+- `PROTOCOL_URL_EQUIVALENT` — two entries' `loc` values are not byte-identical
+  but resolve to the same RFC-3986/3987-canonical URL (`warning`; message names
+  the resolved form). A sitemapr lint (ADR-005).
 - `PROTOCOL_PRIORITY_OUT_OF_RANGE` — `priority` outside `[0.0, 1.0]`
 - `PROTOCOL_CHANGEFREQ_INVALID` — `changefreq` not in the enum
 - `PROTOCOL_LASTMOD_INVALID` — `lastmod` not a valid W3C Date-Time value
@@ -117,7 +121,14 @@ implementation proceeds; codes listed here are the **known v1 set** from the
   disregard such dates (Bing).
 - `PROTOCOL_LASTMOD_LOOKS_GENERATED` — `lastmod` ≈ sitemap fetch/generation time
   across URLs; `info` (→ `warning` in strict). Corpus-level.
-- `PROTOCOL_URL_INVALID_ESCAPE` — invalid percent-encoding in a URL field
+- `PROTOCOL_URL_INVALID_ESCAPE` — malformed percent-encoding in a URL field
+  (e.g. `%zz`); a genuine RFC-3986 violation (`error`)
+- `PROTOCOL_URL_NOT_ESCAPED` — `loc` is not written in escaped RFC-3986 form
+  (sitemaps.org: URLs "must be URL-escaped"; follow RFC-3986/3987 — ADR-005).
+  `info` when the raw `loc` is a valid IRI (RFC-3987) whose URI form is what
+  crawlers fetch; `warning` when it contains a character illegal in both a URI
+  and an IRI (raw space, `<`, `>`, `{`, `}`, …). XML entity-escaping of
+  `& ' " < >` stays a Layer C concern (`SCHEMA_INVALID`), not this code.
 - `PROTOCOL_URL_NOT_ABSOLUTE` — `loc` is not an absolute `http`/`https` URL
 - `PROTOCOL_URL_NO_HOST` — `loc` has no host component
 - `PROTOCOL_URL_TOO_LONG` — `loc` exceeds 2 048 characters (XML; the
