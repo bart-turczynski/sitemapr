@@ -221,6 +221,45 @@ test_that("the per-index child-count cap truncates and records one event", {
   expect_true(any(grepl("cap", res$problems$message)))
 })
 
+test_that("a child the SSRF guard blocks is recorded as unfetchable", {
+  # fetch_source aborts (sitemapr_ssrf_blocked) before any network call when a
+  # child resolves to a blocked address; expansion catches it, records a fetch
+  # problem, and marks the tree node rejected/unfetchable rather than crashing.
+  root <- "https://example.com/sitemap.xml"
+  blocked <- "http://127.0.0.1/child.xml"
+  local_index_server(list()) # child never reaches the network
+
+  res <- expand_root(root, index_xml(blocked))
+
+  expect_identical(nrow(res$tree), 1L)
+  expect_identical(res$tree$status, "rejected")
+  expect_identical(res$tree$reason, "unfetchable")
+  expect_true(any(
+    res$problems$category == "fetch" &
+      grepl("could not be fetched", res$problems$message)
+  ))
+  expect_identical(nrow(res$rows), 0L)
+})
+
+test_that("an index with no children yields an empty tree", {
+  # A childless <sitemapindex> (built inline; index_xml() with no args would
+  # instead emit a single empty-<loc> child). With nothing to iterate, the
+  # accumulator stays empty and the engine returns the empty-tree template.
+  root <- "https://example.com/sitemap.xml"
+  empty_index <- paste0(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+    "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    "</sitemapindex>\n"
+  )
+  local_index_server(list())
+
+  res <- expand_root(root, empty_index)
+
+  expect_identical(nrow(res$tree), 0L)
+  expect_identical(colnames(res$tree), colnames(empty_sitemap_tree()))
+  expect_identical(nrow(res$rows), 0L)
+})
+
 test_that("a nested sitemapindex warns but is still expanded", {
   root <- "https://example.com/root.xml"
   nested <- "https://example.com/nested.xml"
