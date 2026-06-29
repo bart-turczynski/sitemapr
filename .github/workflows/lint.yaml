@@ -1,0 +1,43 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# Mirrors the platform-independent steps of the local pre-push verify gate:
+# the roxygen2-pinned docs-reproducibility guard (tools/check-docs.R) and
+# lintr::lint_package(). The rcmdcheck step lives in R-CMD-check.yaml.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+name: lint.yaml
+
+permissions: read-all
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # roxygen2 is pinned to DESCRIPTION's Config/roxygen2/version so the
+          # docs-reproducibility guard compares against the same generator the
+          # committed man/ + NAMESPACE were produced with. local::. installs the
+          # package's own deps so roxygenise() and lintr can load the namespace.
+          extra-packages: any::lintr, roxygen2@8.0.0, local::.
+          needs: lint
+
+      - name: Docs are reproducible (tools/check-docs.R)
+        run: source("tools/check-docs.R")
+        shell: Rscript {0}
+
+      - name: Lint
+        run: lintr::lint_package()
+        shell: Rscript {0}
+        env:
+          LINTR_ERROR_ON_LINT: true
