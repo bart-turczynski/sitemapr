@@ -396,3 +396,51 @@ test_that("ssrf_check evaluates ranges regardless of any caller toggle", {
   expect_false(res$allowed)
   expect_identical(res$reason, "private")
 })
+
+# ---- helper guards: malformed input rejection --------------------------------
+# Direct unit coverage of the defensive branches in the IPv4/IPv6 parsers. These
+# guards are reachable only with inputs the integration surface normalizes away,
+# so they are exercised against the internal helpers directly.
+
+test_that("ssrf_is_dotted_quad rejects malformed dotted-quads", {
+  # Non-scalar, NA, or empty input.
+  expect_false(sitemapr:::ssrf_is_dotted_quad(NA_character_))
+  expect_false(sitemapr:::ssrf_is_dotted_quad(c("1", "2")))
+  expect_false(sitemapr:::ssrf_is_dotted_quad(""))
+  # Leading-zero octet (octal obfuscation form) is rejected.
+  expect_false(sitemapr:::ssrf_is_dotted_quad("127.017.0.1"))
+  # Octet out of the 0-255 range is rejected.
+  expect_false(sitemapr:::ssrf_is_dotted_quad("256.0.0.1"))
+})
+
+test_that("ssrf_ipv6_hextets returns NULL for non-IPv6 / malformed input", {
+  # Non-scalar, NA, or empty.
+  expect_null(sitemapr:::ssrf_ipv6_hextets(NA_character_))
+  expect_null(sitemapr:::ssrf_ipv6_hextets(""))
+  # No colon, or colon present but illegal characters.
+  expect_null(sitemapr:::ssrf_ipv6_hextets("12345"))
+  expect_null(sitemapr:::ssrf_ipv6_hextets("::zz"))
+  # Trailing dotted-quad tail that is not a valid IPv4 address.
+  expect_null(sitemapr:::ssrf_ipv6_hextets("::1.2.3.999"))
+  # More than one "::" zero-compression run.
+  expect_null(sitemapr:::ssrf_ipv6_hextets("1::2::3"))
+  # "::" present but no room to fill (already eight groups).
+  expect_null(sitemapr:::ssrf_ipv6_hextets("1:2:3:4:5:6:7:8::"))
+  # No "::" and the wrong number of groups.
+  expect_null(sitemapr:::ssrf_ipv6_hextets("1:2:3"))
+  # Correct group count but an over-long hextet.
+  expect_null(sitemapr:::ssrf_ipv6_hextets("::12345"))
+})
+
+test_that("ssrf_check allows when there is no host to evaluate", {
+  # An NA or empty host is not blockable here; downstream rules decide.
+  expect_true(
+    sitemapr:::ssrf_check(host = NA_character_, scheme = "http")$allowed
+  )
+  expect_true(sitemapr:::ssrf_check(host = "", scheme = "http")$allowed)
+})
+
+test_that("ssrf_raw_host_of returns NA for non-scalar / NA / empty input", {
+  expect_true(is.na(sitemapr:::ssrf_raw_host_of(NA_character_)))
+  expect_true(is.na(sitemapr:::ssrf_raw_host_of("")))
+})
