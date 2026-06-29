@@ -13,25 +13,6 @@ source_limits <- function(submitted_list_cap = 25L) {
   list(submitted_list_cap = as.integer(submitted_list_cap))
 }
 
-#' Permitted provenance values for source records
-#'
-#' The full v1 provenance enum. Only the first two are emitted by
-#' `create_source_records()`; the remainder are produced by later slices
-#' (discovery, index expansion, archive extraction).
-#'
-#' @return Character vector of provenance levels.
-#' @keywords internal
-#' @noRd
-source_provenance_levels <- function() {
-  c(
-    "submitted-directly",
-    "submitted-list",
-    "guessed-path",
-    "child-of-index",
-    "extracted-archive"
-  )
-}
-
 #' Does a raw input string carry an explicit URL scheme?
 #'
 #' Detects a leading `scheme://` on the *raw* user string. `rurl` defaults

@@ -59,18 +59,6 @@ empty_schema_findings <- function() {
   schema_findings()
 }
 
-# One evidence list, with the excerpt clamped to the contract's 500-char cap.
-schema_evidence <- function(
-  excerpt = NA_character_,
-  line = NA_integer_,
-  column = NA_integer_
-) {
-  if (!is.na(excerpt)) {
-    excerpt <- substr(excerpt, 1L, 500L)
-  }
-  list(excerpt = excerpt, line = as.integer(line), column = as.integer(column))
-}
-
 # Append a fragment to a subject_ref base, tolerating an absent base.
 schema_ref_fragment <- function(base, fragment) {
   if (is.na(base) || !nzchar(base)) {
@@ -119,7 +107,7 @@ schema_unknown_ns_findings <- function(namespaces, subject_ref) {
         ),
         ns
       ),
-      evidence = list(schema_evidence(excerpt = ns)),
+      evidence = list(finding_evidence(excerpt = ns)),
       is_strict_only = FALSE
     )
   })
@@ -152,7 +140,7 @@ schema_invalid_row <- function(err, subject_ref) {
         schema_namespace_label(el_ns)
       ),
       evidence = list(
-        schema_evidence(excerpt = sprintf("{%s}%s", el_ns, el_local))
+        finding_evidence(excerpt = sprintf("{%s}%s", el_ns, el_local))
       ),
       is_strict_only = FALSE
     )
@@ -163,7 +151,7 @@ schema_invalid_row <- function(err, subject_ref) {
       subject_type = "document",
       subject_ref = subject_ref,
       message = "The document failed XSD schema validation.",
-      evidence = list(schema_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   }
@@ -185,7 +173,7 @@ schema_invalid_findings <- function(errors, subject_ref) {
         "The document contains XML entity references, which are not expanded ",
         "for safety (XXE protection), so it cannot be schema-validated as-is."
       ),
-      evidence = list(schema_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ))
   }

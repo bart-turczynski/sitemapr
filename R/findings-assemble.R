@@ -57,6 +57,21 @@ empty_findings_contract <- function() {
   )
 }
 
+# One `evidence` cell for a finding, with the excerpt clamped to the contract's
+# 500-char cap (findings-contract.md). Shared by every producer (schema,
+# protocol, classification, index-expansion) so the evidence shape is defined
+# in exactly one place.
+finding_evidence <- function(
+  excerpt = NA_character_,
+  line = NA_integer_,
+  column = NA_integer_
+) {
+  if (!is.na(excerpt)) {
+    excerpt <- substr(excerpt, 1L, 500L)
+  }
+  list(excerpt = excerpt, line = as.integer(line), column = as.integer(column))
+}
+
 # Apply the strict/non-strict severity model to the row-bound, mode-stamped
 # findings (findings-contract.md "Strict-vs-non-strict"; sitemap-spec.md §6).
 findings_apply_mode <- function(findings, mode) {

@@ -126,7 +126,7 @@ classification_source_finding <- function(
     subject_type = "source",
     subject_ref = if (is.null(base)) NA_character_ else base,
     message = message,
-    evidence = list(protocol_evidence(excerpt = excerpt)),
+    evidence = list(finding_evidence(excerpt = excerpt)),
     is_strict_only = is_strict_only
   )
 }
@@ -143,7 +143,7 @@ classification_child_finding <- function(code, base, child_url, message) {
       paste0("#index-child:", child_url)
     ),
     message = message,
-    evidence = list(protocol_evidence(excerpt = child_url)),
+    evidence = list(finding_evidence(excerpt = child_url)),
     is_strict_only = FALSE
   )
 }
