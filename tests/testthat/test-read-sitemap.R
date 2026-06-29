@@ -21,9 +21,13 @@ write_tempfile <- function(bytes, ext) {
 }
 
 gz_of <- function(text) {
+  gz_of_raw(charToRaw(text))
+}
+
+gz_of_raw <- function(bytes) {
   tf <- withr::local_tempfile(fileext = ".gz")
   con <- gzfile(tf, "wb")
-  writeBin(charToRaw(text), con)
+  writeBin(bytes, con)
   close(con)
   readBin(tf, what = "raw", n = file.info(tf)$size)
 }
@@ -124,6 +128,24 @@ test_that("unsupported content raises sitemapr_unsupported_format", {
     mock_by_url(
       setNames(list("<html><body>hi</body></html>"), url),
       content_type = "text/html"
+    )
+  )
+  expect_error(
+    read_sitemap(url),
+    class = "sitemapr_unsupported_format"
+  )
+})
+
+test_that("a gzip-wrapped tar fetched over the network is rejected", {
+  # tar.gz is local-only (PRD §1): a fetched archive whose inner stream is tar
+  # must abort as unsupported, never be parsed over the network.
+  block <- raw(512L)
+  block[258:262] <- charToRaw("ustar") # ustar magic at offset 257 (0-based)
+  url <- "https://example.com/sitemap.tar.gz"
+  httr2::local_mocked_responses(
+    mock_by_url(
+      setNames(list(gz_of_raw(block)), url),
+      content_type = "application/octet-stream"
     )
   )
   expect_error(
