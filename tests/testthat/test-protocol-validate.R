@@ -912,6 +912,12 @@ test_that("an out-of-range rating is flagged", {
   }
 })
 
+test_that("a valid rating at the bounds passes", {
+  for (r in c("0.0", "5.0")) {
+    expect_length(ext_codes("video", list(mk_video(rating = leaf(r)))), 0L)
+  }
+})
+
 test_that("more than 32 video tags is flagged and configurable", {
   tags <- stats::setNames(
     rep(list(leaf("t")), 33L),

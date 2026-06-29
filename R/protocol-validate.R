@@ -560,81 +560,88 @@ validate_news_element <- function(n) {
 # of messages (empty = clean). Covers the bounded optionals (sitemap-spec.md
 # §5.3); required-child presence and the content_loc/player_loc one-of rule
 # are structural and left to the schema layer.
-validate_video_element <- function(v, max_tags) {
-  msgs <- character(0)
-
+# `<video:duration>` must be an integer within the protocol range.
+video_duration_msgs <- function(v) {
   dur <- ext_child_text(v, "duration")
-  if (!is.na(dur)) {
-    d <- suppressWarnings(as.numeric(dur))
-    rng <- protocol_video_duration_range
-    if (is.na(d) || d != round(d) || d < rng[1] || d > rng[2]) {
-      msgs <- c(
-        msgs,
-        sprintf(
-          "<video:duration> '%s' must be an integer between %d and %d seconds.",
-          dur,
-          rng[1],
-          rng[2]
-        )
-      )
-    }
+  if (is.na(dur)) {
+    return(character(0))
   }
+  d <- suppressWarnings(as.numeric(dur))
+  rng <- protocol_video_duration_range
+  if (is.na(d) || d != round(d) || d < rng[1] || d > rng[2]) {
+    return(sprintf(
+      "<video:duration> '%s' must be an integer between %d and %d seconds.",
+      dur,
+      rng[1],
+      rng[2]
+    ))
+  }
+  character(0)
+}
 
+# `<video:rating>` must be a number within the protocol range.
+video_rating_msgs <- function(v) {
   rat <- ext_child_text(v, "rating")
-  if (!is.na(rat)) {
-    r <- suppressWarnings(as.numeric(rat))
-    rng <- protocol_video_rating_range
-    if (is.na(r) || r < rng[1] || r > rng[2]) {
-      msgs <- c(
-        msgs,
-        sprintf(
-          "<video:rating> '%s' must be a number between %.1f and %.1f.",
-          rat,
-          rng[1],
-          rng[2]
-        )
-      )
-    }
+  if (is.na(rat)) {
+    return(character(0))
   }
+  r <- suppressWarnings(as.numeric(rat))
+  rng <- protocol_video_rating_range
+  if (is.na(r) || r < rng[1] || r > rng[2]) {
+    return(sprintf(
+      "<video:rating> '%s' must be a number between %.1f and %.1f.",
+      rat,
+      rng[1],
+      rng[2]
+    ))
+  }
+  character(0)
+}
 
+# Per-video `<video:tag>` count cap.
+video_tag_count_msgs <- function(v, max_tags) {
   ntag <- ext_child_count(v, "tag")
   if (ntag > max_tags) {
-    msgs <- c(
-      msgs,
-      sprintf(
-        "<video:tag> count %d exceeds the limit of %d per video.",
-        ntag,
-        max_tags
-      )
-    )
+    return(sprintf(
+      "<video:tag> count %d exceeds the limit of %d per video.",
+      ntag,
+      max_tags
+    ))
   }
+  character(0)
+}
 
+# `<video:description>` length cap.
+video_description_msgs <- function(v) {
   desc <- ext_child_text(v, "description")
   if (!is.na(desc) && nchar(desc) > protocol_video_description_max) {
-    msgs <- c(
-      msgs,
-      sprintf(
-        "<video:description> is %d characters; the limit is %d.",
-        nchar(desc),
-        protocol_video_description_max
-      )
-    )
+    return(sprintf(
+      "<video:description> is %d characters; the limit is %d.",
+      nchar(desc),
+      protocol_video_description_max
+    ))
   }
+  character(0)
+}
 
+# yes/no enum fields: family_friendly, requires_subscription, live.
+video_enum_msgs <- function(v) {
+  msgs <- character(0)
   for (enum in c("family_friendly", "requires_subscription", "live")) {
     val <- ext_child_text(v, enum)
     if (!is.na(val) && !val %in% protocol_video_bool_values) {
       msgs <- c(
         msgs,
-        sprintf(
-          "<video:%s> '%s' must be 'yes' or 'no'.",
-          enum,
-          val
-        )
+        sprintf("<video:%s> '%s' must be 'yes' or 'no'.", enum, val)
       )
     }
   }
+  msgs
+}
 
+# restriction/platform require a relationship="allow"|"deny" attribute.
+video_relationship_msgs <- function(v) {
+  msgs <- character(0)
   for (rel in c("restriction", "platform")) {
     if (ext_has_child(v, rel)) {
       a <- ext_child_attr(v, rel, "relationship")
@@ -649,14 +656,80 @@ validate_video_element <- function(v, max_tags) {
       }
     }
   }
-
   msgs
+}
+
+validate_video_element <- function(v, max_tags) {
+  c(
+    video_duration_msgs(v),
+    video_rating_msgs(v),
+    video_tag_count_msgs(v, max_tags),
+    video_description_msgs(v),
+    video_enum_msgs(v),
+    video_relationship_msgs(v)
+  )
 }
 
 # Extension field/count rules over the `images`/`video`/`news` list-columns.
 # Per-`<url>` image count and per-video/per-news value rules are entry-scoped;
 # the news count is per-FILE and document-scoped. Returns a (possibly empty)
 # protocol-findings tibble.
+# Per-`<url>` image-count cap. Returns a 0-/1-element list.
+extension_image_findings <- function(imgs, base, i, limits) {
+  if (is.null(imgs) || length(imgs) <= limits$max_images_per_url) {
+    return(list())
+  }
+  list(protocol_url_finding(
+    "PROTOCOL_IMAGE_COUNT_EXCEEDED",
+    "error",
+    "entry",
+    base,
+    i,
+    NA_character_,
+    sprintf(
+      "<url> has %d <image:image> entries; the limit is %d per URL.",
+      length(imgs),
+      limits$max_images_per_url
+    )
+  ))
+}
+
+# Per-video field findings for one `<url>` (NULL `vids` -> no findings).
+extension_video_findings <- function(vids, base, i, limits) {
+  out <- list()
+  for (m in seq_along(vids)) {
+    for (msg in validate_video_element(vids[[m]], limits$max_video_tags)) {
+      out[[length(out) + 1L]] <- protocol_ext_finding(
+        "PROTOCOL_VIDEO_FIELD_INVALID",
+        base,
+        i,
+        "video",
+        m,
+        msg
+      )
+    }
+  }
+  out
+}
+
+# Per-news field findings for one `<url>` (NULL `nws` -> no findings).
+extension_news_findings <- function(nws, base, i) {
+  out <- list()
+  for (m in seq_along(nws)) {
+    for (msg in validate_news_element(nws[[m]])) {
+      out[[length(out) + 1L]] <- protocol_ext_finding(
+        "PROTOCOL_NEWS_FIELD_INVALID",
+        base,
+        i,
+        "news",
+        m,
+        msg
+      )
+    }
+  }
+  out
+}
+
 validate_extensions <- function(rows, base, limits) {
   images <- rows$images
   video <- rows$video
@@ -665,55 +738,13 @@ validate_extensions <- function(rows, base, limits) {
   total_news <- 0L
 
   for (i in seq_len(nrow(rows))) {
-    imgs <- images[[i]]
-    if (!is.null(imgs) && length(imgs) > limits$max_images_per_url) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_IMAGE_COUNT_EXCEEDED",
-        "error",
-        "entry",
-        base,
-        i,
-        NA_character_,
-        sprintf(
-          "<url> has %d <image:image> entries; the limit is %d per URL.",
-          length(imgs),
-          limits$max_images_per_url
-        )
-      )
-    }
-
-    vids <- video[[i]]
-    if (!is.null(vids)) {
-      for (m in seq_along(vids)) {
-        for (msg in validate_video_element(vids[[m]], limits$max_video_tags)) {
-          out[[length(out) + 1L]] <- protocol_ext_finding(
-            "PROTOCOL_VIDEO_FIELD_INVALID",
-            base,
-            i,
-            "video",
-            m,
-            msg
-          )
-        }
-      }
-    }
-
-    nws <- news[[i]]
-    if (!is.null(nws)) {
-      total_news <- total_news + length(nws)
-      for (m in seq_along(nws)) {
-        for (msg in validate_news_element(nws[[m]])) {
-          out[[length(out) + 1L]] <- protocol_ext_finding(
-            "PROTOCOL_NEWS_FIELD_INVALID",
-            base,
-            i,
-            "news",
-            m,
-            msg
-          )
-        }
-      }
-    }
+    total_news <- total_news + length(news[[i]])
+    out <- c(
+      out,
+      extension_image_findings(images[[i]], base, i, limits),
+      extension_video_findings(video[[i]], base, i, limits),
+      extension_news_findings(news[[i]], base, i)
+    )
   }
 
   if (total_news > limits$max_news_per_file) {
@@ -761,28 +792,45 @@ hreflang_is_alpha4 <- function(s) grepl("^[A-Za-z]{4}$", s)
 # all-UPPERCASE 2-letter token, which reads as a region used alone (e.g. `US`)
 # and is therefore rejected here as a non-family token (the caller maps `NULL`
 # to `HREFLANG_FORMAT_INVALID`).
+# Single-subtag family (`lang`): a 2-alpha token, but a standalone all-UPPERCASE
+# 2-letter token reads as a region used alone (e.g. `US`) and is rejected.
+hreflang_roles_1 <- function(parts) {
+  if (!hreflang_is_alpha2(parts[1])) {
+    return(NULL)
+  }
+  if (parts[1] == toupper(parts[1]) && parts[1] != tolower(parts[1])) {
+    return(NULL)
+  }
+  "lang"
+}
+
+# Two-subtag families: `lang-REGION` (alpha2-alpha2) or `lang-Script`
+# (alpha2-alpha4).
+hreflang_roles_2 <- function(parts) {
+  if (!hreflang_is_alpha2(parts[1])) {
+    return(NULL)
+  }
+  if (hreflang_is_alpha2(parts[2])) {
+    return(c("lang", "region"))
+  }
+  if (hreflang_is_alpha4(parts[2])) {
+    return(c("lang", "script"))
+  }
+  NULL
+}
+
+# Assign a role (`"lang"`, `"region"`, `"script"`) to each hyphen-separated
+# subtag by position and alpha-length, or return `NULL` when the structure fits
+# no accepted family. With no IANA snapshot the subtags are matched by shape
+# only (see the per-arity helpers; the caller maps `NULL` to
+# `HREFLANG_FORMAT_INVALID`).
 hreflang_roles <- function(parts) {
   n <- length(parts)
   if (n == 1L) {
-    if (!hreflang_is_alpha2(parts[1])) {
-      return(NULL)
-    }
-    if (parts[1] == toupper(parts[1]) && parts[1] != tolower(parts[1])) {
-      return(NULL)
-    }
-    return("lang")
+    return(hreflang_roles_1(parts))
   }
   if (n == 2L) {
-    if (!hreflang_is_alpha2(parts[1])) {
-      return(NULL)
-    }
-    if (hreflang_is_alpha2(parts[2])) {
-      return(c("lang", "region"))
-    }
-    if (hreflang_is_alpha4(parts[2])) {
-      return(c("lang", "script"))
-    }
-    return(NULL)
+    return(hreflang_roles_2(parts))
   }
   is_lsr <- n == 3L &&
     hreflang_is_alpha2(parts[1]) &&
@@ -825,22 +873,38 @@ hreflang_case_ok <- function(parts, roles) {
 # whitespace gives `SEPARATOR_INVALID`; a structure outside the accepted
 # families gives `FORMAT_INVALID`; a well-structured token with off-convention
 # casing gives `NONSTANDARD_CASE`.
+# `x-default`-like (case-folded, `_`->`-`): EXACTLY `x-default` is clean, any
+# near miss is invalid. Returns the code, or `NULL` when not `x-default`-like.
+hreflang_xdefault_code <- function(raw, trimmed) {
+  if (!identical(tolower(gsub("_", "-", trimmed, fixed = TRUE)), "x-default")) {
+    return(NULL)
+  }
+  if (identical(raw, "x-default")) {
+    "valid-xdefault"
+  } else {
+    "HREFLANG_XDEFAULT_INVALID"
+  }
+}
+
+# TRUE when the token uses a disallowed separator: `_`, `--`, an edge `-`, or
+# internal whitespace.
+hreflang_has_bad_separator <- function(trimmed) {
+  grepl("_", trimmed, fixed = TRUE) ||
+    grepl("--", trimmed, fixed = TRUE) ||
+    grepl("(^-)|(-$)|[[:space:]]", trimmed)
+}
+
 classify_hreflang_token <- function(raw) {
   raw <- as.character(raw)
   trimmed <- trimws(raw)
-  if (identical(tolower(gsub("_", "-", trimmed, fixed = TRUE)), "x-default")) {
-    if (identical(raw, "x-default")) {
-      return("valid-xdefault")
-    }
-    return("HREFLANG_XDEFAULT_INVALID")
+  xdefault <- hreflang_xdefault_code(raw, trimmed)
+  if (!is.null(xdefault)) {
+    return(xdefault)
   }
   if (!nzchar(trimmed) || !identical(raw, trimmed)) {
     return("HREFLANG_FORMAT_INVALID")
   }
-  bad_sep <- grepl("_", trimmed, fixed = TRUE) ||
-    grepl("--", trimmed, fixed = TRUE) ||
-    grepl("(^-)|(-$)|[[:space:]]", trimmed)
-  if (bad_sep) {
+  if (hreflang_has_bad_separator(trimmed)) {
     return("HREFLANG_SEPARATOR_INVALID")
   }
   parts <- strsplit(trimmed, "-", fixed = TRUE)[[1]]
@@ -927,6 +991,186 @@ hreflang_attr_message <- function(rel, hreflang_missing, href_missing) {
 # href) and per-`<url>` set checks (duplicate token, duplicate / missing
 # `x-default`) are emitted as protocol findings. Returns a (possibly empty)
 # protocol-findings tibble.
+# Classify one link's `hreflang` value: its normalized token (`NA` when the
+# value is an `x-default`), the two `x-default` flags, and any per-token finding
+# (`NULL` when the token is clean). Pure; the caller folds the result into its
+# per-`<url>` state.
+hreflang_token_outcome <- function(hl, base, i, m) {
+  raw <- as.character(hl)
+  code <- classify_hreflang_token(raw)
+  is_xd <- identical(
+    tolower(gsub("_", "-", trimws(raw), fixed = TRUE)),
+    "x-default"
+  )
+  finding <- NULL
+  if (!code %in% c("valid", "valid-xdefault")) {
+    finding <- protocol_hreflang_finding(
+      code,
+      hreflang_token_severity(code),
+      base,
+      i,
+      m,
+      raw,
+      hreflang_token_message(code, raw)
+    )
+  }
+  list(
+    norm = if (is_xd) NA_character_ else tolower(trimws(raw)),
+    is_xdefault = is_xd,
+    xdefault_clean = is_xd && identical(code, "valid-xdefault"),
+    finding = finding
+  )
+}
+
+# The required-attribute check for one `<xhtml:link>`: `rel="alternate"`, a
+# present `hreflang`, and a non-empty `href`. Returns a 0-/1-element list.
+hreflang_attr_finding <- function(rel, hl, hf, base, i, m) {
+  hreflang_missing <- is.null(hl)
+  href_missing <- is.null(hf) || !nzchar(trimws(as.character(hf)))
+  rel_bad <- is.null(rel) || !identical(as.character(rel), "alternate")
+  if (!(rel_bad || hreflang_missing || href_missing)) {
+    return(list())
+  }
+  list(protocol_hreflang_finding(
+    "HREFLANG_LINK_ATTR_INVALID",
+    "error",
+    base,
+    i,
+    m,
+    if (hreflang_missing) NA_character_ else as.character(hl),
+    hreflang_attr_message(rel, hreflang_missing, href_missing)
+  ))
+}
+
+# The relative-href check for one `<xhtml:link>`. Returns a 0-/1-element list.
+hreflang_href_finding <- function(hf, base, i, m) {
+  href_missing <- is.null(hf) || !nzchar(trimws(as.character(hf)))
+  if (href_missing || loc_absoluteness(as.character(hf)) != "relative") {
+    return(list())
+  }
+  list(protocol_hreflang_finding(
+    "HREFLANG_HREF_RELATIVE",
+    "warning",
+    base,
+    i,
+    m,
+    as.character(hf),
+    sprintf(
+      "hreflang href '%s' is relative; an absolute URL is required.",
+      hf
+    ),
+    is_strict_only = TRUE
+  ))
+}
+
+# Per-`<xhtml:link>` checks for one `<url>`'s alternates (attributes, token
+# format/separator/case, relative href). Returns the per-link findings plus the
+# set-level state the caller's set checks consume.
+hreflang_link_findings <- function(alts, base, i) {
+  nlink <- length(alts)
+  token_norm <- rep(NA_character_, nlink)
+  is_xdefault <- rep(FALSE, nlink)
+  xdefault_clean <- rep(FALSE, nlink)
+  any_hreflang <- FALSE
+  out <- list()
+
+  for (m in seq_len(nlink)) {
+    a <- hreflang_link_attrs(alts[[m]])
+    out <- c(out, hreflang_attr_finding(a$rel, a$hreflang, a$href, base, i, m))
+
+    if (!is.null(a$hreflang)) {
+      any_hreflang <- TRUE
+      o <- hreflang_token_outcome(a$hreflang, base, i, m)
+      token_norm[m] <- o$norm
+      is_xdefault[m] <- o$is_xdefault
+      xdefault_clean[m] <- o$xdefault_clean
+      if (!is.null(o$finding)) {
+        out[[length(out) + 1L]] <- o$finding
+      }
+    }
+
+    out <- c(out, hreflang_href_finding(a$href, base, i, m))
+  }
+
+  list(
+    findings = out,
+    token_norm = token_norm,
+    is_xdefault = is_xdefault,
+    xdefault_clean = xdefault_clean,
+    any_hreflang = any_hreflang
+  )
+}
+
+# Duplicate non-`x-default` tokens within one `<url>`: each repeat past the
+# first occurrence is flagged against its own link, naming the first.
+hreflang_dup_token_findings <- function(token_norm, base, i) {
+  out <- list()
+  seen <- new.env(parent = emptyenv())
+  for (m in which(!is.na(token_norm))) {
+    key <- token_norm[m]
+    if (is.null(seen[[key]])) {
+      assign(key, m, envir = seen)
+    } else {
+      out[[length(out) + 1L]] <- protocol_hreflang_finding(
+        "HREFLANG_DUPLICATE",
+        "warning",
+        base,
+        i,
+        m,
+        key,
+        sprintf(
+          "hreflang '%s' duplicates link %d in this <url>.",
+          key,
+          get(key, envir = seen)
+        )
+      )
+    }
+  }
+  out
+}
+
+# More than one clean `x-default` in one `<url>` is a duplicate (malformed ones
+# are already reported as XDEFAULT_INVALID by the per-token classifier).
+hreflang_xdefault_dup_findings <- function(xdefault_clean, base, i) {
+  out <- list()
+  for (m in which(xdefault_clean)[-1]) {
+    out[[length(out) + 1L]] <- protocol_hreflang_finding(
+      "HREFLANG_XDEFAULT_INVALID",
+      "error",
+      base,
+      i,
+      m,
+      "x-default",
+      "x-default appears more than once in this <url>; only one is permitted."
+    )
+  }
+  out
+}
+
+# `x-default` is recommended whenever any alternate is annotated; "absent" means
+# no `x-default`-like value at all (a malformed attempt is reported, not treated
+# as missing).
+hreflang_no_xdefault_findings <- function(
+  any_hreflang,
+  is_xdefault,
+  base,
+  i
+) {
+  if (!(any_hreflang && !any(is_xdefault))) {
+    return(list())
+  }
+  list(protocol_hreflang_set_finding(
+    "HREFLANG_XDEFAULT_MISSING",
+    "info",
+    base,
+    i,
+    paste0(
+      "No x-default hreflang annotation; one is recommended when ",
+      "alternate-language links are present."
+    )
+  ))
+}
+
 validate_hreflang <- function(rows, base) {
   alternates <- rows$alternates
   out <- list()
@@ -937,133 +1181,19 @@ validate_hreflang <- function(rows, base) {
       next
     }
 
-    nlink <- length(alts)
-    token_norm <- rep(NA_character_, nlink)
-    is_xdefault <- rep(FALSE, nlink)
-    xdefault_clean <- rep(FALSE, nlink)
-    any_hreflang <- FALSE
-
-    for (m in seq_len(nlink)) {
-      a <- hreflang_link_attrs(alts[[m]])
-      rel <- a$rel
-      hl <- a$hreflang
-      hf <- a$href
-
-      hreflang_missing <- is.null(hl)
-      href_missing <- is.null(hf) || !nzchar(trimws(as.character(hf)))
-      rel_bad <- is.null(rel) || !identical(as.character(rel), "alternate")
-
-      if (rel_bad || hreflang_missing || href_missing) {
-        out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_LINK_ATTR_INVALID",
-          "error",
-          base,
-          i,
-          m,
-          if (hreflang_missing) NA_character_ else as.character(hl),
-          hreflang_attr_message(rel, hreflang_missing, href_missing)
-        )
-      }
-
-      if (!hreflang_missing) {
-        any_hreflang <- TRUE
-        raw <- as.character(hl)
-        code <- classify_hreflang_token(raw)
-        if (
-          identical(
-            tolower(gsub("_", "-", trimws(raw), fixed = TRUE)),
-            "x-default"
-          )
-        ) {
-          is_xdefault[m] <- TRUE
-          xdefault_clean[m] <- identical(code, "valid-xdefault")
-        } else {
-          token_norm[m] <- tolower(trimws(raw))
-        }
-        if (!code %in% c("valid", "valid-xdefault")) {
-          out[[length(out) + 1L]] <- protocol_hreflang_finding(
-            code,
-            hreflang_token_severity(code),
-            base,
-            i,
-            m,
-            raw,
-            hreflang_token_message(code, raw)
-          )
-        }
-      }
-
-      if (!href_missing && loc_absoluteness(as.character(hf)) == "relative") {
-        out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_HREF_RELATIVE",
-          "warning",
-          base,
-          i,
-          m,
-          as.character(hf),
-          sprintf(
-            "hreflang href '%s' is relative; an absolute URL is required.",
-            hf
-          ),
-          is_strict_only = TRUE
-        )
-      }
-    }
-
-    # Duplicate non-`x-default` tokens: each repeat past the first occurrence is
-    # flagged against its own link, naming the first.
-    seen <- new.env(parent = emptyenv())
-    for (m in which(!is.na(token_norm))) {
-      key <- token_norm[m]
-      if (is.null(seen[[key]])) {
-        assign(key, m, envir = seen)
-      } else {
-        out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_DUPLICATE",
-          "warning",
-          base,
-          i,
-          m,
-          key,
-          sprintf(
-            "hreflang '%s' duplicates link %d in this <url>.",
-            key,
-            get(key, envir = seen)
-          )
-        )
-      }
-    }
-
-    # More than one clean `x-default` is a duplicate (malformed ones are already
-    # reported as XDEFAULT_INVALID by the per-token classifier above).
-    xclean <- which(xdefault_clean)
-    for (m in xclean[-1]) {
-      out[[length(out) + 1L]] <- protocol_hreflang_finding(
-        "HREFLANG_XDEFAULT_INVALID",
-        "error",
+    links <- hreflang_link_findings(alts, base, i)
+    out <- c(
+      out,
+      links$findings,
+      hreflang_dup_token_findings(links$token_norm, base, i),
+      hreflang_xdefault_dup_findings(links$xdefault_clean, base, i),
+      hreflang_no_xdefault_findings(
+        links$any_hreflang,
+        links$is_xdefault,
         base,
-        i,
-        m,
-        "x-default",
-        "x-default appears more than once in this <url>; only one is permitted."
+        i
       )
-    }
-
-    # `x-default` is recommended whenever any alternate is annotated; "absent"
-    # means no `x-default`-like value at all (a malformed attempt is reported,
-    # not treated as missing).
-    if (any_hreflang && !any(is_xdefault)) {
-      out[[length(out) + 1L]] <- protocol_hreflang_set_finding(
-        "HREFLANG_XDEFAULT_MISSING",
-        "info",
-        base,
-        i,
-        paste0(
-          "No x-default hreflang annotation; one is recommended when ",
-          "alternate-language links are present."
-        )
-      )
-    }
+    )
   }
 
   if (length(out) == 0L) {
@@ -1107,20 +1237,10 @@ hreflang_token_message <- function(code, raw) {
 # Per-`<loc>` URL rules over the parsed rows. Returns a (possibly empty)
 # protocol-findings tibble. `sitemap_url` is the sitemap's own absolute URL,
 # used for scope; `NA` skips the scope check (undefined without an origin).
-validate_loc_urls <- function(rows, sitemap_url, base) {
-  loc <- rows$loc
-  keep <- !is.na(loc) & nzchar(loc)
-  idx <- which(keep)
-  if (length(idx) == 0L) {
-    return(empty_protocol_findings())
-  }
-
-  kind <- loc_absoluteness(loc[idx])
+# Non-absolute (relative or non-http(s) scheme) locs -> a single clear finding
+# per entry; the remaining URL-structure checks assume an absolute http(s) URL.
+loc_not_absolute_findings <- function(loc, bad, base) {
   out <- list()
-
-  # Non-absolute (relative or non-http(s) scheme) -> a single clear finding per
-  # entry; the remaining URL-structure checks assume an absolute http(s) URL.
-  bad <- idx[kind != "http(s)"]
   for (j in bad) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_URL_NOT_ABSOLUTE",
@@ -1135,6 +1255,165 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
       )
     )
   }
+  out
+}
+
+# URL-structure checks for one absolute http(s) `<loc>` at entry `j`: no-host
+# (terminal), over-length, invalid escape, fragment, userinfo, out-of-scope.
+# `prow` is the one-row parsed adapter for this loc.
+loc_single_url_findings <- function(
+  l,
+  j,
+  prow,
+  authority_self,
+  dir_self,
+  sitemap_url,
+  base
+) {
+  host <- as.character(prow$host)
+  if (is.na(host) || !nzchar(host)) {
+    return(list(protocol_url_finding(
+      "PROTOCOL_URL_NO_HOST",
+      "error",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf("<loc> '%s' has no host component.", l)
+    )))
+  }
+
+  out <- list()
+
+  if (nchar(l) >= 2048L) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_TOO_LONG",
+      "warning",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf(
+        "<loc> is %d characters; sitemap URLs must be under 2048.",
+        nchar(l)
+      )
+    )
+  }
+
+  if (has_invalid_escape(l)) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_INVALID_ESCAPE",
+      "error",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf("<loc> '%s' contains an invalid percent-escape.", l)
+    )
+  }
+
+  if (grepl("#", l, fixed = TRUE)) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_FRAGMENT",
+      "info",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf(
+        "<loc> '%s' contains a fragment, which crawlers ignore.",
+        l
+      )
+    )
+  }
+
+  user <- as.character(prow$user)
+  if (!is.na(user) && nzchar(user)) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_USERINFO",
+      "info",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf("<loc> '%s' contains userinfo, which crawlers ignore.", l)
+    )
+  }
+
+  if (!is.na(authority_self)) {
+    in_scope <- identical(loc_authority(prow), authority_self) &&
+      startsWith(as.character(prow$path), dir_self)
+    if (!in_scope) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_URL_OUT_OF_SCOPE",
+        "warning",
+        "entry",
+        base,
+        j,
+        l,
+        sprintf(
+          paste0(
+            "<loc> '%s' is outside the sitemap's scope (same host and ",
+            "same-or-lower path as %s)."
+          ),
+          l,
+          sitemap_url
+        )
+      )
+    }
+  }
+
+  out
+}
+
+# Duplicate detection on the full-URL identity key, over the absolute,
+# host-bearing entries only. Each repeat past the first occurrence of a key is
+# flagged against its own entry, naming the first occurrence.
+loc_duplicate_findings <- function(parsed, absolute, loc, base) {
+  has_host <- !is.na(parsed$host) & nzchar(as.character(parsed$host))
+  if (!any(has_host)) {
+    return(list())
+  }
+  keys <- build_loc_key(parsed)
+  keys[!has_host] <- NA_character_
+  out <- list()
+  first_seen <- new.env(parent = emptyenv())
+  for (k in which(has_host)) {
+    key <- keys[k]
+    if (is.null(first_seen[[key]])) {
+      assign(key, absolute[k], envir = first_seen)
+    } else {
+      j <- absolute[k]
+      first_entry <- get(key, envir = first_seen)
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_DUPLICATE_LOC",
+        "warning",
+        "entry",
+        base,
+        j,
+        loc[j],
+        sprintf(
+          "<loc> duplicates entry %d (identity key '%s').",
+          first_entry,
+          key
+        )
+      )
+    }
+  }
+  out
+}
+
+validate_loc_urls <- function(rows, sitemap_url, base) {
+  loc <- rows$loc
+  keep <- !is.na(loc) & nzchar(loc)
+  idx <- which(keep)
+  if (length(idx) == 0L) {
+    return(empty_protocol_findings())
+  }
+
+  kind <- loc_absoluteness(loc[idx])
+  bad <- idx[kind != "http(s)"]
+  out <- loc_not_absolute_findings(loc, bad, base)
 
   absolute <- idx[kind == "http(s)"]
   if (length(absolute) == 0L) {
@@ -1157,135 +1436,21 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
   for (k in seq_along(absolute)) {
     j <- absolute[k]
-    l <- loc[j]
-    host <- as.character(parsed$host[k])
-
-    if (is.na(host) || !nzchar(host)) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_NO_HOST",
-        "error",
-        "entry",
-        base,
+    out <- c(
+      out,
+      loc_single_url_findings(
+        loc[j],
         j,
-        l,
-        sprintf("<loc> '%s' has no host component.", l)
+        parsed[k, , drop = FALSE],
+        authority_self,
+        dir_self,
+        sitemap_url,
+        base
       )
-      next
-    }
-
-    if (nchar(l) >= 2048L) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_TOO_LONG",
-        "warning",
-        "entry",
-        base,
-        j,
-        l,
-        sprintf(
-          "<loc> is %d characters; sitemap URLs must be under 2048.",
-          nchar(l)
-        )
-      )
-    }
-
-    if (has_invalid_escape(l)) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_INVALID_ESCAPE",
-        "error",
-        "entry",
-        base,
-        j,
-        l,
-        sprintf("<loc> '%s' contains an invalid percent-escape.", l)
-      )
-    }
-
-    if (grepl("#", l, fixed = TRUE)) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_FRAGMENT",
-        "info",
-        "entry",
-        base,
-        j,
-        l,
-        sprintf(
-          "<loc> '%s' contains a fragment, which crawlers ignore.",
-          l
-        )
-      )
-    }
-
-    user <- as.character(parsed$user[k])
-    if (!is.na(user) && nzchar(user)) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_USERINFO",
-        "info",
-        "entry",
-        base,
-        j,
-        l,
-        sprintf("<loc> '%s' contains userinfo, which crawlers ignore.", l)
-      )
-    }
-
-    if (!is.na(authority_self)) {
-      in_scope <- identical(
-        loc_authority(parsed[k, , drop = FALSE]),
-        authority_self
-      ) &&
-        startsWith(as.character(parsed$path[k]), dir_self)
-      if (!in_scope) {
-        out[[length(out) + 1L]] <- protocol_url_finding(
-          "PROTOCOL_URL_OUT_OF_SCOPE",
-          "warning",
-          "entry",
-          base,
-          j,
-          l,
-          sprintf(
-            paste0(
-              "<loc> '%s' is outside the sitemap's scope (same host and ",
-              "same-or-lower path as %s)."
-            ),
-            l,
-            sitemap_url
-          )
-        )
-      }
-    }
+    )
   }
 
-  # Duplicate detection on the full-URL identity key, over the absolute,
-  # host-bearing entries only. Each repeat past the first occurrence of a key is
-  # flagged against its own entry, naming the first occurrence.
-  has_host <- !is.na(parsed$host) & nzchar(as.character(parsed$host))
-  if (any(has_host)) {
-    keys <- build_loc_key(parsed)
-    keys[!has_host] <- NA_character_
-    first_seen <- new.env(parent = emptyenv())
-    for (k in which(has_host)) {
-      key <- keys[k]
-      if (is.null(first_seen[[key]])) {
-        assign(key, absolute[k], envir = first_seen)
-      } else {
-        j <- absolute[k]
-        first_entry <- get(key, envir = first_seen)
-        out[[length(out) + 1L]] <- protocol_url_finding(
-          "PROTOCOL_DUPLICATE_LOC",
-          "warning",
-          "entry",
-          base,
-          j,
-          loc[j],
-          sprintf(
-            "<loc> duplicates entry %d (identity key '%s').",
-            first_entry,
-            key
-          )
-        )
-      }
-    }
-  }
+  out <- c(out, loc_duplicate_findings(parsed, absolute, loc, base))
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())
@@ -1350,16 +1515,9 @@ protocol_text_finding <- function(
 #' @return A protocol-findings tibble (zero rows when every line conforms).
 #' @keywords internal
 #' @noRd
-validate_text_protocol <- function(text, subject_ref = NA_character_) {
-  s <- text_as_string(text)
-  if (!nzchar(s)) {
-    return(empty_protocol_findings())
-  }
-  lines <- strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
-  trimmed <- trimws(lines)
-  blank <- !nzchar(trimmed)
+# Strict-only blank-line findings for a text sitemap.
+text_blank_findings <- function(blank, subject_ref) {
   out <- list()
-
   for (i in which(blank)) {
     out[[length(out) + 1L]] <- protocol_text_finding(
       "PROTOCOL_TEXT_BLANK_LINE",
@@ -1374,22 +1532,13 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
       is_strict_only = TRUE
     )
   }
+  out
+}
 
-  url_idx <- which(!blank)
-  if (length(url_idx) == 0L) {
-    # Unreachable empty-guard: a non-empty document with no URL lines is
-    # all-blank, so the blank-line loop above already populated `out`.
-    if (length(out) == 0L) {
-      return(empty_protocol_findings()) # nocov
-    }
-    return(do.call(rbind, out))
-  }
-
-  vals <- trimmed[url_idx]
-  kind <- loc_absoluteness(vals)
-
-  # Non-absolute lines get a single clear finding; the host/length checks below
-  # assume an absolute http(s) URL.
+# Non-absolute text lines get a single clear finding; the host/length checks
+# assume an absolute http(s) URL.
+text_not_absolute_findings <- function(url_idx, vals, kind, subject_ref) {
+  out <- list()
   for (k in which(kind != "http(s)")) {
     i <- url_idx[k]
     out[[length(out) + 1L]] <- protocol_text_finding(
@@ -1401,41 +1550,80 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
       sprintf("Line %d: '%s' is not an absolute http/https URL.", i, vals[k])
     )
   }
+  out
+}
 
-  abs_k <- which(kind == "http(s)")
-  if (length(abs_k) > 0L) {
-    parsed <- parse_url_adapter(vals[abs_k])
-    for (m in seq_along(abs_k)) {
-      i <- url_idx[abs_k[m]]
-      l <- vals[abs_k[m]]
-      host <- as.character(parsed$host[m])
-      if (is.na(host) || !nzchar(host)) {
-        out[[length(out) + 1L]] <- protocol_text_finding(
-          "PROTOCOL_URL_NO_HOST",
-          "error",
-          subject_ref,
+# Host/length checks over the absolute http(s) text lines (`abs_k` indexes into
+# `vals`/`url_idx`).
+text_absolute_findings <- function(url_idx, abs_k, vals, subject_ref) {
+  out <- list()
+  if (length(abs_k) == 0L) {
+    return(out)
+  }
+  parsed <- parse_url_adapter(vals[abs_k])
+  for (m in seq_along(abs_k)) {
+    i <- url_idx[abs_k[m]]
+    l <- vals[abs_k[m]]
+    host <- as.character(parsed$host[m])
+    if (is.na(host) || !nzchar(host)) {
+      out[[length(out) + 1L]] <- protocol_text_finding(
+        "PROTOCOL_URL_NO_HOST",
+        "error",
+        subject_ref,
+        i,
+        l,
+        sprintf("Line %d: '%s' has no host component.", i, l)
+      )
+      next
+    }
+    if (nchar(l) >= 2048L) {
+      out[[length(out) + 1L]] <- protocol_text_finding(
+        "PROTOCOL_TEXT_URL_TOO_LONG",
+        "warning",
+        subject_ref,
+        i,
+        l,
+        sprintf(
+          "Line %d: URL is %d characters; sitemap URLs must be under 2048.",
           i,
-          l,
-          sprintf("Line %d: '%s' has no host component.", i, l)
+          nchar(l)
         )
-        next
-      }
-      if (nchar(l) >= 2048L) {
-        out[[length(out) + 1L]] <- protocol_text_finding(
-          "PROTOCOL_TEXT_URL_TOO_LONG",
-          "warning",
-          subject_ref,
-          i,
-          l,
-          sprintf(
-            "Line %d: URL is %d characters; sitemap URLs must be under 2048.",
-            i,
-            nchar(l)
-          )
-        )
-      }
+      )
     }
   }
+  out
+}
+
+validate_text_protocol <- function(text, subject_ref = NA_character_) {
+  s <- text_as_string(text)
+  if (!nzchar(s)) {
+    return(empty_protocol_findings())
+  }
+  lines <- strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
+  trimmed <- trimws(lines)
+  blank <- !nzchar(trimmed)
+
+  out <- text_blank_findings(blank, subject_ref)
+
+  url_idx <- which(!blank)
+  if (length(url_idx) == 0L) {
+    # Unreachable empty-guard: a non-empty document with no URL lines is
+    # all-blank, so the blank-line findings above already populated `out`.
+    if (length(out) == 0L) {
+      return(empty_protocol_findings()) # nocov
+    }
+    return(do.call(rbind, out))
+  }
+
+  vals <- trimmed[url_idx]
+  kind <- loc_absoluteness(vals)
+  abs_k <- which(kind == "http(s)")
+
+  out <- c(
+    out,
+    text_not_absolute_findings(url_idx, vals, kind, subject_ref),
+    text_absolute_findings(url_idx, abs_k, vals, subject_ref)
+  )
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())
