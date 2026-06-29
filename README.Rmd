@@ -1,50 +1,58 @@
+---
+output: github_document
+---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
 
 # sitemapr
 
 <!-- badges: start -->
-
 [![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml)
 [![test-coverage](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml)
 [![lint](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml)
 <!-- badges: end -->
 
 A deterministic toolkit for reading and validating XML, text, and index
-sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC
-standards. It parses sitemap sources into tidy tibbles, expands sitemap
-indexes, and reports schema and protocol findings with stable,
-reproducible output.
+sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It
+parses sitemap sources into tidy tibbles, expands sitemap indexes, and reports
+schema and protocol findings with stable, reproducible output.
 
 ## Setup
 
-Install package dependencies (from `DESCRIPTION`) plus the dev tooling
-used by the checks:
+Install package dependencies (from `DESCRIPTION`) plus the dev tooling used by
+the checks:
 
-``` sh
+```sh
 Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
 ```
 
 ## Verification
 
-``` sh
+```sh
 Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }' && Rscript -e 'rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
 ```
 
-`R CMD check` runs testthat plus the active top-level cucumber specs.
-The feature files under `tests/testthat/features/` are pending v1
-acceptance drafts mapped to fp tracer-bullet tickets and should be
-activated as those tickets land.
+`R CMD check` runs testthat plus the active top-level cucumber specs. The
+feature files under `tests/testthat/features/` are pending v1 acceptance drafts
+mapped to fp tracer-bullet tickets and should be activated as those tickets
+land.
 
 ## Project Layout
 
 - `R/` contains the package source.
-- `man/` contains generated help pages (regenerate with
-  `devtools::document()`).
-- `NAMESPACE` and `man/` are roxygen2-generated — edit the roxygen
-  comments in `R/`, not these.
-- `tests/testthat/` contains testthat tests, active cucumber specs, and
-  pending v1 acceptance drafts under `features/`.
+- `man/` contains generated help pages (regenerate with `devtools::document()`).
+- `NAMESPACE` and `man/` are roxygen2-generated — edit the roxygen comments in `R/`, not these.
+- `tests/testthat/` contains testthat tests, active cucumber specs, and pending
+  v1 acceptance drafts under `features/`.
 - `vignettes/` contains long-form documentation.
 - `DESCRIPTION` declares package metadata and dependencies.
 - `docs/architecture.md` contains durable project context.
