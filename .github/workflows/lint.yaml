@@ -25,11 +25,16 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          # roxygen2 is pinned to DESCRIPTION's Config/roxygen2/version so the
-          # docs-reproducibility guard compares against the same generator the
-          # committed man/ + NAMESPACE were produced with. local::. installs the
-          # package's own deps so roxygenise() and lintr can load the namespace.
-          extra-packages: any::lintr, roxygen2@8.0.0, local::.
+          # Install current-CRAN roxygen2; tools/check-docs.R then asserts it
+          # equals DESCRIPTION's Config/roxygen2/version pin, so the docs guard
+          # compares against the same generator the committed man/ + NAMESPACE
+          # were produced with. If CRAN moves past the pin the guard fails
+          # loudly — the signal to bump the pin and regenerate docs. local::.
+          # installs the package's own deps so roxygenise() and lintr can load
+          # the namespace. (An exact pak pin, roxygen2@x.y.z, trips a solver
+          # dependency conflict here, so we rely on the guard for the version
+          # check instead.)
+          extra-packages: any::lintr, any::roxygen2, local::.
           needs: lint
 
       - name: Docs are reproducible (tools/check-docs.R)
