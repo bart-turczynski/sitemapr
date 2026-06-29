@@ -170,6 +170,48 @@ test_that("read_capped_body consumes a binary connection under the cap", {
   expect_length(out, 40L)
 })
 
+test_that("read_capped_body returns an empty raw for empty input", {
+  # No chunks at all, and a list whose only chunk is empty (the early-return
+  # branch in consume()) both yield a zero-length raw, never NULL.
+  expect_identical(read_capped_body(list(), max_bytes = 100L), raw())
+  expect_identical(read_capped_body(list(raw(0)), max_bytes = 100L), raw())
+})
+
+# ---- timeout classification helper -------------------------------------------
+
+test_that("fetch_is_timeout recognises httr2 timeouts and message probes", {
+  httr2_to <- structure(
+    list(message = "timed out"),
+    class = c("httr2_timeout", "rlang_error", "error", "condition")
+  )
+  expect_true(fetch_is_timeout(httr2_to))
+  # A mocked curl-style failure carries the marker only in its message.
+  expect_true(fetch_is_timeout(simpleError("Timeout was reached")))
+  # An unrelated transport failure is not a timeout.
+  expect_false(fetch_is_timeout(simpleError("connection refused")))
+})
+
+# ---- record input (one-row source record instead of a bare URL) --------------
+
+test_that("fetch_source accepts a record with normalized_url", {
+  rec <- data.frame(
+    normalized_url = "https://example.com/sitemap.xml",
+    scheme_inferred = FALSE,
+    stringsAsFactors = FALSE
+  )
+  httr2::local_mocked_responses(list(mock_ok()))
+  meta <- fetch_source(rec)
+  expect_identical(meta$requested_url, "https://example.com/sitemap.xml")
+  expect_identical(meta$status, 200L)
+})
+
+test_that("fetch_source falls back to the record's url field", {
+  rec <- list(url = "https://example.com/sitemap.xml")
+  httr2::local_mocked_responses(list(mock_ok()))
+  meta <- fetch_source(rec)
+  expect_identical(meta$requested_url, "https://example.com/sitemap.xml")
+})
+
 # ---- Safety ceiling: through the fetch path ----------------------------------
 
 test_that("a body over the safety ceiling aborts the fetch with body_ceiling", {
