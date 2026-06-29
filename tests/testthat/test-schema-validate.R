@@ -113,6 +113,42 @@ test_that("an entity-bearing tree yields one clean SCHEMA_INVALID", {
   expect_no_match(out$message, "xmlSchemaVDocWalk", fixed = TRUE)
 })
 
+# --- Scattered / defensive branches ----------------------------------------
+
+test_that("a document with no declared namespaces yields an empty set", {
+  doc <- read_sitemap_xml(
+    charToRaw("<urlset><url><loc>https://a/</loc></url></urlset>")
+  )
+  expect_identical(schema_document_namespaces(doc), character())
+})
+
+test_that("a non-element libxml2 error maps to a document-scoped finding", {
+  out <- schema_invalid_row(
+    "A structural failure that names no element",
+    subject_ref = ref
+  )
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "SCHEMA_INVALID")
+  expect_identical(out$subject_type, "document")
+  expect_identical(out$subject_ref, ref)
+})
+
+test_that("an invalid result with no usable error message still emits a row", {
+  # xml_validate reported invalid but surfaced no message: the failure must not
+  # be silently dropped.
+  out <- schema_invalid_findings(c(NA_character_, ""), subject_ref = ref)
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "SCHEMA_INVALID")
+  expect_identical(out$subject_type, "document")
+})
+
+test_that("an unsupported root element yields no schema findings", {
+  doc <- read_sitemap_xml(charToRaw('<rss version="2.0"><channel/></rss>'))
+  out <- validate_schema(doc, subject_ref = ref)
+  expect_s3_class(out, "tbl_df")
+  expect_identical(nrow(out), 0L)
+})
+
 # --- Contract shape --------------------------------------------------------
 
 test_that("findings carry the contract columns and types, minus Layer F bits", {
