@@ -194,3 +194,30 @@ test_that("external entities are not resolved (XXE-safe)", {
   rows <- parse_sitemap_xml(xxe)$rows
   expect_identical(rows$loc, "")
 })
+
+test_that("extension list-columns align to owning url across gaps/repeats", {
+  # collect_extension() groups document-level extension hits back to their
+  # owning <url> by node path. Exercises the cases the ns-* fixtures don't:
+  # a url with NO extension, a url with TWO, and a third with one — so the
+  # per-element parent mapping (not xml_parent(), which dedups) is verified.
+  doc <- paste0(
+    '<?xml version="1.0"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ',
+    'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
+    "<url><loc>https://e.com/a</loc></url>",
+    "<url><loc>https://e.com/b</loc>",
+    "<image:image><image:loc>https://e.com/i1.jpg</image:loc></image:image>",
+    "<image:image><image:loc>https://e.com/i2.jpg</image:loc></image:image>",
+    "</url>",
+    "<url><loc>https://e.com/c</loc>",
+    "<image:image><image:loc>https://e.com/i3.jpg</image:loc></image:image>",
+    "</url></urlset>"
+  )
+  imgs <- parse_sitemap_xml(doc)$rows$images
+  expect_null(imgs[[1L]])
+  expect_length(imgs[[2L]], 2L)
+  expect_length(imgs[[3L]], 1L)
+  expect_identical(imgs[[2L]][[1L]]$loc[[1L]], "https://e.com/i1.jpg")
+  expect_identical(imgs[[2L]][[2L]]$loc[[1L]], "https://e.com/i2.jpg")
+  expect_identical(imgs[[3L]][[1L]]$loc[[1L]], "https://e.com/i3.jpg")
+})

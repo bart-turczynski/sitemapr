@@ -102,15 +102,40 @@ read_sitemap_xml <- function(x) {
 # Collect the extension list-column for one extension type across all `url`
 # nodes. Returns a list aligned to `url_nodes`: each element is NULL (no such
 # extension element on that URL) or a list of `xml2::as_list()` conversions.
-collect_extension <- function(url_nodes, uri, name) {
-  xpath <- xpath_child_ns(uri, name)
-  lapply(url_nodes, function(node) {
-    els <- xml2::xml_find_all(node, xpath)
-    if (length(els) == 0L) {
-      return(NULL)
-    }
-    lapply(els, xml2::as_list)
-  })
+#
+# A per-node `xml_find_all()` would re-resolve the document's namespaces on
+# every call (`xml_ns.xml_document`), making a large urlset O(n^2). Instead this
+# runs ONE document-level query for every matching extension element (direct
+# children of a `url`) and groups the hits back to their owning `url` by node
+# path — linear in the number of `url` nodes plus matched elements.
+collect_extension <- function(root, url_nodes, uri, name) {
+  n <- length(url_nodes)
+  out <- vector("list", n)
+  if (n == 0L) {
+    return(out)
+  }
+  doc_xpath <- sprintf(
+    "./*[local-name()='url']/*[namespace-uri()='%s' and local-name()='%s']",
+    uri,
+    name
+  )
+  els <- xml2::xml_find_all(root, doc_xpath)
+  if (length(els) == 0L) {
+    return(out) # no such extension anywhere — every element stays NULL
+  }
+  # Map each matched element to the index of its owning `url` node by node path.
+  # `xml_path()` returns one path per element (1:1, unlike `xml_parent()`, which
+  # collapses elements that share a parent into a single node); stripping the
+  # last `/...` step yields each element's parent path, which matches the `url`
+  # node's path exactly.
+  parent_paths <- sub("/[^/]*$", "", xml2::xml_path(els))
+  owner <- match(parent_paths, xml2::xml_path(url_nodes))
+  converted <- lapply(els, xml2::as_list)
+  for (i in seq_along(els)) {
+    k <- owner[[i]]
+    out[[k]] <- c(out[[k]], list(converted[[i]]))
+  }
+  out
 }
 
 # Parse a `urlset` root into the tidy row tibble.
@@ -141,10 +166,21 @@ parse_urlset <- function(root, source_sitemap) {
     lastmod = lastmod,
     changefreq = changefreq,
     priority = priority,
-    images = collect_extension(url_nodes, sitemap_xml_ns[["image"]], "image"),
-    video = collect_extension(url_nodes, sitemap_xml_ns[["video"]], "video"),
-    news = collect_extension(url_nodes, sitemap_xml_ns[["news"]], "news"),
+    images = collect_extension(
+      root,
+      url_nodes,
+      sitemap_xml_ns[["image"]],
+      "image"
+    ),
+    video = collect_extension(
+      root,
+      url_nodes,
+      sitemap_xml_ns[["video"]],
+      "video"
+    ),
+    news = collect_extension(root, url_nodes, sitemap_xml_ns[["news"]], "news"),
     alternates = collect_extension(
+      root,
       url_nodes,
       sitemap_xml_ns[["xhtml"]],
       "link"
