@@ -1300,6 +1300,30 @@ test_that("NULL source_meta producers return empty classification findings", {
   expect_identical(nrow(validate_encoding(NULL, base)), 0L)
 })
 
+test_that("HTTP charset alone resolves encoding without a conflict", {
+  # bom + declaration both absent: resolution falls through to the HTTP-charset
+  # branch and, with a single signal, emits no finding.
+  out <- validate_encoding(source_meta(http_charset = "UTF-8"), base)
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("NA / empty feed children are skipped", {
+  out <- validate_classification(
+    source_meta(feed_children = c(NA_character_, "")),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("encoding normalisation helpers handle absent input", {
+  # norm_encoding maps missing input to NA; encoding_signal_label renders it as
+  # the literal "absent" for diagnostic messages.
+  expect_true(is.na(norm_encoding(NULL)))
+  expect_true(is.na(norm_encoding(character(0))))
+  expect_identical(encoding_signal_label(NULL), "absent")
+  expect_identical(encoding_signal_label(character(0)), "absent")
+})
+
 test_that("classification diagnostics are deterministic across calls", {
   meta <- source_meta(
     unsupported_root = "rss",
