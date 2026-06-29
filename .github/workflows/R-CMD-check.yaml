@@ -21,7 +21,14 @@ jobs:
       matrix:
         config:
           - {os: macos-latest,   r: 'release'}
-          - {os: windows-latest, r: 'release'}
+          # windows-latest is intentionally omitted. The dependency chain
+          # sitemapr -> rurl -> pslr is GitHub-source-only (neither is on CRAN
+          # at the required version yet), so pak must query the GitHub API and
+          # build from source. The Windows runners consistently fail that query
+          # ("Cannot query GitHub, are you offline?") via pak's schannel/libcurl
+          # TLS stack, while Linux + macOS resolve the same chain reliably.
+          # Re-add Windows once rurl + pslr reach CRAN: pak will then use the
+          # Windows binaries with no GitHub query and no source build.
           - {os: ubuntu-latest,  r: 'devel', http-user-agent: 'release'}
           - {os: ubuntu-latest,  r: 'release'}
           - {os: ubuntu-latest,  r: 'oldrel-1'}
