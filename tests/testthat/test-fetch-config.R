@@ -56,6 +56,24 @@ test_that("default_user_agent() follows the documented pattern", {
   expect_true(nzchar(version))
 })
 
+test_that("default_user_agent() omits the suffix when URL is unavailable", {
+  # Mock packageDescription so the URL field is NA. It must stay fields-aware:
+  # packageVersion() also calls packageDescription(fields = "Version") and would
+  # otherwise break, so the Version lookup is served a valid string.
+  fake_pd <- function(pkg, fields = NULL, ...) {
+    if (identical(fields, "Version")) {
+      return("0.0.0.9000")
+    }
+    list(URL = NA_character_)
+  }
+  testthat::local_mocked_bindings(
+    packageDescription = fake_pd,
+    .package = "utils"
+  )
+
+  expect_identical(default_user_agent(), "sitemapr/0.0.0.9000")
+})
+
 test_that("source_metadata() returns the 13 contract columns in order", {
   meta <- source_metadata()
 
