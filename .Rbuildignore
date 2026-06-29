@@ -20,6 +20,7 @@
 ^\.gitattributes$
 ^\.gitignore$
 ^\.pre-commit-config\.yaml$
+^air\.toml$
 ^\.fp$
 ^\.claude$
 ^tools$

@@ -46,8 +46,9 @@
 #' @keywords internal
 #' @noRd
 index_limits <- function(
-    max_depth = getOption("sitemapr.max_index_depth", 3L),
-    max_children = getOption("sitemapr.max_index_children", 50000L)) {
+  max_depth = getOption("sitemapr.max_index_depth", 3L),
+  max_children = getOption("sitemapr.max_index_children", 50000L)
+) {
   list(
     max_depth = as.integer(max_depth),
     max_children = as.integer(max_children)
@@ -65,12 +66,24 @@ index_loc_key <- function(url) {
 # Record one index-expansion tree row into the accumulator. `provenance` is
 # "child-of-index" for every node reached by expansion (the parent is the index
 # that listed it); `page_count`/`gzip` are NA for nodes never fetched.
-add_tree_row <- function(acc, depth, parent_sitemap, sitemap_url,
-                         page_count = NA_integer_, gzip = NA,
-                         status, reason = NA_character_) {
+add_tree_row <- function(
+  acc,
+  depth,
+  parent_sitemap,
+  sitemap_url,
+  page_count = NA_integer_,
+  gzip = NA,
+  status,
+  reason = NA_character_
+) {
   acc$tree[[length(acc$tree) + 1L]] <- sitemap_tree_rows(
-    depth = depth, parent_sitemap = parent_sitemap, sitemap_url = sitemap_url,
-    page_count = page_count, gzip = gzip, status = status, reason = reason,
+    depth = depth,
+    parent_sitemap = parent_sitemap,
+    sitemap_url = sitemap_url,
+    page_count = page_count,
+    gzip = gzip,
+    status = status,
+    reason = reason,
     provenance = "child-of-index"
   )
 }
@@ -79,8 +92,10 @@ add_tree_row <- function(acc, depth, parent_sitemap, sitemap_url,
 # code-free per the problems!=findings invariant; see file header).
 add_index_problem <- function(acc, category, subject_ref, message) {
   acc$problems[[length(acc$problems) + 1L]] <- parse_problems(
-    severity = "warning", category = category,
-    subject_ref = subject_ref, message = message
+    severity = "warning",
+    category = category,
+    subject_ref = subject_ref,
+    message = message
   )
 }
 
@@ -89,8 +104,15 @@ add_index_problem <- function(acc, category, subject_ref, message) {
 # children; `parent_depth` is that index's depth (its children land at
 # `parent_depth + 1`). The accumulator `acc` is an environment carrying the
 # growing `rows`/`sources`/`problems`/`tree` lists and the `visited` key set.
-expand_index_node <- function(parent_url, children, parent_depth,
-                              user_agent, limits, net_limits, acc) {
+expand_index_node <- function(
+  parent_url,
+  children,
+  parent_depth,
+  user_agent,
+  limits,
+  net_limits,
+  acc
+) {
   locs <- children$loc
   # Deduplicate children on the full-URL identity key, keeping catalog order:
   # the same child listed twice is fetched and expanded exactly once.
@@ -102,10 +124,14 @@ expand_index_node <- function(parent_url, children, parent_depth,
   # Per-index child-count cap: drop the overflow and record one event.
   if (length(locs) > limits$max_children) {
     add_index_problem(
-      acc, "index-expansion", parent_url,
+      acc,
+      "index-expansion",
+      parent_url,
       sprintf(
         "Sitemap index %s lists %d children; expanding the first %d (cap).",
-        parent_url, length(locs), limits$max_children
+        parent_url,
+        length(locs),
+        limits$max_children
       )
     )
     locs <- locs[seq_len(limits$max_children)]
@@ -122,24 +148,45 @@ expand_index_node <- function(parent_url, children, parent_depth,
     # longer A -> B -> A loop). Detected before any fetch, so it never recurses.
     if (key %in% acc$visited) {
       add_index_problem(
-        acc, "index-expansion", child_url,
-        sprintf("Sitemap index cycle: %s already visited; not followed.",
-                child_url)
+        acc,
+        "index-expansion",
+        child_url,
+        sprintf(
+          "Sitemap index cycle: %s already visited; not followed.",
+          child_url
+        )
       )
-      add_tree_row(acc, child_depth, parent_url, child_url,
-                   status = "rejected", reason = "cycle")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        child_url,
+        status = "rejected",
+        reason = "cycle"
+      )
       next
     }
 
     # Depth cap: a child that would land beyond the limit is not fetched.
     if (child_depth > limits$max_depth) {
       add_index_problem(
-        acc, "index-expansion", child_url,
-        sprintf("Sitemap index depth limit (%d) exceeded at %s; not followed.",
-                limits$max_depth, child_url)
+        acc,
+        "index-expansion",
+        child_url,
+        sprintf(
+          "Sitemap index depth limit (%d) exceeded at %s; not followed.",
+          limits$max_depth,
+          child_url
+        )
       )
-      add_tree_row(acc, child_depth, parent_url, child_url,
-                   status = "rejected", reason = "depth-exceeded")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        child_url,
+        status = "rejected",
+        reason = "depth-exceeded"
+      )
       next
     }
 
@@ -149,15 +196,23 @@ expand_index_node <- function(parent_url, children, parent_depth,
       fetch_source(child_url, user_agent = user_agent, limits = net_limits),
       error = function(e) {
         add_index_problem(
-          acc, "fetch", child_url,
+          acc,
+          "fetch",
+          child_url,
           sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
         )
         NULL
       }
     )
     if (is.null(crec)) {
-      add_tree_row(acc, child_depth, parent_url, child_url,
-                   status = "rejected", reason = "unfetchable")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        child_url,
+        status = "rejected",
+        reason = "unfetchable"
+      )
       next
     }
     acc$sources[[length(acc$sources) + 1L]] <- crec
@@ -166,12 +221,23 @@ expand_index_node <- function(parent_url, children, parent_depth,
 
     if (!is.na(crec$error_class)) {
       add_index_problem(
-        acc, "fetch", crec$final_url,
-        sprintf("Child sitemap %s returned HTTP %s; skipped.",
-                crec$final_url, crec$status)
+        acc,
+        "fetch",
+        crec$final_url,
+        sprintf(
+          "Child sitemap %s returned HTTP %s; skipped.",
+          crec$final_url,
+          crec$status
+        )
       )
-      add_tree_row(acc, child_depth, parent_url, crec$final_url,
-                   status = "rejected", reason = "http-error")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        crec$final_url,
+        status = "rejected",
+        reason = "http-error"
+      )
       next
     }
 
@@ -179,16 +245,26 @@ expand_index_node <- function(parent_url, children, parent_depth,
       parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
       error = function(e) {
         add_index_problem(
-          acc, "classification", crec$final_url,
-          sprintf("Child sitemap %s could not be parsed; skipped.",
-                  crec$final_url)
+          acc,
+          "classification",
+          crec$final_url,
+          sprintf(
+            "Child sitemap %s could not be parsed; skipped.",
+            crec$final_url
+          )
         )
         NULL
       }
     )
     if (is.null(cparsed)) {
-      add_tree_row(acc, child_depth, parent_url, crec$final_url,
-                   status = "rejected", reason = "unparseable")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        crec$final_url,
+        status = "rejected",
+        reason = "unparseable"
+      )
       next
     }
 
@@ -198,20 +274,43 @@ expand_index_node <- function(parent_url, children, parent_depth,
       # Nested index: non-conformant per the protocol, but still expanded with a
       # warning so the deeper children surface (subject to the same caps).
       add_index_problem(
-        acc, "index-expansion", crec$final_url,
-        sprintf("Nested sitemap index at %s; expanded with a warning.",
-                crec$final_url)
+        acc,
+        "index-expansion",
+        crec$final_url,
+        sprintf(
+          "Nested sitemap index at %s; expanded with a warning.",
+          crec$final_url
+        )
       )
-      add_tree_row(acc, child_depth, parent_url, crec$final_url,
-                   page_count = nrow(cparsed$children), gzip = gzip,
-                   status = "accepted")
-      expand_index_node(crec$final_url, cparsed$children, child_depth,
-                        user_agent, limits, net_limits, acc)
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        crec$final_url,
+        page_count = nrow(cparsed$children),
+        gzip = gzip,
+        status = "accepted"
+      )
+      expand_index_node(
+        crec$final_url,
+        cparsed$children,
+        child_depth,
+        user_agent,
+        limits,
+        net_limits,
+        acc
+      )
     } else {
       acc$rows[[length(acc$rows) + 1L]] <- cparsed$rows
-      add_tree_row(acc, child_depth, parent_url, crec$final_url,
-                   page_count = nrow(cparsed$rows), gzip = gzip,
-                   status = "accepted")
+      add_tree_row(
+        acc,
+        child_depth,
+        parent_url,
+        crec$final_url,
+        page_count = nrow(cparsed$rows),
+        gzip = gzip,
+        status = "accepted"
+      )
     }
   }
 
@@ -233,11 +332,15 @@ expand_index_node <- function(parent_url, children, parent_depth,
 #   sources  fetch-metadata records for every fetched child (not the root).
 #   problems index-expansion / fetch / classification events (warnings).
 #   tree     one `sitemap_tree` row per visited child node (depth >= depth + 1).
-expand_index <- function(root_url, root_children, depth = 0L,
-                         user_agent = default_user_agent(),
-                         limits = index_limits(),
-                         net_limits = fetch_limits(),
-                         visited = NULL) {
+expand_index <- function(
+  root_url,
+  root_children,
+  depth = 0L,
+  user_agent = default_user_agent(),
+  limits = index_limits(),
+  net_limits = fetch_limits(),
+  visited = NULL
+) {
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()
   acc$sources <- list()
@@ -245,8 +348,15 @@ expand_index <- function(root_url, root_children, depth = 0L,
   acc$tree <- list()
   acc$visited <- if (is.null(visited)) index_loc_key(root_url) else visited
 
-  expand_index_node(root_url, root_children, depth,
-                    user_agent, limits, net_limits, acc)
+  expand_index_node(
+    root_url,
+    root_children,
+    depth,
+    user_agent,
+    limits,
+    net_limits,
+    acc
+  )
 
   rows <- if (length(acc$rows) > 0L) {
     do.call(rbind, acc$rows)

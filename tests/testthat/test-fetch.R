@@ -7,9 +7,11 @@
 # responses are not real streams.
 
 # A small helper: a 200 response carrying the given raw body + content type.
-mock_ok <- function(url = "https://example.com/sitemap.xml",
-                    body = charToRaw("<?xml version=\"1.0\"?><urlset/>"),
-                    content_type = "application/xml; charset=UTF-8") {
+mock_ok <- function(
+  url = "https://example.com/sitemap.xml",
+  body = charToRaw("<?xml version=\"1.0\"?><urlset/>"),
+  content_type = "application/xml; charset=UTF-8"
+) {
   httr2::response(
     status_code = 200,
     url = url,
@@ -64,8 +66,10 @@ test_that("the cloud-metadata endpoint is rejected with its reason", {
 
 test_that("a redirect to an RFC-1918 target aborts at the redirect hop", {
   httr2::local_mocked_responses(list(
-    mock_redirect("https://example.com/sitemap.xml",
-                  "http://192.168.1.10/internal.xml")
+    mock_redirect(
+      "https://example.com/sitemap.xml",
+      "http://192.168.1.10/internal.xml"
+    )
   ))
 
   cnd <- rlang::catch_cnd(
@@ -100,8 +104,10 @@ test_that("4 redirects under a limit of 5 returns the final sitemap", {
     mock_ok(url = "https://example.com/4")
   ))
 
-  meta <- fetch_source("https://example.com/0",
-                       limits = fetch_limits(max_redirects = 5L))
+  meta <- fetch_source(
+    "https://example.com/0",
+    limits = fetch_limits(max_redirects = 5L)
+  )
   expect_identical(meta$status, 200L)
   expect_identical(meta$final_url, "https://example.com/4")
   # redirect_chain: 4 intermediate hops + the final URL.
@@ -120,8 +126,10 @@ test_that("6 redirects under a limit of 5 aborts with redirect_limit", {
   ))
 
   cnd <- rlang::catch_cnd(
-    fetch_source("https://example.com/0",
-                 limits = fetch_limits(max_redirects = 5L)),
+    fetch_source(
+      "https://example.com/0",
+      limits = fetch_limits(max_redirects = 5L)
+    ),
     classes = "sitemapr_redirect_limit"
   )
   expect_s3_class(cnd, "sitemapr_redirect_limit")
@@ -171,8 +179,10 @@ test_that("a body over the safety ceiling aborts the fetch with body_ceiling", {
   ))
 
   expect_error(
-    fetch_source("https://example.com/sitemap.xml",
-                 limits = fetch_limits(max_bytes = 10L)),
+    fetch_source(
+      "https://example.com/sitemap.xml",
+      limits = fetch_limits(max_bytes = 10L)
+    ),
     class = "sitemapr_body_ceiling"
   )
 })
@@ -186,8 +196,10 @@ test_that("a body within the ceiling is recorded, not aborted", {
     mock_ok(url = "https://example.com/sitemap.xml", body = body)
   ))
 
-  meta <- fetch_source("https://example.com/sitemap.xml",
-                       limits = fetch_limits(max_bytes = 500L * 1024L^2))
+  meta <- fetch_source(
+    "https://example.com/sitemap.xml",
+    limits = fetch_limits(max_bytes = 500L * 1024L^2)
+  )
   expect_identical(meta$status, 200L)
   expect_identical(meta$bytes, length(body))
   expect_true(is.na(meta$error_class))
@@ -262,9 +274,21 @@ test_that("a successful fetch returns the 13-column metadata record", {
   expect_identical(ncol(meta), 13L)
   expect_identical(
     names(meta),
-    c("requested_url", "final_url", "status", "redirect_chain",
-      "content_type", "charset", "bytes", "timing", "error_class",
-      "format", "root", "namespaces", "profile_id")
+    c(
+      "requested_url",
+      "final_url",
+      "status",
+      "redirect_chain",
+      "content_type",
+      "charset",
+      "bytes",
+      "timing",
+      "error_class",
+      "format",
+      "root",
+      "namespaces",
+      "profile_id"
+    )
   )
   expect_identical(meta$requested_url, "https://example.com/sitemap.xml")
   expect_identical(meta$status, 200L)
@@ -294,8 +318,10 @@ test_that("scheme_inferred = TRUE falls back to http when https fails", {
     mock_ok(url = req$url)
   })
 
-  meta <- fetch_source("https://example.com/sitemap.xml",
-                       scheme_inferred = TRUE)
+  meta <- fetch_source(
+    "https://example.com/sitemap.xml",
+    scheme_inferred = TRUE
+  )
   expect_identical(meta$status, 200L)
   expect_true(startsWith(meta$final_url, "http://"))
   expect_identical(schemes, c("https", "http"))
@@ -305,8 +331,7 @@ test_that("scheme_inferred = FALSE does not retry over http", {
   schemes <- character(0)
   httr2::local_mocked_responses(function(req) {
     schemes <<- c(schemes, sub("://.*$", "", req$url))
-    rlang::abort("Could not connect",
-                 class = c("httr2_failure", "httr2_error"))
+    rlang::abort("Could not connect", class = c("httr2_failure", "httr2_error"))
   })
 
   expect_error(

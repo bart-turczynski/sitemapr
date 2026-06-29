@@ -5,7 +5,8 @@ tree_urlset <- function(...) {
   urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
   paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    urls, "</urlset>"
+    urls,
+    "</urlset>"
   )
 }
 
@@ -13,7 +14,8 @@ tree_index <- function(...) {
   kids <- paste0("<sitemap><loc>", c(...), "</loc></sitemap>", collapse = "")
   paste0(
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    kids, "</sitemapindex>"
+    kids,
+    "</sitemapindex>"
   )
 }
 
@@ -24,10 +26,14 @@ tree_mock <- function(body_map) {
     if (is.null(body)) {
       return(httr2::response(status_code = 404L, url = req$url))
     }
-    if (is.character(body)) body <- charToRaw(body)
+    if (is.character(body)) {
+      body <- charToRaw(body)
+    }
     httr2::response(
-      status_code = 200L, url = req$url,
-      headers = list("Content-Type" = "application/xml"), body = body
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "application/xml"),
+      body = body
     )
   }
 }
@@ -38,8 +44,16 @@ test_that("empty_sitemap_tree carries the 8-column contract and types", {
   expect_identical(nrow(tree), 0L)
   expect_identical(
     names(tree),
-    c("depth", "parent_sitemap", "sitemap_url", "page_count", "gzip",
-      "status", "reason", "provenance")
+    c(
+      "depth",
+      "parent_sitemap",
+      "sitemap_url",
+      "page_count",
+      "gzip",
+      "status",
+      "reason",
+      "provenance"
+    )
   )
   expect_type(tree$depth, "integer")
   expect_type(tree$page_count, "integer")
@@ -51,15 +65,25 @@ test_that("each result row exposes the documented column contract", {
   tree <- sitemap_tree("https://example.com")
   expect_identical(
     names(tree),
-    c("depth", "parent_sitemap", "sitemap_url", "page_count", "gzip",
-      "status", "reason", "provenance")
+    c(
+      "depth",
+      "parent_sitemap",
+      "sitemap_url",
+      "page_count",
+      "gzip",
+      "status",
+      "reason",
+      "provenance"
+    )
   )
 })
 
 test_that("an accepted candidate row carries status, page_count, and gzip", {
   httr2::local_mocked_responses(tree_mock(list(
-    "https://example.com/sitemap.xml" =
-      tree_urlset("https://a/1", "https://a/2")
+    "https://example.com/sitemap.xml" = tree_urlset(
+      "https://a/1",
+      "https://a/2"
+    )
   )))
   tree <- sitemap_tree("https://example.com")
   row <- tree[tree$sitemap_url == "https://example.com/sitemap.xml", ]
@@ -73,8 +97,10 @@ test_that("an accepted candidate row carries status, page_count, and gzip", {
 
 test_that("a sitemapindex hit counts its child sitemaps as the page_count", {
   httr2::local_mocked_responses(tree_mock(list(
-    "https://example.com/sitemap_index.xml" =
-      tree_index("https://example.com/a.xml", "https://example.com/b.xml"),
+    "https://example.com/sitemap_index.xml" = tree_index(
+      "https://example.com/a.xml",
+      "https://example.com/b.xml"
+    ),
     "https://example.com/a.xml" = tree_urlset("https://a/1"),
     "https://example.com/b.xml" = tree_urlset("https://b/1")
   )))
@@ -86,8 +112,10 @@ test_that("a sitemapindex hit counts its child sitemaps as the page_count", {
 
 test_that("an accepted index candidate is expanded into depth-1 child rows", {
   httr2::local_mocked_responses(tree_mock(list(
-    "https://example.com/sitemap_index.xml" =
-      tree_index("https://example.com/a.xml", "https://example.com/b.xml"),
+    "https://example.com/sitemap_index.xml" = tree_index(
+      "https://example.com/a.xml",
+      "https://example.com/b.xml"
+    ),
     "https://example.com/a.xml" = tree_urlset("https://a/1"),
     "https://example.com/b.xml" = tree_urlset("https://b/1")
   )))

@@ -42,11 +42,11 @@ schema_core_namespace <- "http://www.sitemaps.org/schemas/sitemap/0.9"
 # separately (it maps to one of two files depending on the root kind).
 schema_extension_catalog <- function() {
   c(
-    "http://www.google.com/schemas/sitemap-image/1.1"   = "sitemap-image.xsd",
-    "http://www.google.com/schemas/sitemap-video/1.1"   = "sitemap-video.xsd",
-    "http://www.google.com/schemas/sitemap-news/0.9"    = "sitemap-news.xsd",
+    "http://www.google.com/schemas/sitemap-image/1.1" = "sitemap-image.xsd",
+    "http://www.google.com/schemas/sitemap-video/1.1" = "sitemap-video.xsd",
+    "http://www.google.com/schemas/sitemap-news/0.9" = "sitemap-news.xsd",
     "http://www.google.com/schemas/sitemap-pagemap/1.0" = "sitemap-pagemap.xsd",
-    "http://www.w3.org/1999/xhtml"                      = "xhtml-hreflang.xsd"
+    "http://www.w3.org/1999/xhtml" = "xhtml-hreflang.xsd"
   )
 }
 
@@ -61,12 +61,12 @@ schema_dir <- function() {
 # Falls back to the raw URI for a namespace with no registered label.
 schema_namespace_label <- function(ns) {
   labels <- c(
-    "http://www.sitemaps.org/schemas/sitemap/0.9"       = "core",
-    "http://www.google.com/schemas/sitemap-image/1.1"   = "image",
-    "http://www.google.com/schemas/sitemap-video/1.1"   = "video",
-    "http://www.google.com/schemas/sitemap-news/0.9"    = "news",
+    "http://www.sitemaps.org/schemas/sitemap/0.9" = "core",
+    "http://www.google.com/schemas/sitemap-image/1.1" = "image",
+    "http://www.google.com/schemas/sitemap-video/1.1" = "video",
+    "http://www.google.com/schemas/sitemap-news/0.9" = "news",
     "http://www.google.com/schemas/sitemap-pagemap/1.0" = "pagemap",
-    "http://www.w3.org/1999/xhtml"                      = "hreflang"
+    "http://www.w3.org/1999/xhtml" = "hreflang"
   )
   out <- unname(labels[ns])
   ifelse(is.na(out), ns, out)
@@ -75,7 +75,8 @@ schema_namespace_label <- function(ns) {
 # The bundled core schema file for a root kind: sitemap.xsd for urlset,
 # siteindex.xsd for sitemapindex, NA for any other (unsupported) root.
 schema_core_file <- function(root_kind) {
-  switch(root_kind,
+  switch(
+    root_kind,
     urlset = "sitemap.xsd",
     sitemapindex = "siteindex.xsd",
     NA_character_
@@ -105,8 +106,11 @@ schema_sorted_namespace_set <- function(namespaces) {
 # Profile cache key per architecture.md §6: catalog version, root kind, and the
 # sorted namespace set, joined into one stable string. Order-insensitive in the
 # namespace set (it is sorted) and stable across releases for a fixed catalog.
-schema_cache_key <- function(root_kind, namespaces,
-                             catalog_version = schema_catalog_version) {
+schema_cache_key <- function(
+  root_kind,
+  namespaces,
+  catalog_version = schema_catalog_version
+) {
   ns <- schema_sorted_namespace_set(namespaces)
   paste(c(catalog_version, root_kind, ns), collapse = "|")
 }
@@ -138,8 +142,11 @@ schema_cache_key <- function(root_kind, namespaces,
 #'     `"unknown-namespace"`).
 #' @keywords internal
 #' @noRd
-schema_resolve_profile <- function(root_kind, namespaces,
-                                   schemas_dir = schema_dir()) {
+schema_resolve_profile <- function(
+  root_kind,
+  namespaces,
+  schemas_dir = schema_dir()
+) {
   ns <- schema_sorted_namespace_set(namespaces)
   cache_key <- schema_cache_key(root_kind, ns)
 
@@ -156,28 +163,37 @@ schema_resolve_profile <- function(root_kind, namespaces,
   catalog <- schema_extension_catalog()
   unknown <- setdiff(extension_ns, names(catalog))
   if (length(unknown) > 0L) {
-    return(utils::modifyList(base, list(
-      kind = "unknown-namespace",
-      unknown_namespaces = unknown
-    )))
+    return(utils::modifyList(
+      base,
+      list(
+        kind = "unknown-namespace",
+        unknown_namespaces = unknown
+      )
+    ))
   }
 
   core_path <- file.path(schemas_dir, schema_core_file(root_kind))
 
   # Core-only: the bundled core schema validates the document directly.
   if (length(extension_ns) == 0L) {
-    return(utils::modifyList(base, list(
-      kind = "bundled",
-      schema_path = core_path
-    )))
+    return(utils::modifyList(
+      base,
+      list(
+        kind = "bundled",
+        schema_path = core_path
+      )
+    ))
   }
 
   # Mixed namespaces: a wrapper must import the core schema and each extension
   # schema, generated at runtime (R/schema-profile.R, S6.3).
   imports <- c(core_path, file.path(schemas_dir, catalog[extension_ns]))
   names(imports) <- c(schema_core_namespace, extension_ns)
-  utils::modifyList(base, list(
-    kind = "runtime",
-    imports = imports
-  ))
+  utils::modifyList(
+    base,
+    list(
+      kind = "runtime",
+      imports = imports
+    )
+  )
 }

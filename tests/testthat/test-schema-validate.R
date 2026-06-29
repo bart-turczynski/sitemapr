@@ -18,8 +18,13 @@ validate_fixture <- function(name, subject_ref = ref) {
 # --- Valid documents produce no schema findings ----------------------------
 
 valid_fixtures <- c(
-  "valid-minimal.xml", "valid-index.xml", "ns-image.xml", "ns-news.xml",
-  "ns-video.xml", "ns-hreflang.xml", "ns-all-four.xml"
+  "valid-minimal.xml",
+  "valid-index.xml",
+  "ns-image.xml",
+  "ns-news.xml",
+  "ns-video.xml",
+  "ns-hreflang.xml",
+  "ns-all-four.xml"
 )
 
 for (fx in valid_fixtures) {
@@ -38,8 +43,10 @@ test_that("the all-four mixed doc validates via a runtime-generated profile", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   doc <- read_fixture_doc("ns-all-four.xml")
   prof <- schema_profile(
-    "urlset", schema_document_namespaces(doc),
-    cache = new.env(parent = emptyenv()), dir = withr::local_tempdir()
+    "urlset",
+    schema_document_namespaces(doc),
+    cache = new.env(parent = emptyenv()),
+    dir = withr::local_tempdir()
   )
   expect_identical(prof$kind, "runtime")
   expect_identical(nrow(validate_fixture("ns-all-four.xml")), 0L)
@@ -69,7 +76,8 @@ test_that("an invalid extension element is scoped to that extension", {
   expect_match(out$message, "video namespace", fixed = TRUE)
   expect_match(
     out$evidence[[1]]$excerpt,
-    "sitemap-video/1.1}not_a_field", fixed = TRUE
+    "sitemap-video/1.1}not_a_field",
+    fixed = TRUE
   )
 })
 
@@ -113,8 +121,14 @@ test_that("findings carry the contract columns and types, minus Layer F bits", {
   expect_identical(
     names(out),
     c(
-      "code", "severity", "layer", "subject_type", "subject_ref",
-      "message", "evidence", "is_strict_only"
+      "code",
+      "severity",
+      "layer",
+      "subject_type",
+      "subject_ref",
+      "message",
+      "evidence",
+      "is_strict_only"
     )
   )
   expect_type(out$code, "character")
@@ -126,7 +140,8 @@ test_that("findings carry the contract columns and types, minus Layer F bits", {
   expect_false("mode" %in% names(out))
   # Evidence is the contract's named list.
   expect_identical(
-    names(out$evidence[[1]]), c("excerpt", "line", "column")
+    names(out$evidence[[1]]),
+    c("excerpt", "line", "column")
   )
   # Schema findings fire in both modes (not strict-only) at error severity.
   expect_false(out$is_strict_only)
@@ -137,15 +152,25 @@ test_that("empty_schema_findings has the full schema, zero rows", {
   out <- empty_schema_findings()
   expect_identical(nrow(out), 0L)
   expect_true(all(
-    c("code", "severity", "layer", "subject_type", "subject_ref",
-      "message", "evidence", "is_strict_only") %in% names(out)
+    c(
+      "code",
+      "severity",
+      "layer",
+      "subject_type",
+      "subject_ref",
+      "message",
+      "evidence",
+      "is_strict_only"
+    ) %in%
+      names(out)
   ))
 })
 
 test_that("an NA subject_ref produces fragment-only refs", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   out <- validate_fixture(
-    "schema-invalid-urlset.xml", subject_ref = NA_character_
+    "schema-invalid-urlset.xml",
+    subject_ref = NA_character_
   )
   expect_identical(out$subject_ref, "#field:priority")
 })
@@ -157,18 +182,25 @@ test_that("schema validation spawns no subprocess (pure libxml2)", {
   spawned <- 0L
   traced <- character()
   for (fn in c("system", "system2")) {
-    ok <- tryCatch({
-      suppressMessages(trace(
-        fn, quote(spawned <<- spawned + 1L),
-        print = FALSE, where = baseenv()
-      ))
-      TRUE
-    }, error = function(e) FALSE)
+    ok <- tryCatch(
+      {
+        suppressMessages(trace(
+          fn,
+          quote(spawned <<- spawned + 1L),
+          print = FALSE,
+          where = baseenv()
+        ))
+        TRUE
+      },
+      error = function(e) FALSE
+    )
     if (ok) traced <- c(traced, fn)
   }
   skip_if(length(traced) == 0L, "unable to trace base process functions")
   on.exit(
-    for (fn in traced) suppressMessages(untrace(fn, where = baseenv())),
+    for (fn in traced) {
+      suppressMessages(untrace(fn, where = baseenv()))
+    },
     add = TRUE
   )
   validate_fixture("ns-all-four.xml")

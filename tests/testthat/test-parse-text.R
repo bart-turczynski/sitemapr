@@ -7,8 +7,17 @@ test_that("a text sitemap parses to the contract row tibble", {
   expect_s3_class(rows, "tbl_df")
   expect_identical(
     names(rows),
-    c("loc", "lastmod", "changefreq", "priority", "images", "video",
-      "news", "alternates", "source_sitemap")
+    c(
+      "loc",
+      "lastmod",
+      "changefreq",
+      "priority",
+      "images",
+      "video",
+      "news",
+      "alternates",
+      "source_sitemap"
+    )
   )
   expect_identical(rows$loc, c("https://a/", "https://b/", "https://c/"))
 })

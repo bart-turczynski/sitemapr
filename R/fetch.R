@@ -155,11 +155,13 @@ fetch_perform_one <- function(url, limits, user_agent) {
 #'   contract) so the parse entry point can dispatch on it without re-fetching.
 #' @keywords internal
 #' @noRd
-fetch_source <- function(url,
-                         scheme_inferred = FALSE,
-                         limits = fetch_limits(),
-                         user_agent = default_user_agent(),
-                         ssrf_guard = TRUE) {
+fetch_source <- function(
+  url,
+  scheme_inferred = FALSE,
+  limits = fetch_limits(),
+  user_agent = default_user_agent(),
+  ssrf_guard = TRUE
+) {
   # Accept either a bare URL string or a one-row source record.
   if (is.data.frame(url) || is.list(url)) {
     rec <- url
@@ -199,8 +201,11 @@ fetch_source <- function(url,
       }
       if (fetch_is_timeout(cnd)) {
         rlang::abort(
-          sprintf("Request to %s timed out after %s s.", url_str,
-                  format(limits$timeout)),
+          sprintf(
+            "Request to %s timed out after %s s.",
+            url_str,
+            format(limits$timeout)
+          ),
           class = "sitemapr_timeout",
           url = url_str,
           timeout = limits$timeout,
@@ -241,7 +246,9 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
       if (!isTRUE(check$allowed)) {
         rlang::abort(
           sprintf(
-            "SSRF guard blocked %s (%s).", current_url, check$reason
+            "SSRF guard blocked %s (%s).",
+            current_url,
+            check$reason
           ),
           class = "sitemapr_ssrf_blocked",
           reason = check$reason,
@@ -255,8 +262,11 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
     status <- httr2::resp_status(resp)
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.
-    if (status >= 300L && status < 400L &&
-          httr2::resp_header_exists(resp, "Location")) {
+    if (
+      status >= 300L &&
+        status < 400L &&
+        httr2::resp_header_exists(resp, "Location")
+    ) {
       location <- httr2::resp_header(resp, "Location")
       next_url <- httr2::url_modify_relative(current_url, location)
       hops <- hops + 1L
@@ -264,7 +274,8 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
         rlang::abort(
           sprintf(
             "Exceeded the redirect limit of %d while fetching %s.",
-            limits$max_redirects, url
+            limits$max_redirects,
+            url
           ),
           class = "sitemapr_redirect_limit",
           url = url,

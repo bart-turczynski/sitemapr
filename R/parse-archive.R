@@ -41,11 +41,13 @@
 #' @keywords internal
 #' @noRd
 archive_limits <- function(
-    max_archive_bytes = getOption("sitemapr.archive.max_bytes", 50 * 1024^2),
-    max_file_count = getOption("sitemapr.archive.max_files", 100L),
-    max_decompressed_bytes = getOption(
-      "sitemapr.archive.max_decompressed", 200 * 1024^2
-    )) {
+  max_archive_bytes = getOption("sitemapr.archive.max_bytes", 50 * 1024^2),
+  max_file_count = getOption("sitemapr.archive.max_files", 100L),
+  max_decompressed_bytes = getOption(
+    "sitemapr.archive.max_decompressed",
+    200 * 1024^2
+  )
+) {
   list(
     max_archive_bytes = as.numeric(max_archive_bytes),
     max_file_count = as.integer(max_file_count),
@@ -134,7 +136,9 @@ tar_read_entries <- function(tar_bytes) {
     }
 
     entries[[length(entries) + 1L]] <- list(
-      name = name, typeflag = typeflag, content = content
+      name = name,
+      typeflag = typeflag,
+      content = content
     )
   }
 
@@ -233,23 +237,28 @@ archive_parse_member <- function(content, name, source_ref) {
 #'   skipped/rejected members).
 #' @keywords internal
 #' @noRd
-parse_sitemap_archive <- function(path,
-                                  source_ref = path,
-                                  limits = archive_limits()) {
+parse_sitemap_archive <- function(
+  path,
+  source_ref = path,
+  limits = archive_limits()
+) {
   size_on_disk <- file.info(path)$size
   if (is.na(size_on_disk)) {
     rlang::abort(
       sprintf("The archive file does not exist: %s.", path),
-      class = "sitemapr_archive_not_found", path = path
+      class = "sitemapr_archive_not_found",
+      path = path
     )
   }
   if (size_on_disk > limits$max_archive_bytes) {
     rlang::abort(
       sprintf(
         "Archive size %.0f bytes exceeds the limit of %.0f bytes.",
-        size_on_disk, limits$max_archive_bytes
+        size_on_disk,
+        limits$max_archive_bytes
       ),
-      class = "sitemapr_archive_limit", limit = "archive_bytes"
+      class = "sitemapr_archive_limit",
+      limit = "archive_bytes"
     )
   }
 
@@ -260,9 +269,11 @@ parse_sitemap_archive <- function(path,
     rlang::abort(
       sprintf(
         "Decompressed size %.0f bytes exceeds the limit of %.0f bytes.",
-        length(tar_bytes), limits$max_decompressed_bytes
+        length(tar_bytes),
+        limits$max_decompressed_bytes
       ),
-      class = "sitemapr_archive_limit", limit = "decompressed_bytes"
+      class = "sitemapr_archive_limit",
+      limit = "decompressed_bytes"
     )
   }
 
@@ -285,7 +296,8 @@ parse_sitemap_archive <- function(path,
         category = "classification",
         subject_ref = member_ref,
         message = sprintf(
-          "Rejected unsafe archive member path '%s' (path traversal).", e$name
+          "Rejected unsafe archive member path '%s' (path traversal).",
+          e$name
         )
       )
       next
@@ -298,7 +310,8 @@ parse_sitemap_archive <- function(path,
           "Archive member count exceeds the limit of %d files.",
           limits$max_file_count
         ),
-        class = "sitemapr_archive_limit", limit = "file_count"
+        class = "sitemapr_archive_limit",
+        limit = "file_count"
       )
     }
 

@@ -25,7 +25,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
     paste0(
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-      urls, "</urlset>"
+      urls,
+      "</urlset>"
     )
   }
 
@@ -65,8 +66,12 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     for (e in entries) {
       tf <- if (is.null(e$typeflag)) "0" else e$typeflag
       content <- e$content
-      if (is.null(content)) content <- raw(0L)
-      if (is.character(content)) content <- charToRaw(content)
+      if (is.null(content)) {
+        content <- raw(0L)
+      }
+      if (is.character(content)) {
+        content <- charToRaw(content)
+      }
       pad <- length(content) %% 512L
       padded <- if (pad == 0L) content else c(content, raw(512L - pad))
       blocks <- c(blocks, parse_tar_header(e$name, length(content), tf), padded)
@@ -87,7 +92,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
         return(httr2::response(status_code = 404L, url = req$url))
       }
       httr2::response(
-        status_code = 200L, url = req$url,
+        status_code = 200L,
+        url = req$url,
         headers = list("Content-Type" = content_type),
         body = charToRaw(body)
       )
@@ -169,17 +175,28 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "a local fixture {string} containing two sitemap files",
     function(name, context) {
       path <- tempfile(fileext = ".tar.gz")
-      parse_tar_gz(list(
-        list(name = "a.xml", content = parse_urlset_xml(
-          "https://example.com/a1", "https://example.com/a2"
-        )),
-        list(name = "b.xml", content = parse_urlset_xml(
-          "https://example.com/b1"
-        ))
-      ), path)
+      parse_tar_gz(
+        list(
+          list(
+            name = "a.xml",
+            content = parse_urlset_xml(
+              "https://example.com/a1",
+              "https://example.com/a2"
+            )
+          ),
+          list(
+            name = "b.xml",
+            content = parse_urlset_xml(
+              "https://example.com/b1"
+            )
+          )
+        ),
+        path
+      )
       context$source <- path
       context$expected_locs <- c(
-        "https://example.com/a1", "https://example.com/a2",
+        "https://example.com/a1",
+        "https://example.com/a2",
         "https://example.com/b1"
       )
     }
@@ -189,12 +206,21 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "a local fixture {string} containing one sitemap and one README",
     function(name, context) {
       path <- tempfile(fileext = ".tar.gz")
-      parse_tar_gz(list(
-        list(name = "sitemap.xml", content = parse_urlset_xml(
-          "https://example.com/p1"
-        )),
-        list(name = "README.md", content = "# Project\nNotes, not a sitemap.\n")
-      ), path)
+      parse_tar_gz(
+        list(
+          list(
+            name = "sitemap.xml",
+            content = parse_urlset_xml(
+              "https://example.com/p1"
+            )
+          ),
+          list(
+            name = "README.md",
+            content = "# Project\nNotes, not a sitemap.\n"
+          )
+        ),
+        path
+      )
       context$source <- path
       context$sitemap_locs <- "https://example.com/p1"
     }
@@ -206,19 +232,29 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       dir <- file.path(tempdir(), paste0("arc-", as.integer(runif(1, 1, 1e8))))
       dir.create(dir, showWarnings = FALSE)
       path <- file.path(dir, "path-traversal.tar.gz")
-      parse_tar_gz(list(
-        list(name = "ok.xml", content = parse_urlset_xml(
-          "https://example.com/ok"
-        )),
-        list(name = paste0(evil, ".xml"), content = parse_urlset_xml(
-          "https://evil.example.com/owned"
-        ))
-      ), path)
+      parse_tar_gz(
+        list(
+          list(
+            name = "ok.xml",
+            content = parse_urlset_xml(
+              "https://example.com/ok"
+            )
+          ),
+          list(
+            name = paste0(evil, ".xml"),
+            content = parse_urlset_xml(
+              "https://evil.example.com/owned"
+            )
+          )
+        ),
+        path
+      )
       context$source <- path
       # Where a "../evil.xml" entry WOULD land if extraction escaped the
       # archive's directory; it must never be created (extraction is in-memory).
       context$traversal_target <- normalizePath(
-        file.path(dir, "..", "evil.xml"), mustWork = FALSE
+        file.path(dir, "..", "evil.xml"),
+        mustWork = FALSE
       )
     }
   )
@@ -230,7 +266,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     map <- list()
     map[[index_url]] <- parse_read_fixture_text("index-simple.xml")
     map[[c1]] <- parse_urlset_xml(
-      "https://example.com/a1", "https://example.com/a2"
+      "https://example.com/a1",
+      "https://example.com/a2"
     )
     map[[c2]] <- parse_urlset_xml("https://example.com/b1")
     context$source <- index_url
@@ -267,8 +304,15 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # ---- THEN -----------------------------------------------------------------
 
   parse_contract_cols <- c(
-    "loc", "lastmod", "changefreq", "priority", "images", "video",
-    "news", "alternates", "source_sitemap"
+    "loc",
+    "lastmod",
+    "changefreq",
+    "priority",
+    "images",
+    "video",
+    "news",
+    "alternates",
+    "source_sitemap"
   )
 
   then("the result is a tibble", function(context) {

@@ -5,8 +5,16 @@
 
 # The 10-column findings contract, in order.
 contract_cols <- c(
-  "code", "severity", "layer", "subject_type", "subject_ref", "message",
-  "evidence", "mode", "is_strict_only", "remediation_hint"
+  "code",
+  "severity",
+  "layer",
+  "subject_type",
+  "subject_ref",
+  "message",
+  "evidence",
+  "mode",
+  "is_strict_only",
+  "remediation_hint"
 )
 
 fixture <- function(name) test_path("fixtures", name)
@@ -40,7 +48,8 @@ test_that("a schema-invalid urlset is an error in strict mode", {
 
 test_that("a schema-invalid urlset is downgraded to warning in non-strict", {
   out <- validate_sitemap(
-    fixture("schema-invalid-urlset.xml"), mode = "non-strict"
+    fixture("schema-invalid-urlset.xml"),
+    mode = "non-strict"
   )
   schema <- out[out$code == "SCHEMA_INVALID", ]
   expect_gt(nrow(schema), 0L)
@@ -56,7 +65,8 @@ test_that("an unsupported root yields UNSUPPORTED_ROOT", {
 
 test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
   long_url <- paste0(
-    "https://example.com/", paste(rep("a", 2100L), collapse = "")
+    "https://example.com/",
+    paste(rep("a", 2100L), collapse = "")
   )
   path <- withr::local_tempfile(fileext = ".txt")
   writeLines(c("https://example.com/", long_url), path)
@@ -71,7 +81,9 @@ test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
   index_body <- paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-    "  <sitemap><loc>", child, "</loc></sitemap>\n",
+    "  <sitemap><loc>",
+    child,
+    "</loc></sitemap>\n",
     "</sitemapindex>\n"
   )
   rss_body <- paste0(
@@ -88,7 +100,8 @@ test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
       return(httr2::response(status_code = 404, url = req$url))
     }
     httr2::response(
-      status_code = 200, url = req$url,
+      status_code = 200,
+      url = req$url,
       headers = list("Content-Type" = "application/xml; charset=UTF-8"),
       body = charToRaw(body)
     )

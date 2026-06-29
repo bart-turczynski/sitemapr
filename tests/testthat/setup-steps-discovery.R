@@ -32,14 +32,22 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   run_discovery <- function(context, root = context$root, cap = NULL) {
     context$requested <- character(0)
     ok_paths <- context$ok_paths
-    if (is.null(ok_paths)) ok_paths <- character(0)
+    if (is.null(ok_paths)) {
+      ok_paths <- character(0)
+    }
     mock <- function(req) {
       context$requested <- c(context$requested, req$url)
-      if (length(ok_paths) > 0L && any(vapply(
-        ok_paths, function(p) endsWith(req$url, p), logical(1)
-      ))) {
+      if (
+        length(ok_paths) > 0L &&
+          any(vapply(
+            ok_paths,
+            function(p) endsWith(req$url, p),
+            logical(1)
+          ))
+      ) {
         return(httr2::response(
-          status_code = 200L, url = req$url,
+          status_code = 200L,
+          url = req$url,
           headers = list("Content-Type" = "application/xml"),
           body = charToRaw(disc_urlset)
         ))
@@ -151,8 +159,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "the candidates include at least one CMS-specific path",
     function(context) {
-      testthat::expect_true(any(endsWith(context$tree$sitemap_url,
-                                         "/wp-sitemap.xml")))
+      testthat::expect_true(any(endsWith(
+        context$tree$sitemap_url,
+        "/wp-sitemap.xml"
+      )))
     }
   )
 
@@ -229,8 +239,16 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(context) {
       testthat::expect_identical(
         names(context$tree),
-        c("depth", "parent_sitemap", "sitemap_url", "page_count", "gzip",
-          "status", "reason", "provenance")
+        c(
+          "depth",
+          "parent_sitemap",
+          "sitemap_url",
+          "page_count",
+          "gzip",
+          "status",
+          "reason",
+          "provenance"
+        )
       )
     }
   )

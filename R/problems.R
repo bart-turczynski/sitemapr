@@ -32,10 +32,12 @@
 #' @return A tibble with the four `problems` columns.
 #' @keywords internal
 #' @noRd
-parse_problems <- function(severity = character(0),
-                           category = character(0),
-                           subject_ref = character(0),
-                           message = character(0)) {
+parse_problems <- function(
+  severity = character(0),
+  category = character(0),
+  subject_ref = character(0),
+  message = character(0)
+) {
   tibble::tibble(
     severity = as.character(severity),
     category = as.character(category),

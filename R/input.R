@@ -130,8 +130,11 @@ build_origin <- function(scheme, host, port) {
 #' @return A data.frame (tibble-shaped) of normalized source records.
 #' @keywords internal
 #' @noRd
-create_source_records <- function(x, as = c("sitemap", "site"),
-                                  limits = source_limits()) {
+create_source_records <- function(
+  x,
+  as = c("sitemap", "site"),
+  limits = source_limits()
+) {
   as <- match.arg(as)
 
   if (!is.character(x)) {
@@ -164,7 +167,8 @@ create_source_records <- function(x, as = c("sitemap", "site"),
           "Submitted-list input has %d distinct sitemap URLs after ",
           "deduplication, exceeding the submitted-list cap of %d."
         ),
-        nrow(out), limits$submitted_list_cap
+        nrow(out),
+        limits$submitted_list_cap
       ),
       class = "sitemapr_submitted_list_cap_error",
       cap = limits$submitted_list_cap,
@@ -229,9 +233,13 @@ normalize_one <- function(raw, as, provenance) {
     query <- NA_character_
     fragment <- NA_character_
     loc_key <- build_loc_key(data.frame(
-      scheme = scheme, host = host, port = port,
-      path = NA_character_, query = NA_character_,
-      fragment = NA_character_, user = NA_character_,
+      scheme = scheme,
+      host = host,
+      port = port,
+      path = NA_character_,
+      query = NA_character_,
+      fragment = NA_character_,
+      user = NA_character_,
       stringsAsFactors = FALSE
     ))
   } else {
@@ -262,9 +270,20 @@ normalize_one <- function(raw, as, provenance) {
 #'
 #' @keywords internal
 #' @noRd
-source_record_row <- function(original_input, normalized_url, scheme, host,
-                              port, path, query, fragment, is_local_file,
-                              scheme_inferred, provenance, loc_key) {
+source_record_row <- function(
+  original_input,
+  normalized_url,
+  scheme,
+  host,
+  port,
+  path,
+  query,
+  fragment,
+  is_local_file,
+  scheme_inferred,
+  provenance,
+  loc_key
+) {
   data.frame(
     original_input = as.character(original_input),
     normalized_url = as.character(normalized_url),

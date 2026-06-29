@@ -15,8 +15,15 @@
 # The fixed layer order from the findings-contract layer vocabulary. The `layer`
 # column is sorted by this order (NOT alphabetically); encoded as factor levels.
 findings_layer_order <- c(
-  "input", "fetch", "discovery", "classification", "decompression",
-  "schema", "protocol", "index-expansion", "report"
+  "input",
+  "fetch",
+  "discovery",
+  "classification",
+  "decompression",
+  "schema",
+  "protocol",
+  "index-expansion",
+  "report"
 )
 
 # The severity ranking, most-severe first. Sorting is by severity DESCENDING
@@ -28,7 +35,8 @@ findings_severity_order <- c("fatal", "error", "warning", "info")
 # producers emit them at their non-strict `info` baseline with
 # is_strict_only = FALSE, and Layer F owns the elevation).
 findings_strict_elevations <- c(
-  "ENCODING_BOM_DECLARATION_CONFLICT", "PROTOCOL_LASTMOD_LOOKS_GENERATED"
+  "ENCODING_BOM_DECLARATION_CONFLICT",
+  "PROTOCOL_LASTMOD_LOOKS_GENERATED"
 )
 
 # A zero-row 10-column contract tibble with the exact column types. Used when
@@ -59,7 +67,8 @@ findings_apply_mode <- function(findings, mode) {
     findings$severity[schema_violation] <- "warning"
     return(findings)
   }
-  elevate <- findings$code %in% findings_strict_elevations &
+  elevate <- findings$code %in%
+    findings_strict_elevations &
     findings$severity == "info"
   findings$severity[elevate] <- "warning"
   findings
@@ -70,7 +79,10 @@ findings_apply_mode <- function(findings, mode) {
 # within one source, but cross-producer/assembly dedup is Layer F's contract).
 findings_dedup <- function(findings) {
   key <- paste(
-    findings$code, findings$subject_ref, findings$severity, findings$message,
+    findings$code,
+    findings$subject_ref,
+    findings$severity,
+    findings$message,
     sep = ""
   )
   findings[!duplicated(key), , drop = FALSE]

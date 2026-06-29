@@ -31,26 +31,32 @@ test_that("a mixed-namespace doc resolves to a generated runtime wrapper", {
   cache <- new.env(parent = emptyenv())
   dir <- withr::local_tempdir()
   res <- schema_profile(
-    "urlset", c(core_ns, image_ns),
-    cache = cache, dir = dir
+    "urlset",
+    c(core_ns, image_ns),
+    cache = cache,
+    dir = dir
   )
   expect_identical(res$kind, "runtime")
   expect_true(file.exists(res$schema_path))
   # Written into the supplied (temp) dir, never the installed schema tree.
   expect_identical(
-    normalizePath(dirname(res$schema_path)), normalizePath(dir)
+    normalizePath(dirname(res$schema_path)),
+    normalizePath(dir)
   )
 })
 
 test_that("the wrapper references bundled schemas by absolute path", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   res <- schema_profile(
-    "urlset", c(core_ns, image_ns),
-    cache = new.env(parent = emptyenv()), dir = withr::local_tempdir()
+    "urlset",
+    c(core_ns, image_ns),
+    cache = new.env(parent = emptyenv()),
+    dir = withr::local_tempdir()
   )
   doc <- xml2::read_xml(res$schema_path)
   locs <- xml2::xml_attr(
-    xml2::xml_find_all(doc, "//*[local-name()='import']"), "schemaLocation"
+    xml2::xml_find_all(doc, "//*[local-name()='import']"),
+    "schemaLocation"
   )
   expect_true(all(startsWith(locs, schema_dir())))
   # system.file gives an absolute path, so the locations are absolute.
@@ -81,8 +87,10 @@ test_that("core-only documents need no generated wrapper", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   dir <- withr::local_tempdir()
   res <- schema_profile(
-    "urlset", core_ns,
-    cache = new.env(parent = emptyenv()), dir = dir
+    "urlset",
+    core_ns,
+    cache = new.env(parent = emptyenv()),
+    dir = dir
   )
   expect_identical(res$kind, "bundled")
   expect_identical(basename(res$schema_path), "sitemap.xsd")
@@ -92,8 +100,11 @@ test_that("core-only documents need no generated wrapper", {
 test_that("an unknown namespace produces no wrapper, just the signal", {
   dir <- withr::local_tempdir()
   res <- schema_profile(
-    "urlset", c(core_ns, "https://example.com/ns/x"),
-    schemas_dir = "/x", cache = new.env(parent = emptyenv()), dir = dir
+    "urlset",
+    c(core_ns, "https://example.com/ns/x"),
+    schemas_dir = "/x",
+    cache = new.env(parent = emptyenv()),
+    dir = dir
   )
   expect_identical(res$kind, "unknown-namespace")
   expect_identical(res$unknown_namespaces, "https://example.com/ns/x")
@@ -103,18 +114,28 @@ test_that("an unknown namespace produces no wrapper, just the signal", {
 test_that("a generated runtime wrapper actually validates a mixed document", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   res <- schema_profile(
-    "urlset", c(core_ns, image_ns),
-    cache = new.env(parent = emptyenv()), dir = withr::local_tempdir()
+    "urlset",
+    c(core_ns, image_ns),
+    cache = new.env(parent = emptyenv()),
+    dir = withr::local_tempdir()
   )
   schema <- xml2::read_xml(res$schema_path)
   ok <- xml2::read_xml(paste0(
-    "<urlset xmlns=\"", core_ns, "\" xmlns:image=\"", image_ns, "\">",
+    "<urlset xmlns=\"",
+    core_ns,
+    "\" xmlns:image=\"",
+    image_ns,
+    "\">",
     "<url><loc>https://example.com/a</loc>",
     "<image:image><image:loc>https://example.com/i.jpg</image:loc>",
     "</image:image></url></urlset>"
   ))
   bad <- xml2::read_xml(paste0(
-    "<urlset xmlns=\"", core_ns, "\" xmlns:image=\"", image_ns, "\">",
+    "<urlset xmlns=\"",
+    core_ns,
+    "\" xmlns:image=\"",
+    image_ns,
+    "\">",
     "<url><loc>https://example.com/a</loc>",
     "<image:image><image:bogus>x</image:bogus></image:image></url></urlset>"
   ))

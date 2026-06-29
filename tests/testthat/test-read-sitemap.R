@@ -6,13 +6,16 @@ urlset_xml <- function(...) {
   urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
   paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    urls, "</urlset>"
+    urls,
+    "</urlset>"
   )
 }
 
 write_tempfile <- function(bytes, ext) {
   path <- withr::local_tempfile(fileext = ext, .local_envir = parent.frame())
-  if (is.character(bytes)) bytes <- charToRaw(bytes)
+  if (is.character(bytes)) {
+    bytes <- charToRaw(bytes)
+  }
   writeBin(bytes, path)
   path
 }
@@ -26,17 +29,20 @@ gz_of <- function(text) {
 }
 
 # Build a mock that dispatches on the request URL via a named map of bodies.
-mock_by_url <- function(map, status = 200L,
-                        content_type = "application/xml") {
+mock_by_url <- function(map, status = 200L, content_type = "application/xml") {
   function(req) {
     body <- map[[req$url]]
     if (is.null(body)) {
       return(httr2::response(status_code = 404L, url = req$url))
     }
-    if (is.character(body)) body <- charToRaw(body)
+    if (is.character(body)) {
+      body <- charToRaw(body)
+    }
     httr2::response(
-      status_code = status, url = req$url,
-      headers = list("Content-Type" = content_type), body = body
+      status_code = status,
+      url = req$url,
+      headers = list("Content-Type" = content_type),
+      body = body
     )
   }
 }
@@ -70,8 +76,17 @@ test_that("the columns are exactly the parse contract, with no findings code", {
   res <- read_sitemap(path)
   expect_identical(
     names(res),
-    c("loc", "lastmod", "changefreq", "priority", "images", "video",
-      "news", "alternates", "source_sitemap")
+    c(
+      "loc",
+      "lastmod",
+      "changefreq",
+      "priority",
+      "images",
+      "video",
+      "news",
+      "alternates",
+      "source_sitemap"
+    )
   )
   expect_false("code" %in% names(res)) # never a findings tibble
 })
@@ -128,8 +143,12 @@ test_that("a sitemap index expands one level, attributing rows to children", {
   c2 <- "https://example.com/s2.xml"
   index_xml <- paste0(
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    "<sitemap><loc>", c1, "</loc></sitemap>",
-    "<sitemap><loc>", c2, "</loc></sitemap>",
+    "<sitemap><loc>",
+    c1,
+    "</loc></sitemap>",
+    "<sitemap><loc>",
+    c2,
+    "</loc></sitemap>",
     "</sitemapindex>"
   )
   httr2::local_mocked_responses(mock_by_url(setNames(
@@ -140,10 +159,12 @@ test_that("a sitemap index expands one level, attributing rows to children", {
   res <- read_sitemap(index_url)
   expect_setequal(res$loc, c("https://a/1", "https://b/1"))
   expect_identical(
-    res$source_sitemap[res$loc == "https://a/1"], c1
+    res$source_sitemap[res$loc == "https://a/1"],
+    c1
   )
   expect_identical(
-    res$source_sitemap[res$loc == "https://b/1"], c2
+    res$source_sitemap[res$loc == "https://b/1"],
+    c2
   )
   # sources attribute records the index plus both children.
   expect_identical(nrow(attr(res, "sources")), 3L)
@@ -155,8 +176,12 @@ test_that("an unfetchable index child becomes a warning problem", {
   c2 <- "https://example.com/missing.xml"
   index_xml <- paste0(
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    "<sitemap><loc>", c1, "</loc></sitemap>",
-    "<sitemap><loc>", c2, "</loc></sitemap>",
+    "<sitemap><loc>",
+    c1,
+    "</loc></sitemap>",
+    "<sitemap><loc>",
+    c2,
+    "</loc></sitemap>",
     "</sitemapindex>"
   )
   # c2 is absent from the map -> mock returns 404.

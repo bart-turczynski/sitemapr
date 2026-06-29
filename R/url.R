@@ -85,7 +85,8 @@ build_loc_key <- function(parsed) {
   query_part <- ifelse(blank(query), "", paste0("?", query))
 
   paste0(
-    scheme, "://",
+    scheme,
+    "://",
     userinfo,
     host,
     port_part,

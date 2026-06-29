@@ -29,13 +29,15 @@
 
 # Construct the classification-layer findings tibble. Same column contract as
 # `protocol_findings()` / `schema_findings()`, but `layer = "classification"`.
-classification_findings <- function(code = character(0),
-                                    severity = character(0),
-                                    subject_type = character(0),
-                                    subject_ref = character(0),
-                                    message = character(0),
-                                    evidence = list(),
-                                    is_strict_only = logical(0)) {
+classification_findings <- function(
+  code = character(0),
+  severity = character(0),
+  subject_type = character(0),
+  subject_ref = character(0),
+  message = character(0),
+  evidence = list(),
+  is_strict_only = logical(0)
+) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
@@ -76,12 +78,14 @@ empty_classification_findings <- function() {
 #' @return A named list with the fields above.
 #' @keywords internal
 #' @noRd
-source_meta <- function(unsupported_root = NA_character_,
-                        html_masquerade = FALSE,
-                        feed_children = character(0),
-                        bom_encoding = NA_character_,
-                        declared_encoding = NA_character_,
-                        http_charset = NA_character_) {
+source_meta <- function(
+  unsupported_root = NA_character_,
+  html_masquerade = FALSE,
+  feed_children = character(0),
+  bom_encoding = NA_character_,
+  declared_encoding = NA_character_,
+  http_charset = NA_character_
+) {
   list(
     unsupported_root = as.character(unsupported_root),
     html_masquerade = isTRUE(html_masquerade),
@@ -108,10 +112,14 @@ norm_encoding <- function(x) {
 
 # One source-level classification finding (`subject_type = "source"`, the
 # unfragmented `sitemap://…` base).
-classification_source_finding <- function(code, base, message,
-                                          excerpt = NA_character_,
-                                          severity = "error",
-                                          is_strict_only = FALSE) {
+classification_source_finding <- function(
+  code,
+  base,
+  message,
+  excerpt = NA_character_,
+  severity = "error",
+  is_strict_only = FALSE
+) {
   classification_findings(
     code = code,
     severity = severity,
@@ -131,7 +139,8 @@ classification_child_finding <- function(code, base, child_url, message) {
     severity = "error",
     subject_type = "index-child",
     subject_ref = protocol_ref_fragment(
-      base, paste0("#index-child:", child_url)
+      base,
+      paste0("#index-child:", child_url)
     ),
     message = message,
     evidence = list(protocol_evidence(excerpt = child_url)),
@@ -151,7 +160,8 @@ validate_classification <- function(meta, base) {
 
   if (isTRUE(meta$html_masquerade)) {
     out[[length(out) + 1L]] <- classification_source_finding(
-      "UNSUPPORTED_HTML_MASQUERADE", base,
+      "UNSUPPORTED_HTML_MASQUERADE",
+      base,
       paste0(
         "The document looks like HTML, not a sitemap, at the URL expected to ",
         "serve a sitemap."
@@ -162,9 +172,11 @@ validate_classification <- function(meta, base) {
   root <- meta$unsupported_root
   if (length(root) == 1L && !is.na(root) && nzchar(root)) {
     out[[length(out) + 1L]] <- classification_source_finding(
-      "UNSUPPORTED_ROOT", base,
+      "UNSUPPORTED_ROOT",
+      base,
       sprintf(
-        "Root element <%s> is neither <urlset> nor <sitemapindex>.", root
+        "Root element <%s> is neither <urlset> nor <sitemapindex>.",
+        root
       ),
       excerpt = root
     )
@@ -175,7 +187,9 @@ validate_classification <- function(meta, base) {
       next
     }
     out[[length(out) + 1L]] <- classification_child_finding(
-      "UNSUPPORTED_FEED", base, child,
+      "UNSUPPORTED_FEED",
+      base,
+      child,
       sprintf(
         paste0(
           "Sitemap-index child '%s' is an RSS/Atom feed; feeds are out of ",
@@ -221,13 +235,16 @@ validate_encoding <- function(meta, base) {
   bom_decl_conflict <- !is.na(bom) && !is.na(decl) && bom != decl
   if (bom_decl_conflict) {
     out[[length(out) + 1L]] <- classification_source_finding(
-      "ENCODING_BOM_DECLARATION_CONFLICT", base,
+      "ENCODING_BOM_DECLARATION_CONFLICT",
+      base,
       sprintf(
         paste0(
           "Byte-order mark indicates %s but the XML declaration says ",
           "encoding=\"%s\"; resolved to %s (BOM wins)."
         ),
-        meta$bom_encoding, meta$declared_encoding, resolution
+        meta$bom_encoding,
+        meta$declared_encoding,
+        resolution
       ),
       severity = "info"
     )
@@ -237,7 +254,8 @@ validate_encoding <- function(meta, base) {
   decl_http_conflict <- !is.na(decl) && !is.na(http) && decl != http
   if (bom_http_conflict || decl_http_conflict) {
     out[[length(out) + 1L]] <- classification_source_finding(
-      "ENCODING_CONFLICT", base,
+      "ENCODING_CONFLICT",
+      base,
       sprintf(
         paste0(
           "Encoding signals disagree (BOM=%s, XML declaration=%s, HTTP ",

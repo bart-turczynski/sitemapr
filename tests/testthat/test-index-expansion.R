@@ -62,19 +62,24 @@ urlset_xml <- function(...) {
   paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-    entries, "\n</urlset>\n"
+    entries,
+    "\n</urlset>\n"
   )
 }
 
 index_xml <- function(...) {
   locs <- c(...)
   entries <- paste0(
-    "  <sitemap><loc>", locs, "</loc></sitemap>", collapse = "\n"
+    "  <sitemap><loc>",
+    locs,
+    "</loc></sitemap>",
+    collapse = "\n"
   )
   paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-    entries, "\n</sitemapindex>\n"
+    entries,
+    "\n</sitemapindex>\n"
   )
 }
 
@@ -83,19 +88,23 @@ index_xml <- function(...) {
 local_index_server <- function(map, env = parent.frame()) {
   tracker <- new.env(parent = emptyenv())
   tracker$urls <- character(0)
-  httr2::local_mocked_responses(function(req) {
-    u <- req$url
-    tracker$urls <- c(tracker$urls, u)
-    body <- map[[u]]
-    if (is.null(body)) {
-      return(httr2::response(status_code = 404, url = u))
-    }
-    httr2::response(
-      status_code = 200, url = u,
-      headers = list("Content-Type" = "application/xml; charset=UTF-8"),
-      body = charToRaw(body)
-    )
-  }, env = env)
+  httr2::local_mocked_responses(
+    function(req) {
+      u <- req$url
+      tracker$urls <- c(tracker$urls, u)
+      body <- map[[u]]
+      if (is.null(body)) {
+        return(httr2::response(status_code = 404, url = u))
+      }
+      httr2::response(
+        status_code = 200,
+        url = u,
+        headers = list("Content-Type" = "application/xml; charset=UTF-8"),
+        body = charToRaw(body)
+      )
+    },
+    env = env
+  )
   tracker
 }
 
@@ -116,7 +125,8 @@ test_that("a two-child index expands both children with depth-1 provenance", {
   res <- expand_root(root, index_xml(names(map)[[1]], names(map)[[2]]))
 
   expect_setequal(
-    res$rows$loc, c("https://example.com/a", "https://example.com/b")
+    res$rows$loc,
+    c("https://example.com/a", "https://example.com/b")
   )
   expect_identical(nrow(res$tree), 2L)
   expect_true(all(res$tree$depth == 1L))
@@ -142,13 +152,15 @@ test_that("a duplicate child URL is fetched and expanded exactly once", {
 
 test_that("a self-referential index is detected and not followed", {
   root <- "https://example.com/sitemap.xml"
-  tracker <- local_index_server(list())  # root never re-fetched
+  tracker <- local_index_server(list()) # root never re-fetched
 
   res <- expand_root(root, index_xml(root))
 
   expect_false(root %in% tracker$urls)
-  expect_true(any(res$problems$category == "index-expansion" &
-                    grepl("cycle", res$problems$message)))
+  expect_true(any(
+    res$problems$category == "index-expansion" &
+      grepl("cycle", res$problems$message)
+  ))
   expect_true(any(res$tree$reason == "cycle"))
 })
 
@@ -156,7 +168,7 @@ test_that("an A -> B -> A cross-index cycle terminates without recursion", {
   a <- "https://example.com/a.xml"
   b <- "https://example.com/b.xml"
   map <- list()
-  map[[b]] <- index_xml(a)  # B points back at A
+  map[[b]] <- index_xml(a) # B points back at A
   tracker <- local_index_server(map)
 
   res <- expand_root(a, index_xml(b))
@@ -169,15 +181,18 @@ test_that("an A -> B -> A cross-index cycle terminates without recursion", {
 
 test_that("the recursion depth limit is enforced; deeper nodes unfetched", {
   root <- "https://example.com/root.xml"
-  lvl1 <- "https://example.com/lvl1.xml"  # depth 1 (accepted, nested)
-  lvl2 <- "https://example.com/lvl2.xml"  # depth 2 -> exceeds max_depth 1
+  lvl1 <- "https://example.com/lvl1.xml" # depth 1 (accepted, nested)
+  lvl2 <- "https://example.com/lvl2.xml" # depth 2 -> exceeds max_depth 1
   map <- list()
   map[[lvl1]] <- index_xml(lvl2)
   map[[lvl2]] <- urlset_xml("https://example.com/deep")
   tracker <- local_index_server(map)
 
-  res <- expand_root(root, index_xml(lvl1),
-                     limits = index_limits(max_depth = 1L))
+  res <- expand_root(
+    root,
+    index_xml(lvl1),
+    limits = index_limits(max_depth = 1L)
+  )
 
   expect_true(lvl1 %in% tracker$urls)
   expect_false(lvl2 %in% tracker$urls)
@@ -196,8 +211,11 @@ test_that("the per-index child-count cap truncates and records one event", {
   map[[c3]] <- urlset_xml("https://example.com/3")
   tracker <- local_index_server(map)
 
-  res <- expand_root(root, index_xml(c1, c2, c3),
-                     limits = index_limits(max_children = 2L))
+  res <- expand_root(
+    root,
+    index_xml(c1, c2, c3),
+    limits = index_limits(max_children = 2L)
+  )
 
   expect_identical(length(tracker$urls), 2L)
   expect_true(any(grepl("cap", res$problems$message)))
@@ -214,7 +232,9 @@ test_that("a nested sitemapindex warns but is still expanded", {
 
   res <- expand_root(root, index_xml(nested))
 
-  expect_true(any(res$problems$category == "index-expansion" &
-                    grepl("[Nn]ested", res$problems$message)))
+  expect_true(any(
+    res$problems$category == "index-expansion" &
+      grepl("[Nn]ested", res$problems$message)
+  ))
   expect_true("https://example.com/deep" %in% res$rows$loc)
 })

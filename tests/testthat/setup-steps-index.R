@@ -32,7 +32,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # A leaf urlset carrying a single distinctive loc.
   idx_urlset <- function(loc) {
     paste0(
-      "<urlset xmlns=\"", idx_ns, "\"><url><loc>", loc,
+      "<urlset xmlns=\"",
+      idx_ns,
+      "\"><url><loc>",
+      loc,
       "</loc></url></urlset>"
     )
   }
@@ -40,7 +43,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # A sitemapindex listing the given child locs.
   idx_index <- function(...) {
     kids <- paste0(
-      "<sitemap><loc>", c(...), "</loc></sitemap>", collapse = ""
+      "<sitemap><loc>",
+      c(...),
+      "</loc></sitemap>",
+      collapse = ""
     )
     paste0("<sitemapindex xmlns=\"", idx_ns, "\">", kids, "</sitemapindex>")
   }
@@ -64,7 +70,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
         return(httr2::response(status_code = 404L, url = req$url))
       }
       httr2::response(
-        status_code = 200L, url = req$url,
+        status_code = 200L,
+        url = req$url,
         headers = list("Content-Type" = "application/xml"),
         body = charToRaw(body)
       )
@@ -115,7 +122,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     context$index_url <- "https://example.com/sitemap.xml"
     context$root <- "https://example.com"
     context$direct_children <- c(
-      "https://example.com/child-1.xml", "https://example.com/child-2.xml"
+      "https://example.com/child-1.xml",
+      "https://example.com/child-2.xml"
     )
     context$body_map <- list2env(list(
       "https://example.com/sitemap.xml" = idx_fixture("index-simple.xml"),
@@ -141,8 +149,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(context) {
       context$index_url <- "https://example.com/sitemap.xml"
       context$body_map <- list2env(list(
-        "https://example.com/sitemap.xml" =
-          idx_fixture("index-duplicate-child.xml"),
+        "https://example.com/sitemap.xml" = idx_fixture(
+          "index-duplicate-child.xml"
+        ),
         "https://example.com/child-1.xml" = idx_urlset("https://example.com/a")
       ))
     }
@@ -153,8 +162,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(name, context) {
       context$index_url <- "https://example.com/index-self-ref.xml"
       context$body_map <- list2env(list(
-        "https://example.com/index-self-ref.xml" =
-          idx_fixture("index-self-ref.xml"),
+        "https://example.com/index-self-ref.xml" = idx_fixture(
+          "index-self-ref.xml"
+        ),
         "https://example.com/child-1.xml" = idx_urlset("https://example.com/a")
       ))
     }
@@ -168,7 +178,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       context$index_url <- a
       context$cycle_b <- b
       context$body_map <- list2env(stats::setNames(
-        list(idx_fixture("index-cycle-ab.xml"), idx_index(a)), c(a, b)
+        list(idx_fixture("index-cycle-ab.xml"), idx_index(a)),
+        c(a, b)
       ))
     }
   )
@@ -180,14 +191,18 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       context$deep_leaf <- "https://example.com/deep-4.xml"
       context$body_map <- list2env(list(
         "https://example.com/index-deep.xml" = idx_fixture("index-deep.xml"),
-        "https://example.com/deep-1.xml" =
-          idx_index("https://example.com/deep-2.xml"),
-        "https://example.com/deep-2.xml" =
-          idx_index("https://example.com/deep-3.xml"),
-        "https://example.com/deep-3.xml" =
-          idx_index("https://example.com/deep-4.xml"),
-        "https://example.com/deep-4.xml" =
-          idx_urlset("https://example.com/deep")
+        "https://example.com/deep-1.xml" = idx_index(
+          "https://example.com/deep-2.xml"
+        ),
+        "https://example.com/deep-2.xml" = idx_index(
+          "https://example.com/deep-3.xml"
+        ),
+        "https://example.com/deep-3.xml" = idx_index(
+          "https://example.com/deep-4.xml"
+        ),
+        "https://example.com/deep-4.xml" = idx_urlset(
+          "https://example.com/deep"
+        )
       ))
     }
   )
@@ -212,10 +227,12 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(name, context) {
       context$index_url <- "https://example.com/index-nested.xml"
       context$body_map <- list2env(list(
-        "https://example.com/index-nested.xml" =
-          idx_fixture("index-nested.xml"),
-        "https://example.com/nested-index.xml" =
-          idx_index("https://example.com/leaf.xml"),
+        "https://example.com/index-nested.xml" = idx_fixture(
+          "index-nested.xml"
+        ),
+        "https://example.com/nested-index.xml" = idx_index(
+          "https://example.com/leaf.xml"
+        ),
         "https://example.com/leaf.xml" = idx_urlset("https://example.com/deep")
       ))
     }
@@ -316,7 +333,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(context) {
       p <- context$problems
       testthat::expect_true(any(
-        p$category == "index-expansion" & grepl("cycle", p$message) &
+        p$category == "index-expansion" &
+          grepl("cycle", p$message) &
           p$subject_ref == context$index_url
       ))
     }

@@ -33,7 +33,9 @@ if (installed != pinned) {
         "Install the pinned version so generated docs are reproducible:\n",
         "  Rscript -e 'pak::pak(\"roxygen2@%s\")'"
       ),
-      installed, pinned, pinned
+      installed,
+      pinned,
+      pinned
     ),
     call. = FALSE
   )

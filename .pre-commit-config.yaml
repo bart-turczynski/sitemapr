@@ -16,6 +16,16 @@ repos:
       - id: check-case-conflict
   - repo: local
     hooks:
+      # Format R sources with air (https://posit-dev.github.io/air/) on commit.
+      # language: system => contributors must have air on PATH (brew install
+      # air; see CONTRIBUTING). air.toml controls style + exclusions, so the
+      # data-raw/ dev scripts are skipped even when they are staged.
+      - id: air-format
+        name: air (format R code)
+        entry: air format
+        language: system
+        types: [r]
+        stages: [pre-commit]
       - id: verify
         name: verify (mirrors CI)
         entry: Rscript -e

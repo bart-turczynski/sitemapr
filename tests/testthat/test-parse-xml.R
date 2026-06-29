@@ -15,8 +15,17 @@ test_that("a urlset parses to the contract row tibble", {
   expect_s3_class(res$rows, "tbl_df")
   expect_identical(
     names(res$rows),
-    c("loc", "lastmod", "changefreq", "priority", "images", "video",
-      "news", "alternates", "source_sitemap")
+    c(
+      "loc",
+      "lastmod",
+      "changefreq",
+      "priority",
+      "images",
+      "video",
+      "news",
+      "alternates",
+      "source_sitemap"
+    )
   )
   expect_identical(res$rows$loc, c("https://a/", "https://b/"))
 })

@@ -31,16 +31,19 @@ test_that("a relative loc produces PROTOCOL_URL_NOT_ABSOLUTE", {
 
 test_that("a non-http(s) scheme produces PROTOCOL_URL_NOT_ABSOLUTE", {
   expect_identical(
-    codes_for("ftp://example.com/x"), "PROTOCOL_URL_NOT_ABSOLUTE"
+    codes_for("ftp://example.com/x"),
+    "PROTOCOL_URL_NOT_ABSOLUTE"
   )
   expect_identical(
-    codes_for("data:text/plain,hi"), "PROTOCOL_URL_NOT_ABSOLUTE"
+    codes_for("data:text/plain,hi"),
+    "PROTOCOL_URL_NOT_ABSOLUTE"
   )
 })
 
 test_that("a scheme-relative loc produces PROTOCOL_URL_NOT_ABSOLUTE", {
   expect_identical(
-    codes_for("//example.com/x"), "PROTOCOL_URL_NOT_ABSOLUTE"
+    codes_for("//example.com/x"),
+    "PROTOCOL_URL_NOT_ABSOLUTE"
   )
 })
 
@@ -84,7 +87,8 @@ test_that("a valid percent-escape is not flagged", {
 
 test_that("a fragment produces an info PROTOCOL_URL_FRAGMENT", {
   out <- validate_protocol(
-    rows_for("https://example.com/a#section"), sitemap_url = sm_url
+    rows_for("https://example.com/a#section"),
+    sitemap_url = sm_url
   )
   frag <- out[out$code == "PROTOCOL_URL_FRAGMENT", ]
   expect_identical(nrow(frag), 1L)
@@ -93,7 +97,8 @@ test_that("a fragment produces an info PROTOCOL_URL_FRAGMENT", {
 
 test_that("userinfo produces an info PROTOCOL_URL_USERINFO", {
   out <- validate_protocol(
-    rows_for("https://user@example.com/a"), sitemap_url = sm_url
+    rows_for("https://user@example.com/a"),
+    sitemap_url = sm_url
   )
   ui <- out[out$code == "PROTOCOL_URL_USERINFO", ]
   expect_identical(nrow(ui), 1L)
@@ -178,7 +183,8 @@ test_that("an IRI loc is accepted and keyed in its percent-encoded URI form", {
 
 test_that("findings carry the protocol layer and entry-scoped subject_ref", {
   out <- validate_protocol(
-    rows_for(c("https://example.com/a", "/relative")), sitemap_url = sm_url
+    rows_for(c("https://example.com/a", "/relative")),
+    sitemap_url = sm_url
   )
   not_abs <- out[out$code == "PROTOCOL_URL_NOT_ABSOLUTE", ]
   expect_identical(not_abs$layer, "protocol")
@@ -201,8 +207,11 @@ test_that("empty input yields a zero-row protocol-findings tibble", {
 
 test_that("the same input produces an identical finding set twice", {
   loc <- c(
-    "https://example.com/a", "ftp://example.com/b", "https://other.com/c",
-    "https://example.com/a#frag", "https://example.com/a"
+    "https://example.com/a",
+    "ftp://example.com/b",
+    "https://other.com/c",
+    "https://example.com/a#frag",
+    "https://example.com/a"
   )
   a <- validate_protocol(rows_for(loc), sitemap_url = sm_url)
   b <- validate_protocol(rows_for(loc), sitemap_url = sm_url)
@@ -218,7 +227,9 @@ test_that("the same input produces an identical finding set twice", {
 test_that("over 50000 URL entries produces PROTOCOL_URL_COUNT_EXCEEDED", {
   rows <- rows_for(sprintf("https://example.com/p%d", seq_len(3L)))
   out <- validate_protocol(
-    rows, sitemap_url = sm_url, limits = protocol_limits(max_url_count = 2L)
+    rows,
+    sitemap_url = sm_url,
+    limits = protocol_limits(max_url_count = 2L)
   )
   cnt <- out[out$code == "PROTOCOL_URL_COUNT_EXCEEDED", ]
   expect_identical(nrow(cnt), 1L)
@@ -230,7 +241,9 @@ test_that("over 50000 URL entries produces PROTOCOL_URL_COUNT_EXCEEDED", {
 test_that("a URL count at the limit does not fire", {
   rows <- rows_for(sprintf("https://example.com/p%d", seq_len(2L)))
   out <- validate_protocol(
-    rows, sitemap_url = sm_url, limits = protocol_limits(max_url_count = 2L)
+    rows,
+    sitemap_url = sm_url,
+    limits = protocol_limits(max_url_count = 2L)
   )
   expect_false("PROTOCOL_URL_COUNT_EXCEEDED" %in% out$code)
 })
@@ -239,7 +252,8 @@ test_that("a URL count at the limit does not fire", {
 
 test_that("an oversized document produces PROTOCOL_SIZE_EXCEEDED", {
   out <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url,
+    rows_for("https://example.com/a"),
+    sitemap_url = sm_url,
     byte_size = 60 * 1024^2
   )
   sz <- out[out$code == "PROTOCOL_SIZE_EXCEEDED", ]
@@ -250,10 +264,13 @@ test_that("an oversized document produces PROTOCOL_SIZE_EXCEEDED", {
 
 test_that("size within the limit, or an unknown size, does not fire", {
   small <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url, byte_size = 1024
+    rows_for("https://example.com/a"),
+    sitemap_url = sm_url,
+    byte_size = 1024
   )
   unknown <- validate_protocol(
-    rows_for("https://example.com/a"), sitemap_url = sm_url
+    rows_for("https://example.com/a"),
+    sitemap_url = sm_url
   )
   expect_false("PROTOCOL_SIZE_EXCEEDED" %in% small$code)
   expect_false("PROTOCOL_SIZE_EXCEEDED" %in% unknown$code)
@@ -278,8 +295,11 @@ test_that("priority outside [0,1] produces PROTOCOL_PRIORITY_OUT_OF_RANGE", {
 test_that("priority at the [0,1] bounds and absent priority are accepted", {
   out <- validate_protocol(
     sitemap_rows(
-      loc = c("https://example.com/a", "https://example.com/b",
-              "https://example.com/c"),
+      loc = c(
+        "https://example.com/a",
+        "https://example.com/b",
+        "https://example.com/c"
+      ),
       priority = c(0, 1, NA)
     ),
     sitemap_url = sm_url
@@ -308,8 +328,7 @@ test_that("changefreq is case-sensitive (Daily is invalid)", {
 })
 
 test_that("every valid changefreq enum value is accepted", {
-  vals <- c("always", "hourly", "daily", "weekly", "monthly", "yearly",
-            "never")
+  vals <- c("always", "hourly", "daily", "weekly", "monthly", "yearly", "never")
   out <- validate_protocol(
     sitemap_rows(
       loc = sprintf("https://example.com/p%d", seq_along(vals)),
@@ -385,8 +404,11 @@ test_that("an absent lastmod (NA in the faithful column) is not flagged", {
 test_that("uniformly identical lastmods produce ALL_IDENTICAL (warning)", {
   out <- validate_protocol(
     sitemap_rows(
-      loc = c("https://example.com/a", "https://example.com/b",
-              "https://example.com/c"),
+      loc = c(
+        "https://example.com/a",
+        "https://example.com/b",
+        "https://example.com/c"
+      ),
       lastmod = rep("2024-01-01T00:00:00Z", 3L)
     ),
     sitemap_url = sm_url
@@ -426,7 +448,8 @@ test_that("lastmods clustered at fetch time produce LOOKS_GENERATED (info)", {
       loc = c("https://example.com/a", "https://example.com/b"),
       lastmod = c("2024-01-01T11:59:00Z", "2024-01-01T11:58:00Z")
     ),
-    sitemap_url = sm_url, fetched_at = fetched
+    sitemap_url = sm_url,
+    fetched_at = fetched
   )
   lg <- out[out$code == "PROTOCOL_LASTMOD_LOOKS_GENERATED", ]
   expect_identical(nrow(lg), 1L)
@@ -451,7 +474,8 @@ test_that("lastmods far from fetch time do not look generated", {
       loc = c("https://example.com/a", "https://example.com/b"),
       lastmod = c("2020-01-01", "2021-01-01")
     ),
-    sitemap_url = sm_url, fetched_at = fetched
+    sitemap_url = sm_url,
+    fetched_at = fetched
   )
   expect_false("PROTOCOL_LASTMOD_LOOKS_GENERATED" %in% out$code)
 })
@@ -466,15 +490,21 @@ test_that("count, field, and corpus findings combine in one tibble", {
     lastmod = c("2024-01-01", "2024-01-01")
   )
   out <- validate_protocol(
-    rows, sitemap_url = sm_url,
+    rows,
+    sitemap_url = sm_url,
     byte_size = 60 * 1024^2,
     limits = protocol_limits(max_url_count = 1L)
   )
   expect_setequal(
     out$code,
-    c("PROTOCOL_URL_COUNT_EXCEEDED", "PROTOCOL_SIZE_EXCEEDED",
-      "PROTOCOL_PRIORITY_OUT_OF_RANGE", "PROTOCOL_CHANGEFREQ_INVALID",
-      "PROTOCOL_LASTMOD_DATE_ONLY", "PROTOCOL_LASTMOD_ALL_IDENTICAL")
+    c(
+      "PROTOCOL_URL_COUNT_EXCEEDED",
+      "PROTOCOL_SIZE_EXCEEDED",
+      "PROTOCOL_PRIORITY_OUT_OF_RANGE",
+      "PROTOCOL_CHANGEFREQ_INVALID",
+      "PROTOCOL_LASTMOD_DATE_ONLY",
+      "PROTOCOL_LASTMOD_ALL_IDENTICAL"
+    )
   )
   expect_identical(unique(out$layer), "protocol")
 })
@@ -488,7 +518,8 @@ test_that("D.2 rules are deterministic across repeated calls", {
   )
   call <- function() {
     validate_protocol(
-      rows, sitemap_url = sm_url,
+      rows,
+      sitemap_url = sm_url,
       byte_size = 60 * 1024^2
     )
   }
@@ -501,9 +532,15 @@ test_that("D.2 rules are deterministic across repeated calls", {
 # attributes (NULL = attribute absent), matching collect_extension()'s output.
 mk_link <- function(rel = "alternate", hreflang = NULL, href = NULL) {
   x <- list()
-  if (!is.null(rel)) attr(x, "rel") <- rel
-  if (!is.null(hreflang)) attr(x, "hreflang") <- hreflang
-  if (!is.null(href)) attr(x, "href") <- href
+  if (!is.null(rel)) {
+    attr(x, "rel") <- rel
+  }
+  if (!is.null(hreflang)) {
+    attr(x, "hreflang") <- hreflang
+  }
+  if (!is.null(href)) {
+    attr(x, "href") <- href
+  }
   x
 }
 
@@ -535,7 +572,8 @@ test_that("the accepted hreflang families classify as valid", {
 test_that("empty and arbitrary tokens are FORMAT_INVALID", {
   for (tok in c("", "english", "123", "e", "eng")) {
     expect_identical(
-      classify_hreflang_token(tok), "HREFLANG_FORMAT_INVALID"
+      classify_hreflang_token(tok),
+      "HREFLANG_FORMAT_INVALID"
     )
   }
 })
@@ -556,7 +594,8 @@ test_that("a whitespace-padded token is FORMAT_INVALID", {
 test_that("underscore and bad separators are SEPARATOR_INVALID", {
   for (tok in c("en_US", "en--US", "-en", "en-", "en US")) {
     expect_identical(
-      classify_hreflang_token(tok), "HREFLANG_SEPARATOR_INVALID"
+      classify_hreflang_token(tok),
+      "HREFLANG_SEPARATOR_INVALID"
     )
   }
 })
@@ -566,7 +605,8 @@ test_that("off-convention casing is NONSTANDARD_CASE", {
   # all-uppercase standalone 2-letter is region-only (covered above).
   for (tok in c("En", "en-us", "EN-US", "en-latn", "en-LATN-US")) {
     expect_identical(
-      classify_hreflang_token(tok), "HREFLANG_NONSTANDARD_CASE"
+      classify_hreflang_token(tok),
+      "HREFLANG_NONSTANDARD_CASE"
     )
   }
 })
@@ -574,7 +614,8 @@ test_that("off-convention casing is NONSTANDARD_CASE", {
 test_that("malformed x-default near misses are XDEFAULT_INVALID", {
   for (tok in c("X-DEFAULT", "x_default", "X_Default", " x-default")) {
     expect_identical(
-      classify_hreflang_token(tok), "HREFLANG_XDEFAULT_INVALID"
+      classify_hreflang_token(tok),
+      "HREFLANG_XDEFAULT_INVALID"
     )
   }
 })
@@ -583,7 +624,8 @@ test_that("malformed x-default near misses are XDEFAULT_INVALID", {
 
 test_that("a clean hreflang set with x-default produces no findings", {
   out <- validate_hreflang(
-    rows_with_alts(list(alt("en"), alt("de"), alt("x-default"))), base
+    rows_with_alts(list(alt("en"), alt("de"), alt("x-default"))),
+    base
   )
   expect_identical(nrow(out), 0L)
 })
@@ -611,7 +653,8 @@ test_that("a malformed x-default is not treated as missing", {
 
 test_that("a duplicate hreflang token is flagged once, naming the first", {
   out <- validate_hreflang(
-    rows_with_alts(list(alt("en"), alt("en"), alt("x-default"))), base
+    rows_with_alts(list(alt("en"), alt("en"), alt("x-default"))),
+    base
   )
   dup <- out[out$code == "HREFLANG_DUPLICATE", ]
   expect_identical(nrow(dup), 1L)
@@ -620,7 +663,8 @@ test_that("a duplicate hreflang token is flagged once, naming the first", {
 
 test_that("duplicate clean x-default is XDEFAULT_INVALID, not DUPLICATE", {
   out <- validate_hreflang(
-    rows_with_alts(list(alt("en"), alt("x-default"), alt("x-default"))), base
+    rows_with_alts(list(alt("en"), alt("x-default"), alt("x-default"))),
+    base
   )
   expect_identical(
     out$code[out$code != "HREFLANG_XDEFAULT_MISSING"],
@@ -640,15 +684,20 @@ test_that("a missing required attribute is HREFLANG_LINK_ATTR_INVALID", {
   )
   expect_true(
     "HREFLANG_LINK_ATTR_INVALID" %in%
-      hreflang_codes(list(mk_link(rel = "stylesheet",
-                                  hreflang = "en", href = "https://e.com/x")))
+      hreflang_codes(list(mk_link(
+        rel = "stylesheet",
+        hreflang = "en",
+        href = "https://e.com/x"
+      )))
   )
 })
 
 test_that("a relative href is HREFLANG_HREF_RELATIVE and strict-only", {
   out <- validate_hreflang(
-    rows_with_alts(list(mk_link(hreflang = "en", href = "/en"),
-                        alt("x-default"))),
+    rows_with_alts(list(
+      mk_link(hreflang = "en", href = "/en"),
+      alt("x-default")
+    )),
     base
   )
   hr <- out[out$code == "HREFLANG_HREF_RELATIVE", ]
@@ -659,7 +708,8 @@ test_that("a relative href is HREFLANG_HREF_RELATIVE and strict-only", {
 
 test_that("hreflang findings are scoped to the entry and link", {
   out <- validate_hreflang(
-    rows_with_alts(list(alt("en"), alt("english"))), base
+    rows_with_alts(list(alt("en"), alt("english"))),
+    base
   )
   fmt <- out[out$code == "HREFLANG_FORMAT_INVALID", ]
   expect_identical(fmt$subject_ref, paste0(base, "#entry:1:link:2"))
@@ -713,7 +763,9 @@ leaf <- function(text) list(as.character(text))
 leaf_attr <- function(text, ...) {
   x <- leaf(text)
   a <- list(...)
-  for (nm in names(a)) attr(x, nm) <- a[[nm]]
+  for (nm in names(a)) {
+    attr(x, nm) <- a[[nm]]
+  }
   x
 }
 
@@ -756,15 +808,23 @@ ext_codes <- function(column, els) {
 
 test_that("an image set within the per-URL cap produces no findings", {
   imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 1000L)
-  expect_identical(nrow(validate_extensions(
-    rows_with_ext("images", imgs), base, protocol_limits()
-  )), 0L)
+  expect_identical(
+    nrow(validate_extensions(
+      rows_with_ext("images", imgs),
+      base,
+      protocol_limits()
+    )),
+    0L
+  )
 })
 
 test_that("more than 1000 images per URL is PROTOCOL_IMAGE_COUNT_EXCEEDED", {
   imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 1001L)
-  out <- validate_extensions(rows_with_ext("images", imgs), base,
-                             protocol_limits())
+  out <- validate_extensions(
+    rows_with_ext("images", imgs),
+    base,
+    protocol_limits()
+  )
   expect_identical(out$code, "PROTOCOL_IMAGE_COUNT_EXCEEDED")
   expect_identical(out$subject_ref, paste0(base, "#entry:1"))
 })
@@ -772,7 +832,8 @@ test_that("more than 1000 images per URL is PROTOCOL_IMAGE_COUNT_EXCEEDED", {
 test_that("the image cap is configurable via limits", {
   imgs <- rep(list(list(loc = leaf("https://e.com/i.jpg"))), 3L)
   out <- validate_extensions(
-    rows_with_ext("images", imgs), base,
+    rows_with_ext("images", imgs),
+    base,
     protocol_limits(max_images_per_url = 2L)
   )
   expect_identical(out$code, "PROTOCOL_IMAGE_COUNT_EXCEEDED")
@@ -808,14 +869,17 @@ test_that("an out-of-range rating is flagged", {
 
 test_that("more than 32 video tags is flagged and configurable", {
   tags <- stats::setNames(
-    rep(list(leaf("t")), 33L), rep("tag", 33L)
+    rep(list(leaf("t")), 33L),
+    rep("tag", 33L)
   )
   v <- do.call(mk_video, tags)
   expect_identical(
-    ext_codes("video", list(v)), "PROTOCOL_VIDEO_FIELD_INVALID"
+    ext_codes("video", list(v)),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
   )
   out <- validate_extensions(
-    rows_with_ext("video", list(v)), base,
+    rows_with_ext("video", list(v)),
+    base,
     protocol_limits(max_video_tags = 50L)
   )
   expect_identical(nrow(out), 0L)
@@ -835,7 +899,8 @@ test_that("a bad enum-like video value is flagged, a good one passes", {
     "PROTOCOL_VIDEO_FIELD_INVALID"
   )
   expect_length(
-    ext_codes("video", list(mk_video(live = leaf("yes")))), 0L
+    ext_codes("video", list(mk_video(live = leaf("yes")))),
+    0L
   )
 })
 
@@ -845,23 +910,32 @@ test_that("restriction/platform need a valid relationship attribute", {
     "PROTOCOL_VIDEO_FIELD_INVALID"
   )
   expect_length(
-    ext_codes("video", list(mk_video(
-      restriction = leaf_attr("US", relationship = "allow")
-    ))),
+    ext_codes(
+      "video",
+      list(mk_video(
+        restriction = leaf_attr("US", relationship = "allow")
+      ))
+    ),
     0L
   )
   expect_identical(
-    ext_codes("video", list(mk_video(
-      platform = leaf_attr("web", relationship = "maybe")
-    ))),
+    ext_codes(
+      "video",
+      list(mk_video(
+        platform = leaf_attr("web", relationship = "maybe")
+      ))
+    ),
     "PROTOCOL_VIDEO_FIELD_INVALID"
   )
 })
 
 test_that("multiple video violations yield multiple findings", {
   v <- mk_video(duration = leaf("0"), rating = leaf("9"))
-  out <- validate_extensions(rows_with_ext("video", list(v)), base,
-                             protocol_limits())
+  out <- validate_extensions(
+    rows_with_ext("video", list(v)),
+    base,
+    protocol_limits()
+  )
   expect_identical(nrow(out), 2L)
   expect_identical(unique(out$code), "PROTOCOL_VIDEO_FIELD_INVALID")
   expect_identical(out$subject_ref[1], paste0(base, "#entry:1:video:1"))
@@ -891,16 +965,20 @@ test_that("an invalid news publication_date is flagged", {
     "PROTOCOL_NEWS_FIELD_INVALID"
   )
   expect_length(
-    ext_codes("news", list(
-      mk_news(publication_date = "2024-01-01T12:00:00Z")
-    )),
+    ext_codes(
+      "news",
+      list(
+        mk_news(publication_date = "2024-01-01T12:00:00Z")
+      )
+    ),
     0L
   )
 })
 
 test_that("news field findings are scoped to the entry and member", {
   out <- validate_extensions(
-    rows_with_ext("news", list(mk_news(language = "english"))), base,
+    rows_with_ext("news", list(mk_news(language = "english"))),
+    base,
     protocol_limits()
   )
   expect_identical(out$subject_ref, paste0(base, "#entry:1:news:1"))
@@ -936,7 +1014,8 @@ test_that("validate_protocol wires in the extension rules", {
 test_that("rows without extension data produce no extension findings", {
   out <- validate_extensions(
     sitemap_rows(loc = c("https://example.com/a", "https://example.com/b")),
-    base, protocol_limits()
+    base,
+    protocol_limits()
   )
   expect_identical(nrow(out), 0L)
 })
@@ -957,7 +1036,8 @@ txt_codes <- function(text) validate_text_protocol(text, base)$code
 
 test_that("a clean text sitemap produces no findings", {
   out <- validate_text_protocol(
-    "https://example.com/a\nhttps://example.com/b", base
+    "https://example.com/a\nhttps://example.com/b",
+    base
   )
   expect_s3_class(out, "tbl_df")
   expect_identical(nrow(out), 0L)
@@ -980,7 +1060,8 @@ test_that("a relative line is PROTOCOL_URL_NOT_ABSOLUTE", {
 
 test_that("a non-http(s) scheme line is PROTOCOL_URL_NOT_ABSOLUTE", {
   expect_identical(
-    txt_codes("ftp://example.com/x"), "PROTOCOL_URL_NOT_ABSOLUTE"
+    txt_codes("ftp://example.com/x"),
+    "PROTOCOL_URL_NOT_ABSOLUTE"
   )
 })
 
@@ -1009,7 +1090,8 @@ test_that("the 2048-char boundary matches the XML rule (must be < 2048)", {
 
 test_that("a blank line is a strict-only PROTOCOL_TEXT_BLANK_LINE info", {
   out <- validate_text_protocol(
-    "https://example.com/a\n\nhttps://example.com/b", base
+    "https://example.com/a\n\nhttps://example.com/b",
+    base
   )
   expect_identical(out$code, "PROTOCOL_TEXT_BLANK_LINE")
   expect_identical(out$severity, "info")
@@ -1023,7 +1105,8 @@ test_that("a whitespace-only line is also a blank line", {
 
 test_that("blank-line findings carry the 1-based line number", {
   out <- validate_text_protocol(
-    "https://example.com/a\n\n\nhttps://example.com/b", base
+    "https://example.com/a\n\n\nhttps://example.com/b",
+    base
   )
   lines <- vapply(out$evidence, function(e) e$line, integer(1))
   expect_identical(sort(lines), c(2L, 3L))
@@ -1042,16 +1125,21 @@ test_that("the too-long excerpt is clamped to 200 chars", {
 })
 
 test_that("surrounding whitespace is trimmed before URL checks", {
-  expect_identical(nrow(validate_text_protocol("  https://example.com/a  ",
-                                               base)), 0L)
+  expect_identical(
+    nrow(validate_text_protocol("  https://example.com/a  ", base)),
+    0L
+  )
 })
 
 test_that("multiple lines yield one finding each, in line order", {
   out <- validate_text_protocol(
-    paste("/rel", "https://example.com/ok", "ftp://h/x", sep = "\n"), base
+    paste("/rel", "https://example.com/ok", "ftp://h/x", sep = "\n"),
+    base
   )
-  expect_identical(out$code, c("PROTOCOL_URL_NOT_ABSOLUTE",
-                               "PROTOCOL_URL_NOT_ABSOLUTE"))
+  expect_identical(
+    out$code,
+    c("PROTOCOL_URL_NOT_ABSOLUTE", "PROTOCOL_URL_NOT_ABSOLUTE")
+  )
 })
 
 test_that("raw bytes are accepted as input", {
@@ -1074,7 +1162,8 @@ test_that("text validation is deterministic across repeated calls", {
 
 test_that("an unsupported root yields a classification UNSUPPORTED_ROOT", {
   out <- validate_protocol(
-    empty_sitemap_rows(), subject_ref = base,
+    empty_sitemap_rows(),
+    subject_ref = base,
     source_meta = source_meta(unsupported_root = "rss")
   )
   ur <- out[out$code == "UNSUPPORTED_ROOT", ]
@@ -1088,7 +1177,8 @@ test_that("an unsupported root yields a classification UNSUPPORTED_ROOT", {
 
 test_that("HTML at a sitemap URL yields UNSUPPORTED_HTML_MASQUERADE", {
   out <- validate_protocol(
-    empty_sitemap_rows(), subject_ref = base,
+    empty_sitemap_rows(),
+    subject_ref = base,
     source_meta = source_meta(html_masquerade = TRUE)
   )
   hm <- out[out$code == "UNSUPPORTED_HTML_MASQUERADE", ]
@@ -1100,7 +1190,8 @@ test_that("HTML at a sitemap URL yields UNSUPPORTED_HTML_MASQUERADE", {
 test_that("feed children each yield an index-child UNSUPPORTED_FEED", {
   children <- c("https://example.com/feed.xml", "https://example.com/atom")
   out <- validate_protocol(
-    empty_sitemap_rows(), subject_ref = base,
+    empty_sitemap_rows(),
+    subject_ref = base,
     source_meta = source_meta(feed_children = children)
   )
   uf <- out[out$code == "UNSUPPORTED_FEED", ]
@@ -1114,7 +1205,8 @@ test_that("feed children each yield an index-child UNSUPPORTED_FEED", {
 
 test_that("diagnostics are produced even with no rows", {
   out <- validate_protocol(
-    empty_sitemap_rows(), subject_ref = base,
+    empty_sitemap_rows(),
+    subject_ref = base,
     source_meta = source_meta(unsupported_root = "feed")
   )
   expect_identical(out$code, "UNSUPPORTED_ROOT")
@@ -1128,7 +1220,9 @@ test_that("no source_meta yields no classification diagnostics", {
 
 test_that("an all-default source_meta yields no diagnostics", {
   out <- validate_protocol(
-    empty_sitemap_rows(), subject_ref = base, source_meta = source_meta()
+    empty_sitemap_rows(),
+    subject_ref = base,
+    source_meta = source_meta()
   )
   expect_identical(nrow(out), 0L)
 })
@@ -1138,7 +1232,8 @@ test_that("diagnostics co-exist with protocol findings over real rows", {
     sitemap_rows(loc = "https://example.com/a", changefreq = "fortnightly"),
     subject_ref = base,
     source_meta = source_meta(
-      bom_encoding = "UTF-8", declared_encoding = "UTF-16"
+      bom_encoding = "UTF-8",
+      declared_encoding = "UTF-16"
     )
   )
   expect_true("PROTOCOL_CHANGEFREQ_INVALID" %in% out$code)
@@ -1150,7 +1245,8 @@ test_that("diagnostics co-exist with protocol findings over real rows", {
 
 test_that("BOM vs XML declaration is the specialised conflict (info)", {
   out <- validate_encoding(
-    source_meta(bom_encoding = "UTF-8", declared_encoding = "UTF-16"), base
+    source_meta(bom_encoding = "UTF-8", declared_encoding = "UTF-16"),
+    base
   )
   expect_identical(out$code, "ENCODING_BOM_DECLARATION_CONFLICT")
   expect_identical(out$severity, "info")
@@ -1160,7 +1256,8 @@ test_that("BOM vs XML declaration is the specialised conflict (info)", {
 
 test_that("an HTTP-charset disagreement is the general ENCODING_CONFLICT", {
   out <- validate_encoding(
-    source_meta(declared_encoding = "UTF-8", http_charset = "ISO-8859-1"), base
+    source_meta(declared_encoding = "UTF-8", http_charset = "ISO-8859-1"),
+    base
   )
   expect_identical(out$code, "ENCODING_CONFLICT")
   expect_identical(out$severity, "info")
@@ -1169,7 +1266,8 @@ test_that("an HTTP-charset disagreement is the general ENCODING_CONFLICT", {
 test_that("a three-way mismatch emits both encoding findings", {
   out <- validate_encoding(
     source_meta(
-      bom_encoding = "UTF-16", declared_encoding = "UTF-8",
+      bom_encoding = "UTF-16",
+      declared_encoding = "UTF-8",
       http_charset = "UTF-8"
     ),
     base
@@ -1183,7 +1281,8 @@ test_that("a three-way mismatch emits both encoding findings", {
 test_that("equivalent encoding spellings do not conflict", {
   out <- validate_encoding(
     source_meta(
-      bom_encoding = "UTF-8", declared_encoding = "utf8",
+      bom_encoding = "UTF-8",
+      declared_encoding = "utf8",
       http_charset = "utf-8"
     ),
     base
@@ -1205,11 +1304,15 @@ test_that("classification diagnostics are deterministic across calls", {
   meta <- source_meta(
     unsupported_root = "rss",
     feed_children = c("https://example.com/a", "https://example.com/b"),
-    bom_encoding = "UTF-8", declared_encoding = "UTF-16"
+    bom_encoding = "UTF-8",
+    declared_encoding = "UTF-16"
   )
   call <- function() {
-    validate_protocol(empty_sitemap_rows(), subject_ref = base,
-                      source_meta = meta)
+    validate_protocol(
+      empty_sitemap_rows(),
+      subject_ref = base,
+      source_meta = meta
+    )
   }
   expect_identical(call(), call())
 })

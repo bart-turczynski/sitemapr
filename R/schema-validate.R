@@ -31,13 +31,15 @@
 # columns this producer emits (a contract-shaped subset; `mode` and
 # `remediation_hint` are added by Layer F). Each `evidence` entry is the named
 # list `list(excerpt, line, column)` from the findings contract.
-schema_findings <- function(code = character(0),
-                            severity = character(0),
-                            subject_type = character(0),
-                            subject_ref = character(0),
-                            message = character(0),
-                            evidence = list(),
-                            is_strict_only = logical(0)) {
+schema_findings <- function(
+  code = character(0),
+  severity = character(0),
+  subject_type = character(0),
+  subject_ref = character(0),
+  message = character(0),
+  evidence = list(),
+  is_strict_only = logical(0)
+) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
@@ -58,9 +60,11 @@ empty_schema_findings <- function() {
 }
 
 # One evidence list, with the excerpt clamped to the contract's 500-char cap.
-schema_evidence <- function(excerpt = NA_character_,
-                            line = NA_integer_,
-                            column = NA_integer_) {
+schema_evidence <- function(
+  excerpt = NA_character_,
+  line = NA_integer_,
+  column = NA_integer_
+) {
   if (!is.na(excerpt)) {
     excerpt <- substr(excerpt, 1L, 500L)
   }
@@ -86,12 +90,17 @@ schema_document_namespaces <- function(doc) {
   if (length(declared) == 0L) {
     return(character())
   }
-  used <- vapply(declared, function(uri) {
-    node <- xml2::xml_find_first(
-      doc, sprintf("//*[namespace-uri()='%s']", uri)
-    )
-    !inherits(node, "xml_missing")
-  }, logical(1L))
+  used <- vapply(
+    declared,
+    function(uri) {
+      node <- xml2::xml_find_first(
+        doc,
+        sprintf("//*[namespace-uri()='%s']", uri)
+      )
+      !inherits(node, "xml_missing")
+    },
+    logical(1L)
+  )
   declared[used]
 }
 
@@ -122,7 +131,8 @@ schema_unknown_ns_findings <- function(namespaces, subject_ref) {
 # prefixes structural and datatype errors with `Element '{ns}local'`).
 schema_invalid_row <- function(err, subject_ref) {
   match <- regmatches(
-    err, regexec("^Element '\\{([^}]*)\\}([^']*)'", err)
+    err,
+    regexec("^Element '\\{([^}]*)\\}([^']*)'", err)
   )[[1]]
 
   if (length(match) == 3L) {
@@ -133,11 +143,13 @@ schema_invalid_row <- function(err, subject_ref) {
       severity = "error",
       subject_type = "field",
       subject_ref = schema_ref_fragment(
-        subject_ref, paste0("#field:", el_local)
+        subject_ref,
+        paste0("#field:", el_local)
       ),
       message = sprintf(
         "Element <%s> in the %s namespace scope failed XSD schema validation.",
-        el_local, schema_namespace_label(el_ns)
+        el_local,
+        schema_namespace_label(el_ns)
       ),
       evidence = list(
         schema_evidence(excerpt = sprintf("{%s}%s", el_ns, el_local))
@@ -203,10 +215,13 @@ schema_invalid_findings <- function(errors, subject_ref) {
 #' @return A schema-findings tibble (zero rows when the document is valid).
 #' @keywords internal
 #' @noRd
-validate_schema <- function(doc, subject_ref = NA_character_,
-                            schemas_dir = schema_dir(),
-                            cache = schema_profile_cache,
-                            dir = tempdir()) {
+validate_schema <- function(
+  doc,
+  subject_ref = NA_character_,
+  schemas_dir = schema_dir(),
+  cache = schema_profile_cache,
+  dir = tempdir()
+) {
   root_kind <- schema_root_kind(xml2::xml_name(xml2::xml_root(doc)))
   if (is.na(root_kind)) {
     # An unsupported root is rejected by the parse layer as a classed condition;
@@ -216,13 +231,17 @@ validate_schema <- function(doc, subject_ref = NA_character_,
 
   namespaces <- schema_document_namespaces(doc)
   profile <- schema_profile(
-    root_kind, namespaces,
-    schemas_dir = schemas_dir, cache = cache, dir = dir
+    root_kind,
+    namespaces,
+    schemas_dir = schemas_dir,
+    cache = cache,
+    dir = dir
   )
 
   if (identical(profile$kind, "unknown-namespace")) {
     return(schema_unknown_ns_findings(
-      profile$unknown_namespaces, subject_ref
+      profile$unknown_namespaces,
+      subject_ref
     ))
   }
 

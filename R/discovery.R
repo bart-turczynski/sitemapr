@@ -27,7 +27,8 @@
 #' @keywords internal
 #' @noRd
 discovery_limits <- function(
-    max_candidates = getOption("sitemapr.max_candidates", 50L)) {
+  max_candidates = getOption("sitemapr.max_candidates", 50L)
+) {
   list(max_candidates = as.integer(max_candidates))
 }
 
@@ -54,10 +55,14 @@ discovery_limits <- function(
 #'   parsed raises the underlying `create_source_records()` classed error.
 #' @keywords internal
 #' @noRd
-discovery_candidates <- function(root, catalog = discovery_catalog(),
-                                 limits = discovery_limits()) {
-  if (!is.character(root) || length(root) != 1L || is.na(root) ||
-        !nzchar(root)) {
+discovery_candidates <- function(
+  root,
+  catalog = discovery_catalog(),
+  limits = discovery_limits()
+) {
+  if (
+    !is.character(root) || length(root) != 1L || is.na(root) || !nzchar(root)
+  ) {
     rlang::abort(
       "`root` must be a single non-empty site-root URL.",
       class = "sitemapr_bad_input"
@@ -101,8 +106,11 @@ classify_candidate <- function(kind, source, rec) {
   }
 
   if (is.na(rec$error_class)) {
-    return(list(status = "accepted", reason = ok_reason,
-                http_status = as.integer(rec$status)))
+    return(list(
+      status = "accepted",
+      reason = ok_reason,
+      http_status = as.integer(rec$status)
+    ))
   }
 
   status <- as.integer(rec$status)
@@ -136,14 +144,22 @@ fetch_candidate <- function(candidate_url, kind, source, user_agent, limits) {
   )
 
   if (inherits(rec, "discovery_abort")) {
-    return(list(rec = NULL, status = "rejected", reason = rec$reason,
-                http_status = NA_integer_, final_url = NA_character_))
+    return(list(
+      rec = NULL,
+      status = "rejected",
+      reason = rec$reason,
+      http_status = NA_integer_,
+      final_url = NA_character_
+    ))
   }
 
   cls <- classify_candidate(kind, source, rec)
   list(
-    rec = rec, status = cls$status, reason = cls$reason,
-    http_status = cls$http_status, final_url = as.character(rec$final_url)
+    rec = rec,
+    status = cls$status,
+    reason = cls$reason,
+    http_status = cls$http_status,
+    final_url = as.character(rec$final_url)
   )
 }
 
@@ -175,16 +191,22 @@ fetch_candidate <- function(candidate_url, kind, source, user_agent, limits) {
 #'   The `records` attribute holds the parallel list of fetch records.
 #' @keywords internal
 #' @noRd
-discover_candidates <- function(root, catalog = discovery_catalog(),
-                                limits = discovery_limits(),
-                                user_agent = default_user_agent(),
-                                net_limits = fetch_limits()) {
+discover_candidates <- function(
+  root,
+  catalog = discovery_catalog(),
+  limits = discovery_limits(),
+  user_agent = default_user_agent(),
+  net_limits = fetch_limits()
+) {
   cand <- discovery_candidates(root, catalog = catalog, limits = limits)
 
   outcomes <- lapply(seq_len(nrow(cand)), function(i) {
     fetch_candidate(
-      cand$candidate_url[[i]], cand$kind[[i]], cand$source[[i]],
-      user_agent = user_agent, limits = net_limits
+      cand$candidate_url[[i]],
+      cand$kind[[i]],
+      cand$source[[i]],
+      user_agent = user_agent,
+      limits = net_limits
     )
   })
 

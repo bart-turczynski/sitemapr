@@ -155,7 +155,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       expect_false(is.null(context$error))
       expect_s3_class(context$error, "sitemapr_submitted_list_cap_error")
       expect_match(
-        conditionMessage(context$error), as.character(cap),
+        conditionMessage(context$error),
+        as.character(cap),
         fixed = TRUE
       )
     }

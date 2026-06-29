@@ -1,0 +1,12 @@
+[format]
+# Match lintr's default line_length_linter (80) so the formatter and the
+# verify-gate linter never fight over wrapping.
+line-width = 80
+indent-width = 2
+indent-style = "space"
+line-ending = "auto"
+
+# Mirror .lintr's exclusions: data-raw/ holds dev/reproducibility scripts
+# (schema build + parity oracle) held to functional correctness, not package
+# style. Keep air off them so the formatter and linter agree on package source.
+exclude = ["data-raw"]

@@ -29,7 +29,7 @@
 sitemap_xml_ns <- c(
   image = "http://www.google.com/schemas/sitemap-image/1.1",
   video = "http://www.google.com/schemas/sitemap-video/1.1",
-  news  = "http://www.google.com/schemas/sitemap-news/0.9",
+  news = "http://www.google.com/schemas/sitemap-news/0.9",
   xhtml = "http://www.w3.org/1999/xhtml"
 )
 
@@ -59,7 +59,8 @@ parse_lastmod <- function(x) {
   if (any(date_only)) {
     out[date_only] <- as.POSIXct(
       paste0(x[date_only], "T00:00:00+0000"),
-      format = "%Y-%m-%dT%H:%M:%S%z", tz = "UTC"
+      format = "%Y-%m-%dT%H:%M:%S%z",
+      tz = "UTC"
     )
   }
 
@@ -68,7 +69,9 @@ parse_lastmod <- function(x) {
     norm <- sub("[Zz]$", "+0000", x[dt])
     norm <- sub("([+-][0-9]{2}):([0-9]{2})$", "\\1\\2", norm)
     out[dt] <- as.POSIXct(
-      norm, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC"
+      norm,
+      format = "%Y-%m-%dT%H:%M:%OS%z",
+      tz = "UTC"
     )
   }
 
@@ -142,7 +145,9 @@ parse_urlset <- function(root, source_sitemap) {
     video = collect_extension(url_nodes, sitemap_xml_ns[["video"]], "video"),
     news = collect_extension(url_nodes, sitemap_xml_ns[["news"]], "news"),
     alternates = collect_extension(
-      url_nodes, sitemap_xml_ns[["xhtml"]], "link"
+      url_nodes,
+      sitemap_xml_ns[["xhtml"]],
+      "link"
     ),
     source_sitemap = source_sitemap
   )

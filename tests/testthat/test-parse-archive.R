@@ -36,10 +36,16 @@ write_tar_gz <- function(entries, path) {
   for (e in entries) {
     tf <- if (is.null(e$typeflag)) "0" else e$typeflag
     content <- e$content
-    if (is.null(content)) content <- raw(0L)
-    if (is.character(content)) content <- charToRaw(content)
+    if (is.null(content)) {
+      content <- raw(0L)
+    }
+    if (is.character(content)) {
+      content <- charToRaw(content)
+    }
     blocks <- c(
-      blocks, tar_header(e$name, length(content), tf), pad_block(content)
+      blocks,
+      tar_header(e$name, length(content), tf),
+      pad_block(content)
     )
   }
   blocks <- c(blocks, raw(1024L)) # two zero blocks: end-of-archive marker
@@ -53,7 +59,8 @@ urlset_xml <- function(...) {
   urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
   paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    urls, "</urlset>"
+    urls,
+    "</urlset>"
   )
 }
 
@@ -69,14 +76,18 @@ gz_bytes <- function(text) {
 
 test_that("two sitemap members both contribute rows, distinguished by source", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "a.xml", content = urlset_xml("https://a/1", "https://a/2")),
-    list(name = "b.xml", content = urlset_xml("https://b/1"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "a.xml", content = urlset_xml("https://a/1", "https://a/2")),
+      list(name = "b.xml", content = urlset_xml("https://b/1"))
+    ),
+    path
+  )
 
   res <- parse_sitemap_archive(path, source_ref = "arc")
   expect_setequal(
-    res$rows$loc, c("https://a/1", "https://a/2", "https://b/1")
+    res$rows$loc,
+    c("https://a/1", "https://a/2", "https://b/1")
   )
   expect_setequal(
     unique(res$rows$source_sitemap),
@@ -87,18 +98,24 @@ test_that("two sitemap members both contribute rows, distinguished by source", {
 
 test_that("a text sitemap member parses to rows", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "urls.txt", content = "https://a/\nhttps://b/\n")
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "urls.txt", content = "https://a/\nhttps://b/\n")
+    ),
+    path
+  )
   res <- parse_sitemap_archive(path)
   expect_identical(res$rows$loc, c("https://a/", "https://b/"))
 })
 
 test_that("an inner .gz member is decompressed and parsed", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "inner.xml.gz", content = gz_bytes(urlset_xml("https://g/1")))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "inner.xml.gz", content = gz_bytes(urlset_xml("https://g/1")))
+    ),
+    path
+  )
   res <- parse_sitemap_archive(path)
   expect_identical(res$rows$loc, "https://g/1")
 })
@@ -107,10 +124,13 @@ test_that("an inner .gz member is decompressed and parsed", {
 
 test_that("a non-sitemap file is skipped with an info problem", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "sitemap.xml", content = urlset_xml("https://a/1")),
-    list(name = "README.md", content = "# hello\nsome prose\n")
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "sitemap.xml", content = urlset_xml("https://a/1")),
+      list(name = "README.md", content = "# hello\nsome prose\n")
+    ),
+    path
+  )
   res <- parse_sitemap_archive(path, source_ref = "arc")
   expect_identical(res$rows$loc, "https://a/1")
   expect_identical(nrow(res$problems), 1L)
@@ -120,10 +140,13 @@ test_that("a non-sitemap file is skipped with an info problem", {
 
 test_that("a path-traversal member is rejected with a warning problem", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "ok.xml", content = urlset_xml("https://a/1")),
-    list(name = "../evil.xml", content = urlset_xml("https://evil/"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "ok.xml", content = urlset_xml("https://a/1")),
+      list(name = "../evil.xml", content = urlset_xml("https://evil/"))
+    ),
+    path
+  )
   res <- parse_sitemap_archive(path)
   expect_identical(res$rows$loc, "https://a/1") # evil URL never parsed
   expect_identical(res$problems$severity, "warning")
@@ -140,11 +163,14 @@ test_that("absolute and drive-letter member names are unsafe", {
 
 test_that("directory and special entries are skipped silently", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "d/", content = NULL, typeflag = "5"),
-    list(name = "link", content = NULL, typeflag = "2"), # symlink
-    list(name = "d/s.xml", content = urlset_xml("https://a/1"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "d/", content = NULL, typeflag = "5"),
+      list(name = "link", content = NULL, typeflag = "2"), # symlink
+      list(name = "d/s.xml", content = urlset_xml("https://a/1"))
+    ),
+    path
+  )
   res <- parse_sitemap_archive(path)
   expect_identical(res$rows$loc, "https://a/1")
   expect_identical(nrow(res$problems), 0L) # dirs/special: no problem rows
@@ -154,11 +180,14 @@ test_that("directory and special entries are skipped silently", {
 
 test_that("exceeding the file-count limit raises sitemapr_archive_limit", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "a.xml", content = urlset_xml("https://a/1")),
-    list(name = "b.xml", content = urlset_xml("https://b/1")),
-    list(name = "c.xml", content = urlset_xml("https://c/1"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "a.xml", content = urlset_xml("https://a/1")),
+      list(name = "b.xml", content = urlset_xml("https://b/1")),
+      list(name = "c.xml", content = urlset_xml("https://c/1"))
+    ),
+    path
+  )
   expect_error(
     parse_sitemap_archive(path, limits = archive_limits(max_file_count = 2L)),
     class = "sitemapr_archive_limit"
@@ -167,9 +196,12 @@ test_that("exceeding the file-count limit raises sitemapr_archive_limit", {
 
 test_that("exceeding the on-disk size limit raises sitemapr_archive_limit", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "a.xml", content = urlset_xml("https://a/1"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "a.xml", content = urlset_xml("https://a/1"))
+    ),
+    path
+  )
   expect_error(
     parse_sitemap_archive(path, limits = archive_limits(max_archive_bytes = 1)),
     class = "sitemapr_archive_limit"
@@ -178,9 +210,12 @@ test_that("exceeding the on-disk size limit raises sitemapr_archive_limit", {
 
 test_that("exceeding the decompressed limit raises sitemapr_archive_limit", {
   path <- withr::local_tempfile(fileext = ".tar.gz")
-  write_tar_gz(list(
-    list(name = "a.xml", content = urlset_xml("https://a/1"))
-  ), path)
+  write_tar_gz(
+    list(
+      list(name = "a.xml", content = urlset_xml("https://a/1"))
+    ),
+    path
+  )
   expect_error(
     parse_sitemap_archive(
       path,

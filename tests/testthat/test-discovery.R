@@ -26,8 +26,10 @@ test_that("candidates are tried in catalog order (generic before CMS)", {
 
 test_that("a duplicate URL (Shopify == generic /sitemap.xml) is collapsed", {
   cand <- discovery_candidates("https://example.com")
-  expect_identical(sum(cand$candidate_url == "https://example.com/sitemap.xml"),
-                   1L)
+  expect_identical(
+    sum(cand$candidate_url == "https://example.com/sitemap.xml"),
+    1L
+  )
   # The surviving row is the first (generic) occurrence, not the CMS one.
   keep <- cand[cand$candidate_url == "https://example.com/sitemap.xml", ]
   expect_identical(keep$kind, "generic")

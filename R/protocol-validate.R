@@ -73,13 +73,15 @@
 # the columns this producer emits (a contract-shaped subset; `mode` and
 # `remediation_hint` are added by Layer F). Each `evidence` entry is the named
 # list `list(excerpt, line, column)` from the findings contract.
-protocol_findings <- function(code = character(0),
-                              severity = character(0),
-                              subject_type = character(0),
-                              subject_ref = character(0),
-                              message = character(0),
-                              evidence = list(),
-                              is_strict_only = logical(0)) {
+protocol_findings <- function(
+  code = character(0),
+  severity = character(0),
+  subject_type = character(0),
+  subject_ref = character(0),
+  message = character(0),
+  evidence = list(),
+  is_strict_only = logical(0)
+) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
@@ -99,9 +101,11 @@ empty_protocol_findings <- function() {
 }
 
 # One evidence list, with the excerpt clamped to the contract's 500-char cap.
-protocol_evidence <- function(excerpt = NA_character_,
-                              line = NA_integer_,
-                              column = NA_integer_) {
+protocol_evidence <- function(
+  excerpt = NA_character_,
+  line = NA_integer_,
+  column = NA_integer_
+) {
   if (!is.na(excerpt)) {
     excerpt <- substr(excerpt, 1L, 500L)
   }
@@ -168,8 +172,16 @@ loc_directory_prefix <- function(path) {
 }
 
 # Build one URL-rule finding row for entry `i`.
-protocol_url_finding <- function(code, severity, subject_type, base, i, loc,
-                                 message, is_strict_only = FALSE) {
+protocol_url_finding <- function(
+  code,
+  severity,
+  subject_type,
+  base,
+  i,
+  loc,
+  message,
+  is_strict_only = FALSE
+) {
   protocol_findings(
     code = code,
     severity = severity,
@@ -183,9 +195,14 @@ protocol_url_finding <- function(code, severity, subject_type, base, i, loc,
 
 # One document-level finding row (`subject_type = "document"`, the unfragmented
 # `sitemap://…` base). Used by the count/size and corpus-level lastmod rules.
-protocol_document_finding <- function(code, severity, base, message,
-                                      excerpt = NA_character_,
-                                      is_strict_only = FALSE) {
+protocol_document_finding <- function(
+  code,
+  severity,
+  base,
+  message,
+  excerpt = NA_character_,
+  is_strict_only = FALSE
+) {
   protocol_findings(
     code = code,
     severity = severity,
@@ -200,26 +217,36 @@ protocol_document_finding <- function(code, severity, base, message,
 # The `<changefreq>` enumeration (sitemaps.org Protocol 0.9). Case-sensitive,
 # matching the XSD enumeration; a wrong-case value (`Daily`) is invalid.
 protocol_changefreq_values <- c(
-  "always", "hourly", "daily", "weekly", "monthly", "yearly", "never"
+  "always",
+  "hourly",
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+  "never"
 )
 
 # Layer D limit thresholds. Each resolves from its argument, then the matching
 # `getOption("sitemapr.*")`, then the sitemaps.org protocol default. All limits
 # are configurable; none is hardcoded (sitemap-spec.md §2, ADR-003 §3).
 protocol_limits <- function(
-    max_url_count = getOption("sitemapr.max_url_count", 50000L),
-    max_uncompressed_bytes = getOption(
-      "sitemapr.max_uncompressed_bytes", 52428800L
-    ),
-    lastmod_identical_ratio = getOption(
-      "sitemapr.lastmod_identical_ratio", 1
-    ),
-    lastmod_generated_tolerance = getOption(
-      "sitemapr.lastmod_generated_tolerance", 86400
-    ),
-    max_images_per_url = getOption("sitemapr.max_images_per_url", 1000L),
-    max_news_per_file = getOption("sitemapr.max_news_per_file", 1000L),
-    max_video_tags = getOption("sitemapr.max_video_tags", 32L)) {
+  max_url_count = getOption("sitemapr.max_url_count", 50000L),
+  max_uncompressed_bytes = getOption(
+    "sitemapr.max_uncompressed_bytes",
+    52428800L
+  ),
+  lastmod_identical_ratio = getOption(
+    "sitemapr.lastmod_identical_ratio",
+    1
+  ),
+  lastmod_generated_tolerance = getOption(
+    "sitemapr.lastmod_generated_tolerance",
+    86400
+  ),
+  max_images_per_url = getOption("sitemapr.max_images_per_url", 1000L),
+  max_news_per_file = getOption("sitemapr.max_news_per_file", 1000L),
+  max_video_tags = getOption("sitemapr.max_video_tags", 32L)
+) {
   list(
     max_url_count = as.integer(max_url_count),
     max_uncompressed_bytes = as.numeric(max_uncompressed_bytes),
@@ -263,9 +290,13 @@ validate_url_count <- function(rows, base, limit) {
     return(empty_protocol_findings())
   }
   protocol_document_finding(
-    "PROTOCOL_URL_COUNT_EXCEEDED", "error", base,
+    "PROTOCOL_URL_COUNT_EXCEEDED",
+    "error",
+    base,
     sprintf(
-      "Sitemap has %d URL entries; the protocol limit is %d.", n, limit
+      "Sitemap has %d URL entries; the protocol limit is %d.",
+      n,
+      limit
     )
   )
 }
@@ -278,10 +309,13 @@ validate_doc_size <- function(byte_size, base, limit) {
     return(empty_protocol_findings())
   }
   protocol_document_finding(
-    "PROTOCOL_SIZE_EXCEEDED", "error", base,
+    "PROTOCOL_SIZE_EXCEEDED",
+    "error",
+    base,
     sprintf(
       "Sitemap is %.0f bytes uncompressed; the protocol limit is %.0f.",
-      byte_size, limit
+      byte_size,
+      limit
     )
   )
 }
@@ -297,7 +331,11 @@ validate_field_values <- function(rows, base) {
   bad_pri <- which(!is.na(pri) & (pri < 0 | pri > 1))
   for (j in bad_pri) {
     out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_PRIORITY_OUT_OF_RANGE", "error", "entry", base, j,
+      "PROTOCOL_PRIORITY_OUT_OF_RANGE",
+      "error",
+      "entry",
+      base,
+      j,
       trimws(as.character(rows$priority[j])),
       sprintf(
         "<priority> %s is outside the permitted range [0.0, 1.0].",
@@ -310,10 +348,16 @@ validate_field_values <- function(rows, base) {
   bad_cf <- which(!is.na(cf) & !(cf %in% protocol_changefreq_values))
   for (j in bad_cf) {
     out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_CHANGEFREQ_INVALID", "error", "entry", base, j, cf[j],
+      "PROTOCOL_CHANGEFREQ_INVALID",
+      "error",
+      "entry",
+      base,
+      j,
+      cf[j],
       sprintf(
         "<changefreq> '%s' is not one of: %s.",
-        cf[j], paste(protocol_changefreq_values, collapse = ", ")
+        cf[j],
+        paste(protocol_changefreq_values, collapse = ", ")
       )
     )
   }
@@ -322,7 +366,11 @@ validate_field_values <- function(rows, base) {
   cls <- classify_lastmod(lm)
   for (j in which(cls == "invalid")) {
     out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_LASTMOD_INVALID", "error", "entry", base, j,
+      "PROTOCOL_LASTMOD_INVALID",
+      "error",
+      "entry",
+      base,
+      j,
       as.character(lm[j]),
       sprintf(
         "<lastmod> '%s' is not a valid W3C Date-Time value.",
@@ -332,7 +380,11 @@ validate_field_values <- function(rows, base) {
   }
   for (j in which(cls == "date-only")) {
     out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_LASTMOD_DATE_ONLY", "info", "entry", base, j,
+      "PROTOCOL_LASTMOD_DATE_ONLY",
+      "info",
+      "entry",
+      base,
+      j,
       as.character(lm[j]),
       sprintf(
         "<lastmod> '%s' is date-only; including a time is recommended.",
@@ -366,13 +418,16 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
 
   if (modal_ratio >= limits$lastmod_identical_ratio) {
     out[[length(out) + 1L]] <- protocol_document_finding(
-      "PROTOCOL_LASTMOD_ALL_IDENTICAL", "warning", base,
+      "PROTOCOL_LASTMOD_ALL_IDENTICAL",
+      "warning",
+      base,
       sprintf(
         paste0(
           "%d of %d dated entries share one <lastmod> value; engines may ",
           "distrust uniformly identical dates."
         ),
-        max(counts), length(dated)
+        max(counts),
+        length(dated)
       )
     )
   }
@@ -382,13 +437,17 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
       limits$lastmod_generated_tolerance
     if (mean(near) >= limits$lastmod_identical_ratio) {
       out[[length(out) + 1L]] <- protocol_document_finding(
-        "PROTOCOL_LASTMOD_LOOKS_GENERATED", "info", base,
+        "PROTOCOL_LASTMOD_LOOKS_GENERATED",
+        "info",
+        base,
         sprintf(
           paste0(
             "%d of %d dated entries fall within %.0fs of the sitemap's ",
             "fetch time; <lastmod> looks auto-generated, not content-derived."
           ),
-          sum(near), length(dated), limits$lastmod_generated_tolerance
+          sum(near),
+          length(dated),
+          limits$lastmod_generated_tolerance
         )
       )
     }
@@ -448,14 +507,22 @@ ext_child_attr <- function(el, name, attrname) {
 
 # One extension field/count finding scoped to a member of an entry (ref
 # `…#entry:i:kind:m`, e.g. `…#entry:3:video:1`).
-protocol_ext_finding <- function(code, base, i, kind, m, message,
-                                 excerpt = NA_character_) {
+protocol_ext_finding <- function(
+  code,
+  base,
+  i,
+  kind,
+  m,
+  message,
+  excerpt = NA_character_
+) {
   protocol_findings(
     code = code,
     severity = "error",
     subject_type = "entry",
     subject_ref = protocol_ref_fragment(
-      base, sprintf("#entry:%d:%s:%d", i, kind, m)
+      base,
+      sprintf("#entry:%d:%s:%d", i, kind, m)
     ),
     message = message,
     evidence = list(protocol_evidence(excerpt = excerpt)),
@@ -479,17 +546,25 @@ validate_news_element <- function(n) {
   if (length(pub_idx) > 0L) {
     lang <- ext_child_text(n[[pub_idx[1]]], "language")
     if (!is.na(lang) && !news_language_ok(lang)) {
-      msgs <- c(msgs, sprintf(
-        "<news:language> '%s' is not a valid ISO 639 language code.", lang
-      ))
+      msgs <- c(
+        msgs,
+        sprintf(
+          "<news:language> '%s' is not a valid ISO 639 language code.",
+          lang
+        )
+      )
     }
   }
 
   pdate <- ext_child_text(n, "publication_date")
   if (!is.na(pdate) && is.na(parse_lastmod(pdate))) {
-    msgs <- c(msgs, sprintf(
-      "<news:publication_date> '%s' is not a valid W3C date-time value.", pdate
-    ))
+    msgs <- c(
+      msgs,
+      sprintf(
+        "<news:publication_date> '%s' is not a valid W3C date-time value.",
+        pdate
+      )
+    )
   }
 
   msgs
@@ -507,10 +582,15 @@ validate_video_element <- function(v, max_tags) {
     d <- suppressWarnings(as.numeric(dur))
     rng <- protocol_video_duration_range
     if (is.na(d) || d != round(d) || d < rng[1] || d > rng[2]) {
-      msgs <- c(msgs, sprintf(
-        "<video:duration> '%s' must be an integer between %d and %d seconds.",
-        dur, rng[1], rng[2]
-      ))
+      msgs <- c(
+        msgs,
+        sprintf(
+          "<video:duration> '%s' must be an integer between %d and %d seconds.",
+          dur,
+          rng[1],
+          rng[2]
+        )
+      )
     }
   }
 
@@ -519,34 +599,53 @@ validate_video_element <- function(v, max_tags) {
     r <- suppressWarnings(as.numeric(rat))
     rng <- protocol_video_rating_range
     if (is.na(r) || r < rng[1] || r > rng[2]) {
-      msgs <- c(msgs, sprintf(
-        "<video:rating> '%s' must be a number between %.1f and %.1f.",
-        rat, rng[1], rng[2]
-      ))
+      msgs <- c(
+        msgs,
+        sprintf(
+          "<video:rating> '%s' must be a number between %.1f and %.1f.",
+          rat,
+          rng[1],
+          rng[2]
+        )
+      )
     }
   }
 
   ntag <- ext_child_count(v, "tag")
   if (ntag > max_tags) {
-    msgs <- c(msgs, sprintf(
-      "<video:tag> count %d exceeds the limit of %d per video.", ntag, max_tags
-    ))
+    msgs <- c(
+      msgs,
+      sprintf(
+        "<video:tag> count %d exceeds the limit of %d per video.",
+        ntag,
+        max_tags
+      )
+    )
   }
 
   desc <- ext_child_text(v, "description")
   if (!is.na(desc) && nchar(desc) > protocol_video_description_max) {
-    msgs <- c(msgs, sprintf(
-      "<video:description> is %d characters; the limit is %d.",
-      nchar(desc), protocol_video_description_max
-    ))
+    msgs <- c(
+      msgs,
+      sprintf(
+        "<video:description> is %d characters; the limit is %d.",
+        nchar(desc),
+        protocol_video_description_max
+      )
+    )
   }
 
   for (enum in c("family_friendly", "requires_subscription", "live")) {
     val <- ext_child_text(v, enum)
     if (!is.na(val) && !val %in% protocol_video_bool_values) {
-      msgs <- c(msgs, sprintf(
-        "<video:%s> '%s' must be 'yes' or 'no'.", enum, val
-      ))
+      msgs <- c(
+        msgs,
+        sprintf(
+          "<video:%s> '%s' must be 'yes' or 'no'.",
+          enum,
+          val
+        )
+      )
     }
   }
 
@@ -554,10 +653,13 @@ validate_video_element <- function(v, max_tags) {
     if (ext_has_child(v, rel)) {
       a <- ext_child_attr(v, rel, "relationship")
       if (is.null(a) || !as.character(a) %in% protocol_video_rel_values) {
-        msgs <- c(msgs, sprintf(
-          "<video:%s> requires a relationship=\"allow\" or \"deny\" attribute.",
-          rel
-        ))
+        msgs <- c(
+          msgs,
+          sprintf(
+            '<video:%s> requires a relationship="allow" or "deny" attribute.',
+            rel
+          )
+        )
       }
     }
   }
@@ -580,11 +682,16 @@ validate_extensions <- function(rows, base, limits) {
     imgs <- images[[i]]
     if (!is.null(imgs) && length(imgs) > limits$max_images_per_url) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_IMAGE_COUNT_EXCEEDED", "error", "entry", base, i,
+        "PROTOCOL_IMAGE_COUNT_EXCEEDED",
+        "error",
+        "entry",
+        base,
+        i,
         NA_character_,
         sprintf(
           "<url> has %d <image:image> entries; the limit is %d per URL.",
-          length(imgs), limits$max_images_per_url
+          length(imgs),
+          limits$max_images_per_url
         )
       )
     }
@@ -594,7 +701,12 @@ validate_extensions <- function(rows, base, limits) {
       for (m in seq_along(vids)) {
         for (msg in validate_video_element(vids[[m]], limits$max_video_tags)) {
           out[[length(out) + 1L]] <- protocol_ext_finding(
-            "PROTOCOL_VIDEO_FIELD_INVALID", base, i, "video", m, msg
+            "PROTOCOL_VIDEO_FIELD_INVALID",
+            base,
+            i,
+            "video",
+            m,
+            msg
           )
         }
       }
@@ -606,7 +718,12 @@ validate_extensions <- function(rows, base, limits) {
       for (m in seq_along(nws)) {
         for (msg in validate_news_element(nws[[m]])) {
           out[[length(out) + 1L]] <- protocol_ext_finding(
-            "PROTOCOL_NEWS_FIELD_INVALID", base, i, "news", m, msg
+            "PROTOCOL_NEWS_FIELD_INVALID",
+            base,
+            i,
+            "news",
+            m,
+            msg
           )
         }
       }
@@ -615,10 +732,13 @@ validate_extensions <- function(rows, base, limits) {
 
   if (total_news > limits$max_news_per_file) {
     out[[length(out) + 1L]] <- protocol_document_finding(
-      "PROTOCOL_NEWS_COUNT_EXCEEDED", "error", base,
+      "PROTOCOL_NEWS_COUNT_EXCEEDED",
+      "error",
+      base,
       sprintf(
         "Sitemap has %d <news:news> entries; the limit is %d per file.",
-        total_news, limits$max_news_per_file
+        total_news,
+        limits$max_news_per_file
       )
     )
   }
@@ -693,11 +813,13 @@ hreflang_roles <- function(parts) {
 hreflang_case_ok <- function(parts, roles) {
   for (i in seq_along(parts)) {
     p <- parts[i]
-    ok <- switch(roles[i],
+    ok <- switch(
+      roles[i],
       lang = identical(p, tolower(p)),
       region = identical(p, toupper(p)),
       script = identical(
-        p, paste0(toupper(substr(p, 1L, 1L)), tolower(substr(p, 2L, nchar(p))))
+        p,
+        paste0(toupper(substr(p, 1L, 1L)), tolower(substr(p, 2L, nchar(p))))
       )
     )
     if (!ok) {
@@ -749,14 +871,23 @@ classify_hreflang_token <- function(raw) {
 # One per-`<xhtml:link>` hreflang finding (`subject_type = "entry"`, ref
 # `…#entry:i:link:m`). `i` is the 1-based row/entry index, `m` the 1-based link
 # index within that entry.
-protocol_hreflang_finding <- function(code, severity, base, i, m, excerpt,
-                                      message, is_strict_only = FALSE) {
+protocol_hreflang_finding <- function(
+  code,
+  severity,
+  base,
+  i,
+  m,
+  excerpt,
+  message,
+  is_strict_only = FALSE
+) {
   protocol_findings(
     code = code,
     severity = severity,
     subject_type = "entry",
     subject_ref = protocol_ref_fragment(
-      base, sprintf("#entry:%d:link:%d", i, m)
+      base,
+      sprintf("#entry:%d:link:%d", i, m)
     ),
     message = message,
     evidence = list(protocol_evidence(excerpt = excerpt)),
@@ -838,7 +969,11 @@ validate_hreflang <- function(rows, base) {
 
       if (rel_bad || hreflang_missing || href_missing) {
         out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_LINK_ATTR_INVALID", "error", base, i, m,
+          "HREFLANG_LINK_ATTR_INVALID",
+          "error",
+          base,
+          i,
+          m,
           if (hreflang_missing) NA_character_ else as.character(hl),
           hreflang_attr_message(rel, hreflang_missing, href_missing)
         )
@@ -848,9 +983,12 @@ validate_hreflang <- function(rows, base) {
         any_hreflang <- TRUE
         raw <- as.character(hl)
         code <- classify_hreflang_token(raw)
-        if (identical(
-          tolower(gsub("_", "-", trimws(raw), fixed = TRUE)), "x-default"
-        )) {
+        if (
+          identical(
+            tolower(gsub("_", "-", trimws(raw), fixed = TRUE)),
+            "x-default"
+          )
+        ) {
           is_xdefault[m] <- TRUE
           xdefault_clean[m] <- identical(code, "valid-xdefault")
         } else {
@@ -858,7 +996,12 @@ validate_hreflang <- function(rows, base) {
         }
         if (!code %in% c("valid", "valid-xdefault")) {
           out[[length(out) + 1L]] <- protocol_hreflang_finding(
-            code, hreflang_token_severity(code), base, i, m, raw,
+            code,
+            hreflang_token_severity(code),
+            base,
+            i,
+            m,
+            raw,
             hreflang_token_message(code, raw)
           )
         }
@@ -866,9 +1009,15 @@ validate_hreflang <- function(rows, base) {
 
       if (!href_missing && loc_absoluteness(as.character(hf)) == "relative") {
         out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_HREF_RELATIVE", "warning", base, i, m, as.character(hf),
+          "HREFLANG_HREF_RELATIVE",
+          "warning",
+          base,
+          i,
+          m,
+          as.character(hf),
           sprintf(
-            "hreflang href '%s' is relative; an absolute URL is required.", hf
+            "hreflang href '%s' is relative; an absolute URL is required.",
+            hf
           ),
           is_strict_only = TRUE
         )
@@ -884,10 +1033,16 @@ validate_hreflang <- function(rows, base) {
         assign(key, m, envir = seen)
       } else {
         out[[length(out) + 1L]] <- protocol_hreflang_finding(
-          "HREFLANG_DUPLICATE", "warning", base, i, m, key,
+          "HREFLANG_DUPLICATE",
+          "warning",
+          base,
+          i,
+          m,
+          key,
           sprintf(
             "hreflang '%s' duplicates link %d in this <url>.",
-            key, get(key, envir = seen)
+            key,
+            get(key, envir = seen)
           )
         )
       }
@@ -898,7 +1053,12 @@ validate_hreflang <- function(rows, base) {
     xclean <- which(xdefault_clean)
     for (m in xclean[-1]) {
       out[[length(out) + 1L]] <- protocol_hreflang_finding(
-        "HREFLANG_XDEFAULT_INVALID", "error", base, i, m, "x-default",
+        "HREFLANG_XDEFAULT_INVALID",
+        "error",
+        base,
+        i,
+        m,
+        "x-default",
         "x-default appears more than once in this <url>; only one is permitted."
       )
     }
@@ -908,7 +1068,10 @@ validate_hreflang <- function(rows, base) {
     # not treated as missing).
     if (any_hreflang && !any(is_xdefault)) {
       out[[length(out) + 1L]] <- protocol_hreflang_set_finding(
-        "HREFLANG_XDEFAULT_MISSING", "info", base, i,
+        "HREFLANG_XDEFAULT_MISSING",
+        "info",
+        base,
+        i,
         paste0(
           "No x-default hreflang annotation; one is recommended when ",
           "alternate-language links are present."
@@ -925,7 +1088,8 @@ validate_hreflang <- function(rows, base) {
 
 # The human-readable message for one per-token classifier code.
 hreflang_token_message <- function(code, raw) {
-  switch(code,
+  switch(
+    code,
     HREFLANG_FORMAT_INVALID = sprintf(
       paste0(
         "hreflang '%s' is not an accepted language token (lang, lang-REGION, ",
@@ -973,9 +1137,15 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
   bad <- idx[kind != "http(s)"]
   for (j in bad) {
     out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_NOT_ABSOLUTE", "error", "entry", base, j, loc[j],
+      "PROTOCOL_URL_NOT_ABSOLUTE",
+      "error",
+      "entry",
+      base,
+      j,
+      loc[j],
       sprintf(
-        "<loc> '%s' is not an absolute http/https URL.", loc[j]
+        "<loc> '%s' is not an absolute http/https URL.",
+        loc[j]
       )
     )
   }
@@ -1004,7 +1174,12 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
     if (is.na(host) || !nzchar(host)) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_NO_HOST", "error", "entry", base, j, l,
+        "PROTOCOL_URL_NO_HOST",
+        "error",
+        "entry",
+        base,
+        j,
+        l,
         sprintf("<loc> '%s' has no host component.", l)
       )
       next
@@ -1012,25 +1187,42 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
     if (nchar(l) >= 2048L) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_TOO_LONG", "warning", "entry", base, j, l,
+        "PROTOCOL_URL_TOO_LONG",
+        "warning",
+        "entry",
+        base,
+        j,
+        l,
         sprintf(
-          "<loc> is %d characters; sitemap URLs must be under 2048.", nchar(l)
+          "<loc> is %d characters; sitemap URLs must be under 2048.",
+          nchar(l)
         )
       )
     }
 
     if (has_invalid_escape(l)) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_INVALID_ESCAPE", "error", "entry", base, j, l,
+        "PROTOCOL_URL_INVALID_ESCAPE",
+        "error",
+        "entry",
+        base,
+        j,
+        l,
         sprintf("<loc> '%s' contains an invalid percent-escape.", l)
       )
     }
 
     if (grepl("#", l, fixed = TRUE)) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_FRAGMENT", "info", "entry", base, j, l,
+        "PROTOCOL_URL_FRAGMENT",
+        "info",
+        "entry",
+        base,
+        j,
+        l,
         sprintf(
-          "<loc> '%s' contains a fragment, which crawlers ignore.", l
+          "<loc> '%s' contains a fragment, which crawlers ignore.",
+          l
         )
       )
     }
@@ -1038,24 +1230,37 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
     user <- as.character(parsed$user[k])
     if (!is.na(user) && nzchar(user)) {
       out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_USERINFO", "info", "entry", base, j, l,
+        "PROTOCOL_URL_USERINFO",
+        "info",
+        "entry",
+        base,
+        j,
+        l,
         sprintf("<loc> '%s' contains userinfo, which crawlers ignore.", l)
       )
     }
 
     if (!is.na(authority_self)) {
-      in_scope <- identical(loc_authority(parsed[k, , drop = FALSE]),
-                            authority_self) &&
+      in_scope <- identical(
+        loc_authority(parsed[k, , drop = FALSE]),
+        authority_self
+      ) &&
         startsWith(as.character(parsed$path[k]), dir_self)
       if (!in_scope) {
         out[[length(out) + 1L]] <- protocol_url_finding(
-          "PROTOCOL_URL_OUT_OF_SCOPE", "warning", "entry", base, j, l,
+          "PROTOCOL_URL_OUT_OF_SCOPE",
+          "warning",
+          "entry",
+          base,
+          j,
+          l,
           sprintf(
             paste0(
               "<loc> '%s' is outside the sitemap's scope (same host and ",
               "same-or-lower path as %s)."
             ),
-            l, sitemap_url
+            l,
+            sitemap_url
           )
         )
       }
@@ -1078,9 +1283,16 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
         j <- absolute[k]
         first_entry <- get(key, envir = first_seen)
         out[[length(out) + 1L]] <- protocol_url_finding(
-          "PROTOCOL_DUPLICATE_LOC", "warning", "entry", base, j, loc[j],
+          "PROTOCOL_DUPLICATE_LOC",
+          "warning",
+          "entry",
+          base,
+          j,
+          loc[j],
           sprintf(
-            "<loc> duplicates entry %d (identity key '%s').", first_entry, key
+            "<loc> duplicates entry %d (identity key '%s').",
+            first_entry,
+            key
           )
         )
       }
@@ -1107,8 +1319,15 @@ protocol_text_evidence <- function(excerpt, line) {
 
 # One text-sitemap finding row, scoped to a 1-based line via the `#line:<n>`
 # subject_ref fragment (findings-contract.md). A text line is an `entry`.
-protocol_text_finding <- function(code, severity, base, line, excerpt, message,
-                                  is_strict_only = FALSE) {
+protocol_text_finding <- function(
+  code,
+  severity,
+  base,
+  line,
+  excerpt,
+  message,
+  is_strict_only = FALSE
+) {
   protocol_findings(
     code = code,
     severity = severity,
@@ -1155,7 +1374,11 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 
   for (i in which(blank)) {
     out[[length(out) + 1L]] <- protocol_text_finding(
-      "PROTOCOL_TEXT_BLANK_LINE", "info", subject_ref, i, NA_character_,
+      "PROTOCOL_TEXT_BLANK_LINE",
+      "info",
+      subject_ref,
+      i,
+      NA_character_,
       sprintf(
         "Line %d is blank; blank lines are skipped (reported only in strict).",
         i
@@ -1180,7 +1403,11 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
   for (k in which(kind != "http(s)")) {
     i <- url_idx[k]
     out[[length(out) + 1L]] <- protocol_text_finding(
-      "PROTOCOL_URL_NOT_ABSOLUTE", "error", subject_ref, i, vals[k],
+      "PROTOCOL_URL_NOT_ABSOLUTE",
+      "error",
+      subject_ref,
+      i,
+      vals[k],
       sprintf("Line %d: '%s' is not an absolute http/https URL.", i, vals[k])
     )
   }
@@ -1194,17 +1421,26 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
       host <- as.character(parsed$host[m])
       if (is.na(host) || !nzchar(host)) {
         out[[length(out) + 1L]] <- protocol_text_finding(
-          "PROTOCOL_URL_NO_HOST", "error", subject_ref, i, l,
+          "PROTOCOL_URL_NO_HOST",
+          "error",
+          subject_ref,
+          i,
+          l,
           sprintf("Line %d: '%s' has no host component.", i, l)
         )
         next
       }
       if (nchar(l) >= 2048L) {
         out[[length(out) + 1L]] <- protocol_text_finding(
-          "PROTOCOL_TEXT_URL_TOO_LONG", "warning", subject_ref, i, l,
+          "PROTOCOL_TEXT_URL_TOO_LONG",
+          "warning",
+          subject_ref,
+          i,
+          l,
           sprintf(
             "Line %d: URL is %d characters; sitemap URLs must be under 2048.",
-            i, nchar(l)
+            i,
+            nchar(l)
           )
         )
       }
@@ -1256,27 +1492,37 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #'   source diagnostics carry `layer = "classification"`.
 #' @keywords internal
 #' @noRd
-validate_protocol <- function(rows, sitemap_url = NA_character_,
-                              subject_ref = sitemap_subject_ref(sitemap_url),
-                              byte_size = NA_real_,
-                              fetched_at = NA,
-                              source_meta = NULL,
-                              limits = protocol_limits()) {
+validate_protocol <- function(
+  rows,
+  sitemap_url = NA_character_,
+  subject_ref = sitemap_subject_ref(sitemap_url),
+  byte_size = NA_real_,
+  fetched_at = NA,
+  source_meta = NULL,
+  limits = protocol_limits()
+) {
   parts <- list(
     validate_classification(source_meta, subject_ref),
     validate_encoding(source_meta, subject_ref)
   )
 
   if (!is.null(rows) && nrow(rows) > 0L) {
-    parts <- c(parts, list(
-      validate_loc_urls(rows, sitemap_url, subject_ref),
-      validate_url_count(rows, subject_ref, limits$max_url_count),
-      validate_doc_size(byte_size, subject_ref, limits$max_uncompressed_bytes),
-      validate_field_values(rows, subject_ref),
-      validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
-      validate_hreflang(rows, subject_ref),
-      validate_extensions(rows, subject_ref, limits)
-    ))
+    parts <- c(
+      parts,
+      list(
+        validate_loc_urls(rows, sitemap_url, subject_ref),
+        validate_url_count(rows, subject_ref, limits$max_url_count),
+        validate_doc_size(
+          byte_size,
+          subject_ref,
+          limits$max_uncompressed_bytes
+        ),
+        validate_field_values(rows, subject_ref),
+        validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
+        validate_hreflang(rows, subject_ref),
+        validate_extensions(rows, subject_ref, limits)
+      )
+    )
   }
 
   parts <- parts[vapply(parts, nrow, integer(1)) > 0L]

@@ -21,9 +21,11 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   # A 200 response carrying the given raw body + content type.
   default_body <- charToRaw("<?xml version=\"1.0\"?><urlset/>")
-  fetch_mock_ok <- function(url = "https://example.com/sitemap.xml",
-                            body = default_body,
-                            content_type = "application/xml; charset=UTF-8") {
+  fetch_mock_ok <- function(
+    url = "https://example.com/sitemap.xml",
+    body = default_body,
+    content_type = "application/xml; charset=UTF-8"
+  ) {
     httr2::response(
       status_code = 200,
       url = url,
@@ -155,7 +157,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "a fixture file named {string} that contains valid XML",
     function(name, context) {
       context$bytes <- readBin(
-        test_path("fixtures", name), "raw", n = 1e6
+        test_path("fixtures", name),
+        "raw",
+        n = 1e6
       )
     }
   )
@@ -164,7 +168,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "a fixture file named {string} that is gzip-compressed XML",
     function(name, context) {
       context$bytes <- readBin(
-        test_path("fixtures", name), "raw", n = 1e6
+        test_path("fixtures", name),
+        "raw",
+        n = 1e6
       )
     }
   )
@@ -418,9 +424,21 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(context) {
       expect_identical(
         names(context$result),
-        c("requested_url", "final_url", "status", "redirect_chain",
-          "content_type", "charset", "bytes", "timing", "error_class",
-          "format", "root", "namespaces", "profile_id")
+        c(
+          "requested_url",
+          "final_url",
+          "status",
+          "redirect_chain",
+          "content_type",
+          "charset",
+          "bytes",
+          "timing",
+          "error_class",
+          "format",
+          "root",
+          "namespaces",
+          "profile_id"
+        )
       )
     }
   )
@@ -450,7 +468,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   then("the failed child appears in the problems attribute", function(context) {
     problems <- context$problems
-    expect_true(any(grepl(context$failed_child, problems$subject_ref,
-                          fixed = TRUE)))
+    expect_true(any(grepl(
+      context$failed_child,
+      problems$subject_ref,
+      fixed = TRUE
+    )))
   })
 }

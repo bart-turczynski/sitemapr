@@ -67,7 +67,8 @@ test_that("cache key is (version, root_kind, sorted namespace set)", {
   key <- schema_cache_key("urlset", c(image_ns, core_ns))
   expect_identical(
     key,
-    paste(c(schema_catalog_version, "urlset", sort(c(core_ns, image_ns))),
+    paste(
+      c(schema_catalog_version, "urlset", sort(c(core_ns, image_ns))),
       collapse = "|"
     )
   )
@@ -111,7 +112,8 @@ test_that("a bare doc with no namespaces still resolves core-only", {
 
 test_that("mixed namespaces without a pre-composed file need runtime gen", {
   res <- schema_resolve_profile(
-    "urlset", c(core_ns, image_ns, news_ns),
+    "urlset",
+    c(core_ns, image_ns, news_ns),
     schemas_dir = "/no-such-dir"
   )
   expect_identical(res$kind, "runtime")
@@ -130,7 +132,9 @@ test_that("mixed namespaces without a pre-composed file need runtime gen", {
 test_that("an unrecognised namespace yields an unknown-namespace decision", {
   weird <- "https://example.com/ns/custom"
   res <- schema_resolve_profile(
-    "urlset", c(core_ns, image_ns, weird), schemas_dir = "/x"
+    "urlset",
+    c(core_ns, image_ns, weird),
+    schemas_dir = "/x"
   )
   expect_identical(res$kind, "unknown-namespace")
   expect_identical(res$unknown_namespaces, weird)
@@ -140,10 +144,13 @@ test_that("an unrecognised namespace yields an unknown-namespace decision", {
 
 test_that("resolution echoes the sorted namespace set and a cache key", {
   res <- schema_resolve_profile(
-    "urlset", c(image_ns, core_ns), schemas_dir = "/x"
+    "urlset",
+    c(image_ns, core_ns),
+    schemas_dir = "/x"
   )
   expect_identical(res$namespaces, sort(c(core_ns, image_ns)))
   expect_identical(
-    res$cache_key, schema_cache_key("urlset", c(core_ns, image_ns))
+    res$cache_key,
+    schema_cache_key("urlset", c(core_ns, image_ns))
   )
 })

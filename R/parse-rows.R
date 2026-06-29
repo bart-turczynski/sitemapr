@@ -40,7 +40,8 @@ parse_recycle <- function(x, n, fill) {
     rlang::abort(
       sprintf(
         "Expected a length-%d or length-1 vector, got length %d.",
-        n, length(x)
+        n,
+        length(x)
       ),
       class = "sitemapr_row_length_error"
     )
@@ -67,7 +68,8 @@ parse_recycle_list <- function(x, n) {
     rlang::abort(
       sprintf(
         "Expected a length-%d or length-1 list, got length %d.",
-        n, length(x)
+        n,
+        length(x)
       ),
       class = "sitemapr_row_length_error"
     )
@@ -93,15 +95,17 @@ parse_recycle_list <- function(x, n) {
 #' @return A tibble with the 9 contract columns (faithful form).
 #' @keywords internal
 #' @noRd
-sitemap_rows <- function(loc = character(0),
-                         lastmod = NULL,
-                         changefreq = NULL,
-                         priority = NULL,
-                         images = NULL,
-                         video = NULL,
-                         news = NULL,
-                         alternates = NULL,
-                         source_sitemap = NULL) {
+sitemap_rows <- function(
+  loc = character(0),
+  lastmod = NULL,
+  changefreq = NULL,
+  priority = NULL,
+  images = NULL,
+  video = NULL,
+  news = NULL,
+  alternates = NULL,
+  source_sitemap = NULL
+) {
   loc <- as.character(loc)
   n <- length(loc)
 
