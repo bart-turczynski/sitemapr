@@ -139,3 +139,14 @@ test_that("a transport abort becomes a rejected unreachable candidate", {
   expect_true(all(res$status == "rejected"))
   expect_true(all(res$reason == "unreachable"))
 })
+
+test_that("classify_candidate marks a statusless errored record unreachable", {
+  # A fetch record that carries an error_class but no HTTP status (e.g. a
+  # connection-level failure surfaced as a record rather than an abort) is a
+  # rejected, unreachable candidate.
+  rec <- list(error_class = "sitemapr_timeout", status = NA_integer_)
+  out <- classify_candidate("generic", "robots", rec)
+  expect_identical(out$status, "rejected")
+  expect_identical(out$reason, "unreachable")
+  expect_true(is.na(out$http_status))
+})
