@@ -51,3 +51,12 @@ candidates are depth-0 rows with no parent; an accepted candidate that is a
 contributing deeper rows parented to the index, with provenance
 \code{"child-of-index"}.
 }
+\examples{
+\dontrun{
+# Discover a site's sitemaps from its root URL as a tree of candidates.
+sitemap_tree("https://example.com")
+
+# A bare host is accepted and normalized to https://.
+sitemap_tree("example.com")
+}
+}

@@ -157,6 +157,23 @@ read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
 #'   An entry-point fetch failure or unsupported content raises a classed error
 #'   condition.
 #' @export
+#' @examples
+#' # Read a local sitemap file into a tidy tibble of URLs.
+#' xml <- paste0(
+#'   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+#'   '<url><loc>https://example.com/</loc>',
+#'   '<lastmod>2024-01-01</lastmod></url>',
+#'   '<url><loc>https://example.com/about</loc></url>',
+#'   '</urlset>'
+#' )
+#' path <- tempfile(fileext = ".xml")
+#' writeLines(xml, path)
+#' read_sitemap(path)
+#'
+#' \dontrun{
+#' # Read directly from a sitemap URL; a top-level index expands recursively.
+#' read_sitemap("https://example.com/sitemap.xml")
+#' }
 read_sitemap <- function(
   x,
   user_agent = default_user_agent(),

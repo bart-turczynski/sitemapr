@@ -108,6 +108,14 @@ count_pages <- function(parsed) {
 #'   `page_count`/`gzip`; rejected rows carry their rejection `reason` and `NA`
 #'   page count.
 #' @export
+#' @examples
+#' \dontrun{
+#' # Discover a site's sitemaps from its root URL as a tree of candidates.
+#' sitemap_tree("https://example.com")
+#'
+#' # A bare host is accepted and normalized to https://.
+#' sitemap_tree("example.com")
+#' }
 sitemap_tree <- function(
   x,
   user_agent = default_user_agent(),
