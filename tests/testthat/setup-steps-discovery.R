@@ -206,11 +206,23 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "validate_sitemap produces no finding for missing guesses",
     function(context) {
-      # validate_sitemap() (Layer F, SITE-ymzvnlpr) is a later slice. The
-      # discovery-level contract this asserts is already enforced here: a 404
-      # guess is a rejected candidate, never a finding. The findings tibble is
-      # asserted directly once the assembly slice lands.
-      testthat::skip("pending findings-assembly slice (SITE-ymzvnlpr)")
+      # A missing guess (404) is a rejected discovery candidate; it must never
+      # cross into the findings layer. Pointing validate_sitemap() (Layer F,
+      # SITE-ymzvnlpr) at such a URL surfaces the transport failure as a classed
+      # `sitemapr_entrypoint_error` — it returns no findings tibble at all, so a
+      # 404 can never become a finding row. The given's `404 for all guesses`
+      # fixture is re-mocked here because run_discovery's frame-scoped mock was
+      # torn down when the WHEN returned.
+      missing <- paste0(context$root, "/sitemap.xml")
+      httr2::local_mocked_responses(function(req) {
+        httr2::response(status_code = 404L, url = req$url)
+      })
+      suppressWarnings(
+        testthat::expect_error(
+          sitemapr::validate_sitemap(missing),
+          class = "sitemapr_entrypoint_error"
+        )
+      )
     }
   )
 
