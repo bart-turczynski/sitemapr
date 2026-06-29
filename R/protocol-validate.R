@@ -1140,8 +1140,10 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
   absolute <- idx[kind == "http(s)"]
   if (length(absolute) == 0L) {
+    # Unreachable empty-guard: with no absolute URL left, every kept loc was
+    # non-absolute and already emitted a finding above, so `out` is non-empty.
     if (length(out) == 0L) {
-      return(empty_protocol_findings())
+      return(empty_protocol_findings()) # nocov
     }
     return(do.call(rbind, out))
   }
@@ -1377,8 +1379,10 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 
   url_idx <- which(!blank)
   if (length(url_idx) == 0L) {
+    # Unreachable empty-guard: a non-empty document with no URL lines is
+    # all-blank, so the blank-line loop above already populated `out`.
     if (length(out) == 0L) {
-      return(empty_protocol_findings())
+      return(empty_protocol_findings()) # nocov
     }
     return(do.call(rbind, out))
   }

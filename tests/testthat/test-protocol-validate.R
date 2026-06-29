@@ -57,6 +57,16 @@ test_that("a non-absolute loc is reported once, without follow-on URL rules", {
   expect_identical(out$code, "PROTOCOL_URL_NOT_ABSOLUTE")
 })
 
+test_that("rows whose locs are all NA/empty yield no URL findings", {
+  out <- validate_loc_urls(
+    rows_for(c(NA_character_, "")),
+    sitemap_url = NA_character_,
+    base = base
+  )
+  expect_s3_class(out, "tbl_df")
+  expect_identical(nrow(out), 0L)
+})
+
 # --- Host / length / escaping ----------------------------------------------
 
 test_that("an absolute URL with no host produces PROTOCOL_URL_NO_HOST", {
@@ -620,6 +630,19 @@ test_that("malformed x-default near misses are XDEFAULT_INVALID", {
   }
 })
 
+test_that("multi-subtag tokens that fit no family are FORMAT_INVALID", {
+  # Each exercises a distinct hreflang_roles() fall-through: a 2-part token
+  # whose first subtag is not alpha2 ("xyz-US"); a 2-part token whose second
+  # subtag is neither alpha2 nor alpha4 ("en-xyz"); a 3-part token that is not
+  # lang-script-region ("en-US-XX", second subtag not alpha4).
+  for (tok in c("xyz-US", "en-xyz", "en-US-XX")) {
+    expect_identical(
+      classify_hreflang_token(tok),
+      "HREFLANG_FORMAT_INVALID"
+    )
+  }
+})
+
 # --- per-entry findings -----------------------------------------------------
 
 test_that("a clean hreflang set with x-default produces no findings", {
@@ -690,6 +713,16 @@ test_that("a missing required attribute is HREFLANG_LINK_ATTR_INVALID", {
         href = "https://e.com/x"
       )))
   )
+})
+
+test_that("an absent hreflang attribute is named in the LINK_ATTR message", {
+  out <- validate_hreflang(
+    rows_with_alts(list(mk_link(rel = "alternate", href = "https://e.com/x"))),
+    base
+  )
+  inv <- out[out$code == "HREFLANG_LINK_ATTR_INVALID", ]
+  expect_identical(nrow(inv), 1L)
+  expect_match(inv$message, "hreflang is absent")
 })
 
 test_that("a relative href is HREFLANG_HREF_RELATIVE and strict-only", {
@@ -768,6 +801,18 @@ leaf_attr <- function(text, ...) {
   }
   x
 }
+
+test_that("ext_child_text is NA for an empty or non-character child", {
+  expect_identical(ext_child_text(list(title = list()), "title"), NA_character_)
+  expect_identical(
+    ext_child_text(list(title = list(123L)), "title"),
+    NA_character_
+  )
+})
+
+test_that("ext_child_attr is NULL when the named child is absent", {
+  expect_null(ext_child_attr(list(title = leaf("x")), "loc", "type"))
+})
 
 # A minimally-valid <video:video> element; override/add children via `...`.
 # A flat (non-recursive) merge so leaf lists are replaced wholesale and repeated
