@@ -122,7 +122,7 @@ schema_cache_key <- function(
 #' or validated here; the returned `kind` tells Layer C how to obtain the schema
 #' document.
 #'
-#' @param root_kind `"urlset"` or `"sitemapindex"` (see [schema_root_kind()]).
+#' @param root_kind `"urlset"` or `"sitemapindex"` (see `schema_root_kind()`).
 #' @param namespaces Character vector of namespace URIs present in the document
 #'   (may include the core namespace; order and duplicates do not matter).
 #' @param schemas_dir Directory holding the bundled schemas. Defaults to the
@@ -132,7 +132,7 @@ schema_cache_key <- function(
 #'     schema), `"runtime"` (a wrapper must be generated, S6.3), or
 #'     `"unknown-namespace"` (an unrecognised namespace is present).
 #'   * `cache_key` — the `(catalog_version, root_kind, sorted_namespace_set)`
-#'     key (see [schema_cache_key()]).
+#'     key (see `schema_cache_key()`).
 #'   * `root_kind`, `namespaces` — the (sorted) inputs echoed back.
 #'   * `schema_path` — absolute path to the validating schema for `"bundled"`;
 #'     `NA` for `"runtime"`/`"unknown-namespace"`.

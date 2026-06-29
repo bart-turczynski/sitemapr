@@ -1494,7 +1494,7 @@ protocol_text_finding <- function(
 
 #' Validate a text sitemap against protocol/semantic rules (Layer D)
 #'
-#' The text-format counterpart of [validate_protocol()] and a standalone
+#' The text-format counterpart of `validate_protocol()` and a standalone
 #' finding-producer: text sitemaps never go through the XML rows path
 #' (sitemap-spec.md §7.2). It reads the RAW document because the parsed row
 #' tibble has already dropped blank lines and line numbers (R/parse-text.R).
@@ -1509,7 +1509,7 @@ protocol_text_finding <- function(
 #' final contract (no `mode`, filtering, dedup, or sort — those are Layer F).
 #'
 #' @param text The raw text-sitemap document: a character string/vector or raw
-#'   bytes (decoded as UTF-8), the same input [parse_sitemap_text()] accepts.
+#'   bytes (decoded as UTF-8), the same input `parse_sitemap_text()` accepts.
 #' @param subject_ref The document-level `sitemap://…` base for each finding's
 #'   `subject_ref`. `NA` yields fragment-only refs.
 #' @return A protocol-findings tibble (zero rows when every line conforms).
@@ -1642,9 +1642,9 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #' token policy over the `alternates` list-column, and the image/video/news
 #' extension field rules. With a `source_meta` argument it also surfaces the D.6
 #' classification diagnostics (`UNSUPPORTED_*` / `ENCODING_*`); text sitemaps
-#' take the dedicated [validate_text_protocol()] path.
+#' take the dedicated `validate_text_protocol()` path.
 #'
-#' @param rows A faithful parsed row tibble from [sitemap_rows()] / the format
+#' @param rows A faithful parsed row tibble from `sitemap_rows()` / the format
 #'   parsers — `lastmod` and `priority` are the raw `<lastmod>`/`<priority>`
 #'   strings (ADR-004), so format rules read the original text directly.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
@@ -1656,7 +1656,7 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #'   `PROTOCOL_SIZE_EXCEEDED` rule. `NA` skips the size check.
 #' @param fetched_at The sitemap's fetch/generation time (`POSIXct`), for the
 #'   `PROTOCOL_LASTMOD_LOOKS_GENERATED` corpus heuristic. `NA` skips it.
-#' @param source_meta A [source_meta()] object carrying the source's
+#' @param source_meta A `source_meta()` object carrying the source's
 #'   classification + encoding signals, for the D.6 unsupported-input and
 #'   encoding-conflict diagnostics (`UNSUPPORTED_*` / `ENCODING_*`, all
 #'   `layer = "classification"`). `NULL` emits none. These run from the metadata
@@ -1664,7 +1664,7 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #'   `UNSUPPORTED_ROOT` document yields no rows). Acting as the interim
 #'   cross-layer assembler, this function surfaces them alongside the protocol
 #'   findings until Layer F owns assembly.
-#' @param limits Layer D limit thresholds; see [protocol_limits()].
+#' @param limits Layer D limit thresholds; see `protocol_limits()`.
 #' @return A findings tibble (zero rows when the document conforms and no
 #'   diagnostics apply). Protocol rows carry `layer = "protocol"`; the D.6
 #'   source diagnostics carry `layer = "classification"`.

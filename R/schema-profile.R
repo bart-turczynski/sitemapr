@@ -75,7 +75,7 @@ schema_cached_wrapper <- function(
 
 #' Resolve a document to a concrete, ready-to-validate schema profile
 #'
-#' Wraps the pure resolver ([schema_resolve_profile()]) with the side effect of
+#' Wraps the pure resolver (`schema_resolve_profile()`) with the side effect of
 #' generating (and caching) a runtime wrapper XSD when the namespace combination
 #' is not pre-composed. The returned `schema_path` is always a file ready to be
 #' read by `xml2::xml_validate()` — except for `"unknown-namespace"`, where no

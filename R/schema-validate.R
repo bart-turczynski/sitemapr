@@ -198,7 +198,7 @@ schema_invalid_findings <- function(errors, subject_ref) {
 #'   `read_sitemap_xml()`; external entities are never expanded).
 #' @param subject_ref Stable `sitemap://…` reference for the document, used as
 #'   the base of each finding's `subject_ref`. `NA` yields fragment-only refs.
-#' @param schemas_dir,cache,dir Forwarded to [schema_profile()] (bundled-schema
+#' @param schemas_dir,cache,dir Forwarded to `schema_profile()` (bundled-schema
 #'   directory, the runtime-wrapper cache, and the wrapper output directory).
 #' @return A schema-findings tibble (zero rows when the document is valid).
 #' @keywords internal
