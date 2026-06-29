@@ -136,6 +136,22 @@ test_that("6 redirects under a limit of 5 aborts with redirect_limit", {
   expect_identical(cnd$max_redirects, 5L)
 })
 
+test_that("a 3xx without a Location header is treated as a terminal response", {
+  # A redirect status with no Location is not follow-able: it falls through to
+  # terminal handling and is recorded as a non-2xx response (with a warning).
+  httr2::local_mocked_responses(list(
+    httr2::response(status_code = 302L, url = "https://example.com/moved")
+  ))
+
+  meta <- NULL
+  expect_warning(
+    meta <- fetch_source("https://example.com/moved"),
+    class = "sitemapr_http_error"
+  )
+  expect_identical(meta$status, 302L)
+  expect_identical(meta$error_class, "sitemapr_http_error")
+})
+
 # ---- Safety ceiling: read_capped_body directly -------------------------------
 
 test_that("read_capped_body raises sitemapr_body_ceiling on oversized input", {
