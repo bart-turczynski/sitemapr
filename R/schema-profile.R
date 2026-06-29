@@ -57,9 +57,12 @@ schema_wrapper_xsd <- function(imports) {
 # Return a generated wrapper path for `imports`, reusing a cached one when this
 # cache_key was already generated this session. The wrapper is written to `dir`
 # (tempdir() by default) with a unique name.
-schema_cached_wrapper <- function(cache_key, imports,
-                                  cache = schema_profile_cache,
-                                  dir = tempdir()) {
+schema_cached_wrapper <- function(
+  cache_key,
+  imports,
+  cache = schema_profile_cache,
+  dir = tempdir()
+) {
   cached <- cache[[cache_key]]
   if (!is.null(cached) && file.exists(cached)) {
     return(cached)
@@ -89,12 +92,16 @@ schema_cached_wrapper <- function(cache_key, imports,
 #'   unknown), `cache_key`, and `unknown_namespaces`.
 #' @keywords internal
 #' @noRd
-schema_profile <- function(root_kind, namespaces,
-                           schemas_dir = schema_dir(),
-                           cache = schema_profile_cache,
-                           dir = tempdir()) {
+schema_profile <- function(
+  root_kind,
+  namespaces,
+  schemas_dir = schema_dir(),
+  cache = schema_profile_cache,
+  dir = tempdir()
+) {
   res <- schema_resolve_profile(
-    root_kind, namespaces,
+    root_kind,
+    namespaces,
     schemas_dir = schemas_dir
   )
 
@@ -107,8 +114,10 @@ schema_profile <- function(root_kind, namespaces,
 
   if (identical(res$kind, "runtime")) {
     out$schema_path <- schema_cached_wrapper(
-      res$cache_key, res$imports,
-      cache = cache, dir = dir
+      res$cache_key,
+      res$imports,
+      cache = cache,
+      dir = dir
     )
   }
 

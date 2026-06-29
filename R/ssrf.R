@@ -77,9 +77,11 @@ ssrf_classify_ipv4 <- function(s) {
   if (ssrf_in_cidr(n, "127.0.0.0", 8L)) {
     return("loopback")
   }
-  if (ssrf_in_cidr(n, "10.0.0.0", 8L) ||
-        ssrf_in_cidr(n, "172.16.0.0", 12L) ||
-        ssrf_in_cidr(n, "192.168.0.0", 16L)) {
+  if (
+    ssrf_in_cidr(n, "10.0.0.0", 8L) ||
+      ssrf_in_cidr(n, "172.16.0.0", 12L) ||
+      ssrf_in_cidr(n, "192.168.0.0", 16L)
+  ) {
     return("private")
   }
   if (ssrf_in_cidr(n, "169.254.0.0", 16L)) {
@@ -234,8 +236,11 @@ ssrf_classify_ipv6 <- function(s) {
   h <- ssrf_ipv6_hextets(low)
   if (!is.null(h)) {
     emb <- ssrf_embedded_ipv4(h)
-    if (!is.null(emb) && ssrf_is_dotted_quad(emb[[1L]]) &&
-          !is.na(ssrf_classify_ipv4(emb[[1L]]))) {
+    if (
+      !is.null(emb) &&
+        ssrf_is_dotted_quad(emb[[1L]]) &&
+        !is.na(ssrf_classify_ipv4(emb[[1L]]))
+    ) {
       return(emb[[2L]])
     }
   }
@@ -301,8 +306,10 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
     # Octal-style dotted form (any octet with a leading zero) or hex/decimal
     # single-integer forms are obfuscation. A canonical dotted-quad is fine.
     looks_octal_dotted <- grepl("^0[0-7]+(\\.0?[0-7]*){1,3}$", raw)
-    if (!is_canonical_quad &&
-          (looks_hex || looks_decimal_int || looks_octal_dotted)) {
+    if (
+      !is_canonical_quad &&
+        (looks_hex || looks_decimal_int || looks_octal_dotted)
+    ) {
       return(ssrf_result(FALSE, "numeric-literal"))
     }
   }
@@ -352,8 +359,12 @@ ssrf_check_parsed <- function(parsed_row) {
   scheme <- as.character(parsed_row$scheme)[[1L]]
   is_ip <- isTRUE(as.logical(parsed_row$is_ip_host)[[1L]])
   raw_host <- ssrf_raw_host_of(as.character(parsed_row$original_url)[[1L]])
-  ssrf_check(host = host, scheme = scheme, is_ip_host = is_ip,
-             raw_host = raw_host)
+  ssrf_check(
+    host = host,
+    scheme = scheme,
+    is_ip_host = is_ip,
+    raw_host = raw_host
+  )
 }
 
 # Extract the host substring from a raw URL string WITHOUT re-parsing semantics:

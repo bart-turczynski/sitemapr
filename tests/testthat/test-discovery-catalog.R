@@ -38,9 +38,15 @@ test_that("generic guesses keep their documented contractual order", {
   expect_identical(
     generic,
     c(
-      "/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml",
-      "/sitemap.xml.gz", "/sitemap.txt", "/sitemap/index.xml",
-      "/sitemaps.xml", "/news-sitemap.xml", "/sitemap-news.xml"
+      "/sitemap.xml",
+      "/sitemap_index.xml",
+      "/sitemap-index.xml",
+      "/sitemap.xml.gz",
+      "/sitemap.txt",
+      "/sitemap/index.xml",
+      "/sitemaps.xml",
+      "/news-sitemap.xml",
+      "/sitemap-news.xml"
     )
   )
 })

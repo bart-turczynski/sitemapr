@@ -36,7 +36,8 @@ parse_dispatch <- function(bytes, source_sitemap) {
           "tar.gz archives are supported only as local files,",
           "not over the network."
         ),
-        class = "sitemapr_unsupported_format", format = "tar"
+        class = "sitemapr_unsupported_format",
+        format = "tar"
       )
     }
   }
@@ -54,7 +55,8 @@ parse_dispatch <- function(bytes, source_sitemap) {
 
   rlang::abort(
     sprintf("Unsupported sitemap content (sniffed format: %s).", fmt),
-    class = "sitemapr_unsupported_format", format = fmt
+    class = "sitemapr_unsupported_format",
+    format = fmt
   )
 }
 
@@ -66,11 +68,15 @@ read_sitemap_local <- function(path) {
   bytes <- readBin(path, what = "raw", n = size)
   fmt <- sniff_format(bytes)
 
-  if (identical(fmt, "gzip") &&
-        identical(sniff_format(gzip_decompress(bytes)), "tar")) {
+  if (
+    identical(fmt, "gzip") &&
+      identical(sniff_format(gzip_decompress(bytes)), "tar")
+  ) {
     meta <- source_metadata(
-      requested_url = path, final_url = path,
-      bytes = as.integer(size), format = "tar"
+      requested_url = path,
+      final_url = path,
+      bytes = as.integer(size),
+      format = "tar"
     )
     res <- parse_sitemap_archive(path, source_ref = path)
     return(list(rows = res$rows, sources = meta, problems = res$problems))
@@ -78,8 +84,10 @@ read_sitemap_local <- function(path) {
 
   parsed <- parse_dispatch(bytes, source_sitemap = path)
   meta <- source_metadata(
-    requested_url = path, final_url = path,
-    bytes = as.integer(size), format = fmt
+    requested_url = path,
+    final_url = path,
+    bytes = as.integer(size),
+    format = fmt
   )
   list(rows = parsed$rows, sources = meta, problems = empty_problems())
 }
@@ -92,19 +100,25 @@ read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
   if (!is.na(rec$error_class)) {
     rlang::abort(
       sprintf(
-        "Entry-point fetch of %s failed with HTTP %s.", rec$final_url,
+        "Entry-point fetch of %s failed with HTTP %s.",
+        rec$final_url,
         rec$status
       ),
       class = "sitemapr_entrypoint_error",
-      url = rec$final_url, status = rec$status
+      url = rec$final_url,
+      status = rec$status
     )
   }
 
   parsed <- parse_dispatch(attr(rec, "body"), source_sitemap = rec$final_url)
   if (identical(parsed$kind, "sitemapindex")) {
     ex <- expand_index(
-      rec$final_url, parsed$children, depth = 0L,
-      user_agent = user_agent, limits = idx_limits, net_limits = limits
+      rec$final_url,
+      parsed$children,
+      depth = 0L,
+      user_agent = user_agent,
+      limits = idx_limits,
+      net_limits = limits
     )
     sources <- if (is.null(ex$sources)) rec else rbind(rec, ex$sources)
     return(list(rows = ex$rows, sources = sources, problems = ex$problems))
@@ -143,10 +157,12 @@ read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
 #'   An entry-point fetch failure or unsupported content raises a classed error
 #'   condition.
 #' @export
-read_sitemap <- function(x,
-                         user_agent = default_user_agent(),
-                         limits = fetch_limits(),
-                         index_limits = NULL) {
+read_sitemap <- function(
+  x,
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(
       "`x` must be a single non-empty source: a URL or a local file path.",
@@ -161,7 +177,10 @@ read_sitemap <- function(x,
     read_sitemap_local(x)
   } else {
     read_sitemap_url(
-      x, user_agent = user_agent, limits = limits, idx_limits = index_limits
+      x,
+      user_agent = user_agent,
+      limits = limits,
+      idx_limits = index_limits
     )
   }
 

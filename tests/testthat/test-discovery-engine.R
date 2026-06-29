@@ -6,7 +6,8 @@ urlset_doc <- function(...) {
   urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
   paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    urls, "</urlset>"
+    urls,
+    "</urlset>"
   )
 }
 
@@ -16,11 +17,16 @@ mock_server <- function(status_map, log_env, body_map = list()) {
   function(req) {
     log_env$urls <- c(log_env$urls, req$url)
     status <- status_map[[req$url]]
-    if (is.null(status)) status <- 404L
+    if (is.null(status)) {
+      status <- 404L
+    }
     body <- body_map[[req$url]]
-    if (is.null(body)) body <- urlset_doc("https://x/1")
+    if (is.null(body)) {
+      body <- urlset_doc("https://x/1")
+    }
     httr2::response(
-      status_code = status, url = req$url,
+      status_code = status,
+      url = req$url,
       headers = list("Content-Type" = "application/xml"),
       body = charToRaw(body)
     )

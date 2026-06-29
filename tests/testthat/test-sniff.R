@@ -86,7 +86,9 @@ test_that("XML body served as .txt classifies by bytes (feature scenario)", {
   # The file is named sitemap.txt but the BYTES are XML: must be xml-urlset.
   ns <- "http://www.sitemaps.org/schemas/sitemap/0.9"
   body <- paste0(
-    "<urlset xmlns=\"", ns, "\">",
+    "<urlset xmlns=\"",
+    ns,
+    "\">",
     "<url><loc>https://e/</loc></url></urlset>"
   )
   expect_identical(sniff(charToRaw(body)), "xml-urlset")
@@ -95,7 +97,9 @@ test_that("XML body served as .txt classifies by bytes (feature scenario)", {
 test_that("namespace-prefixed urlset root is recognised", {
   ns <- "http://www.sitemaps.org/schemas/sitemap/0.9"
   body <- paste0(
-    "<sm:urlset xmlns:sm=\"", ns, "\"></sm:urlset>"
+    "<sm:urlset xmlns:sm=\"",
+    ns,
+    "\"></sm:urlset>"
   )
   expect_identical(sniff(charToRaw(body)), "xml-urlset")
 })

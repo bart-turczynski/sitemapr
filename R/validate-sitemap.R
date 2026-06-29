@@ -42,11 +42,13 @@ resolve_validation_source <- function(x, user_agent, limits) {
     if (!is.na(rec$error_class)) {
       rlang::abort(
         sprintf(
-          "Entry-point fetch of %s failed with HTTP %s.", rec$final_url,
+          "Entry-point fetch of %s failed with HTTP %s.",
+          rec$final_url,
           rec$status
         ),
         class = "sitemapr_entrypoint_error",
-        url = rec$final_url, status = rec$status
+        url = rec$final_url,
+        status = rec$status
       )
     }
     bytes <- attr(rec, "body")
@@ -118,7 +120,8 @@ index_findings_from_problems <- function(problems, base) {
       severity = index_code_severity(code),
       subject_type = "index-child",
       subject_ref = protocol_ref_fragment(
-        base, paste0("#index-child:", problems$subject_ref[i])
+        base,
+        paste0("#index-child:", problems$subject_ref[i])
       ),
       message = problems$message[i],
       evidence = list(protocol_evidence(excerpt = problems$subject_ref[i])),
@@ -133,13 +136,15 @@ index_findings_from_problems <- function(problems, base) {
 
 # Construct an index-expansion findings tibble (the same 8-column contract
 # subset the other producers emit, with `layer = "index-expansion"`).
-index_findings <- function(code = character(0),
-                           severity = character(0),
-                           subject_type = character(0),
-                           subject_ref = character(0),
-                           message = character(0),
-                           evidence = list(),
-                           is_strict_only = logical(0)) {
+index_findings <- function(
+  code = character(0),
+  severity = character(0),
+  subject_type = character(0),
+  subject_ref = character(0),
+  message = character(0),
+  evidence = list(),
+  is_strict_only = logical(0)
+) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
@@ -179,8 +184,11 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits) {
     return(list(
       schema,
       validate_protocol(
-        rows, sitemap_url = src$final_url, subject_ref = src$base,
-        byte_size = src$byte_size, fetched_at = src$fetched_at,
+        rows,
+        sitemap_url = src$final_url,
+        subject_ref = src$base,
+        byte_size = src$byte_size,
+        fetched_at = src$fetched_at,
         source_meta = NULL
       )
     ))
@@ -194,8 +202,14 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits) {
 
 # Assemble the producer parts for a `sitemapindex` root. A local index has no
 # origin URL to fetch children from, so expansion only runs for a URL source.
-validate_index_parts <- function(src, schema, doc, user_agent, limits,
-                                 index_limits) {
+validate_index_parts <- function(
+  src,
+  schema,
+  doc,
+  user_agent,
+  limits,
+  index_limits
+) {
   parts <- list(schema)
   if (is.na(src$final_url)) {
     return(parts)
@@ -203,8 +217,12 @@ validate_index_parts <- function(src, schema, doc, user_agent, limits,
 
   children <- parse_sitemapindex(xml2::xml_root(doc))
   ex <- expand_index(
-    src$final_url, children, depth = 0L,
-    user_agent = user_agent, limits = index_limits, net_limits = limits
+    src$final_url,
+    children,
+    depth = 0L,
+    user_agent = user_agent,
+    limits = index_limits,
+    net_limits = limits
   )
 
   parts[[length(parts) + 1L]] <-
@@ -217,14 +235,18 @@ validate_index_parts <- function(src, schema, doc, user_agent, limits,
   feeds <- index_feed_children(ex$sources)
   if (length(feeds) > 0L) {
     parts[[length(parts) + 1L]] <- validate_classification(
-      source_meta(feed_children = feeds), src$base
+      source_meta(feed_children = feeds),
+      src$base
     )
   }
 
   if (nrow(ex$rows) > 0L) {
     parts[[length(parts) + 1L]] <- validate_protocol(
-      ex$rows, sitemap_url = src$final_url, subject_ref = src$base,
-      byte_size = src$byte_size, fetched_at = src$fetched_at,
+      ex$rows,
+      sitemap_url = src$final_url,
+      subject_ref = src$base,
+      byte_size = src$byte_size,
+      fetched_at = src$fetched_at,
       source_meta = NULL
     )
   }
@@ -282,11 +304,13 @@ index_feed_children <- function(sources) {
 #' validate_sitemap("https://example.com/sitemap.xml")
 #' validate_sitemap("path/to/sitemap.xml", mode = "non-strict")
 #' }
-validate_sitemap <- function(x,
-                             mode = c("strict", "non-strict"),
-                             user_agent = default_user_agent(),
-                             limits = fetch_limits(),
-                             index_limits = NULL) {
+validate_sitemap <- function(
+  x,
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+) {
   mode <- match.arg(mode)
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(

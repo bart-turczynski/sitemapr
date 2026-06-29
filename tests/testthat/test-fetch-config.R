@@ -64,9 +64,19 @@ test_that("source_metadata() returns the 13 contract columns in order", {
   expect_identical(
     names(meta),
     c(
-      "requested_url", "final_url", "status", "redirect_chain",
-      "content_type", "charset", "bytes", "timing", "error_class",
-      "format", "root", "namespaces", "profile_id"
+      "requested_url",
+      "final_url",
+      "status",
+      "redirect_chain",
+      "content_type",
+      "charset",
+      "bytes",
+      "timing",
+      "error_class",
+      "format",
+      "root",
+      "namespaces",
+      "profile_id"
     )
   )
 })

@@ -44,8 +44,10 @@ sniff_bom_length <- function(bytes) {
   if (sniff_starts_with(bytes, c(0xEF, 0xBB, 0xBF))) {
     return(3L)
   }
-  if (sniff_starts_with(bytes, c(0xFE, 0xFF)) ||
-        sniff_starts_with(bytes, c(0xFF, 0xFE))) {
+  if (
+    sniff_starts_with(bytes, c(0xFE, 0xFF)) ||
+      sniff_starts_with(bytes, c(0xFF, 0xFE))
+  ) {
     return(2L)
   }
   0L
@@ -224,9 +226,11 @@ sniff_format <- function(bytes) {
     # HTML markers. Check after the sitemap roots so an XML sitemap is never
     # mistaken for HTML.
     html_tags <- "^<(head|body|title|meta|table|div|span|p|a|ul|ol|li)"
-    if (startsWith(root, "<!doctype html") ||
-          grepl("^<html([[:space:]>/]|$)", root) ||
-          grepl(paste0(html_tags, "([[:space:]>/]|$)"), root)) {
+    if (
+      startsWith(root, "<!doctype html") ||
+        grepl("^<html([[:space:]>/]|$)", root) ||
+        grepl(paste0(html_tags, "([[:space:]>/]|$)"), root)
+    ) {
       return("html")
     }
 

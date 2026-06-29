@@ -16,14 +16,30 @@
 
 # The tree row-schema column contract, in documented order.
 sitemap_tree_cols <- function() {
-  c("depth", "parent_sitemap", "sitemap_url", "page_count", "gzip",
-    "status", "reason", "provenance")
+  c(
+    "depth",
+    "parent_sitemap",
+    "sitemap_url",
+    "page_count",
+    "gzip",
+    "status",
+    "reason",
+    "provenance"
+  )
 }
 
 # Construct the tree tibble with the stable 8-column contract and coerced types.
 # Vectorized; scalar arguments recycle to the `sitemap_url` row count.
-sitemap_tree_rows <- function(depth, parent_sitemap, sitemap_url, page_count,
-                              gzip, status, reason, provenance) {
+sitemap_tree_rows <- function(
+  depth,
+  parent_sitemap,
+  sitemap_url,
+  page_count,
+  gzip,
+  status,
+  reason,
+  provenance
+) {
   tibble::tibble(
     depth = as.integer(depth),
     parent_sitemap = as.character(parent_sitemap),
@@ -39,10 +55,14 @@ sitemap_tree_rows <- function(depth, parent_sitemap, sitemap_url, page_count,
 # A 0-row tree tibble carrying the column contract and types.
 empty_sitemap_tree <- function() {
   sitemap_tree_rows(
-    depth = integer(0), parent_sitemap = character(0),
-    sitemap_url = character(0), page_count = integer(0),
-    gzip = logical(0), status = character(0),
-    reason = character(0), provenance = character(0)
+    depth = integer(0),
+    parent_sitemap = character(0),
+    sitemap_url = character(0),
+    page_count = integer(0),
+    gzip = logical(0),
+    status = character(0),
+    reason = character(0),
+    provenance = character(0)
   )
 }
 
@@ -88,16 +108,21 @@ count_pages <- function(parsed) {
 #'   `page_count`/`gzip`; rejected rows carry their rejection `reason` and `NA`
 #'   page count.
 #' @export
-sitemap_tree <- function(x,
-                         user_agent = default_user_agent(),
-                         limits = discovery_limits(),
-                         net_limits = fetch_limits(),
-                         index_limits = NULL) {
+sitemap_tree <- function(
+  x,
+  user_agent = default_user_agent(),
+  limits = discovery_limits(),
+  net_limits = fetch_limits(),
+  index_limits = NULL
+) {
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
   disc <- discover_candidates(
-    x, limits = limits, user_agent = user_agent, net_limits = net_limits
+    x,
+    limits = limits,
+    user_agent = user_agent,
+    net_limits = net_limits
   )
   records <- attr(disc, "records")
   n <- nrow(disc)
@@ -129,8 +154,12 @@ sitemap_tree <- function(x,
     # An accepted index candidate contributes deeper, parented rows.
     if (identical(parsed$kind, "sitemapindex")) {
       ex <- expand_index(
-        candidate_url, parsed$children, depth = 0L,
-        user_agent = user_agent, limits = index_limits, net_limits = net_limits
+        candidate_url,
+        parsed$children,
+        depth = 0L,
+        user_agent = user_agent,
+        limits = index_limits,
+        net_limits = net_limits
       )
       expansion_parts[[length(expansion_parts) + 1L]] <- ex$tree
     }

@@ -6,8 +6,17 @@ test_that("empty_sitemap_rows is a 0-row tibble with the 9-column contract", {
   expect_identical(nrow(rows), 0L)
   expect_identical(
     names(rows),
-    c("loc", "lastmod", "changefreq", "priority", "images", "video",
-      "news", "alternates", "source_sitemap")
+    c(
+      "loc",
+      "lastmod",
+      "changefreq",
+      "priority",
+      "images",
+      "video",
+      "news",
+      "alternates",
+      "source_sitemap"
+    )
   )
   expect_type(rows$lastmod, "character")
   expect_type(rows$loc, "character")

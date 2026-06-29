@@ -63,7 +63,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
         return(httr2::response(status_code = 404L, url = req$url))
       }
       httr2::response(
-        status_code = 200L, url = req$url,
+        status_code = 200L,
+        url = req$url,
         headers = list("Content-Type" = "application/xml; charset=UTF-8"),
         body = charToRaw(body)
       )

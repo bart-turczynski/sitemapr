@@ -29,7 +29,8 @@ for (schema_file in names(corpus)) {
         xml <- case[[1]]
         expected <- case[[2]]
         expect_identical(
-          validate_doc(xml, xsd), expected,
+          validate_doc(xml, xsd),
+          expected,
           info = sprintf("%s: %s", file, substr(xml, 1, 80))
         )
       }

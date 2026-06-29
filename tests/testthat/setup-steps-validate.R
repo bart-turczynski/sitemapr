@@ -29,15 +29,30 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   # The 10-column findings contract (docs/findings-contract.md), in order.
   validate_contract_cols <- c(
-    "code", "severity", "layer", "subject_type", "subject_ref", "message",
-    "evidence", "mode", "is_strict_only", "remediation_hint"
+    "code",
+    "severity",
+    "layer",
+    "subject_type",
+    "subject_ref",
+    "message",
+    "evidence",
+    "mode",
+    "is_strict_only",
+    "remediation_hint"
   )
 
   # The severity vocabulary and the fixed layer vocabulary.
   validate_severities <- c("fatal", "error", "warning", "info")
   validate_layers <- c(
-    "input", "fetch", "discovery", "classification", "decompression",
-    "schema", "protocol", "index-expansion", "report"
+    "input",
+    "fetch",
+    "discovery",
+    "classification",
+    "decompression",
+    "schema",
+    "protocol",
+    "index-expansion",
+    "report"
   )
 
   # Point context$source at a committed fixture by bare name.
@@ -232,10 +247,14 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "the excerpt field in each evidence list is at most 500 characters",
     function(context) {
-      lens <- vapply(context$result$evidence, function(ev) {
-        ex <- ev$excerpt
-        if (is.null(ex) || is.na(ex)) 0L else nchar(ex)
-      }, integer(1L))
+      lens <- vapply(
+        context$result$evidence,
+        function(ev) {
+          ex <- ev$excerpt
+          if (is.null(ex) || is.na(ex)) 0L else nchar(ex)
+        },
+        integer(1L)
+      )
       expect_true(all(lens <= 500L))
     }
   )
@@ -342,10 +361,14 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       # Scoped to the video extension: the message names the video namespace
       # scope and the evidence excerpt carries the video namespace URI.
       msg_video <- grepl("video", hits$message, ignore.case = TRUE)
-      ex_video <- vapply(hits$evidence, function(ev) {
-        ex <- ev$excerpt
-        !is.null(ex) && !is.na(ex) && grepl("video", ex)
-      }, logical(1L))
+      ex_video <- vapply(
+        hits$evidence,
+        function(ev) {
+          ex <- ev$excerpt
+          !is.null(ex) && !is.na(ex) && grepl("video", ex)
+        },
+        logical(1L)
+      )
       expect_true(any(msg_video | ex_video))
     }
   )
@@ -356,10 +379,14 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       r <- context$result
       hits <- r[r$code == "SCHEMA_INVALID", , drop = FALSE]
       expect_gt(nrow(hits), 0L)
-      excerpts <- vapply(hits$evidence, function(ev) {
-        ex <- ev$excerpt
-        if (is.null(ex) || is.na(ex)) NA_character_ else ex
-      }, character(1L))
+      excerpts <- vapply(
+        hits$evidence,
+        function(ev) {
+          ex <- ev$excerpt
+          if (is.null(ex) || is.na(ex)) NA_character_ else ex
+        },
+        character(1L)
+      )
       expect_true(any(!is.na(excerpts) & nzchar(excerpts)))
     }
   )

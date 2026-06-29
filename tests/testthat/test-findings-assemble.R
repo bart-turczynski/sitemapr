@@ -3,8 +3,16 @@
 # the producer constructors where convenient.
 
 contract_cols <- c(
-  "code", "severity", "layer", "subject_type", "subject_ref", "message",
-  "evidence", "mode", "is_strict_only", "remediation_hint"
+  "code",
+  "severity",
+  "layer",
+  "subject_type",
+  "subject_ref",
+  "message",
+  "evidence",
+  "mode",
+  "is_strict_only",
+  "remediation_hint"
 )
 
 test_that("empty input yields a zero-row 10-column contract tibble", {
@@ -17,7 +25,8 @@ test_that("empty input yields a zero-row 10-column contract tibble", {
 
 test_that("a list of only zero-row parts also yields the empty contract", {
   out <- assemble_findings(
-    list(empty_protocol_findings(), empty_schema_findings()), "strict"
+    list(empty_protocol_findings(), empty_schema_findings()),
+    "strict"
   )
   expect_equal(nrow(out), 0L)
   expect_identical(names(out), contract_cols)
@@ -26,9 +35,13 @@ test_that("a list of only zero-row parts also yields the empty contract", {
 test_that("column set and types match the contract exactly", {
   parts <- list(
     schema_findings(
-      code = "SCHEMA_INVALID", severity = "error", subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml", message = "bad",
-      evidence = list(schema_evidence(excerpt = "x")), is_strict_only = FALSE
+      code = "SCHEMA_INVALID",
+      severity = "error",
+      subject_type = "document",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "bad",
+      evidence = list(schema_evidence(excerpt = "x")),
+      is_strict_only = FALSE
     )
   )
   out <- assemble_findings(parts, "strict")
@@ -51,8 +64,10 @@ test_that("column set and types match the contract exactly", {
 test_that("non-strict drops is_strict_only rows; strict keeps them", {
   parts <- list(
     protocol_findings(
-      code = "PROTOCOL_LASTMOD_DATE_ONLY", severity = "info",
-      subject_type = "entry", subject_ref = "sitemap://e.com/s.xml#entry:1",
+      code = "PROTOCOL_LASTMOD_DATE_ONLY",
+      severity = "info",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:1",
       message = "date-only",
       evidence = list(protocol_evidence(excerpt = "2024-01-01")),
       is_strict_only = TRUE
@@ -70,9 +85,13 @@ test_that("non-strict drops is_strict_only rows; strict keeps them", {
 test_that("non-strict downgrades schema error to warning; strict leaves it", {
   parts <- list(
     schema_findings(
-      code = "SCHEMA_INVALID", severity = "error", subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml", message = "bad",
-      evidence = list(schema_evidence()), is_strict_only = FALSE
+      code = "SCHEMA_INVALID",
+      severity = "error",
+      subject_type = "document",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "bad",
+      evidence = list(schema_evidence()),
+      is_strict_only = FALSE
     )
   )
 
@@ -83,15 +102,21 @@ test_that("non-strict downgrades schema error to warning; strict leaves it", {
 test_that("strict elevates info->warning codes; non-strict keeps info", {
   parts <- list(
     classification_findings(
-      code = "ENCODING_BOM_DECLARATION_CONFLICT", severity = "info",
-      subject_type = "source", subject_ref = "sitemap://e.com/s.xml",
-      message = "bom", evidence = list(protocol_evidence()),
+      code = "ENCODING_BOM_DECLARATION_CONFLICT",
+      severity = "info",
+      subject_type = "source",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "bom",
+      evidence = list(protocol_evidence()),
       is_strict_only = FALSE
     ),
     protocol_findings(
-      code = "PROTOCOL_LASTMOD_LOOKS_GENERATED", severity = "info",
-      subject_type = "document", subject_ref = "sitemap://e.com/s.xml",
-      message = "gen", evidence = list(protocol_evidence()),
+      code = "PROTOCOL_LASTMOD_LOOKS_GENERATED",
+      severity = "info",
+      subject_type = "document",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "gen",
+      evidence = list(protocol_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -109,25 +134,40 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
   # subject_ref, then code.
   parts <- list(
     protocol_findings(
-      code = "PROTOCOL_URL_FRAGMENT", severity = "info", subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:9", message = "frag",
-      evidence = list(protocol_evidence()), is_strict_only = FALSE
+      code = "PROTOCOL_URL_FRAGMENT",
+      severity = "info",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:9",
+      message = "frag",
+      evidence = list(protocol_evidence()),
+      is_strict_only = FALSE
     ),
     protocol_findings(
-      code = "PROTOCOL_DUPLICATE_LOC", severity = "warning",
-      subject_type = "entry", subject_ref = "sitemap://e.com/s.xml#entry:2",
-      message = "dup", evidence = list(protocol_evidence()),
+      code = "PROTOCOL_DUPLICATE_LOC",
+      severity = "warning",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      message = "dup",
+      evidence = list(protocol_evidence()),
       is_strict_only = FALSE
     ),
     schema_findings(
-      code = "SCHEMA_INVALID", severity = "error", subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml", message = "schema",
-      evidence = list(schema_evidence()), is_strict_only = FALSE
+      code = "SCHEMA_INVALID",
+      severity = "error",
+      subject_type = "document",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "schema",
+      evidence = list(schema_evidence()),
+      is_strict_only = FALSE
     ),
     classification_findings(
-      code = "UNSUPPORTED_ROOT", severity = "error", subject_type = "source",
-      subject_ref = "sitemap://e.com/s.xml", message = "root",
-      evidence = list(protocol_evidence()), is_strict_only = FALSE
+      code = "UNSUPPORTED_ROOT",
+      severity = "error",
+      subject_type = "source",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "root",
+      evidence = list(protocol_evidence()),
+      is_strict_only = FALSE
     )
   )
 
@@ -140,7 +180,9 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
   expect_identical(
     out$code,
     c(
-      "UNSUPPORTED_ROOT", "SCHEMA_INVALID", "PROTOCOL_DUPLICATE_LOC",
+      "UNSUPPORTED_ROOT",
+      "SCHEMA_INVALID",
+      "PROTOCOL_DUPLICATE_LOC",
       "PROTOCOL_URL_FRAGMENT"
     )
   )
@@ -153,14 +195,21 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
 test_that("severity ties break by subject_ref then code", {
   parts <- list(
     protocol_findings(
-      code = "PROTOCOL_URL_NO_HOST", severity = "error", subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2", message = "b",
-      evidence = list(protocol_evidence()), is_strict_only = FALSE
+      code = "PROTOCOL_URL_NO_HOST",
+      severity = "error",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      message = "b",
+      evidence = list(protocol_evidence()),
+      is_strict_only = FALSE
     ),
     protocol_findings(
-      code = "PROTOCOL_URL_NOT_ABSOLUTE", severity = "error",
-      subject_type = "entry", subject_ref = "sitemap://e.com/s.xml#entry:1",
-      message = "a", evidence = list(protocol_evidence()),
+      code = "PROTOCOL_URL_NOT_ABSOLUTE",
+      severity = "error",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      message = "a",
+      evidence = list(protocol_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -173,9 +222,13 @@ test_that("severity ties break by subject_ref then code", {
 
 test_that("exact-duplicate rows are de-duplicated, first kept", {
   one <- protocol_findings(
-    code = "PROTOCOL_URL_FRAGMENT", severity = "info", subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1", message = "frag",
-    evidence = list(protocol_evidence(excerpt = "a")), is_strict_only = FALSE
+    code = "PROTOCOL_URL_FRAGMENT",
+    severity = "info",
+    subject_type = "entry",
+    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    message = "frag",
+    evidence = list(protocol_evidence(excerpt = "a")),
+    is_strict_only = FALSE
   )
   out <- assemble_findings(list(one, one), "strict")
   expect_equal(nrow(out), 1L)
@@ -184,15 +237,22 @@ test_that("exact-duplicate rows are de-duplicated, first kept", {
 test_that("assembling the same parts twice is row-for-row identical", {
   parts <- list(
     protocol_findings(
-      code = "PROTOCOL_DUPLICATE_LOC", severity = "warning",
-      subject_type = "entry", subject_ref = "sitemap://e.com/s.xml#entry:2",
-      message = "dup", evidence = list(protocol_evidence()),
+      code = "PROTOCOL_DUPLICATE_LOC",
+      severity = "warning",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      message = "dup",
+      evidence = list(protocol_evidence()),
       is_strict_only = FALSE
     ),
     schema_findings(
-      code = "SCHEMA_INVALID", severity = "error", subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml", message = "schema",
-      evidence = list(schema_evidence()), is_strict_only = FALSE
+      code = "SCHEMA_INVALID",
+      severity = "error",
+      subject_type = "document",
+      subject_ref = "sitemap://e.com/s.xml",
+      message = "schema",
+      evidence = list(schema_evidence()),
+      is_strict_only = FALSE
     )
   )
   expect_identical(

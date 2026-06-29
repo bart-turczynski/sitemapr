@@ -106,7 +106,8 @@ test_that("IPv4-mapped IPv6 of a private address is rejected (feature)", {
 
 test_that("IPv4-mapped IPv6 of loopback is rejected", {
   res <- sitemapr:::ssrf_check(
-    host = "[::ffff:127.0.0.1]", scheme = "http",
+    host = "[::ffff:127.0.0.1]",
+    scheme = "http",
     raw_host = "[::ffff:127.0.0.1]"
   )
   expect_false(res$allowed)
@@ -115,7 +116,8 @@ test_that("IPv4-mapped IPv6 of loopback is rejected", {
 
 test_that("IPv4-mapped IPv6 of a PUBLIC address is allowed", {
   res <- sitemapr:::ssrf_check(
-    host = "[::ffff:8.8.8.8]", scheme = "http",
+    host = "[::ffff:8.8.8.8]",
+    scheme = "http",
     raw_host = "[::ffff:8.8.8.8]"
   )
   expect_true(res$allowed)
@@ -161,7 +163,8 @@ test_that("::ffff:1 is a plain IPv6 address, not an IPv4-mapped form", {
 
 test_that("fully-expanded hex-hextet mapped loopback is rejected", {
   res <- sitemapr:::ssrf_check(
-    host = "[0:0:0:0:0:ffff:7f00:1]", scheme = "http",
+    host = "[0:0:0:0:0:ffff:7f00:1]",
+    scheme = "http",
     raw_host = "[0:0:0:0:0:ffff:7f00:1]"
   )
   expect_false(res$allowed)
@@ -170,7 +173,8 @@ test_that("fully-expanded hex-hextet mapped loopback is rejected", {
 
 test_that("hex-hextet mapped form is case-insensitive", {
   res <- sitemapr:::ssrf_check(
-    host = "[::FFFF:7F00:1]", scheme = "http",
+    host = "[::FFFF:7F00:1]",
+    scheme = "http",
     raw_host = "[::FFFF:7F00:1]"
   )
   expect_false(res$allowed)
@@ -189,7 +193,8 @@ test_that("hex-hextet mapped PUBLIC address still passes", {
 test_that("IPv4-translated of loopback is rejected (hex + dotted)", {
   expect_identical(guard("http://[::ffff:0:7f00:1]/")$reason, "ipv4-translated")
   expect_identical(
-    guard("http://[::ffff:0:127.0.0.1]/")$reason, "ipv4-translated"
+    guard("http://[::ffff:0:127.0.0.1]/")$reason,
+    "ipv4-translated"
   )
 })
 
@@ -307,7 +312,9 @@ test_that("octal IPv4 literal is rejected as numeric-literal", {
 test_that("octal-dotted IPv4 literal is rejected as numeric-literal", {
   # 0177.0.0.1 == 127.0.0.1 with a leading-zero (octal) first octet.
   res <- sitemapr:::ssrf_check(
-    host = "127.0.0.1", scheme = "http", raw_host = "0177.0.0.1"
+    host = "127.0.0.1",
+    scheme = "http",
+    raw_host = "0177.0.0.1"
   )
   expect_false(res$allowed)
   expect_identical(res$reason, "numeric-literal")
@@ -317,7 +324,9 @@ test_that("octal-dotted IPv4 literal is rejected as numeric-literal", {
 
 test_that("non-http(s) scheme is rejected", {
   res <- sitemapr:::ssrf_check(
-    host = "example.com", scheme = "ftp", raw_host = "example.com"
+    host = "example.com",
+    scheme = "ftp",
+    raw_host = "example.com"
   )
   expect_false(res$allowed)
   expect_identical(res$reason, "scheme")
@@ -325,7 +334,9 @@ test_that("non-http(s) scheme is rejected", {
 
 test_that("file scheme is rejected", {
   res <- sitemapr:::ssrf_check(
-    host = "", scheme = "file", raw_host = ""
+    host = "",
+    scheme = "file",
+    raw_host = ""
   )
   expect_false(res$allowed)
   expect_identical(res$reason, "scheme")
@@ -333,7 +344,9 @@ test_that("file scheme is rejected", {
 
 test_that("https scheme is permitted through the scheme gate", {
   res <- sitemapr:::ssrf_check(
-    host = "example.com", scheme = "https", raw_host = "example.com"
+    host = "example.com",
+    scheme = "https",
+    raw_host = "example.com"
   )
   expect_true(res$allowed)
 })
@@ -361,7 +374,9 @@ test_that("public IPv6 literal is allowed", {
 
 test_that("the guard returns a list with allowed + reason fields", {
   res <- sitemapr:::ssrf_check(
-    host = "example.com", scheme = "https", raw_host = "example.com"
+    host = "example.com",
+    scheme = "https",
+    raw_host = "example.com"
   )
   expect_type(res, "list")
   expect_named(res, c("allowed", "reason"))
@@ -374,7 +389,9 @@ test_that("ssrf_check evaluates ranges regardless of any caller toggle", {
   # The guard has no disable flag; disabling is the caller's job. Confirm the
   # core matcher always evaluates and blocks a private address.
   res <- sitemapr:::ssrf_check(
-    host = "10.0.0.1", scheme = "http", raw_host = "10.0.0.1"
+    host = "10.0.0.1",
+    scheme = "http",
+    raw_host = "10.0.0.1"
   )
   expect_false(res$allowed)
   expect_identical(res$reason, "private")

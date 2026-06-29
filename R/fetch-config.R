@@ -19,13 +19,17 @@
 #' @return A named list of limits with coerced types.
 #' @keywords internal
 #' @noRd
-fetch_limits <- function(timeout = getOption("sitemapr.timeout", 30),
-                         max_redirects = getOption(
-                           "sitemapr.max_redirects", 5L
-                         ),
-                         max_bytes = getOption(
-                           "sitemapr.max_bytes", 500L * 1024L^2
-                         )) {
+fetch_limits <- function(
+  timeout = getOption("sitemapr.timeout", 30),
+  max_redirects = getOption(
+    "sitemapr.max_redirects",
+    5L
+  ),
+  max_bytes = getOption(
+    "sitemapr.max_bytes",
+    500L * 1024L^2
+  )
+) {
   list(
     timeout = as.numeric(timeout),
     max_redirects = as.integer(max_redirects),
@@ -84,19 +88,21 @@ default_user_agent <- function() {
 #' @return A one-row data.frame with the 13 contract columns.
 #' @keywords internal
 #' @noRd
-source_metadata <- function(requested_url = NA_character_,
-                            final_url = NA_character_,
-                            status = NA_integer_,
-                            redirect_chain = list(),
-                            content_type = NA_character_,
-                            charset = NA_character_,
-                            bytes = NA_integer_,
-                            timing = NA_real_,
-                            error_class = NA_character_,
-                            format = NA_character_,
-                            root = NA_character_,
-                            namespaces = list(),
-                            profile_id = NA_character_) {
+source_metadata <- function(
+  requested_url = NA_character_,
+  final_url = NA_character_,
+  status = NA_integer_,
+  redirect_chain = list(),
+  content_type = NA_character_,
+  charset = NA_character_,
+  bytes = NA_integer_,
+  timing = NA_real_,
+  error_class = NA_character_,
+  format = NA_character_,
+  root = NA_character_,
+  namespaces = list(),
+  profile_id = NA_character_
+) {
   data.frame(
     requested_url = as.character(requested_url),
     final_url = as.character(final_url),
