@@ -38,12 +38,9 @@ tree_mock <- function(body_map) {
   }
 }
 
-test_that("empty_sitemap_tree carries the 8-column contract and types", {
-  tree <- empty_sitemap_tree()
-  expect_s3_class(tree, "tbl_df")
-  expect_identical(nrow(tree), 0L)
+test_that("sitemap_tree_cols() is the documented 8-column contract", {
   expect_identical(
-    names(tree),
+    sitemap_tree_cols(),
     c(
       "depth",
       "parent_sitemap",
@@ -55,6 +52,13 @@ test_that("empty_sitemap_tree carries the 8-column contract and types", {
       "provenance"
     )
   )
+})
+
+test_that("empty_sitemap_tree carries the column contract and types", {
+  tree <- empty_sitemap_tree()
+  expect_s3_class(tree, "tbl_df")
+  expect_identical(nrow(tree), 0L)
+  expect_identical(names(tree), sitemap_tree_cols())
   expect_type(tree$depth, "integer")
   expect_type(tree$page_count, "integer")
   expect_type(tree$gzip, "logical")
@@ -63,19 +67,7 @@ test_that("empty_sitemap_tree carries the 8-column contract and types", {
 test_that("each result row exposes the documented column contract", {
   httr2::local_mocked_responses(tree_mock(list()))
   tree <- sitemap_tree("https://example.com")
-  expect_identical(
-    names(tree),
-    c(
-      "depth",
-      "parent_sitemap",
-      "sitemap_url",
-      "page_count",
-      "gzip",
-      "status",
-      "reason",
-      "provenance"
-    )
-  )
+  expect_identical(names(tree), sitemap_tree_cols())
 })
 
 test_that("an accepted candidate row carries status, page_count, and gzip", {
@@ -158,4 +150,46 @@ test_that("all discovery rows are depth 0 with guessed-path provenance", {
   expect_true(all(tree$depth == 0L))
   expect_true(all(is.na(tree$parent_sitemap)))
   expect_true(all(tree$provenance == "guessed-path"))
+})
+
+test_that("a candidate whose fetch aborts has no record and no page_count", {
+  # A transport failure on one candidate yields a NULL fetch record; the
+  # assembler must skip it (no page_count/gzip), not error.
+  mock <- function(req) {
+    if (grepl("/sitemap\\.xml$", req$url)) {
+      stop("simulated transport failure")
+    }
+    httr2::response(status_code = 404L, url = req$url)
+  }
+  httr2::local_mocked_responses(mock)
+  tree <- sitemap_tree("https://example.com")
+  row <- tree[tree$sitemap_url == "https://example.com/sitemap.xml", ]
+  expect_identical(row$status, "rejected")
+  expect_identical(row$reason, "unreachable")
+  expect_true(is.na(row$page_count))
+  expect_true(is.na(row$gzip))
+})
+
+test_that("an accepted candidate with an unparseable body skips page_count", {
+  # A 200 HTML masquerade is accepted by discovery (2xx) but fails the parser;
+  # the assembler swallows the parse error and leaves page_count NA.
+  mock <- function(req) {
+    if (grepl("/sitemap\\.xml$", req$url)) {
+      return(httr2::response(
+        status_code = 200L,
+        url = req$url,
+        headers = list("Content-Type" = "text/html"),
+        body = charToRaw(
+          "<!DOCTYPE html><html><body>not a sitemap</body></html>"
+        )
+      ))
+    }
+    httr2::response(status_code = 404L, url = req$url)
+  }
+  httr2::local_mocked_responses(mock)
+  tree <- sitemap_tree("https://example.com")
+  row <- tree[tree$sitemap_url == "https://example.com/sitemap.xml", ]
+  expect_identical(row$status, "accepted")
+  expect_true(is.na(row$page_count))
+  expect_false(row$gzip)
 })
