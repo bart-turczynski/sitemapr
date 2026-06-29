@@ -121,3 +121,188 @@ test_that("validation is deterministic for a fixture and mode", {
   b <- validate_sitemap(fixture("urlset-duplicate-loc.xml"), mode = "strict")
   expect_identical(a, b)
 })
+
+# An httr2 mock dispatching on request URL via a named body map; unknown URLs
+# 404. Mirrors the feed-child test's local helper, served as application/xml.
+mock_by_url <- function(map) {
+  function(req) {
+    body <- map[[req$url]]
+    if (is.null(body)) {
+      return(httr2::response(status_code = 404L, url = req$url))
+    }
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "application/xml; charset=UTF-8"),
+      body = charToRaw(body)
+    )
+  }
+}
+
+urlset_body <- function(...) {
+  locs <- vapply(
+    c(...),
+    function(u) sprintf("<url><loc>%s</loc></url>", u),
+    character(1)
+  )
+  paste0(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    paste(locs, collapse = ""),
+    "</urlset>"
+  )
+}
+
+index_body <- function(...) {
+  locs <- vapply(
+    c(...),
+    function(u) sprintf("<sitemap><loc>%s</loc></sitemap>", u),
+    character(1)
+  )
+  paste0(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+    "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    paste(locs, collapse = ""),
+    "</sitemapindex>"
+  )
+}
+
+test_that("a non-scalar / empty / NA `x` raises sitemapr_bad_input", {
+  expect_error(validate_sitemap(character(0)), class = "sitemapr_bad_input")
+  expect_error(validate_sitemap(NA_character_), class = "sitemapr_bad_input")
+  expect_error(validate_sitemap(""), class = "sitemapr_bad_input")
+  expect_error(validate_sitemap(c("a", "b")), class = "sitemapr_bad_input")
+  expect_error(validate_sitemap(42), class = "sitemapr_bad_input")
+})
+
+test_that("a 404 source raises sitemapr_entrypoint_error, never a finding", {
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(status_code = 404L, url = req$url)
+  })
+  suppressWarnings(
+    expect_error(
+      validate_sitemap("https://example.com/missing.xml"),
+      class = "sitemapr_entrypoint_error"
+    )
+  )
+})
+
+test_that("an HTML masquerade source yields UNSUPPORTED_HTML_MASQUERADE", {
+  out <- validate_sitemap(fixture("html-masquerade.html"))
+  expect_identical(names(out), contract_cols)
+  expect_true("UNSUPPORTED_HTML_MASQUERADE" %in% out$code)
+  row <- out[out$code == "UNSUPPORTED_HTML_MASQUERADE", ]
+  expect_identical(row$layer, "classification")
+})
+
+test_that("a gzip-compressed urlset is transparently decompressed", {
+  # Real gzip-container bytes (1f 8b magic). memCompress(., "gzip") emits a raw
+  # zlib stream the sniffer does not recognize, so gzfile() is used instead.
+  tf <- withr::local_tempfile()
+  con <- gzfile(tf, "wb")
+  writeBin(charToRaw(urlset_body("https://example.com/page/1")), con)
+  close(con)
+  gz <- readBin(tf, what = "raw", n = file.info(tf)$size)
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "application/gzip"),
+      body = gz
+    )
+  })
+  out <- validate_sitemap("https://example.com/sitemap.xml.gz")
+  expect_identical(names(out), contract_cols)
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("a local sitemapindex is schema-checked without expansion", {
+  # A local file has no origin URL, so children are never fetched: the index
+  # branch returns the schema part only (no INDEX_* or protocol findings).
+  out <- validate_sitemap(fixture("valid-index.xml"))
+  expect_identical(names(out), contract_cols)
+  expect_false(any(startsWith(out$code, "INDEX_")))
+})
+
+test_that("an index cycle yields an INDEX_CYCLE_DETECTED error finding", {
+  root <- "https://example.com/index-a.xml"
+  b <- "https://example.com/index-b.xml"
+  map <- list()
+  map[[root]] <- index_body(b)
+  map[[b]] <- index_body(root)
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(root)
+  expect_identical(names(out), contract_cols)
+  expect_true("INDEX_CYCLE_DETECTED" %in% out$code)
+  row <- out[out$code == "INDEX_CYCLE_DETECTED", ]
+  expect_identical(row$layer, "index-expansion")
+  expect_identical(row$severity, "error")
+  expect_identical(row$subject_type, "index-child")
+})
+
+test_that("a nested index warns SITEMAP_INDEX_NESTED and expands leaf rows", {
+  root <- "https://example.com/index.xml"
+  nested <- "https://example.com/nested-index.xml"
+  leaf <- "https://example.com/leaf.xml"
+  map <- list()
+  map[[root]] <- index_body(nested)
+  map[[nested]] <- index_body(leaf)
+  # A leaf urlset with a duplicate loc so the protocol layer over the expanded
+  # rows fires a recognizable finding (exercises the index protocol branch).
+  map[[leaf]] <- urlset_body(
+    "https://example.com/p1",
+    "https://example.com/p1"
+  )
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(root)
+  expect_identical(names(out), contract_cols)
+
+  nested_row <- out[out$code == "SITEMAP_INDEX_NESTED", ]
+  expect_gt(nrow(nested_row), 0L)
+  expect_true(all(nested_row$severity == "warning"))
+  # The expanded leaf rows reached the protocol producer.
+  expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
+})
+
+test_that("an over-deep index chain yields INDEX_DEPTH_EXCEEDED", {
+  root <- "https://example.com/d0.xml"
+  d1 <- "https://example.com/d1.xml"
+  d2 <- "https://example.com/d2.xml"
+  map <- list()
+  map[[root]] <- index_body(d1)
+  map[[d1]] <- index_body(d2)
+  map[[d2]] <- urlset_body("https://example.com/p1")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(
+    root,
+    index_limits = sitemapr:::index_limits(
+      max_depth = 1L
+    )
+  )
+  expect_identical(names(out), contract_cols)
+  expect_true("INDEX_DEPTH_EXCEEDED" %in% out$code)
+  expect_true(all(out$severity[out$code == "INDEX_DEPTH_EXCEEDED"] == "error"))
+})
+
+test_that("an over-wide index yields INDEX_CHILD_COUNT_EXCEEDED", {
+  root <- "https://example.com/wide.xml"
+  a <- "https://example.com/a.xml"
+  b <- "https://example.com/b.xml"
+  map <- list()
+  map[[root]] <- index_body(a, b)
+  map[[a]] <- urlset_body("https://example.com/p1")
+  map[[b]] <- urlset_body("https://example.com/p2")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(
+    root,
+    index_limits = sitemapr:::index_limits(
+      max_children = 1L
+    )
+  )
+  expect_identical(names(out), contract_cols)
+  expect_true("INDEX_CHILD_COUNT_EXCEEDED" %in% out$code)
+})
