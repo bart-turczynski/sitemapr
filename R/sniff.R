@@ -109,6 +109,65 @@ sniff_markup_preview <- function(bytes, max_bytes = 4096L) {
   tolower(rawToChar(as.raw(ascii)))
 }
 
+# Strip a single `<! ... >` declaration (e.g. `<!DOCTYPE ...>`) from the front
+# of `s`, accounting for a DOCTYPE internal subset in brackets whose own
+# declarations may contain ">". A naive "consume to the first >" stops inside
+# the subset and strands "]>...<root>", e.g. for
+# `<!DOCTYPE urlset [ <!ENTITY xxe SYSTEM "..."> ]>`. When a "[" opens before
+# the closing ">", skip from "[" to the matching "]" and then to the next ">".
+# Returns the same list shape as strip_one_prologue_token().
+strip_declaration <- function(s) {
+  gt <- regexpr(">", s, fixed = TRUE)
+  if (gt < 0L) {
+    return(list(done = TRUE, s = ""))
+  }
+  open <- regexpr("[", s, fixed = TRUE)
+  has_subset <- open > 0L && open < gt
+  if (!has_subset) {
+    return(list(done = FALSE, s = substring(s, gt + 1L)))
+  }
+  close <- regexpr("]", substring(s, open + 1L), fixed = TRUE)
+  if (close < 0L) {
+    return(list(done = TRUE, s = "")) # unterminated internal subset
+  }
+  close_abs <- open + close
+  after_gt <- regexpr(">", substring(s, close_abs + 1L), fixed = TRUE)
+  if (after_gt < 0L) {
+    return(list(done = TRUE, s = "")) # subset closed but no trailing ">"
+  }
+  list(done = FALSE, s = substring(s, close_abs + after_gt + 1L))
+}
+
+# Consume one XML prologue construct from the front of `s`: a comment
+# <!-- ... -->, a processing instruction / declaration <? ... ?>, or the
+# DOCTYPE / other <! ... > markup. `s` must already have its leading whitespace
+# stripped and be non-empty. Returns a list:
+#   $done  TRUE when stripping should stop — either the front is the root
+#          element (returned in $s) or an unterminated construct was hit
+#          ($s == "");
+#          FALSE when one construct was consumed and the loop should continue.
+#   $s     the remaining string.
+strip_one_prologue_token <- function(s) {
+  if (startsWith(s, "<!--")) {
+    end <- regexpr("-->", s, fixed = TRUE)
+    if (end < 0L) {
+      return(list(done = TRUE, s = "")) # unterminated comment
+    }
+    return(list(done = FALSE, s = substring(s, end + 3L)))
+  }
+  if (startsWith(s, "<?")) {
+    end <- regexpr("?>", s, fixed = TRUE)
+    if (end < 0L) {
+      return(list(done = TRUE, s = ""))
+    }
+    return(list(done = FALSE, s = substring(s, end + 2L)))
+  }
+  if (startsWith(s, "<!")) {
+    return(strip_declaration(s))
+  }
+  list(done = TRUE, s = s) # root element reached
+}
+
 # Drop leading whitespace and any sequence of XML prologue constructs that may
 # precede the root element: the <?xml ...?> declaration, processing instructions
 # <? ... ?>, comments <!-- ... -->, and the DOCTYPE / other <! ... > markup.
@@ -119,53 +178,73 @@ sniff_strip_prologue <- function(s) {
     if (!nzchar(s)) {
       return(s)
     }
-    if (startsWith(s, "<!--")) {
-      end <- regexpr("-->", s, fixed = TRUE)
-      if (end < 0L) {
-        return("") # unterminated comment: nothing usable follows
-      }
-      s <- substring(s, end + 3L)
-      next
+    step <- strip_one_prologue_token(s)
+    if (step$done) {
+      return(step$s)
     }
-    if (startsWith(s, "<?")) {
-      end <- regexpr("?>", s, fixed = TRUE)
-      if (end < 0L) {
-        return("")
-      }
-      s <- substring(s, end + 2L)
-      next
-    }
-    # <!DOCTYPE ...> or other declaration-style markup (but NOT a comment, which
-    # is handled above). A DOCTYPE may carry an internal subset in brackets,
-    # e.g. `<!DOCTYPE urlset [ <!ENTITY xxe SYSTEM "..."> ]>`: its declarations
-    # themselves contain ">" — so a naive "consume to the first >" stops inside
-    # the subset and strands "]>...<root>". When a "[" opens before the closing
-    # ">", skip from "[" to the matching "]" and then to the following ">".
-    if (startsWith(s, "<!")) {
-      gt <- regexpr(">", s, fixed = TRUE)
-      if (gt < 0L) {
-        return("")
-      }
-      open <- regexpr("[", s, fixed = TRUE)
-      has_subset <- open > 0L && open < gt
-      if (has_subset) {
-        close <- regexpr("]", substring(s, open + 1L), fixed = TRUE)
-        if (close < 0L) {
-          return("") # unterminated internal subset
-        }
-        close_abs <- open + close
-        after_gt <- regexpr(">", substring(s, close_abs + 1L), fixed = TRUE)
-        if (after_gt < 0L) {
-          return("") # subset closed but no trailing ">"
-        }
-        s <- substring(s, close_abs + after_gt + 1L)
-        next
-      }
-      s <- substring(s, gt + 1L)
-      next
-    }
-    return(s)
+    s <- step$s
   }
+}
+
+# Classify a markup root element (prologue already stripped) into a format name,
+# or NA_character_ when nothing matches. Order matters: sitemap roots win over
+# feed roots, which win over the HTML / generic-XML catch-alls. An optional
+# namespace prefix like "ns:urlset" is allowed, plus attributes/namespaces after
+# the element name.
+sniff_classify_root <- function(root) {
+  ns <- "([a-z0-9_.-]+:)?"
+  tail <- "([[:space:]>/]|$)"
+  # Ordered dispatch: the first matching pattern wins. Sitemap roots are listed
+  # before feed roots so a urlset / sitemapindex always wins; the generic-XML
+  # catch-all is last. (HTML, with several markers, is matched separately.)
+  # Duplicate "feed" names are intentional — RSS and Atom both classify as feed.
+  patterns <- c(
+    "xml-urlset" = paste0("^<", ns, "urlset", tail),
+    "xml-sitemapindex" = paste0("^<", ns, "sitemapindex", tail),
+    "feed" = paste0("^<", ns, "rss", tail),
+    "feed" = paste0("^<", ns, "feed", tail),
+    "xml" = paste0("^<", ns, "[a-z][a-z0-9_.-]*", tail)
+  )
+  # HTML markers, checked before the generic-XML catch-all so markup like
+  # <html>/<head>/<body> is "html", but after the sitemap/feed roots so an XML
+  # sitemap is never mistaken for HTML.
+  html_tags <- "^<(head|body|title|meta|table|div|span|p|a|ul|ol|li)"
+  is_html <- startsWith(root, "<!doctype html") ||
+    grepl(paste0("^<html", tail), root) ||
+    grepl(paste0(html_tags, tail), root)
+  for (i in seq_along(patterns)) {
+    if (names(patterns)[i] == "xml" && is_html) {
+      return("html")
+    }
+    if (grepl(patterns[[i]], root)) {
+      return(names(patterns)[i])
+    }
+  }
+  NA_character_
+}
+
+# Detect a markup format from raw bytes — an XML sitemap root, a feed, HTML, or
+# generic XML — or NA_character_ when the bytes are not recognisable markup.
+# Strips a leading BOM, builds a lowercase ASCII preview, drops the XML
+# prologue, then classifies the root element. A bare `<!doctype html ...>` with
+# no separate root (one the prologue stripping would have eaten) is also HTML.
+sniff_classify_markup <- function(bytes) {
+  bom <- sniff_bom_length(bytes)
+  if (bom > 0L) {
+    bytes <- bytes[-seq_len(bom)]
+  }
+  preview <- sniff_markup_preview(bytes)
+  trimmed <- sub("^[[:space:]]+", "", preview)
+  if (startsWith(trimmed, "<")) {
+    fmt <- sniff_classify_root(sniff_strip_prologue(trimmed))
+    if (!is.na(fmt)) {
+      return(fmt)
+    }
+  }
+  if (startsWith(trimmed, "<!doctype html")) {
+    return("html")
+  }
+  NA_character_
 }
 
 # ---- main entry point --------------------------------------------------------
@@ -193,58 +272,10 @@ sniff_format <- function(bytes) {
     return("tar")
   }
 
-  # 4. XML vs HTML — skip BOM, then probe markup.
-  body <- bytes
-  bom <- sniff_bom_length(body)
-  if (bom > 0L) {
-    body <- body[-seq_len(bom)]
-  }
-  preview <- sniff_markup_preview(body)
-  trimmed <- sub("^[[:space:]]+", "", preview)
-
-  if (startsWith(trimmed, "<")) {
-    root <- sniff_strip_prologue(trimmed)
-
-    # Sitemap roots first (both start with "<"; an optional ns prefix like
-    # "ns:urlset" is allowed, plus attributes/namespaces after the name).
-    if (grepl("^<([a-z0-9_.-]+:)?urlset([[:space:]>/]|$)", root)) {
-      return("xml-urlset")
-    }
-    if (grepl("^<([a-z0-9_.-]+:)?sitemapindex([[:space:]>/]|$)", root)) {
-      return("xml-sitemapindex")
-    }
-
-    # RSS / Atom feed roots. Checked after the sitemap roots (so a urlset or
-    # sitemapindex always wins) and before the HTML / generic-xml catch-alls.
-    if (grepl("^<([a-z0-9_.-]+:)?rss([[:space:]>/]|$)", root)) {
-      return("feed")
-    }
-    if (grepl("^<([a-z0-9_.-]+:)?feed([[:space:]>/]|$)", root)) {
-      return("feed")
-    }
-
-    # HTML markers. Check after the sitemap roots so an XML sitemap is never
-    # mistaken for HTML.
-    html_tags <- "^<(head|body|title|meta|table|div|span|p|a|ul|ol|li)"
-    if (
-      startsWith(root, "<!doctype html") ||
-        grepl("^<html([[:space:]>/]|$)", root) ||
-        grepl(paste0(html_tags, "([[:space:]>/]|$)"), root)
-    ) {
-      return("html")
-    }
-
-    # Any other recognisable XML root element.
-    if (grepl("^<([a-z0-9_.-]+:)?[a-z][a-z0-9_.-]*([[:space:]>/]|$)", root)) {
-      return("xml")
-    }
-  }
-
-  # A bare <!doctype html ...> with no separate root (handled above as part of
-  # prologue stripping would have eaten it); also catch a leading doctype that
-  # `trimmed` exposes directly.
-  if (startsWith(trimmed, "<!doctype html")) {
-    return("html")
+  # 4. XML vs HTML.
+  markup <- sniff_classify_markup(bytes)
+  if (!is.na(markup)) {
+    return(markup)
   }
 
   # 5. text vs binary.
