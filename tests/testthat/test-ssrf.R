@@ -432,6 +432,20 @@ test_that("ssrf_ipv6_hextets returns NULL for non-IPv6 / malformed input", {
   expect_null(sitemapr:::ssrf_ipv6_hextets("::12345"))
 })
 
+test_that("ssrf_embedded_reason returns NA when no blocked embedding", {
+  # Malformed literal: hextet parse fails, so there is nothing to decode.
+  expect_true(is.na(sitemapr:::ssrf_embedded_reason("::zz")))
+  # Well-formed IPv6 with no embedding prefix.
+  expect_true(is.na(sitemapr:::ssrf_embedded_reason("fe80::1")))
+  # Embedding prefix but a PUBLIC embedded address is allowed (NA).
+  expect_true(is.na(sitemapr:::ssrf_embedded_reason("::ffff:8.8.8.8")))
+  # Embedding prefix wrapping a blocked address yields its reason code.
+  expect_identical(
+    sitemapr:::ssrf_embedded_reason("::ffff:127.0.0.1"),
+    "ipv4-mapped"
+  )
+})
+
 test_that("ssrf_check allows when there is no host to evaluate", {
   # An NA or empty host is not blockable here; downstream rules decide.
   expect_true(
