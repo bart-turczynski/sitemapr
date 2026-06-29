@@ -170,15 +170,38 @@ tar_is_unsafe_name <- function(name) {
 
 # ---- per-member content dispatch ---------------------------------------------
 
-# Classify and parse one regular-file member's bytes into rows. Member
-# eligibility is decided by FILE EXTENSION first: inside an archive a text
-# sitemap and an arbitrary text file (a README) are indistinguishable by
-# content, so only `.xml`/`.txt` members (after peeling a `.gz` suffix) are
-# treated as sitemap candidates; anything else is skipped. The content is then
-# sniffed to catch a mismatch (e.g. an `.xml` member that is actually HTML or a
-# sitemap index). An inner `.gz` member is decompressed once before either step.
-# Returns list(rows = <tibble or NULL>, reason = <NULL when parsed, else why it
-# was skipped>).
+# Decide whether a member with the given (peeled) extension and sniffed format
+# is a parseable sitemap. Returns NULL when the member should be parsed, else a
+# human-readable skip reason. Eligibility is decided by FILE EXTENSION first:
+# inside an archive a text sitemap and an arbitrary text file (a README) are
+# indistinguishable by content, so only `.xml`/`.txt` members are sitemap
+# candidates; anything else is skipped. The sniffed format then catches a
+# mismatch (e.g. an `.xml` member that is actually HTML or a sitemap index).
+member_skip_reason <- function(ext, fmt) {
+  if (!ext %in% c("xml", "txt")) {
+    label <- if (nzchar(ext)) sprintf(".%s file", ext) else "extensionless file"
+    return(sprintf("non-sitemap %s", label))
+  }
+  if (identical(ext, "xml")) {
+    if (identical(fmt, "xml-urlset")) {
+      return(NULL)
+    }
+    if (identical(fmt, "xml-sitemapindex")) {
+      return("sitemap index inside archive is not expanded")
+    }
+    return("non-sitemap XML content")
+  }
+  # The remaining candidate extension is "txt".
+  if (!identical(fmt, "text")) {
+    return("non-text content in .txt member")
+  }
+  NULL
+}
+
+# Classify and parse one regular-file member's bytes into rows. An inner `.gz`
+# member is decompressed once before classification. Returns
+# list(rows = <tibble or NULL>, reason = <NULL when parsed, else why it was
+# skipped>).
 archive_parse_member <- function(content, name, source_ref) {
   if (is.null(content) || length(content) == 0L) {
     return(list(rows = NULL, reason = "empty member"))
@@ -191,33 +214,18 @@ archive_parse_member <- function(content, name, source_ref) {
   }
 
   ext <- tolower(tools::file_ext(display_name))
-  if (!ext %in% c("xml", "txt")) {
-    label <- if (nzchar(ext)) sprintf(".%s file", ext) else "extensionless file"
-    return(list(rows = NULL, reason = sprintf("non-sitemap %s", label)))
-  }
-
   fmt <- sniff_format(content)
-  if (identical(ext, "xml")) {
-    if (!identical(fmt, "xml-urlset")) {
-      reason <- if (identical(fmt, "xml-sitemapindex")) {
-        "sitemap index inside archive is not expanded"
-      } else {
-        "non-sitemap XML content"
-      }
-      return(list(rows = NULL, reason = reason))
-    }
-    parsed <- parse_sitemap_xml(content, source_sitemap = source_ref)
-    return(list(rows = parsed$rows, reason = NULL))
+  reason <- member_skip_reason(ext, fmt)
+  if (!is.null(reason)) {
+    return(list(rows = NULL, reason = reason))
   }
 
-  # The remaining candidate extension is "txt".
-  if (!identical(fmt, "text")) {
-    return(list(rows = NULL, reason = "non-text content in .txt member"))
+  rows <- if (identical(ext, "xml")) {
+    parse_sitemap_xml(content, source_sitemap = source_ref)$rows
+  } else {
+    parse_sitemap_text(content, source_sitemap = source_ref)
   }
-  list(
-    rows = parse_sitemap_text(content, source_sitemap = source_ref),
-    reason = NULL
-  )
+  list(rows = rows, reason = NULL)
 }
 
 # ---- entry point -------------------------------------------------------------
@@ -237,11 +245,12 @@ archive_parse_member <- function(content, name, source_ref) {
 #'   skipped/rejected members).
 #' @keywords internal
 #' @noRd
-parse_sitemap_archive <- function(
-  path,
-  source_ref = path,
-  limits = archive_limits()
-) {
+# Read a local `.tar.gz` from disk and return the inflated tar bytes, enforcing
+# the on-disk archive-byte and total-decompressed-byte bounds. A missing file
+# raises `sitemapr_archive_not_found`; either bound raises
+# `sitemapr_archive_limit`; a corrupt outer gzip raises (via gzip_decompress)
+# `sitemapr_decompression_error`.
+read_archive_bytes <- function(path, limits) {
   size_on_disk <- file.info(path)$size
   if (is.na(size_on_disk)) {
     rlang::abort(
@@ -277,6 +286,15 @@ parse_sitemap_archive <- function(
     )
   }
 
+  tar_bytes
+}
+
+parse_sitemap_archive <- function(
+  path,
+  source_ref = path,
+  limits = archive_limits()
+) {
+  tar_bytes <- read_archive_bytes(path, limits)
   entries <- tar_read_entries(tar_bytes)
 
   rows_parts <- list()
