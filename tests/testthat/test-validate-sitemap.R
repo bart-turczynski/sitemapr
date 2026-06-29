@@ -306,3 +306,33 @@ test_that("an over-wide index yields INDEX_CHILD_COUNT_EXCEEDED", {
   expect_identical(names(out), contract_cols)
   expect_true("INDEX_CHILD_COUNT_EXCEEDED" %in% out$code)
 })
+
+# --- Internal helper guards (empty/NULL inputs) ----------------------------
+# These map/feed helpers are only reached with non-empty inputs by the public
+# entry point, but each documents an empty-input contract (a zero-row tibble /
+# an empty character vector). Exercise that guard directly.
+
+test_that("index_findings_from_problems is an empty tibble for no problems", {
+  base <- "sitemap://example.com/sitemap.xml"
+  empty_probs <- tibble::tibble(
+    category = character(0),
+    message = character(0),
+    subject_ref = character(0)
+  )
+  for (problems in list(NULL, empty_probs)) {
+    out <- sitemapr:::index_findings_from_problems(problems, base)
+    expect_s3_class(out, "tbl_df")
+    expect_identical(nrow(out), 0L)
+  }
+})
+
+test_that("index_feed_children is an empty character vector for no sources", {
+  empty_sources <- tibble::tibble(
+    format = character(0),
+    final_url = character(0)
+  )
+  for (sources in list(NULL, empty_sources)) {
+    out <- sitemapr:::index_feed_children(sources)
+    expect_identical(out, character(0))
+  }
+})
