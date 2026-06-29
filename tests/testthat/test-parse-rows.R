@@ -117,3 +117,18 @@ test_that("a mismatched list-column length raises the same error", {
     class = "sitemapr_row_length_error"
   )
 })
+
+test_that("a non-list list-column argument raises sitemapr_row_length_error", {
+  expect_error(
+    sitemap_rows(loc = "https://a/", images = "not-a-list"),
+    class = "sitemapr_row_length_error"
+  )
+})
+
+test_that("a length-1 list-column is recycled to the row count", {
+  imgs <- list(list(loc = "https://shared.jpg"))
+  rows <- sitemap_rows(loc = c("https://a/", "https://b/"), images = imgs)
+  expect_length(rows$images, 2L)
+  expect_identical(rows$images[[1L]]$loc, "https://shared.jpg")
+  expect_identical(rows$images[[2L]]$loc, "https://shared.jpg")
+})
