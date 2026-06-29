@@ -67,6 +67,19 @@ read_capped_body <- function(source, max_bytes, chunk_size = 65536L) {
     invisible()
   }
 
+  read_capped_drain(source, chunk_size, consume)
+
+  if (length(acc) == 0L) {
+    return(raw())
+  }
+  do.call(c, acc)
+}
+
+# Drive one body source through `consume`, one chunk at a time. The source is a
+# binary connection (read in fixed-size chunks), a list of raw vectors, or a
+# single raw vector. `consume` (supplied by read_capped_body) enforces the
+# ceiling and accumulates; this helper only handles the source-shape dispatch.
+read_capped_drain <- function(source, chunk_size, consume) {
   if (inherits(source, "connection")) {
     repeat {
       chunk <- readBin(source, what = "raw", n = chunk_size)
@@ -82,11 +95,7 @@ read_capped_body <- function(source, max_bytes, chunk_size = 65536L) {
   } else {
     consume(if (is.raw(source)) source else as.raw(source))
   }
-
-  if (length(acc) == 0L) {
-    return(raw())
-  }
-  do.call(c, acc)
+  invisible()
 }
 
 # ---- condition / error classification helpers --------------------------------
@@ -222,10 +231,95 @@ fetch_source <- function(
   result
 }
 
+# Run the per-hop structural SSRF guard for `url` before any network call.
+# Aborts with `sitemapr_ssrf_blocked` when the guard rejects the host; returns
+# invisibly when the host is allowed or when guarding is disabled. ADR-003: this
+# MUST run before every hop's request, so a redirect cannot bypass the guard.
+fetch_hop_ssrf_guard <- function(url, ssrf_guard) {
+  if (!isTRUE(ssrf_guard)) {
+    return(invisible())
+  }
+  check <- ssrf_check_parsed(parse_url_adapter(url))
+  if (isTRUE(check$allowed)) {
+    return(invisible())
+  }
+  rlang::abort(
+    sprintf("SSRF guard blocked %s (%s).", url, check$reason),
+    class = "sitemapr_ssrf_blocked",
+    reason = check$reason,
+    url = url
+  )
+}
+
+# The redirect target for a response, or NA_character_ when `resp` is not a
+# follow-able redirect (status outside 3xx, or no Location header). A Location
+# is resolved relative to `base`. A 3xx without Location therefore reads as
+# terminal (handled as a non-2xx response), exactly as before.
+fetch_redirect_target <- function(resp, base) {
+  status <- httr2::resp_status(resp)
+  if (status < 300L || status >= 400L) {
+    return(NA_character_)
+  }
+  if (!httr2::resp_header_exists(resp, "Location")) {
+    return(NA_character_)
+  }
+  location <- httr2::resp_header(resp, "Location")
+  httr2::url_modify_relative(base, location)
+}
+
+# Build the terminal one-row source_metadata() record from a final response. A
+# non-2xx status additionally raises a `sitemapr_http_error` warning (the record
+# still carries the status and error_class). The ceiling-capped raw `body` rides
+# along as a "body" attribute (off the 13-column contract) so the parse entry
+# point (R/read-sitemap.R) can dispatch without a second fetch. An empty body on
+# a 2xx response still sniffs (to "empty"); on a non-2xx it stays NA.
+fetch_terminal_record <- function(resp, url, redirect_chain, body, elapsed) {
+  status <- httr2::resp_status(resp)
+  final_url <- httr2::resp_url(resp)
+  content_type <- tryCatch(
+    httr2::resp_content_type(resp),
+    error = function(e) NA_character_
+  )
+  charset <- tryCatch(
+    httr2::resp_encoding(resp),
+    error = function(e) NA_character_
+  )
+  is_2xx <- status >= 200L && status < 300L
+  error_class <- if (is_2xx) NA_character_ else "sitemapr_http_error"
+  if (!is_2xx) {
+    rlang::warn(
+      sprintf("HTTP %d while fetching %s.", status, final_url),
+      class = "sitemapr_http_error",
+      status = status,
+      url = final_url,
+      error_class = error_class
+    )
+  }
+  rec <- source_metadata(
+    requested_url = url,
+    final_url = final_url,
+    status = status,
+    redirect_chain = c(redirect_chain, final_url),
+    content_type = content_type,
+    charset = charset,
+    bytes = length(body),
+    timing = elapsed,
+    error_class = error_class,
+    format = if (is_2xx || length(body) > 0L) {
+      sniff_format(body)
+    } else {
+      NA_character_
+    }
+  )
+  attr(rec, "body") <- body
+  rec
+}
+
 # Manual redirect loop with per-hop SSRF re-check and the safety-ceiling cap.
 # Returns a one-row source_metadata() record. SSRF / redirect-limit / ceiling
 # all surface as classed aborts; transport failures propagate to the caller
-# (`fetch_source`) for the https->http fallback decision.
+# (`fetch_source`) for the https->http fallback decision. Ordering is load-
+# bearing (ADR-003): guard -> perform -> follow, on every hop.
 fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
   start <- Sys.time()
   current_url <- url
@@ -234,35 +328,14 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
 
   repeat {
     # 1. Per-hop SSRF guard BEFORE any network activity for this hop.
-    if (isTRUE(ssrf_guard)) {
-      parsed <- parse_url_adapter(current_url)
-      check <- ssrf_check_parsed(parsed)
-      if (!isTRUE(check$allowed)) {
-        rlang::abort(
-          sprintf(
-            "SSRF guard blocked %s (%s).",
-            current_url,
-            check$reason
-          ),
-          class = "sitemapr_ssrf_blocked",
-          reason = check$reason,
-          url = current_url
-        )
-      }
-    }
+    fetch_hop_ssrf_guard(current_url, ssrf_guard)
 
     # 2. Perform one request (no auto-redirect).
     resp <- fetch_perform_one(current_url, limits, user_agent)
-    status <- httr2::resp_status(resp)
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.
-    if (
-      status >= 300L &&
-        status < 400L &&
-        httr2::resp_header_exists(resp, "Location")
-    ) {
-      location <- httr2::resp_header(resp, "Location")
-      next_url <- httr2::url_modify_relative(current_url, location)
+    next_url <- fetch_redirect_target(resp, current_url)
+    if (!is.na(next_url)) {
       hops <- hops + 1L
       if (hops > limits$max_redirects) {
         rlang::abort(
@@ -282,67 +355,14 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
       next
     }
 
-    # 4. Terminal response. Read the buffered body under the safety ceiling.
-    final_url <- httr2::resp_url(resp)
+    # 4. Terminal response. Read the buffered body under the safety ceiling,
+    #    then assemble the record (a non-2xx status warns inside the helper).
     body <- if (httr2::resp_has_body(resp)) {
       read_capped_body(httr2::resp_body_raw(resp), limits$max_bytes)
     } else {
       raw()
     }
     elapsed <- as.numeric(difftime(Sys.time(), start, units = "secs"))
-
-    content_type <- tryCatch(
-      httr2::resp_content_type(resp),
-      error = function(e) NA_character_
-    )
-    charset <- tryCatch(
-      httr2::resp_encoding(resp),
-      error = function(e) NA_character_
-    )
-
-    # 5. Non-2xx terminal status -> warning condition, record carries the error.
-    if (status < 200L || status >= 300L) {
-      error_class <- "sitemapr_http_error"
-      rlang::warn(
-        sprintf("HTTP %d while fetching %s.", status, final_url),
-        class = "sitemapr_http_error",
-        status = status,
-        url = final_url,
-        error_class = error_class
-      )
-      rec <- source_metadata(
-        requested_url = url,
-        final_url = final_url,
-        status = status,
-        redirect_chain = c(redirect_chain, final_url),
-        content_type = content_type,
-        charset = charset,
-        bytes = length(body),
-        timing = elapsed,
-        error_class = error_class,
-        format = if (length(body) > 0L) sniff_format(body) else NA_character_
-      )
-      attr(rec, "body") <- body
-      return(rec)
-    }
-
-    # 6. Success.
-    rec <- source_metadata(
-      requested_url = url,
-      final_url = final_url,
-      status = status,
-      redirect_chain = c(redirect_chain, final_url),
-      content_type = content_type,
-      charset = charset,
-      bytes = length(body),
-      timing = elapsed,
-      error_class = NA_character_,
-      format = sniff_format(body)
-    )
-    # The raw body rides along as an attribute (off the 13-column contract) so
-    # the parse entry point (R/read-sitemap.R) can dispatch on it without a
-    # second fetch. Callers that only need metadata simply ignore it.
-    attr(rec, "body") <- body
-    return(rec)
+    return(fetch_terminal_record(resp, url, redirect_chain, body, elapsed))
   }
 }
