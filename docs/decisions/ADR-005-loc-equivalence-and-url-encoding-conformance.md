@@ -63,12 +63,13 @@ mandate, and it is communicated by *degree of confidence*, not as a flat
 | Case | Detection | Code | Severity | Message shape |
 |---|---|---|---|---|
 | Byte-identical `<loc>` repeats | raw-string equality | `PROTOCOL_DUPLICATE_LOC` | **warning** | "identical to entry N" |
-| Canonical forms match, raw bytes differ | canonical-key match, raw differs | `PROTOCOL_URL_EQUIVALENT` | **info** | "likely resolves to the same URL as entry N: `Y`" |
+| Canonical forms match, raw bytes differ | canonical-key match, raw differs | `PROTOCOL_URL_EQUIVALENT` | **warning** | "likely resolves to the same URL as entry N: `Y`" |
 
-Rationale for the severity split: a byte-identical repeat is almost always an
-authoring mistake (`warning`); a canonical collision can be intentional (e.g.
-two IRIs that map to one URI), so it is advisory (`info`) and names the resolved
-form `Y` rather than asserting a defect.
+Both tiers are `warning`: a duplicate or likely-duplicate `<loc>` wastes crawl
+budget either way, and downgrading the canonical-collision case to `info` would
+bury the lede. The two codes stay distinct (different message and confidence —
+byte-identical vs. "likely resolves to `Y`"), so the severity can be split later
+without a code change if a quieter equivalence tier proves useful.
 
 ### 2. URL encoding conformance (RFC-3986/3987) becomes a first-class check
 
@@ -130,6 +131,8 @@ for this ADR.
 - The encoding-conformance gap sitemaps.org actually mandates is now surfaced.
 - "Validate, don't modify" is satisfied explicitly: the raw bytes are reported;
   the canonical form is only ever a comparison key and a `resolves-to` hint.
+- Both equivalence tiers surface at `warning` so a likely-duplicate is not
+  buried; the distinct codes leave room to split severity later if needed.
 - The 50 000-URL Layer D stall is removed for the common (ASCII) case without an
   approximate fast path — `rurl` runs only where it can change the answer.
 

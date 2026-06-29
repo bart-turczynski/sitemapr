@@ -99,8 +99,8 @@ replacement** for the user's URL: `read_sitemap()` and every finding's
 `subject_ref` carry the original `<loc>` bytes (ADR-004 posture). Validation
 reports the *delta* between raw and canonical — it does not rewrite the sitemap
 (ADR-005). That delta drives two checks: `<loc>` equivalence (a sitemapr lint —
-byte-identical → `PROTOCOL_DUPLICATE_LOC` `warning`; canonical-equal but raw
-differs → `PROTOCOL_URL_EQUIVALENT` `info`) and URL encoding conformance
+byte-identical → `PROTOCOL_DUPLICATE_LOC`; canonical-equal but raw differs →
+`PROTOCOL_URL_EQUIVALENT`; both `warning`) and URL encoding conformance
 (`PROTOCOL_URL_NOT_ESCAPED`, per RFC-3986/3987).
 
 **`rurl` is invoked only where it can change the answer** (ADR-005). A raw

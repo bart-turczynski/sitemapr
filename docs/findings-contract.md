@@ -110,8 +110,8 @@ implementation proceeds; codes listed here are the **known v1 set** from the
 - `PROTOCOL_DUPLICATE_LOC` — two entries share a **byte-identical** `loc`
   (`warning`). A sitemapr lint: sitemaps.org is silent on duplicates (ADR-005).
 - `PROTOCOL_URL_EQUIVALENT` — two entries' `loc` values are not byte-identical
-  but resolve to the same RFC-3986/3987-canonical URL (`info`; message names the
-  resolved form). A sitemapr lint (ADR-005).
+  but resolve to the same RFC-3986/3987-canonical URL (`warning`; message names
+  the resolved form). A sitemapr lint (ADR-005).
 - `PROTOCOL_PRIORITY_OUT_OF_RANGE` — `priority` outside `[0.0, 1.0]`
 - `PROTOCOL_CHANGEFREQ_INVALID` — `changefreq` not in the enum
 - `PROTOCOL_LASTMOD_INVALID` — `lastmod` not a valid W3C Date-Time value

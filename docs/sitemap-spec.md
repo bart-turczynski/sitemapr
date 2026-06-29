@@ -333,9 +333,10 @@ Rules XSD 1.0 cannot express (SPEC §19):
    > 50 MB, `<loc>` length, per-extension caps.
 2. **Duplicate / equivalent `<loc>`** — a **sitemapr lint**, not a protocol
    rule (sitemaps.org is silent on duplicates and on URL comparison; ADR-005).
-   Two tiers by confidence: byte-identical repeats → `PROTOCOL_DUPLICATE_LOC`
-   (`warning`); non-identical raw forms that share the RFC-3986/3987-canonical
-   key → `PROTOCOL_URL_EQUIVALENT` (`info`, names the resolved URL). The
+   Two tiers by confidence, both `warning`: byte-identical repeats →
+   `PROTOCOL_DUPLICATE_LOC`; non-identical raw forms that share the
+   RFC-3986/3987-canonical key → `PROTOCOL_URL_EQUIVALENT` (names the resolved
+   URL). The
    canonical key is `sitemapr`-owned (assembled from `rurl` components, *not*
    `rurl::clean_url` — `architecture.md` §5).
 3. **Field rules** — `lastmod` / `changefreq` / `priority` (§4); must run
