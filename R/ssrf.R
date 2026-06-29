@@ -366,7 +366,7 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
 #'
 #' Convenience wrapper that pulls `scheme`, `host`, `is_ip_host`, and the raw
 #' host (from `original_url`) out of a single parsed row and delegates to
-#' [ssrf_check()]. Operates on exactly one row.
+#' `ssrf_check()`. Operates on exactly one row.
 #'
 #' @param parsed_row A one-row data.frame from `parse_url_adapter()`.
 #' @return A list: `list(allowed = <logical>, reason = <character>)`.
