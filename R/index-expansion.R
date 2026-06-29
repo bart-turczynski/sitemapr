@@ -99,29 +99,16 @@ add_index_problem <- function(acc, category, subject_ref, message) {
   )
 }
 
-# Expand one already-parsed sitemapindex node's children into the accumulator,
-# recursing into nested indexes. `parent_url` is the index that listed these
-# children; `parent_depth` is that index's depth (its children land at
-# `parent_depth + 1`). The accumulator `acc` is an environment carrying the
-# growing `rows`/`sources`/`problems`/`tree` lists and the `visited` key set.
-expand_index_node <- function(
-  parent_url,
-  children,
-  parent_depth,
-  user_agent,
-  limits,
-  net_limits,
-  acc
-) {
-  locs <- children$loc
-  # Deduplicate children on the full-URL identity key, keeping catalog order:
-  # the same child listed twice is fetched and expanded exactly once.
+# Deduplicate an index's children on the full-URL identity key (keeping catalog
+# order) and apply the per-index child-count cap. The same child listed twice is
+# fetched and expanded exactly once; overflow beyond the cap is dropped with one
+# recorded event. Returns `list(locs, keys)` of the survivors.
+dedup_and_cap_children <- function(locs, parent_url, limits, acc) {
   keys <- vapply(locs, index_loc_key, character(1L))
   keep <- !duplicated(keys)
   locs <- locs[keep]
   keys <- keys[keep]
 
-  # Per-index child-count cap: drop the overflow and record one event.
   if (length(locs) > limits$max_children) {
     add_index_problem(
       acc,
@@ -138,135 +125,189 @@ expand_index_node <- function(
     keys <- keys[seq_len(limits$max_children)]
   }
 
+  list(locs = locs, keys = keys)
+}
+
+# Pre-fetch reject gates for one child, evaluated in order. Returns a rejection
+# reason (`"cycle"` / `"depth-exceeded"`) and records the matching problem, or
+# `NA_character_` when the child is fetchable. Cycle detection runs first and
+# before any fetch, so a self-reference or A -> B -> A loop never recurses.
+index_child_reject <- function(child_url, key, child_depth, limits, acc) {
+  if (key %in% acc$visited) {
+    add_index_problem(
+      acc,
+      "index-expansion",
+      child_url,
+      sprintf(
+        "Sitemap index cycle: %s already visited; not followed.",
+        child_url
+      )
+    )
+    return("cycle")
+  }
+
+  if (child_depth > limits$max_depth) {
+    add_index_problem(
+      acc,
+      "index-expansion",
+      child_url,
+      sprintf(
+        "Sitemap index depth limit (%d) exceeded at %s; not followed.",
+        limits$max_depth,
+        child_url
+      )
+    )
+    return("depth-exceeded")
+  }
+
+  NA_character_
+}
+
+# Fetch one child sitemap and parse it, recording its source metadata and any
+# fetch/HTTP/parse failure as a problem + rejected tree row. Returns
+# `list(crec, cparsed)` on success, or `NULL` when the child was skipped (the
+# caller advances to the next child). The child's identity key is assumed
+# already added to `acc$visited` by the caller; the redirect-resolved final URL
+# is keyed here so a redirect onto an already-visited resource is caught.
+fetch_and_parse_child <- function(
+  child_url,
+  child_depth,
+  parent_url,
+  user_agent,
+  net_limits,
+  acc
+) {
+  crec <- tryCatch(
+    fetch_source(child_url, user_agent = user_agent, limits = net_limits),
+    error = function(e) {
+      add_index_problem(
+        acc,
+        "fetch",
+        child_url,
+        sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
+      )
+      NULL
+    }
+  )
+  if (is.null(crec)) {
+    add_tree_row(
+      acc,
+      child_depth,
+      parent_url,
+      child_url,
+      status = "rejected",
+      reason = "unfetchable"
+    )
+    return(NULL)
+  }
+  acc$sources[[length(acc$sources) + 1L]] <- crec
+  # A redirected child may resolve to an already-visited resource; key both.
+  acc$visited <- c(acc$visited, index_loc_key(crec$final_url))
+
+  if (!is.na(crec$error_class)) {
+    add_index_problem(
+      acc,
+      "fetch",
+      crec$final_url,
+      sprintf(
+        "Child sitemap %s returned HTTP %s; skipped.",
+        crec$final_url,
+        crec$status
+      )
+    )
+    add_tree_row(
+      acc,
+      child_depth,
+      parent_url,
+      crec$final_url,
+      status = "rejected",
+      reason = "http-error"
+    )
+    return(NULL)
+  }
+
+  cparsed <- tryCatch(
+    parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
+    error = function(e) {
+      add_index_problem(
+        acc,
+        "classification",
+        crec$final_url,
+        sprintf(
+          "Child sitemap %s could not be parsed; skipped.",
+          crec$final_url
+        )
+      )
+      NULL
+    }
+  )
+  if (is.null(cparsed)) {
+    add_tree_row(
+      acc,
+      child_depth,
+      parent_url,
+      crec$final_url,
+      status = "rejected",
+      reason = "unparseable"
+    )
+    return(NULL)
+  }
+
+  list(crec = crec, cparsed = cparsed)
+}
+
+# Expand one already-parsed sitemapindex node's children into the accumulator,
+# recursing into nested indexes. `parent_url` is the index that listed these
+# children; `parent_depth` is that index's depth (its children land at
+# `parent_depth + 1`). The accumulator `acc` is an environment carrying the
+# growing `rows`/`sources`/`problems`/`tree` lists and the `visited` key set.
+expand_index_node <- function(
+  parent_url,
+  children,
+  parent_depth,
+  user_agent,
+  limits,
+  net_limits,
+  acc
+) {
+  capped <- dedup_and_cap_children(children$loc, parent_url, limits, acc)
+  locs <- capped$locs
+  keys <- capped$keys
+
   child_depth <- parent_depth + 1L
 
   for (i in seq_along(locs)) {
     child_url <- locs[[i]]
     key <- keys[[i]]
 
-    # Cycle: a child whose identity key was already visited (self-reference or a
-    # longer A -> B -> A loop). Detected before any fetch, so it never recurses.
-    if (key %in% acc$visited) {
-      add_index_problem(
-        acc,
-        "index-expansion",
-        child_url,
-        sprintf(
-          "Sitemap index cycle: %s already visited; not followed.",
-          child_url
-        )
-      )
+    reason <- index_child_reject(child_url, key, child_depth, limits, acc)
+    if (!is.na(reason)) {
       add_tree_row(
         acc,
         child_depth,
         parent_url,
         child_url,
         status = "rejected",
-        reason = "cycle"
-      )
-      next
-    }
-
-    # Depth cap: a child that would land beyond the limit is not fetched.
-    if (child_depth > limits$max_depth) {
-      add_index_problem(
-        acc,
-        "index-expansion",
-        child_url,
-        sprintf(
-          "Sitemap index depth limit (%d) exceeded at %s; not followed.",
-          limits$max_depth,
-          child_url
-        )
-      )
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        child_url,
-        status = "rejected",
-        reason = "depth-exceeded"
+        reason = reason
       )
       next
     }
 
     acc$visited <- c(acc$visited, key)
 
-    crec <- tryCatch(
-      fetch_source(child_url, user_agent = user_agent, limits = net_limits),
-      error = function(e) {
-        add_index_problem(
-          acc,
-          "fetch",
-          child_url,
-          sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
-        )
-        NULL
-      }
+    res <- fetch_and_parse_child(
+      child_url,
+      child_depth,
+      parent_url,
+      user_agent,
+      net_limits,
+      acc
     )
-    if (is.null(crec)) {
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        child_url,
-        status = "rejected",
-        reason = "unfetchable"
-      )
+    if (is.null(res)) {
       next
     }
-    acc$sources[[length(acc$sources) + 1L]] <- crec
-    # A redirected child may resolve to an already-visited resource; key both.
-    acc$visited <- c(acc$visited, index_loc_key(crec$final_url))
-
-    if (!is.na(crec$error_class)) {
-      add_index_problem(
-        acc,
-        "fetch",
-        crec$final_url,
-        sprintf(
-          "Child sitemap %s returned HTTP %s; skipped.",
-          crec$final_url,
-          crec$status
-        )
-      )
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        crec$final_url,
-        status = "rejected",
-        reason = "http-error"
-      )
-      next
-    }
-
-    cparsed <- tryCatch(
-      parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
-      error = function(e) {
-        add_index_problem(
-          acc,
-          "classification",
-          crec$final_url,
-          sprintf(
-            "Child sitemap %s could not be parsed; skipped.",
-            crec$final_url
-          )
-        )
-        NULL
-      }
-    )
-    if (is.null(cparsed)) {
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        crec$final_url,
-        status = "rejected",
-        reason = "unparseable"
-      )
-      next
-    }
+    crec <- res$crec
+    cparsed <- res$cparsed
 
     gzip <- identical(as.character(crec$format), "gzip")
 
