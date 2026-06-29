@@ -150,3 +150,30 @@ test_that("normalized_url equals the identity key for a sitemap source", {
   )
   expect_equal(rec$normalized_url, rec$loc_key)
 })
+
+test_that("a non-character `x` raises sitemapr_input_type_error", {
+  expect_error(
+    sitemapr:::create_source_records(42L),
+    class = "sitemapr_input_type_error"
+  )
+  expect_error(
+    sitemapr:::create_source_records(list("a")),
+    class = "sitemapr_input_type_error"
+  )
+})
+
+test_that("an empty character `x` raises sitemapr_input_empty_error", {
+  expect_error(
+    sitemapr:::create_source_records(character(0)),
+    class = "sitemapr_input_empty_error"
+  )
+})
+
+test_that("an unparseable URL raises sitemapr_input_parse_error", {
+  # "https://" carries an explicit scheme but no host, so parse_url_adapter()
+  # reports parse_status != "ok" and normalize_one() aborts.
+  expect_error(
+    sitemapr:::create_source_records("https://"),
+    class = "sitemapr_input_parse_error"
+  )
+})
