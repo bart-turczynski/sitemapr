@@ -197,35 +197,35 @@ ssrf_num_to_quad <- function(n) {
 # the NAT64 local-use /48 packs the IPv4 across the RFC 6052 §2.2 bit layout
 # (octets at bits 48-63 and 72-95, skipping the reserved u-byte at bits 64-71).
 #
-# Cyclomatic-complexity note: this stays one function by design. Each `if` below
-# is a distinct RFC-defined embedding prefix; the body is a flat security spec
-# table, not control-flow tangle. Splitting it would scatter the bit-layout
-# mapping across helpers and make the SSRF matrix harder to review, so the
-# elevated cyclocomp here is an accepted readability/security trade-off
-# (ADR-003; cyclocomp is advisory and not enforced by lint or R CMD check).
+# Each `if` is a distinct RFC-defined embedding prefix, written as an exact
+# hextet pattern compared with a single vectorised `all()`. This reads as a flat
+# security spec table (prefix -> pattern) AND keeps cyclocomp low: a `&&` chain
+# is charged per-operator, whereas one `all(h[...] == c(...))` is a single
+# branch (ADR-003).
 ssrf_embedded_ipv4 <- function(h) {
   tail32 <- h[7L] * 65536 + h[8L]
 
   # IPv4-mapped: five zero hextets then ffff, IPv4 in the last 32 bits.
-  if (all(h[1:5] == 0) && h[6L] == 0xffff) {
+  if (all(h[1:6] == c(0, 0, 0, 0, 0, 0xffff))) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-mapped"))
   }
   # IPv4-translated: four zero hextets, then ffff and a zero hextet.
-  if (all(h[1:4] == 0) && h[5L] == 0xffff && h[6L] == 0) {
+  if (all(h[1:6] == c(0, 0, 0, 0, 0xffff, 0))) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-translated"))
   }
   # NAT64 well-known prefix, IPv4 in the last 32 bits.
-  if (h[1L] == 0x64 && h[2L] == 0xff9b && all(h[3:6] == 0)) {
+  if (all(h[1:6] == c(0x64, 0xff9b, 0, 0, 0, 0))) {
     return(list(ssrf_num_to_quad(tail32), "nat64"))
   }
   # NAT64 local-use prefix; IPv4 split per RFC 6052 §2.2 around the u-byte.
-  if (h[1L] == 0x64 && h[2L] == 0xff9b && h[3L] == 1) {
+  if (all(h[1:3] == c(0x64, 0xff9b, 1))) {
     o <- c(h[4L] %/% 256, h[4L] %% 256, h[5L] %% 256, h[6L] %/% 256)
     return(list(paste(o, collapse = "."), "nat64"))
   }
-  # IPv4-compatible (deprecated): six zero hextets. Excludes the unspecified
-  # and loopback specials, which must not be read as 0.0.0.0 / 0.0.0.1.
-  if (all(h[1:6] == 0) && !(h[7L] == 0 && h[8L] <= 1)) {
+  # IPv4-compatible (deprecated): six zero hextets. tail32 > 1 excludes the
+  # unspecified (::) and loopback (::1) specials, which must not be read as
+  # 0.0.0.0 / 0.0.0.1.
+  if (all(h[1:6] == 0) && tail32 > 1) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-compatible"))
   }
   NULL
