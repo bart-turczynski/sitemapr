@@ -48,3 +48,21 @@ A top-level sitemap index is expanded recursively (cycle-safe, depth- and
 count-capped) so every reachable child sitemap's rows carry per-child
 provenance; the bounds are configurable via \code{index_limits}.
 }
+\examples{
+# Read a local sitemap file into a tidy tibble of URLs.
+xml <- paste0(
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  '<url><loc>https://example.com/</loc>',
+  '<lastmod>2024-01-01</lastmod></url>',
+  '<url><loc>https://example.com/about</loc></url>',
+  '</urlset>'
+)
+path <- tempfile(fileext = ".xml")
+writeLines(xml, path)
+read_sitemap(path)
+
+\dontrun{
+# Read directly from a sitemap URL; a top-level index expands recursively.
+read_sitemap("https://example.com/sitemap.xml")
+}
+}
