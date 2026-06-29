@@ -222,3 +222,54 @@ test_that("dense control bytes (no NUL) classify as binary", {
   ctrl <- as.raw(rep(0x01L, 100L))
   expect_identical(sniff(ctrl), "binary")
 })
+
+# ---- coercion + short input --------------------------------------------------
+
+test_that("a non-raw (integer) vector is coerced before sniffing", {
+  # Integer bytes for "<html"; sniff_format() coerces with as.raw() first.
+  html_ints <- c(0x3CL, 0x68L, 0x74L, 0x6DL, 0x6CL)
+  expect_identical(sniff(html_ints), "html")
+})
+
+test_that("input shorter than a magic sequence is not misread", {
+  # A single 0x1f byte must not match the 2-byte gzip magic (1f 8b).
+  expect_identical(sniff(as.raw(0x1FL)), "binary")
+})
+
+# ---- XML prologue stripping edge cases ---------------------------------------
+
+test_that("an unterminated comment strands no usable root", {
+  expect_identical(sniff(charToRaw("<!-- never closed")), "text")
+})
+
+test_that("an unterminated processing instruction strands no usable root", {
+  expect_identical(sniff(charToRaw('<?xml version="1.0"')), "text")
+})
+
+test_that("a DOCTYPE with no closing '>' strands no usable root", {
+  # A bare unterminated <!doctype html ...> still resolves to html via the
+  # trailing direct-doctype check.
+  expect_identical(sniff(charToRaw("<!DOCTYPE html")), "html")
+})
+
+test_that("a DOCTYPE internal subset with no closing ']' strands no root", {
+  expect_identical(sniff(charToRaw("<!DOCTYPE a [ b >")), "text")
+})
+
+test_that("a closed internal subset with no trailing '>' strands no root", {
+  expect_identical(sniff(charToRaw("<!DOCTYPE a [ x > ]")), "text")
+})
+
+# ---- helper-level defensive branches -----------------------------------------
+
+test_that("sniff_is_text() treats zero-length input as not text", {
+  expect_false(sitemapr:::sniff_is_text(raw(0)))
+})
+
+test_that("sniff_markup_preview() of empty bytes is the empty string", {
+  expect_identical(sitemapr:::sniff_markup_preview(raw(0)), "")
+})
+
+test_that("sniff_strip_prologue() of whitespace-only input is empty", {
+  expect_identical(sitemapr:::sniff_strip_prologue("   \n\t"), "")
+})
