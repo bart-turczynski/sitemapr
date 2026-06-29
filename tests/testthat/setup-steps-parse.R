@@ -455,7 +455,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   then("the error identifies the URL and the HTTP status", function(context) {
     expect_identical(context$error$status, 500L)
-    expect_true(!is.null(context$error$url) && nzchar(context$error$url))
+    expect_false(is.null(context$error$url))
+    expect_true(nzchar(context$error$url))
   })
 
   then("the result has a sources attribute", function(context) {

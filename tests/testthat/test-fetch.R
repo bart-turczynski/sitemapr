@@ -159,7 +159,7 @@ test_that("read_capped_body discards the partial body over the ceiling", {
     classes = "sitemapr_body_ceiling"
   )
   expect_identical(cnd$max_bytes, 100)
-  expect_true(cnd$bytes_read > 100)
+  expect_gt(cnd$bytes_read, 100)
 })
 
 test_that("read_capped_body consumes a binary connection under the cap", {

@@ -261,11 +261,9 @@ classify_lastmod <- function(raw) {
   }
   parsed <- parse_lastmod(raw[present])
   is_date <- grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", trimmed[present])
-  cls <- ifelse(
-    is.na(parsed),
-    "invalid",
-    ifelse(is_date, "date-only", "datetime")
-  )
+  cls <- rep("datetime", length(parsed))
+  cls[is.na(parsed)] <- "invalid"
+  cls[!is.na(parsed) & is_date] <- "date-only"
   out[present] <- cls
   out
 }

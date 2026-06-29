@@ -54,7 +54,7 @@ test_that("generic guesses keep their documented contractual order", {
 test_that("generic guesses carry NA source; CMS rows carry a source slug", {
   cat <- discovery_catalog()
   expect_true(all(is.na(cat$source[cat$kind == "generic"])))
-  expect_true(all(!is.na(cat$source[cat$kind == "cms"])))
+  expect_true(!any(is.na(cat$source[cat$kind == "cms"])))
 })
 
 test_that("rows are unique even though a path may repeat across kinds", {

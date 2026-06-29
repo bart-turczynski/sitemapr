@@ -365,7 +365,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
         hits$evidence,
         function(ev) {
           ex <- ev$excerpt
-          !is.null(ex) && !is.na(ex) && grepl("video", ex)
+          !is.null(ex) && !is.na(ex) && grepl("video", ex, fixed = TRUE)
         },
         logical(1L)
       )

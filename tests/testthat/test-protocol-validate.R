@@ -395,7 +395,7 @@ test_that("a full datetime lastmod is clean and not flagged date-only", {
     rows_with_lastmod("https://example.com/a", "2004-12-23T18:00:15+00:00"),
     sitemap_url = sm_url
   )
-  expect_false(any(grepl("LASTMOD", out$code)))
+  expect_false(any(grepl("LASTMOD", out$code, fixed = TRUE)))
 })
 
 test_that("an absent lastmod (NA in the faithful column) is not flagged", {
@@ -406,7 +406,7 @@ test_that("an absent lastmod (NA in the faithful column) is not flagged", {
     ),
     sitemap_url = sm_url
   )
-  expect_false(any(grepl("LASTMOD", out$code)))
+  expect_false(any(grepl("LASTMOD", out$code, fixed = TRUE)))
 })
 
 # --- corpus-level lastmod heuristics ---------------------------------------

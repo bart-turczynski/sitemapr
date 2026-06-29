@@ -159,7 +159,7 @@ test_that("a self-referential index is detected and not followed", {
   expect_false(root %in% tracker$urls)
   expect_true(any(
     res$problems$category == "index-expansion" &
-      grepl("cycle", res$problems$message)
+      grepl("cycle", res$problems$message, fixed = TRUE)
   ))
   expect_true(any(res$tree$reason == "cycle"))
 })
@@ -176,7 +176,7 @@ test_that("an A -> B -> A cross-index cycle terminates without recursion", {
   # B is fetched once; the loop back to A is caught, A is never fetched.
   expect_identical(sum(tracker$urls == b), 1L)
   expect_false(a %in% tracker$urls)
-  expect_true(any(grepl("cycle", res$problems$message)))
+  expect_true(any(grepl("cycle", res$problems$message, fixed = TRUE)))
 })
 
 test_that("the recursion depth limit is enforced; deeper nodes unfetched", {
@@ -196,7 +196,7 @@ test_that("the recursion depth limit is enforced; deeper nodes unfetched", {
 
   expect_true(lvl1 %in% tracker$urls)
   expect_false(lvl2 %in% tracker$urls)
-  expect_true(any(grepl("depth limit", res$problems$message)))
+  expect_true(any(grepl("depth limit", res$problems$message, fixed = TRUE)))
   expect_true(any(res$tree$reason == "depth-exceeded"))
 })
 
@@ -218,7 +218,7 @@ test_that("the per-index child-count cap truncates and records one event", {
   )
 
   expect_identical(length(tracker$urls), 2L)
-  expect_true(any(grepl("cap", res$problems$message)))
+  expect_true(any(grepl("cap", res$problems$message, fixed = TRUE)))
 })
 
 test_that("a child the SSRF guard blocks is recorded as unfetchable", {
@@ -236,7 +236,7 @@ test_that("a child the SSRF guard blocks is recorded as unfetchable", {
   expect_identical(res$tree$reason, "unfetchable")
   expect_true(any(
     res$problems$category == "fetch" &
-      grepl("could not be fetched", res$problems$message)
+      grepl("could not be fetched", res$problems$message, fixed = TRUE)
   ))
   expect_identical(nrow(res$rows), 0L)
 })
