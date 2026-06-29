@@ -264,3 +264,88 @@ test_that("a missing archive file raises sitemapr_archive_not_found", {
     class = "sitemapr_archive_not_found"
   )
 })
+
+# ---- tar reader edge cases ---------------------------------------------------
+
+test_that("a blank octal header field parses as zero", {
+  expect_identical(tar_field_octal(raw(512L), 124L, 12L), 0)
+})
+
+test_that("an unparseable (overflowing) octal field is malformed", {
+  h <- raw(512L)
+  h[125:136] <- charToRaw("777777777777") # overflows a 32-bit integer
+  expect_error(
+    tar_field_octal(h, 124L, 12L),
+    class = "sitemapr_malformed_archive"
+  )
+})
+
+test_that("a stream that ends without a zero block still reads its entries", {
+  body <- charToRaw("https://a/1\n")
+  bytes <- c(tar_header("a.txt", length(body)), pad_block(body))
+  entries <- tar_read_entries(bytes)
+  expect_length(entries, 1L)
+  expect_identical(entries[[1L]]$name, "a.txt")
+})
+
+test_that("a partial trailing header block is malformed", {
+  expect_error(
+    tar_read_entries(raw(10L)),
+    class = "sitemapr_malformed_archive"
+  )
+})
+
+test_that("a ustar prefix field is prepended to the member name", {
+  body <- charToRaw("https://a/1\n")
+  h <- tar_header("file.xml", length(body))
+  h[346:351] <- charToRaw("subdir") # prefix field at offset 345
+  bytes <- c(h, pad_block(body), raw(1024L))
+  entries <- tar_read_entries(bytes)
+  expect_identical(entries[[1L]]$name, "subdir/file.xml")
+})
+
+# ---- per-member content dispatch ---------------------------------------------
+
+test_that("an empty member is skipped", {
+  out <- archive_parse_member(NULL, "empty.xml", "ref")
+  expect_null(out$rows)
+  expect_identical(out$reason, "empty member")
+})
+
+test_that("a sitemap index member is skipped, not expanded", {
+  idx <- paste0(
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "<sitemap><loc>https://a/s.xml</loc></sitemap>",
+    "</sitemapindex>"
+  )
+  out <- archive_parse_member(charToRaw(idx), "idx.xml", "ref")
+  expect_null(out$rows)
+  expect_identical(out$reason, "sitemap index inside archive is not expanded")
+})
+
+test_that("a non-sitemap XML member is skipped", {
+  out <- archive_parse_member(charToRaw("<foo>bar</foo>"), "x.xml", "ref")
+  expect_null(out$rows)
+  expect_identical(out$reason, "non-sitemap XML content")
+})
+
+test_that("a .txt member with non-text content is skipped", {
+  out <- archive_parse_member(
+    as.raw(c(0x00L, 0x01L, 0x02L, 0x03L)),
+    "x.txt",
+    "ref"
+  )
+  expect_null(out$rows)
+  expect_identical(out$reason, "non-text content in .txt member")
+})
+
+test_that("an archive whose only members are skipped yields zero rows", {
+  path <- withr::local_tempfile(fileext = ".tar.gz")
+  write_tar_gz(
+    list(list(name = "notes.md", content = "just some notes")),
+    path
+  )
+  res <- parse_sitemap_archive(path, source_ref = "arc")
+  expect_identical(nrow(res$rows), 0L)
+  expect_identical(nrow(res$problems), 1L)
+})
