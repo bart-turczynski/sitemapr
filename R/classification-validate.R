@@ -152,6 +152,11 @@ classification_child_finding <- function(code, base, child_url, message) {
 # unsupported root element, and RSS/Atom feed children of a sitemap index.
 # `NULL` meta (or all-default fields) yields no findings. Returns a (possibly
 # empty) classification-findings tibble.
+# Accepted cyclocomp advisory exception (SITE-kpgkiikq): cyclocomp scores this
+# ~18 (threshold 15). It is three independent, flat `source_meta`-driven blocks
+# (HTML masquerade, unsupported root, feed children) emitting one finding each;
+# the score comes from the `&&` guards and the per-block branches, not nesting.
+# Splitting into one helper per block would not improve readability. Left as-is.
 validate_classification <- function(meta, base) {
   if (is.null(meta)) {
     return(empty_classification_findings())
@@ -213,6 +218,12 @@ validate_classification <- function(meta, base) {
 # is the general `ENCODING_CONFLICT`. Both are `info` here; Layer F elevates the
 # BOM/declaration one to `warning` in strict mode. Returns a (possibly empty)
 # classification-findings tibble.
+# Accepted cyclocomp advisory exception (SITE-kpgkiikq): cyclocomp scores this
+# ~21 (threshold 15), but the count is dominated by short-circuit `&&`/`||` in
+# the flat conflict predicates below and the BOM > declaration > HTTP > UTF-8
+# resolution cascade — boolean richness, not nested control flow. The function
+# reads linearly against the spec; extracting the one-line predicates would only
+# relocate the operators (cyclocomp follows them into helpers). Left as-is.
 validate_encoding <- function(meta, base) {
   if (is.null(meta)) {
     return(empty_classification_findings())
