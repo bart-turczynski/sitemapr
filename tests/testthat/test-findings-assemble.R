@@ -40,7 +40,7 @@ test_that("column set and types match the contract exactly", {
       subject_type = "document",
       subject_ref = "sitemap://e.com/s.xml",
       message = "bad",
-      evidence = list(schema_evidence(excerpt = "x")),
+      evidence = list(finding_evidence(excerpt = "x")),
       is_strict_only = FALSE
     )
   )
@@ -69,7 +69,7 @@ test_that("non-strict drops is_strict_only rows; strict keeps them", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:1",
       message = "date-only",
-      evidence = list(protocol_evidence(excerpt = "2024-01-01")),
+      evidence = list(finding_evidence(excerpt = "2024-01-01")),
       is_strict_only = TRUE
     )
   )
@@ -90,7 +90,7 @@ test_that("non-strict downgrades schema error to warning; strict leaves it", {
       subject_type = "document",
       subject_ref = "sitemap://e.com/s.xml",
       message = "bad",
-      evidence = list(schema_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -107,7 +107,7 @@ test_that("strict elevates info->warning codes; non-strict keeps info", {
       subject_type = "source",
       subject_ref = "sitemap://e.com/s.xml",
       message = "bom",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     protocol_findings(
@@ -116,7 +116,7 @@ test_that("strict elevates info->warning codes; non-strict keeps info", {
       subject_type = "document",
       subject_ref = "sitemap://e.com/s.xml",
       message = "gen",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -139,7 +139,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:9",
       message = "frag",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     protocol_findings(
@@ -148,7 +148,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:2",
       message = "dup",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     schema_findings(
@@ -157,7 +157,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       subject_type = "document",
       subject_ref = "sitemap://e.com/s.xml",
       message = "schema",
-      evidence = list(schema_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     classification_findings(
@@ -166,7 +166,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       subject_type = "source",
       subject_ref = "sitemap://e.com/s.xml",
       message = "root",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -200,7 +200,7 @@ test_that("severity ties break by subject_ref then code", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:2",
       message = "b",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     protocol_findings(
@@ -209,7 +209,7 @@ test_that("severity ties break by subject_ref then code", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:1",
       message = "a",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   )
@@ -227,7 +227,7 @@ test_that("exact-duplicate rows are de-duplicated, first kept", {
     subject_type = "entry",
     subject_ref = "sitemap://e.com/s.xml#entry:1",
     message = "frag",
-    evidence = list(protocol_evidence(excerpt = "a")),
+    evidence = list(finding_evidence(excerpt = "a")),
     is_strict_only = FALSE
   )
   out <- assemble_findings(list(one, one), "strict")
@@ -242,7 +242,7 @@ test_that("assembling the same parts twice is row-for-row identical", {
       subject_type = "entry",
       subject_ref = "sitemap://e.com/s.xml#entry:2",
       message = "dup",
-      evidence = list(protocol_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     ),
     schema_findings(
@@ -251,7 +251,7 @@ test_that("assembling the same parts twice is row-for-row identical", {
       subject_type = "document",
       subject_ref = "sitemap://e.com/s.xml",
       message = "schema",
-      evidence = list(schema_evidence()),
+      evidence = list(finding_evidence()),
       is_strict_only = FALSE
     )
   )

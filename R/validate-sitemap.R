@@ -124,7 +124,7 @@ index_findings_from_problems <- function(problems, base) {
         paste0("#index-child:", problems$subject_ref[i])
       ),
       message = problems$message[i],
-      evidence = list(protocol_evidence(excerpt = problems$subject_ref[i])),
+      evidence = list(finding_evidence(excerpt = problems$subject_ref[i])),
       is_strict_only = FALSE
     )
   }

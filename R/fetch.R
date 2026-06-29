@@ -91,12 +91,6 @@ read_capped_body <- function(source, max_bytes, chunk_size = 65536L) {
 
 # ---- condition / error classification helpers --------------------------------
 
-# A connection-level failure (DNS, refused, reset, TLS, timeout) surfaces from
-# httr2 as `httr2_failure` (real curl errors) and/or `httr2_timeout`.
-fetch_is_transport_failure <- function(cnd) {
-  inherits(cnd, "httr2_failure") || inherits(cnd, "httr2_timeout")
-}
-
 # Distinguish a timeout from a generic transport failure. httr2's real timeout
 # carries class `httr2_timeout`; otherwise fall back to a message probe so a
 # mocked curl-style failure ("Timeout was reached") is also recognised.

@@ -100,18 +100,6 @@ empty_protocol_findings <- function() {
   protocol_findings()
 }
 
-# One evidence list, with the excerpt clamped to the contract's 500-char cap.
-protocol_evidence <- function(
-  excerpt = NA_character_,
-  line = NA_integer_,
-  column = NA_integer_
-) {
-  if (!is.na(excerpt)) {
-    excerpt <- substr(excerpt, 1L, 500L)
-  }
-  list(excerpt = excerpt, line = as.integer(line), column = as.integer(column))
-}
-
 # Append a fragment to a subject_ref base, tolerating an absent base.
 protocol_ref_fragment <- function(base, fragment) {
   if (is.null(base) || is.na(base) || !nzchar(base)) {
@@ -188,7 +176,7 @@ protocol_url_finding <- function(
     subject_type = subject_type,
     subject_ref = protocol_ref_fragment(base, paste0("#entry:", i)),
     message = message,
-    evidence = list(protocol_evidence(excerpt = loc)),
+    evidence = list(finding_evidence(excerpt = loc)),
     is_strict_only = is_strict_only
   )
 }
@@ -209,7 +197,7 @@ protocol_document_finding <- function(
     subject_type = "document",
     subject_ref = if (is.null(base)) NA_character_ else base,
     message = message,
-    evidence = list(protocol_evidence(excerpt = excerpt)),
+    evidence = list(finding_evidence(excerpt = excerpt)),
     is_strict_only = is_strict_only
   )
 }
@@ -525,7 +513,7 @@ protocol_ext_finding <- function(
       sprintf("#entry:%d:%s:%d", i, kind, m)
     ),
     message = message,
-    evidence = list(protocol_evidence(excerpt = excerpt)),
+    evidence = list(finding_evidence(excerpt = excerpt)),
     is_strict_only = FALSE
   )
 }
@@ -890,7 +878,7 @@ protocol_hreflang_finding <- function(
       sprintf("#entry:%d:link:%d", i, m)
     ),
     message = message,
-    evidence = list(protocol_evidence(excerpt = excerpt)),
+    evidence = list(finding_evidence(excerpt = excerpt)),
     is_strict_only = is_strict_only
   )
 }
@@ -904,7 +892,7 @@ protocol_hreflang_set_finding <- function(code, severity, base, i, message) {
     subject_type = "entry",
     subject_ref = protocol_ref_fragment(base, sprintf("#entry:%d", i)),
     message = message,
-    evidence = list(protocol_evidence()),
+    evidence = list(finding_evidence()),
     is_strict_only = FALSE
   )
 }
@@ -1307,7 +1295,7 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
 # --- Text-sitemap rules (D.5) ------------------------------------------------
 
-# Text-sitemap evidence: like protocol_evidence() but the excerpt is clamped to
+# Text-sitemap evidence: like finding_evidence() but the excerpt is clamped to
 # the contract's tighter 200-char cap for text lines (findings-contract.md;
 # sitemap-spec.md §7.2) and the 1-based line number is always recorded.
 protocol_text_evidence <- function(excerpt, line) {
