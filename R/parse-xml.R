@@ -39,12 +39,6 @@ xpath_child_local <- function(name) {
   sprintf("./*[local-name()='%s']", name)
 }
 
-# XPath for a direct child matched by namespace URI and local name (used for
-# extension elements so any prefix binding is accepted).
-xpath_child_ns <- function(uri, name) {
-  sprintf("./*[namespace-uri()='%s' and local-name()='%s']", uri, name)
-}
-
 # Parse W3C Datetime / ISO 8601 sitemap `lastmod` values to POSIXct (UTC).
 # Accepts a date (`YYYY-MM-DD`, taken as midnight UTC) or a datetime with a
 # `Z` or `+hh:mm` offset, with optional fractional seconds. Unparseable or
