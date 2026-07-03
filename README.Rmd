@@ -16,44 +16,109 @@ knitr::opts_chunk$set(
 # sitemapr
 
 <!-- badges: start -->
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml)
 [![test-coverage](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml)
 [![lint](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml)
 <!-- badges: end -->
 
-A deterministic toolkit for reading and validating XML, text, and index
-sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It
-parses sitemap sources into tidy tibbles, expands sitemap indexes, and reports
-schema and protocol findings with stable, reproducible output.
+sitemapr is a deterministic toolkit for reading and validating XML, text, and
+index sitemaps against the [Sitemap Protocol
+0.9](https://www.sitemaps.org/protocol.html) and the related W3C and RFC
+standards. It parses sitemap sources into tidy tibbles, expands sitemap indexes,
+discovers a site's sitemaps from its root URL, and reports schema and protocol
+findings with stable, reproducible output.
 
-## Setup
+> **Status: experimental.** The package works and is covered by an extensive
+> test suite, but the API may still change without deprecation and it is not yet
+> on CRAN. Pin a commit or tag if you depend on it.
 
-Install package dependencies (from `DESCRIPTION`) plus the dev tooling used by
-the checks:
+## Installation
 
-```sh
-Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
+sitemapr and its URL-parsing dependency ([rurl](https://github.com/bart-turczynski/rurl))
+are installed from GitHub. [pak](https://pak.r-lib.org) reads the `Remotes`
+field and resolves the chain for you:
+
+```r
+# install.packages("pak")
+pak::pak("bart-turczynski/sitemapr")
 ```
 
-## Verification
+## Usage
 
-```sh
-Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }' && Rscript -e 'rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
+### Read a sitemap into a tidy tibble
+
+`read_sitemap()` accepts a sitemap URL or a local file (`.xml`, `.txt`, `.gz`,
+or `.tar.gz`) and returns one row per URL, with `lastmod`, `changefreq`,
+`priority`, and the image/video/news/alternate extension columns.
+
+```{r read}
+library(sitemapr)
+
+sitemap <- '<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2024-01-01</lastmod>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://example.com/about</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+</urlset>'
+
+path <- tempfile(fileext = ".xml")
+writeLines(sitemap, path)
+
+read_sitemap(path)
 ```
 
-`R CMD check` runs testthat plus the active top-level cucumber specs. The
-feature files under `tests/testthat/features/` are pending v1 acceptance drafts
-mapped to fp tracer-bullet tickets and should be activated as those tickets
-land.
+A top-level sitemap index is expanded recursively (cycle-safe, depth- and
+count-capped) so every reachable child sitemap's rows carry provenance.
 
-## Project Layout
+### Validate against the schema and protocol
 
-- `R/` contains the package source.
-- `man/` contains generated help pages (regenerate with `devtools::document()`).
-- `NAMESPACE` and `man/` are roxygen2-generated — edit the roxygen comments in `R/`, not these.
-- `tests/testthat/` contains testthat tests, active cucumber specs, and pending
-  v1 acceptance drafts under `features/`.
-- `vignettes/` contains long-form documentation.
-- `DESCRIPTION` declares package metadata and dependencies.
-- `docs/architecture.md` contains durable project context.
-- `_scratch/` is local-only planning space and is ignored by git.
+`validate_sitemap()` returns a stable findings tibble — one row per issue, with
+a `code`, `severity`, and the `layer` (schema, protocol, classification, or
+index) that produced it. The same source and mode always yield a row-for-row
+identical result.
+
+```{r validate}
+invalid <- '<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/</loc><priority>2.0</priority></url>
+  <url><loc>/relative/path</loc></url>
+</urlset>'
+
+path <- tempfile(fileext = ".xml")
+writeLines(invalid, path)
+
+findings <- validate_sitemap(path)
+findings[, c("code", "severity", "layer")]
+```
+
+Pass `mode = "non-strict"` to downgrade schema violations to warnings and drop
+strict-only findings.
+
+### Discover a site's sitemaps
+
+`sitemap_tree()` takes a site-root URL, tries a catalog of common sitemap paths
+(generic, then WordPress/Shopify), and returns a discovery tree: one row per
+candidate, marked `accepted` or `rejected`. It needs network access, so it is
+not run here.
+
+```{r tree, eval = FALSE}
+sitemap_tree("https://example.com")
+```
+
+## Learn more
+
+- Full reference and articles: <https://bart-turczynski.github.io/sitemapr/>
+- Getting-started vignette: `vignette("introduction", package = "sitemapr")`
+
+## Development
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev setup, verification gate,
+and formatting conventions. Durable project context lives under
+[`docs/`](docs/).
