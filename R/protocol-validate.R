@@ -1258,20 +1258,12 @@ loc_not_absolute_findings <- function(loc, bad, base) {
   out
 }
 
-# URL-structure checks for one absolute http(s) `<loc>` at entry `j`: no-host
-# (terminal), over-length, invalid escape, fragment, userinfo, out-of-scope.
-# `prow` is the one-row parsed adapter for this loc.
-loc_single_url_findings <- function(
-  l,
-  j,
-  prow,
-  authority_self,
-  dir_self,
-  sitemap_url,
-  base
-) {
-  host <- as.character(prow$host)
-  if (is.na(host) || !nzchar(host)) {
+# URL-structure findings for one absolute http(s) `<loc>` at entry `j`, built
+# from the per-entry flags precomputed vectorized by `validate_loc_urls()`:
+# no-host (terminal), over-length, invalid escape, fragment, userinfo,
+# out-of-scope. `f` is a named logical list for this one entry.
+loc_single_url_findings <- function(l, j, f, sitemap_url, base) {
+  if (f$no_host) {
     return(list(protocol_url_finding(
       "PROTOCOL_URL_NO_HOST",
       "error",
@@ -1285,7 +1277,7 @@ loc_single_url_findings <- function(
 
   out <- list()
 
-  if (nchar(l) >= 2048L) {
+  if (f$too_long) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_URL_TOO_LONG",
       "warning",
@@ -1300,7 +1292,7 @@ loc_single_url_findings <- function(
     )
   }
 
-  if (has_invalid_escape(l)) {
+  if (f$invalid_escape) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_URL_INVALID_ESCAPE",
       "error",
@@ -1312,7 +1304,7 @@ loc_single_url_findings <- function(
     )
   }
 
-  if (grepl("#", l, fixed = TRUE)) {
+  if (f$fragment) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_URL_FRAGMENT",
       "info",
@@ -1327,8 +1319,7 @@ loc_single_url_findings <- function(
     )
   }
 
-  user <- as.character(prow$user)
-  if (!is.na(user) && nzchar(user)) {
+  if (f$userinfo) {
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_URL_USERINFO",
       "info",
@@ -1340,27 +1331,23 @@ loc_single_url_findings <- function(
     )
   }
 
-  if (!is.na(authority_self)) {
-    in_scope <- identical(loc_authority(prow), authority_self) &&
-      startsWith(as.character(prow$path), dir_self)
-    if (!in_scope) {
-      out[[length(out) + 1L]] <- protocol_url_finding(
-        "PROTOCOL_URL_OUT_OF_SCOPE",
-        "warning",
-        "entry",
-        base,
-        j,
+  if (f$out_of_scope) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_OUT_OF_SCOPE",
+      "warning",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf(
+        paste0(
+          "<loc> '%s' is outside the sitemap's scope (same host and ",
+          "same-or-lower path as %s)."
+        ),
         l,
-        sprintf(
-          paste0(
-            "<loc> '%s' is outside the sitemap's scope (same host and ",
-            "same-or-lower path as %s)."
-          ),
-          l,
-          sitemap_url
-        )
+        sitemap_url
       )
-    }
+    )
   }
 
   out
@@ -1434,19 +1421,44 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
     dir_self <- loc_directory_prefix(parsed_self$path)
   }
 
-  for (k in seq_along(absolute)) {
-    j <- absolute[k]
+  # Compute every URL-rule predicate across ALL absolute rows at once, then
+  # iterate only over the entries that trip a rule — a clean sitemap loops zero
+  # times. Extract the parsed columns to plain vectors once (no per-URL
+  # `parsed[k, ]` row-subsetting). NO_HOST is terminal, so the other predicates
+  # apply only where a host is present.
+  l <- loc[absolute]
+  host <- as.character(parsed$host)
+  user <- as.character(parsed$user)
+  path <- as.character(parsed$path)
+
+  no_host <- is.na(host) | !nzchar(host)
+  applies <- !no_host
+  too_long <- applies & nchar(l) >= 2048L
+  invalid_escape <- applies & has_invalid_escape(l)
+  fragment <- applies & grepl("#", l, fixed = TRUE)
+  userinfo <- applies & !is.na(user) & nzchar(user)
+  out_of_scope <- rep(FALSE, length(l))
+  if (!is.na(authority_self)) {
+    in_scope <- loc_authority(parsed) == authority_self &
+      startsWith(path, dir_self)
+    out_of_scope <- applies & !(!is.na(in_scope) & in_scope)
+  }
+
+  hit <- which(
+    no_host | too_long | invalid_escape | fragment | userinfo | out_of_scope
+  )
+  for (k in hit) {
+    flags <- list(
+      no_host = no_host[k],
+      too_long = too_long[k],
+      invalid_escape = invalid_escape[k],
+      fragment = fragment[k],
+      userinfo = userinfo[k],
+      out_of_scope = out_of_scope[k]
+    )
     out <- c(
       out,
-      loc_single_url_findings(
-        loc[j],
-        j,
-        parsed[k, , drop = FALSE],
-        authority_self,
-        dir_self,
-        sitemap_url,
-        base
-      )
+      loc_single_url_findings(l[k], absolute[k], flags, sitemap_url, base)
     )
   }
 

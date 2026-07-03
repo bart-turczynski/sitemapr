@@ -35,33 +35,27 @@ parse_url_adapter <- function(urls) {
   }
 
   fast <- !url_needs_rurl(urls)
-  comp <- vector("list", n)
-  for (i in which(fast)) {
-    c_i <- url_fast_components(urls[[i]])
-    if (is.null(c_i)) {
-      fast[i] <- FALSE # ambiguous once parsed — defer to rurl
-    } else {
-      comp[[i]] <- c_i
-    }
+  fc_kept <- NULL
+  if (any(fast)) {
+    fc <- url_fast_components_vec(urls[fast])
+    # Candidates that did not resolve to a proven no-op defer to rurl.
+    fast[which(fast)[!fc$resolved]] <- FALSE
+    fc_kept <- fc[fc$resolved, , drop = FALSE]
   }
 
   if (!any(fast)) {
     return(rurl_parse(urls))
   }
   if (all(fast)) {
-    return(url_fast_rows(urls, comp))
+    return(url_fast_rows(urls, fc_kept))
   }
 
   # Build both halves with the identical 14-column schema, then restore order.
-  fast_df <- url_fast_rows(urls[fast], comp[fast])
+  fast_df <- url_fast_rows(urls[fast], fc_kept)
   slow_df <- rurl_parse(urls[!fast])
   combined <- rbind(fast_df, slow_df)
   combined[order(c(which(fast), which(!fast))), , drop = FALSE]
 }
-
-# Local null-coalescing helper (base R gained `%||%` only in 4.4; the package
-# targets R >= 4.0). Internal to this file's fast-path plumbing.
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 # The pinned rurl call (canonicalization options sitemapr relies on).
 rurl_parse <- function(urls) {
@@ -91,129 +85,155 @@ url_needs_rurl <- function(urls) {
 # untouched (verified empirically): unreserved + `/` in the path; additionally
 # `&` `=` `?` in the query. Anything else (sub-delims, parens, `:` in a path,
 # `+`, `;`, ...) is encoded by rurl, so such a URL is not fast-eligible.
+# Vectorized over a character vector of paths -> logical vector.
 url_path_is_noop <- function(path) {
-  if (is.null(path) || !nzchar(path)) {
-    return(TRUE)
-  }
-  if (!grepl("^[A-Za-z0-9._~/-]*$", path)) {
-    return(FALSE)
-  }
+  empty <- is.na(path) | !nzchar(path)
   # No dot-segments or empty segments: rurl would collapse `/./`, `/../`, `//`.
-  # The leading empty segment from a path's initial `/` is expected, so test for
-  # `//` directly rather than via the split.
-  if (grepl("//", path, fixed = TRUE)) {
-    return(FALSE)
-  }
-  segs <- strsplit(path, "/", fixed = TRUE)[[1L]]
-  !any(segs %in% c(".", ".."))
+  # `(^|/)[.]{1,2}(/|$)` matches a `.`/`..` segment anywhere (equivalent to the
+  # per-segment `%in% c(".", "..")` check); `//` is tested directly.
+  ok <- grepl("^[A-Za-z0-9._~/-]*$", path) &
+    !grepl("//", path, fixed = TRUE) &
+    !grepl("(^|/)[.]{1,2}(/|$)", path)
+  empty | (!is.na(ok) & ok)
 }
 
+# Vectorized over a character vector of queries -> logical vector.
 url_query_is_noop <- function(query) {
-  is.null(query) || !nzchar(query) || grepl("^[A-Za-z0-9._~&=/?-]*$", query)
+  is.na(query) | !nzchar(query) | grepl("^[A-Za-z0-9._~&=/?-]*$", query)
 }
 
 # A host is fast-eligible only when it is unambiguously a DNS name: ASCII
 # letters/digits/dots/hyphens whose rightmost label contains a letter. That
 # excludes every IP-literal form (dotted-quad, decimal, hex, IPv6) so the
 # security-sensitive `is_ip_host` flag is never guessed here — those defer to
-# rurl, which owns IP detection (R/ssrf.R depends on it).
+# rurl, which owns IP detection (R/ssrf.R depends on it). Vectorized over a
+# character vector of hosts -> logical vector.
 url_host_is_dns_name <- function(host) {
-  if (is.null(host) || !nzchar(host)) {
-    return(FALSE)
-  }
-  if (!grepl("^[A-Za-z0-9.-]+$", host)) {
-    return(FALSE)
-  }
+  ok <- !is.na(host) & nzchar(host) & grepl("^[A-Za-z0-9.-]+$", host)
   last <- sub("^.*\\.", "", host)
-  grepl("[A-Za-z]", last)
+  ok & grepl("[A-Za-z]", last)
 }
 
-# Split a fast-prefiltered URL into components by regex and confirm every one is
-# a proven rurl no-op. Returns the component list on success, or NULL to defer
-# the URL to rurl. Done by slicing the raw string (not `curl::curl_parse_url`,
-# which returns decoded query `params` rather than the raw query) so the
-# fast-path components are literally the input's — which, for a no-op URL, is
-# exactly what rurl emits.
-url_fast_components <- function(url) {
-  m <- regmatches(
-    url,
-    regexec("^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?", url)
-  )[[1L]]
-  if (length(m) == 0L) {
-    return(NULL) # no scheme://authority — let rurl produce the error row
-  }
-  scheme <- tolower(m[[2L]])
-  if (!scheme %in% c("http", "https")) {
-    return(NULL)
-  }
+# Split fast-prefiltered URLs into components by regex and confirm every one is
+# a proven rurl no-op, in a single vectorized pass. Returns a data.frame with
+# one row per input URL: the six component columns plus a `resolved` logical
+# that is TRUE only where every component is a confirmed no-op (a FALSE row
+# defers to rurl; its component cells are NA). Done by slicing the raw string
+# (not `curl::curl_parse_url`, which returns decoded query `params` rather than
+# the raw query) so the fast-path components are literally the input's — which,
+# for a no-op URL, is exactly what rurl emits.
+url_fast_components_vec <- function(u) {
+  n <- length(u)
+  scheme <- rep(NA_character_, n)
+  host <- rep(NA_character_, n)
+  port <- rep(NA_integer_, n)
+  path <- rep(NA_character_, n)
+  query <- rep(NA_character_, n)
+  fragment <- rep(NA_character_, n)
+  resolved <- rep(FALSE, n)
 
-  authority <- m[[3L]]
-  host <- authority
-  port <- NA_integer_
-  if (grepl(":", authority, fixed = TRUE)) {
-    parts <- strsplit(authority, ":", fixed = TRUE)[[1L]]
-    if (length(parts) != 2L || !grepl("^[0-9]+$", parts[[2L]])) {
-      return(NULL)
+  mm <- regmatches(
+    u,
+    regexec("^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?", u)
+  )
+  ok <- lengths(mm) == 4L # full + 3 groups; 0 = no match -> defer to rurl
+  if (any(ok)) {
+    oi <- which(ok)
+    uok <- u[ok]
+    mat <- do.call(rbind, mm[ok]) # cols: full, scheme, authority, path
+    sch <- tolower(mat[, 2L])
+    auth <- mat[, 3L]
+    rawpath <- mat[, 4L]
+
+    keep <- sch %in% c("http", "https")
+
+    # authority -> host[:port]; a colon authority must be exactly host:digits.
+    h <- auth
+    p <- rep(NA_integer_, length(auth))
+    has_colon <- grepl(":", auth, fixed = TRUE)
+    pm <- regmatches(auth, regexec("^([^:]+):([0-9]+)$", auth))
+    colon_ok <- lengths(pm) == 3L
+    keep <- keep & (!has_colon | colon_ok)
+    ci <- which(has_colon & colon_ok)
+    if (length(ci)) {
+      cmat <- do.call(rbind, pm[ci])
+      h[ci] <- cmat[, 2L]
+      p[ci] <- as.integer(cmat[, 3L])
     }
-    host <- parts[[1L]]
-    port <- as.integer(parts[[2L]])
-  }
-  if (!url_host_is_dns_name(host)) {
-    return(NULL)
+    keep <- keep & url_host_is_dns_name(h)
+
+    # rurl normalizes a missing path to "/" when a host is present.
+    pth <- ifelse(is.na(rawpath) | !nzchar(rawpath), "/", rawpath)
+    keep <- keep & url_path_is_noop(pth)
+
+    # Query: the slice between the first `?` and the `#`/end. An empty query
+    # (`...?` or `...?#`) is ambiguous against rurl's NA, so defer it.
+    has_q <- grepl("?", uok, fixed = TRUE)
+    q <- rep(NA_character_, length(uok))
+    q[has_q] <- sub("^[^?]*\\?([^#]*).*$", "\\1", uok[has_q])
+    q_bad <- has_q & (is.na(q) | !nzchar(q) | !url_query_is_noop(q))
+    keep <- keep & !q_bad
+
+    frag <- rep(NA_character_, length(uok))
+    has_f <- grepl("#", uok, fixed = TRUE)
+    frag[has_f] <- sub("^[^#]*#(.*)$", "\\1", uok[has_f])
+    frag[!is.na(frag) & !nzchar(frag)] <- NA_character_
+
+    kept <- which(keep)
+    gi <- oi[kept]
+    resolved[gi] <- TRUE
+    scheme[gi] <- sch[kept]
+    host[gi] <- tolower(h[kept])
+    port[gi] <- p[kept]
+    path[gi] <- pth[kept]
+    query[gi] <- q[kept]
+    fragment[gi] <- frag[kept]
   }
 
-  # rurl normalizes a missing path to "/" when a host is present.
-  raw_path <- m[[4L]]
-  path <- if (is.na(raw_path) || !nzchar(raw_path)) "/" else raw_path
-  if (!url_path_is_noop(path)) {
-    return(NULL)
-  }
-
-  # Query: the slice between the first `?` and the `#`/end. An empty query
-  # (`...?` or `...?#`) is ambiguous against rurl's NA, so defer it.
-  query <- NA_character_
-  if (grepl("?", url, fixed = TRUE)) {
-    query <- sub("^[^?]*\\?([^#]*).*$", "\\1", url)
-    if (!nzchar(query)) {
-      return(NULL)
-    }
-    if (!url_query_is_noop(query)) {
-      return(NULL)
-    }
-  }
-
-  fragment <- NA_character_
-  if (grepl("#", url, fixed = TRUE)) {
-    fragment <- sub("^[^#]*#(.*)$", "\\1", url)
-  }
-
-  list(
+  data.frame(
     scheme = scheme,
-    host = tolower(host),
+    host = host,
     port = port,
     path = path,
     query = query,
-    fragment = if (nzchar(fragment %||% "")) fragment else NA_character_
+    fragment = fragment,
+    resolved = resolved,
+    stringsAsFactors = FALSE
   )
 }
 
-# Assemble the rurl-shaped 14-column data.frame for the fast rows. Columns no
-# sitemapr consumer reads (domain, tld, clean_url, password, parse_status) are
-# left NA / "ok"; the host is a confirmed DNS name so is_ip_host is FALSE. The
-# read columns (scheme, host, port, path, query, user, is_ip_host) are
-# byte-identical to rurl by the no-op invariant.
-url_fast_rows <- function(urls, comp) {
-  g <- function(field, default) {
-    vapply(comp, function(c) c[[field]] %||% default, default)
+# Scalar entry point over the vectorized core: the component list on success, or
+# NULL to defer the URL to rurl. Kept for direct single-URL callers and tests.
+url_fast_components <- function(url) {
+  fc <- url_fast_components_vec(url)
+  if (!isTRUE(fc$resolved[[1L]])) {
+    return(NULL)
   }
+  list(
+    scheme = fc$scheme[[1L]],
+    host = fc$host[[1L]],
+    port = fc$port[[1L]],
+    path = fc$path[[1L]],
+    query = fc$query[[1L]],
+    fragment = fc$fragment[[1L]]
+  )
+}
+
+# Assemble the rurl-shaped 14-column data.frame for the fast rows from the
+# resolved-component frame (`url_fast_components_vec()`, `resolved` rows only).
+# Columns no sitemapr consumer reads (domain, tld, clean_url, password,
+# parse_status) are left NA / "ok"; the host is a confirmed DNS name so
+# is_ip_host is FALSE. The read columns (scheme, host, port, path, query, user,
+# is_ip_host) are byte-identical to rurl by the no-op invariant.
+url_fast_rows <- function(urls, fc) {
   data.frame(
     original_url = as.character(urls),
-    scheme = g("scheme", NA_character_),
-    host = g("host", NA_character_),
-    port = g("port", NA_integer_),
-    path = g("path", NA_character_),
-    query = g("query", NA_character_),
-    fragment = g("fragment", NA_character_),
+    scheme = fc$scheme,
+    host = fc$host,
+    port = fc$port,
+    path = fc$path,
+    query = fc$query,
+    fragment = fc$fragment,
     user = NA_character_,
     password = NA_character_,
     domain = NA_character_,
