@@ -71,7 +71,7 @@ rurl_parse <- function(urls) {
 # Cheap, vectorized first cut: a URL MIGHT need rurl if it is not pure ASCII, or
 # carries a `%` (possible escape normalization), or contains a character rurl
 # would percent-encode or that complicates parsing. Returning TRUE only routes a
-# URL to rurl; the precise per-component decision is `url_fast_components_vec()`.
+# URL to rurl; the exact per-component decision is `url_fast_components_vec()`.
 # Conservative by design: a false TRUE costs only speed, never correctness.
 url_needs_rurl <- function(urls) {
   is.na(urls) |
