@@ -1,6 +1,7 @@
 # Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
 # Mirrors the platform-independent steps of the local pre-push verify gate:
-# the roxygen2-pinned docs-reproducibility guard (tools/check-docs.R) and
+# the roxygen2-pinned docs-reproducibility guard (tools/check-docs.R), the
+# findings-registry sync guard (tools/check-findings-registry.R), and
 # lintr::lint_package(). The rcmdcheck step lives in R-CMD-check.yaml.
 on:
   push:
@@ -39,6 +40,10 @@ jobs:
 
       - name: Docs are reproducible (tools/check-docs.R)
         run: source("tools/check-docs.R")
+        shell: Rscript {0}
+
+      - name: Findings registry in sync (tools/check-findings-registry.R)
+        run: source("tools/check-findings-registry.R")
         shell: Rscript {0}
 
       - name: Lint
