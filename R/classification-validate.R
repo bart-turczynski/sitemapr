@@ -211,19 +211,34 @@ validate_classification <- function(meta, base) {
   do.call(rbind, out)
 }
 
+# TRUE when two normalized encoding labels are both present and disagree.
+encoding_conflict <- function(a, b) {
+  !is.na(a) && !is.na(b) && a != b
+}
+
+# The resolved encoding by priority BOM > XML declaration > HTTP charset >
+# UTF-8: the raw label of the highest-priority present signal, else "UTF-8".
+resolve_encoding <- function(bom, decl, http, meta) {
+  if (!is.na(bom)) {
+    meta$bom_encoding
+  } else if (!is.na(decl)) {
+    meta$declared_encoding
+  } else if (!is.na(http)) {
+    meta$http_charset
+  } else {
+    "UTF-8"
+  }
+}
+
 # Encoding-conflict diagnostics from `source_meta`. Resolution priority is
 # BOM > XML declaration > HTTP charset > UTF-8 (sitemap-spec.md §3). A
 # BOM-vs-XML-declaration disagreement is the specialised
 # `ENCODING_BOM_DECLARATION_CONFLICT`; a disagreement involving the HTTP charset
 # is the general `ENCODING_CONFLICT`. Both are `info` here; Layer F elevates the
-# BOM/declaration one to `warning` in strict mode. Returns a (possibly empty)
-# classification-findings tibble.
-# Accepted cyclocomp advisory exception (SITE-kpgkiikq): cyclocomp scores this
-# ~21 (threshold 15), but the count is dominated by short-circuit `&&`/`||` in
-# the flat conflict predicates below and the BOM > declaration > HTTP > UTF-8
-# resolution cascade — boolean richness, not nested control flow. The function
-# reads linearly against the spec; extracting the one-line predicates would only
-# relocate the operators (cyclocomp follows them into helpers). Left as-is.
+# BOM/declaration one to `warning` in strict mode. The conflict predicate and
+# the resolution cascade are factored into `encoding_conflict()` /
+# `resolve_encoding()` to keep this function's control flow flat. Returns a
+# (possibly empty) classification-findings tibble.
 validate_encoding <- function(meta, base) {
   if (is.null(meta)) {
     return(empty_classification_findings())
@@ -233,18 +248,9 @@ validate_encoding <- function(meta, base) {
   http <- norm_encoding(meta$http_charset)
   out <- list()
 
-  resolution <- if (!is.na(bom)) {
-    meta$bom_encoding
-  } else if (!is.na(decl)) {
-    meta$declared_encoding
-  } else if (!is.na(http)) {
-    meta$http_charset
-  } else {
-    "UTF-8"
-  }
+  resolution <- resolve_encoding(bom, decl, http, meta)
 
-  bom_decl_conflict <- !is.na(bom) && !is.na(decl) && bom != decl
-  if (bom_decl_conflict) {
+  if (encoding_conflict(bom, decl)) {
     out[[length(out) + 1L]] <- classification_source_finding(
       "ENCODING_BOM_DECLARATION_CONFLICT",
       base,
@@ -261,9 +267,7 @@ validate_encoding <- function(meta, base) {
     )
   }
 
-  bom_http_conflict <- !is.na(bom) && !is.na(http) && bom != http
-  decl_http_conflict <- !is.na(decl) && !is.na(http) && decl != http
-  if (bom_http_conflict || decl_http_conflict) {
+  if (encoding_conflict(bom, http) || encoding_conflict(decl, http)) {
     out[[length(out) + 1L]] <- classification_source_finding(
       "ENCODING_CONFLICT",
       base,
