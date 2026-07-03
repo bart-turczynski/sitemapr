@@ -2,4 +2,5 @@
 
 export(read_sitemap)
 export(sitemap_tree)
+export(sitemap_tree_from_bytes)
 export(validate_sitemap)
