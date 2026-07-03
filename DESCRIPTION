@@ -10,7 +10,8 @@ Description: A deterministic toolkit for reading and validating XML, text, and
     indexes, and reports schema and protocol findings with stable, reproducible
     output.
 License: MIT + file LICENSE
-URL: https://github.com/bart-turczynski/sitemapr
+URL: https://github.com/bart-turczynski/sitemapr,
+    https://bart-turczynski.github.io/sitemapr/
 BugReports: https://github.com/bart-turczynski/sitemapr/issues
 Imports:
     httr2,
