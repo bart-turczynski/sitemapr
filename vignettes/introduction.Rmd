@@ -14,13 +14,110 @@ knitr::opts_chunk$set(
 )
 ```
 
+sitemapr reads and validates XML, text, and index sitemaps against the
+[Sitemap Protocol 0.9](https://www.sitemaps.org/protocol.html) and the related
+W3C and RFC standards. Every function is deterministic: the same source yields
+row-for-row identical output across calls, which makes results safe to snapshot
+and diff.
+
+This vignette walks through the three public entry points. The examples use
+local files so they run without network access; each function also accepts a
+URL.
+
 ```{r setup}
 library(sitemapr)
 ```
 
-Replace this vignette with a real introduction to your package: what it does,
-the problem it solves, and a worked example or two.
+## Reading a sitemap
 
-```{r}
-scaffold_ready()
+`read_sitemap()` parses a source into a tidy tibble with one row per URL. It
+accepts a URL or a local file (`.xml`, `.txt`, `.gz`, or `.tar.gz`) and returns
+the `loc`, `lastmod`, `changefreq`, and `priority` columns alongside the
+`images`/`video`/`news`/`alternates` extension list-columns and a
+`source_sitemap` provenance column.
+
+```{r read}
+sitemap <- '<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2024-01-01</lastmod>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://example.com/about</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+</urlset>'
+
+path <- tempfile(fileext = ".xml")
+writeLines(sitemap, path)
+
+urls <- read_sitemap(path)
+urls[, c("loc", "lastmod", "changefreq", "priority")]
 ```
+
+When the source is a sitemap **index**, `read_sitemap()` expands it recursively
+— cycle-safe and capped on depth and child count — so every reachable child
+sitemap's rows carry per-child provenance. The bounds are configurable through
+the `index_limits` argument.
+
+## Validating a sitemap
+
+`read_sitemap()` never reports conformance problems; `validate_sitemap()` does.
+It runs every finding producer — the XSD schema layer, the protocol/semantic
+layer, the byte-level classification layer, and, for an index, the
+index-expansion layer — and assembles the results into a stable findings
+tibble.
+
+```{r validate}
+invalid <- '<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/</loc><priority>2.0</priority></url>
+  <url><loc>/relative/path</loc></url>
+</urlset>'
+
+path <- tempfile(fileext = ".xml")
+writeLines(invalid, path)
+
+findings <- validate_sitemap(path)
+findings[, c("code", "severity", "layer")]
+```
+
+Each finding carries a stable `code`, a `severity`, the `layer` that produced
+it, and a `remediation_hint`, among other columns documented in the findings
+contract. Two modes tune the strictness:
+
+- `mode = "strict"` (the default) elevates the documented info-to-warning codes.
+- `mode = "non-strict"` drops strict-only findings and downgrades schema
+  violations to warnings.
+
+A malformed source never crashes the call for a conformance reason: an HTML
+page served where a sitemap was expected becomes an `UNSUPPORTED_HTML_MASQUERADE`
+finding, and an unexpected XML root becomes an `UNSUPPORTED_ROOT` finding.
+Only a genuine transport, SSRF, or HTTP failure raises a classed error.
+
+## Discovering a site's sitemaps
+
+Given a site-root URL, `sitemap_tree()` tries a catalog of common sitemap paths
+(generic guesses first, then WordPress and Shopify conventions), classifies each
+candidate as `accepted` or `rejected`, and returns a discovery tree — one row
+per evaluated candidate, plus a row per expanded index child. A guessed path
+that 404s is a `rejected` row, never an error, so a single unreachable guess
+never fails the call.
+
+```{r tree, eval = FALSE}
+tree <- sitemap_tree("https://example.com")
+tree[, c("depth", "sitemap_url", "status", "page_count")]
+```
+
+This example needs network access, so it is not evaluated here. robots.txt is
+not consulted in this version.
+
+## Where to go next
+
+- The [function reference](https://bart-turczynski.github.io/sitemapr/reference/)
+  documents every argument, including the `limits`, `index_limits`, and
+  `user_agent` controls shared across the entry points.
+- `read_sitemap()` for extraction, `validate_sitemap()` for conformance, and
+  `sitemap_tree()` for discovery cover the full public surface.
