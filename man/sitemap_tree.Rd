@@ -6,6 +6,7 @@
 \usage{
 sitemap_tree(
   x,
+  from = c("root", "sitemap"),
   user_agent = default_user_agent(),
   limits = discovery_limits(),
   net_limits = fetch_limits(),
@@ -13,14 +14,19 @@ sitemap_tree(
 )
 }
 \arguments{
-\item{x}{A single site-root URL (character). A bare host is accepted and
-normalized to \verb{https://} via the shared site-entrypoint policy.}
+\item{x}{A single URL (character). With \code{from = "root"} a site-root URL (a
+bare host is accepted and normalized to \verb{https://} via the shared
+site-entrypoint policy); with \code{from = "sitemap"} an exact sitemap URL.}
+
+\item{from}{Input mode: \code{"root"} (default) treats \code{x} as a site root and
+runs the guessed-path catalog; \code{"sitemap"} treats \code{x} as an exact sitemap
+URL and fetches only that.}
 
 \item{user_agent}{The User-Agent header for HTTP fetches. Defaults to the
 package User-Agent.}
 
 \item{limits}{Discovery limits (the candidate cap), as from
-\code{discovery_limits()}.}
+\code{discovery_limits()}. Used only when \code{from = "root"}.}
 
 \item{net_limits}{Network limits for the per-candidate fetches, as from
 \code{fetch_limits()}.}
@@ -29,27 +35,37 @@ package User-Agent.}
 Defaults to \code{index_limits()}.}
 }
 \value{
-A tibble with one row per evaluated candidate (and per expanded index
+A tibble with one row per evaluated sitemap (and per expanded index
 child) and columns \code{depth}, \code{parent_sitemap}, \code{sitemap_url}, \code{page_count},
 \code{gzip}, \code{status}, \code{reason}, and \code{provenance}. Accepted rows carry a
 \code{page_count}/\code{gzip}; rejected rows carry their rejection \code{reason} and \code{NA}
 page count.
 }
 \description{
-From a site-root URL, tries the guessed-path catalog (every generic guess
-first, then WordPress/Shopify), classifies each candidate as \code{accepted} or
-\code{rejected}, and returns the result as a discovery tree: one row per evaluated
-candidate. A guessed path that 404s is a \code{rejected} \code{not-found} row, never a
-validation finding, and a single unreachable guess never fails the call.
-robots.txt is not consulted in v1.
+Discovers a site's sitemaps and returns them as a tree: one row per evaluated
+sitemap, \code{accepted} or \code{rejected}, with the columns needed to explain the
+result. Two input modes select what \code{x} is:
 }
 \details{
-Each accepted candidate's page count and gzip flag are taken from the body
-fetched during discovery, so no source is requested twice. Discovered
-candidates are depth-0 rows with no parent; an accepted candidate that is a
-\code{sitemapindex} is expanded recursively (cycle-safe, depth- and count-capped),
-contributing deeper rows parented to the index, with provenance
-\code{"child-of-index"}.
+\describe{
+\item{\code{from = "root"} (default)}{\code{x} is a site-root URL. \code{sitemap_tree()}
+tries the guessed-path catalog (every generic guess first, then
+WordPress/Shopify) and classifies each candidate. A guessed path that
+404s is a \code{rejected} \code{not-found} row, never a validation finding, and a
+single unreachable guess never fails the call. robots.txt is not
+consulted (ADR-002).}
+\item{\code{from = "sitemap"}}{\code{x} is an exact sitemap or sitemapindex URL.
+\code{sitemap_tree()} fetches that one URL (no catalog, no guessing) and, if
+it is a \code{sitemapindex}, expands it. The root row carries provenance
+\code{"seed"}. A fetch or parse failure yields a single \code{rejected} seed row.}
+}
+
+In both modes each accepted candidate's page count and gzip flag come from
+the body fetched during discovery, so no source is requested twice, and an
+accepted \code{sitemapindex} is expanded recursively (cycle-safe, depth- and
+count-capped), contributing deeper rows parented to the index with provenance
+\code{"child-of-index"}. To discover from sitemap bytes you already fetched
+yourself (no network for the root), use \code{\link[=sitemap_tree_from_bytes]{sitemap_tree_from_bytes()}}.
 }
 \examples{
 \dontrun{
@@ -58,5 +74,11 @@ sitemap_tree("https://example.com")
 
 # A bare host is accepted and normalized to https://.
 sitemap_tree("example.com")
+
+# Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
+sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
 }
+}
+\seealso{
+\code{\link[=sitemap_tree_from_bytes]{sitemap_tree_from_bytes()}} to discover from already-fetched bytes.
 }

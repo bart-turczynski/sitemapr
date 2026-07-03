@@ -164,6 +164,11 @@ Columns: `depth`, `parent_sitemap`, `sitemap_url`, `page_count`, `gzip`,
 Includes accepted and rejected discovery candidates as well as expanded index
 children.
 
+`provenance` column values: `guessed-path` (a `from = "root"` catalog
+candidate), `seed` (a `from = "sitemap"` exact-URL root or a
+`sitemap_tree_from_bytes()` root), and `child-of-index` (a node reached by
+recursive sitemapindex expansion).
+
 ### `validate_sitemap()` → findings tibble
 
 See `docs/findings-contract.md` for the full column contract.

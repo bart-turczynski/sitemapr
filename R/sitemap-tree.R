@@ -78,35 +78,50 @@ count_pages <- function(parsed) {
 
 #' Discover a site's sitemaps as a tree
 #'
-#' From a site-root URL, tries the guessed-path catalog (every generic guess
-#' first, then WordPress/Shopify), classifies each candidate as `accepted` or
-#' `rejected`, and returns the result as a discovery tree: one row per evaluated
-#' candidate. A guessed path that 404s is a `rejected` `not-found` row, never a
-#' validation finding, and a single unreachable guess never fails the call.
-#' robots.txt is not consulted in v1.
+#' Discovers a site's sitemaps and returns them as a tree: one row per evaluated
+#' sitemap, `accepted` or `rejected`, with the columns needed to explain the
+#' result. Two input modes select what `x` is:
 #'
-#' Each accepted candidate's page count and gzip flag are taken from the body
-#' fetched during discovery, so no source is requested twice. Discovered
-#' candidates are depth-0 rows with no parent; an accepted candidate that is a
-#' `sitemapindex` is expanded recursively (cycle-safe, depth- and count-capped),
-#' contributing deeper rows parented to the index, with provenance
-#' `"child-of-index"`.
+#' \describe{
+#'   \item{`from = "root"` (default)}{`x` is a site-root URL. `sitemap_tree()`
+#'     tries the guessed-path catalog (every generic guess first, then
+#'     WordPress/Shopify) and classifies each candidate. A guessed path that
+#'     404s is a `rejected` `not-found` row, never a validation finding, and a
+#'     single unreachable guess never fails the call. robots.txt is not
+#'     consulted (ADR-002).}
+#'   \item{`from = "sitemap"`}{`x` is an exact sitemap or sitemapindex URL.
+#'     `sitemap_tree()` fetches that one URL (no catalog, no guessing) and, if
+#'     it is a `sitemapindex`, expands it. The root row carries provenance
+#'     `"seed"`. A fetch or parse failure yields a single `rejected` seed row.}
+#' }
 #'
-#' @param x A single site-root URL (character). A bare host is accepted and
-#'   normalized to `https://` via the shared site-entrypoint policy.
+#' In both modes each accepted candidate's page count and gzip flag come from
+#' the body fetched during discovery, so no source is requested twice, and an
+#' accepted `sitemapindex` is expanded recursively (cycle-safe, depth- and
+#' count-capped), contributing deeper rows parented to the index with provenance
+#' `"child-of-index"`. To discover from sitemap bytes you already fetched
+#' yourself (no network for the root), use [sitemap_tree_from_bytes()].
+#'
+#' @param x A single URL (character). With `from = "root"` a site-root URL (a
+#'   bare host is accepted and normalized to `https://` via the shared
+#'   site-entrypoint policy); with `from = "sitemap"` an exact sitemap URL.
+#' @param from Input mode: `"root"` (default) treats `x` as a site root and
+#'   runs the guessed-path catalog; `"sitemap"` treats `x` as an exact sitemap
+#'   URL and fetches only that.
 #' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
 #'   package User-Agent.
 #' @param limits Discovery limits (the candidate cap), as from
-#'   `discovery_limits()`.
+#'   `discovery_limits()`. Used only when `from = "root"`.
 #' @param net_limits Network limits for the per-candidate fetches, as from
 #'   `fetch_limits()`.
 #' @param index_limits Sitemapindex-expansion bounds, as from `index_limits()`.
 #'   Defaults to `index_limits()`.
-#' @return A tibble with one row per evaluated candidate (and per expanded index
+#' @return A tibble with one row per evaluated sitemap (and per expanded index
 #'   child) and columns `depth`, `parent_sitemap`, `sitemap_url`, `page_count`,
 #'   `gzip`, `status`, `reason`, and `provenance`. Accepted rows carry a
 #'   `page_count`/`gzip`; rejected rows carry their rejection `reason` and `NA`
 #'   page count.
+#' @seealso [sitemap_tree_from_bytes()] to discover from already-fetched bytes.
 #' @export
 #' @examples
 #' \dontrun{
@@ -115,17 +130,32 @@ count_pages <- function(parsed) {
 #'
 #' # A bare host is accepted and normalized to https://.
 #' sitemap_tree("example.com")
+#'
+#' # Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
+#' sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
 #' }
 sitemap_tree <- function(
   x,
+  from = c("root", "sitemap"),
   user_agent = default_user_agent(),
   limits = discovery_limits(),
   net_limits = fetch_limits(),
   index_limits = NULL
 ) {
+  from <- match.arg(from)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
+
+  if (identical(from, "sitemap")) {
+    return(seed_tree_from_url(
+      x,
+      user_agent = user_agent,
+      net_limits = net_limits,
+      index_limits = index_limits
+    ))
+  }
+
   disc <- discover_candidates(
     x,
     limits = limits,
