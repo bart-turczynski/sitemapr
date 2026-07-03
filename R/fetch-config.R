@@ -60,7 +60,9 @@ default_user_agent <- function() {
   }
 
   # The URL field may list multiple URLs (comma/whitespace separated); the
-  # first entry is the canonical contact URL.
+  # first entry is the canonical contact URL. DESCRIPTION deliberately lists the
+  # GitHub repo first (ahead of the pkgdown site) so the crawler contact URL
+  # points at the repo README/issues; keep that order.
   contact <- trimws(strsplit(url, "[,[:space:]]+")[[1L]][[1L]])
   paste0("sitemapr/", version, " (+", contact, ")")
 }

@@ -1,8 +1,7 @@
 # R build/dev artifacts
 ^README\.Rmd$
 ^_pkgdown\.yml$
-^pkgdown$
-^pkgdown-site$
+^site$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.Rhistory$
