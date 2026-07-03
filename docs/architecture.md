@@ -165,9 +165,9 @@ Includes accepted and rejected discovery candidates as well as expanded index
 children.
 
 `provenance` column values: `guessed-path` (a `from = "root"` catalog
-candidate), `seed` (a `from = "sitemap"` exact-URL root or a
-`sitemap_tree_from_bytes()` root), and `child-of-index` (a node reached by
-recursive sitemapindex expansion).
+candidate), `robots` (a `Sitemap:` directive from robots.txt; ADR-005), `seed`
+(a `from = "sitemap"` exact-URL root or a `sitemap_tree_from_bytes()` root), and
+`child-of-index` (a node reached by recursive sitemapindex expansion).
 
 ### `validate_sitemap()` → findings tibble
 

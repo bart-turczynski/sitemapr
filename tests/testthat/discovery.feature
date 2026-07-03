@@ -1,8 +1,9 @@
 Feature: Discovery of sitemap candidates from a site root
-  # Covers: SITE-avdanhik, SITE-pgtudaic
-  # From a site/root URL, sitemapr guesses sitemap paths from a fixed catalog,
-  # classifies candidates as accepted or rejected, and returns the result as
-  # part of sitemap_tree(). Robots.txt is not fetched in v1.
+  # Covers: SITE-avdanhik, SITE-pgtudaic, SITE-stxkwfbq
+  # From a site/root URL, sitemapr discovers sitemaps from two sources: the
+  # robots.txt Sitemap: directive (ADR-005) and a fixed guessed-path catalog. It
+  # classifies candidates as accepted or rejected and returns the result as part
+  # of sitemap_tree(). Robots rules (Disallow/Allow) are never applied.
 
   Scenario: Generic guessed paths are tried in catalog order
     Given a site root URL "https://example.com"
@@ -51,8 +52,14 @@ Feature: Discovery of sitemap candidates from a site root
     When I call sitemap_tree("https://example.com")
     Then each result row has columns depth, parent_sitemap, sitemap_url, page_count, gzip, status, reason, provenance
 
-  Scenario: robots.txt is not fetched during v1 discovery
-    Given a fixture server that logs all requests
+  Scenario: robots.txt Sitemap directives are added as discovery candidates
+    Given a fixture whose robots.txt lists a non-catalog sitemap
     When discovery runs against "https://example.com"
+    Then the result contains a row for the robots-listed sitemap
+    And the robots-listed row carries provenance "robots"
+
+  Scenario: robots discovery can be disabled
+    Given a fixture whose robots.txt lists a non-catalog sitemap
+    When discovery runs against "https://example.com" with robots disabled
     Then no request is made to "/robots.txt"
-    And the Sitemap directive in robots.txt is not consulted
+    And the result has no robots-listed row

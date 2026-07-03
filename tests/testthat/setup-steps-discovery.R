@@ -29,14 +29,31 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # Run discovery against `root` under a request-logging mock. A candidate whose
   # URL ends with one of the "resolved" paths gets a 200 urlset; everything else
   # 404s. Requested URLs are recorded in `context$requested` (in fetch order).
-  run_discovery <- function(context, root = context$root, cap = NULL) {
+  run_discovery <- function(
+    context,
+    root = context$root,
+    cap = NULL,
+    use_robots = TRUE
+  ) {
     context$requested <- character(0)
     ok_paths <- context$ok_paths
     if (is.null(ok_paths)) {
       ok_paths <- character(0)
     }
+    robots_body <- context$robots_body
     mock <- function(req) {
       context$requested <- c(context$requested, req$url)
+      if (endsWith(req$url, "/robots.txt")) {
+        if (is.null(robots_body)) {
+          return(httr2::response(status_code = 404L, url = req$url))
+        }
+        return(httr2::response(
+          status_code = 200L,
+          url = req$url,
+          headers = list("Content-Type" = "text/plain"),
+          body = charToRaw(robots_body)
+        ))
+      }
       if (
         length(ok_paths) > 0L &&
           any(vapply(
@@ -60,7 +77,17 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     } else {
       sitemapr:::discovery_limits(max_candidates = cap)
     }
-    context$tree <- sitemapr::sitemap_tree(root, limits = limits)
+    context$tree <- sitemapr::sitemap_tree(
+      root,
+      limits = limits,
+      use_robots = use_robots
+    )
+  }
+
+  # Requested URLs excluding the robots.txt probe, for catalog-order/cap
+  # assertions that concern only the guessed-path candidates.
+  requested_candidates <- function(context) {
+    context$requested[!endsWith(context$requested, "/robots.txt")]
   }
 
   # Find the single tree row whose sitemap_url ends with the given path.
@@ -152,7 +179,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "candidates are tried in the documented catalog order",
     function(context) {
       expected <- sitemapr:::discovery_candidates(context$root)$candidate_url
-      testthat::expect_identical(context$requested, expected)
+      testthat::expect_identical(requested_candidates(context), expected)
     }
   )
 
@@ -227,7 +254,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   )
 
   then("at most {int} candidates are evaluated", function(cap, context) {
-    testthat::expect_lte(length(unique(context$requested)), cap)
+    testthat::expect_lte(length(unique(requested_candidates(context))), cap)
     testthat::expect_lte(nrow(context$tree), cap)
   })
 
@@ -269,12 +296,52 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     testthat::expect_false(any(endsWith(context$requested, path)))
   })
 
-  then(
-    "the Sitemap directive in robots.txt is not consulted",
+  # --- robots.txt Sitemap: directive discovery (ADR-005) ---------------------
+
+  robots_listed_path <- "/robots-only/deep.xml"
+
+  given(
+    "a fixture whose robots.txt lists a non-catalog sitemap",
     function(context) {
-      testthat::expect_false(
-        any(grepl("robots", context$requested, fixed = TRUE))
+      context$root <- "https://example.com"
+      context$robots_body <- paste0(
+        "Sitemap: https://example.com",
+        robots_listed_path
+      )
+      context$ok_paths <- c(context$ok_paths, robots_listed_path)
+    }
+  )
+
+  when(
+    "discovery runs against {string} with robots disabled",
+    function(root, context) {
+      run_discovery(context, root = root, use_robots = FALSE)
+    }
+  )
+
+  then(
+    "the result contains a row for the robots-listed sitemap",
+    function(context) {
+      testthat::expect_true(
+        any(endsWith(context$tree$sitemap_url, robots_listed_path))
       )
     }
   )
+
+  then(
+    "the robots-listed row carries provenance {string}",
+    function(provenance, context) {
+      row <- context$tree[
+        endsWith(context$tree$sitemap_url, robots_listed_path),
+      ]
+      testthat::expect_identical(nrow(row), 1L)
+      testthat::expect_identical(row$provenance, provenance)
+    }
+  )
+
+  then("the result has no robots-listed row", function(context) {
+    testthat::expect_false(
+      any(endsWith(context$tree$sitemap_url, robots_listed_path))
+    )
+  })
 }

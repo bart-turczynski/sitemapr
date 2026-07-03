@@ -7,6 +7,8 @@
 sitemap_tree(
   x,
   from = c("root", "sitemap"),
+  use_robots = TRUE,
+  use_known_paths = TRUE,
   user_agent = default_user_agent(),
   limits = discovery_limits(),
   net_limits = fetch_limits(),
@@ -19,8 +21,17 @@ bare host is accepted and normalized to \verb{https://} via the shared
 site-entrypoint policy); with \code{from = "sitemap"} an exact sitemap URL.}
 
 \item{from}{Input mode: \code{"root"} (default) treats \code{x} as a site root and
-runs the guessed-path catalog; \code{"sitemap"} treats \code{x} as an exact sitemap
-URL and fetches only that.}
+runs discovery; \code{"sitemap"} treats \code{x} as an exact sitemap URL and fetches
+only that.}
+
+\item{use_robots}{When \code{from = "root"}, fetch robots.txt and add every
+\verb{Sitemap:} directive it lists (provenance \code{"robots"}), deduplicated against
+the guessed paths. Default \code{TRUE}. Robots rules (\code{Disallow}/\code{Allow}) are
+never applied — only the \verb{Sitemap:} directive is read.}
+
+\item{use_known_paths}{When \code{from = "root"}, try the guessed-path catalog
+(provenance \code{"guessed-path"}). Default \code{TRUE}. Set both \code{use_robots} and
+\code{use_known_paths} to \code{FALSE} for an empty tree.}
 
 \item{user_agent}{The User-Agent header for HTTP fetches. Defaults to the
 package User-Agent.}
@@ -49,11 +60,13 @@ result. Two input modes select what \code{x} is:
 \details{
 \describe{
 \item{\code{from = "root"} (default)}{\code{x} is a site-root URL. \code{sitemap_tree()}
-tries the guessed-path catalog (every generic guess first, then
-WordPress/Shopify) and classifies each candidate. A guessed path that
-404s is a \code{rejected} \code{not-found} row, never a validation finding, and a
-single unreachable guess never fails the call. robots.txt is not
-consulted (ADR-002).}
+reads robots.txt \verb{Sitemap:} directives (provenance \code{"robots"}) and tries
+the guessed-path catalog (every generic guess first, then
+WordPress/Shopify), classifying each candidate. A guessed path that 404s
+is a \code{rejected} \code{not-found} row, never a validation finding, and a single
+unreachable guess never fails the call. Robots rules (\code{Disallow}/\code{Allow})
+are never applied — only the \verb{Sitemap:} directive is read (ADR-005). Turn
+either source off with \code{use_robots} / \code{use_known_paths}.}
 \item{\code{from = "sitemap"}}{\code{x} is an exact sitemap or sitemapindex URL.
 \code{sitemap_tree()} fetches that one URL (no catalog, no guessing) and, if
 it is a \code{sitemapindex}, expands it. The root row carries provenance
