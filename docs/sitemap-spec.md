@@ -385,14 +385,17 @@ preserve parent→child provenance.
 
 From a bare-domain / site-root entrypoint, candidate order (SPEC §10):
 robots.txt `Sitemap:` directives → generic guessed paths → CMS-oriented guesses
-→ dedupe + classify. **robots.txt discovery is deferred (ADR-002)** for v1, so v1
-discovery is the **guessed-path catalog** only.
+→ dedupe + classify. robots.txt `Sitemap:` discovery is **enabled** (ADR-005,
+default `use_robots = TRUE`); the guessed-path catalog is also enabled by default
+(`use_known_paths = TRUE`). robots *rule application* (`Disallow`/`Allow`)
+remains out of scope (ADR-002). Directives take precedence over catalog guesses
+on dedupe.
 
 Generic guess catalog (≥): `/sitemap.xml`, `/sitemap_index.xml`,
 `/sitemap-index.xml`, `/sitemap.xml.gz`, `/sitemap.txt`, `/sitemap/index.xml`,
 `/sitemaps.xml`, `/news-sitemap.xml`, `/sitemap-news.xml`. `/sitemap/` is
 **deliberately excluded** from guesses (HTML/redirect noise) but **must** be
-attempted if it appears as a robots `Sitemap:` directive (post-v1).
+attempted if it appears as a robots `Sitemap:` directive.
 
 CMS catalog: only **WordPress** (`/wp-sitemap.xml`) and **Shopify**
 (`/sitemap.xml`) are settled (SPEC §31.3 open; ROADMAP confirms these two).

@@ -110,10 +110,17 @@ test_that("the records attribute is parallel; accepted records carry a body", {
   expect_false(is.null(attr(records[[acc_idx]], "body")))
 })
 
-test_that("robots.txt is never requested during discovery", {
+test_that("robots.txt is requested during discovery by default", {
   log_env <- new.env()
   httr2::local_mocked_responses(mock_server(list(), log_env))
   discover_candidates("https://example.com")
+  expect_true(any(grepl("/robots.txt", log_env$urls, fixed = TRUE)))
+})
+
+test_that("use_robots = FALSE suppresses the robots.txt request", {
+  log_env <- new.env()
+  httr2::local_mocked_responses(mock_server(list(), log_env))
+  discover_candidates("https://example.com", use_robots = FALSE)
   expect_false(any(grepl("/robots.txt", log_env$urls, fixed = TRUE)))
 })
 

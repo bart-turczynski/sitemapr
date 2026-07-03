@@ -84,11 +84,13 @@ count_pages <- function(parsed) {
 #'
 #' \describe{
 #'   \item{`from = "root"` (default)}{`x` is a site-root URL. `sitemap_tree()`
-#'     tries the guessed-path catalog (every generic guess first, then
-#'     WordPress/Shopify) and classifies each candidate. A guessed path that
-#'     404s is a `rejected` `not-found` row, never a validation finding, and a
-#'     single unreachable guess never fails the call. robots.txt is not
-#'     consulted (ADR-002).}
+#'     reads robots.txt `Sitemap:` directives (provenance `"robots"`) and tries
+#'     the guessed-path catalog (every generic guess first, then
+#'     WordPress/Shopify), classifying each candidate. A guessed path that 404s
+#'     is a `rejected` `not-found` row, never a validation finding, and a single
+#'     unreachable guess never fails the call. Robots rules (`Disallow`/`Allow`)
+#'     are never applied — only the `Sitemap:` directive is read (ADR-005). Turn
+#'     either source off with `use_robots` / `use_known_paths`.}
 #'   \item{`from = "sitemap"`}{`x` is an exact sitemap or sitemapindex URL.
 #'     `sitemap_tree()` fetches that one URL (no catalog, no guessing) and, if
 #'     it is a `sitemapindex`, expands it. The root row carries provenance
@@ -106,8 +108,15 @@ count_pages <- function(parsed) {
 #'   bare host is accepted and normalized to `https://` via the shared
 #'   site-entrypoint policy); with `from = "sitemap"` an exact sitemap URL.
 #' @param from Input mode: `"root"` (default) treats `x` as a site root and
-#'   runs the guessed-path catalog; `"sitemap"` treats `x` as an exact sitemap
-#'   URL and fetches only that.
+#'   runs discovery; `"sitemap"` treats `x` as an exact sitemap URL and fetches
+#'   only that.
+#' @param use_robots When `from = "root"`, fetch robots.txt and add every
+#'   `Sitemap:` directive it lists (provenance `"robots"`), deduplicated against
+#'   the guessed paths. Default `TRUE`. Robots rules (`Disallow`/`Allow`) are
+#'   never applied — only the `Sitemap:` directive is read.
+#' @param use_known_paths When `from = "root"`, try the guessed-path catalog
+#'   (provenance `"guessed-path"`). Default `TRUE`. Set both `use_robots` and
+#'   `use_known_paths` to `FALSE` for an empty tree.
 #' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
 #'   package User-Agent.
 #' @param limits Discovery limits (the candidate cap), as from
@@ -137,6 +146,8 @@ count_pages <- function(parsed) {
 sitemap_tree <- function(
   x,
   from = c("root", "sitemap"),
+  use_robots = TRUE,
+  use_known_paths = TRUE,
   user_agent = default_user_agent(),
   limits = discovery_limits(),
   net_limits = fetch_limits(),
@@ -160,7 +171,9 @@ sitemap_tree <- function(
     x,
     limits = limits,
     user_agent = user_agent,
-    net_limits = net_limits
+    net_limits = net_limits,
+    use_known_paths = use_known_paths,
+    use_robots = use_robots
   )
   records <- attr(disc, "records")
   n <- nrow(disc)
