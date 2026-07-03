@@ -32,6 +32,8 @@ vignettes/*.html
 vignettes/*.pdf
 doc/
 Meta/
+# Generated pkgdown site (deployed to the gh-pages branch, never committed).
+pkgdown-site/
 tests/testthat/_snaps/
 tests/testthat/_problems/
 

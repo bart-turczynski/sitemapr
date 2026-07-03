@@ -1,0 +1,9 @@
+url: https://bart-turczynski.github.io/sitemapr/
+
+# The default pkgdown output directory (docs/) already holds durable project
+# documentation, so the generated site is written to a dedicated build dir and
+# deployed to the gh-pages branch by .github/workflows/pkgdown.yaml.
+destination: pkgdown-site
+
+template:
+  bootstrap: 5
