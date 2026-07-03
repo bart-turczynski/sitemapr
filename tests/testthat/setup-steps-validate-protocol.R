@@ -125,9 +125,11 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     }
   )
 
-  # Default-port identity scenario: two entries, one with an explicit `:443`,
+  # Default-port equivalence scenario: two entries, one with an explicit `:443`,
   # the other omitting it. build_loc_key() collapses the default port, so the
-  # two share one identity key -> PROTOCOL_DUPLICATE_LOC.
+  # two share one canonical key; their raw bytes differ, so the confidence tier
+  # is PROTOCOL_URL_EQUIVALENT, not the byte-identical PROTOCOL_DUPLICATE_LOC
+  # (ADR-005 decision 1).
   given(
     'two entries where one uses ":443" and the other omits the default port',
     function(context) {
@@ -233,17 +235,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then("no {word} finding is produced", function(code, context) {
     expect_false(code %in% context$result$code)
   })
-
-  # The default-port duplicate scenario's bespoke wording.
-  then(
-    paste(
-      "a PROTOCOL_DUPLICATE_LOC finding is produced because the identity",
-      "key is the same"
-    ),
-    function(context) {
-      expect_true("PROTOCOL_DUPLICATE_LOC" %in% context$result$code)
-    }
-  )
 
   # ---- THEN: family-level "no X finding" assertions -------------------------
   # "URL finding" = any PROTOCOL_URL_* code; "priority finding" = the priority

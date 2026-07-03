@@ -77,10 +77,12 @@ expected output or condition.
 
 | Scenario | Fixture | Expected behavior |
 |---|---|---|
-| Unicode path (IRI → URI mapping) | `url-iri-path.xml` | `loc` decoded then normalized |
+| Unicode path (IRI → URI mapping) | `url-iri-path.xml` | `PROTOCOL_URL_NOT_ESCAPED` info; identity key uses URI form |
+| Char illegal in URI and IRI (`{` `}`) | `url-unescaped-illegal.xml` | `PROTOCOL_URL_NOT_ESCAPED` warning |
 | Punycode/IDNA host | `url-idna-host.xml` | Host lowercased, IDNA applied |
 | Default port stripped (`:80` / `:443`) | `url-default-port.xml` | Port absent from identity key |
-| Full URL duplicate (same loc, different ports) | `url-duplicate-loc.xml` | `PROTOCOL_DUPLICATE_LOC` |
+| Byte-identical `loc` repeat | `urlset-duplicate-loc.xml` | `PROTOCOL_DUPLICATE_LOC` warning |
+| Canonically equal `loc`, differing bytes (`:443` vs default) | in-memory | `PROTOCOL_URL_EQUIVALENT` warning |
 | Fragment in `loc` | `url-fragment.xml` | `PROTOCOL_URL_FRAGMENT` info |
 | Userinfo in `loc` | `url-userinfo.xml` | `PROTOCOL_URL_USERINFO` info |
 | Relative `loc` | `url-relative.xml` | `PROTOCOL_URL_NOT_ABSOLUTE` |

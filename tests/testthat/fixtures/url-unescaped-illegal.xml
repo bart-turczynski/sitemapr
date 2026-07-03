@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- <loc> with a character illegal unescaped in BOTH a URI and an IRI (raw
+     `{` `}`): must be RFC-3986 percent-escaped -> PROTOCOL_URL_NOT_ESCAPED
+     (warning). Contrast url-iri-path.xml, whose raw Unicode is a valid IRI
+     (info). ADR-005 decision 2. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/path{1}</loc></url>
+</urlset>
