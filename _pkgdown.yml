@@ -44,11 +44,6 @@ reference:
     contents:
       - validate_sitemap
 
-  - title: "Package status"
-    desc: "Scaffold readiness helper."
-    contents:
-      - scaffold_ready
-
 footer:
   structure:
     left: developed_by
