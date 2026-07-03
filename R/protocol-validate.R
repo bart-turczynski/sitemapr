@@ -60,14 +60,21 @@
 # `PROTOCOL_SIZE_EXCEEDED` and `PROTOCOL_LASTMOD_LOOKS_GENERATED` respectively.
 #
 # URL handling follows the sitemap spec exactly and never reshapes a URL's
-# meaning. A `<loc>` is validated as: absolute `http`/`https`, host present,
-# RFC 3986/3987, shorter than 2048 chars, in the sitemap's scope, and with valid
-# percent-escaping. Duplicate detection keys on sitemapr's full-URL identity key
-# (`build_loc_key()`: keeps query, collapses the scheme's default port, drops
-# the fragment) and NEVER on `rurl::clean_url`/`get_clean_url`, which discard
-# the meaningful query/port that distinguish two sitemap entries. IRIs are
-# accepted and compared in their percent-encoded URI form (the RFC 3987 -> 3986
-# mapping is done once in `parse_url_adapter()` via `path_encoding = "encode"`).
+# meaning (ADR-005): we report the raw bytes and use the canonical form only as
+# a comparison key and a `resolves-to` hint. A `<loc>` is validated as: absolute
+# `http`/`https`, host present, shorter than 2048 chars, in the sitemap's scope,
+# and with valid percent-escaping. Two spec-grounded findings fall out of the
+# raw-vs-canonical delta: equivalence (a sitemapr lint the spec is silent on) is
+# split by confidence into byte-identical repeats (`PROTOCOL_DUPLICATE_LOC`) and
+# canonical-key collisions whose raw bytes differ (`PROTOCOL_URL_EQUIVALENT`);
+# encoding conformance (mandated: URLs must be URL-escaped per RFC 3986/3987)
+# surfaces as `PROTOCOL_URL_NOT_ESCAPED` (`info` for a raw IRI, `warning` for a
+# char illegal in both a URI and an IRI). The canonical key is sitemapr's own
+# `build_loc_key()` (keeps query, collapses the scheme's default port, drops the
+# fragment) and NEVER `rurl::clean_url`/`get_clean_url`, which discard the
+# meaningful query/port that distinguish two sitemap entries. IRIs are accepted
+# and compared in their percent-encoded URI form (the RFC 3987 -> 3986 mapping
+# is done once in `parse_url_adapter()` via `path_encoding = "encode"`).
 
 # Construct the protocol-layer findings tibble. The single source of truth for
 # the columns this producer emits (a contract-shaped subset; `mode` and
@@ -137,6 +144,25 @@ loc_absoluteness <- function(loc) {
 # §2.1). A well-escaped `%XX` and a literal-free URL are both clean.
 has_invalid_escape <- function(loc) {
   grepl("%(?![0-9A-Fa-f]{2})", loc, perl = TRUE)
+}
+
+# A character that must be percent-encoded and is illegal unescaped in BOTH an
+# RFC 3986 URI and an RFC 3987 IRI (RFC 3987 only adds non-ASCII `ucschar`, so
+# every ASCII "excluded"/"unwise" character stays illegal): a raw space, the
+# RFC 3986 excluded set (`" < > \ ^ ` `` ` `` ` { | }`), and C0/DEL controls.
+# `%` is deliberately excluded (a malformed escape is the INVALID_ESCAPE code
+# and a well-formed `%XX` is conformant); `#` is excluded (the fragment lint).
+# Drives the `warning` tier of PROTOCOL_URL_NOT_ESCAPED (ADR-005 decision 2).
+has_uri_illegal_char <- function(loc) {
+  grepl("[ \"<>\\\\^`{|}\x01-\x1f\x7f]", loc, perl = TRUE, useBytes = TRUE)
+}
+
+# A raw non-ASCII byte marks a `<loc>` written as an IRI (RFC 3987): conformant
+# per sitemaps.org, but crawlers fetch its percent-encoded URI form. Drives the
+# `info` tier of PROTOCOL_URL_NOT_ESCAPED (ADR-005 decision 2). Byte-wise so a
+# multibyte UTF-8 sequence is detected regardless of the string's declared enc.
+has_non_ascii <- function(loc) {
+  grepl("[\x80-\xff]", loc, useBytes = TRUE)
 }
 
 # The scheme+host+port authority of a parsed row, with the scheme's default port
@@ -1260,9 +1286,11 @@ loc_not_absolute_findings <- function(loc, bad, base) {
 
 # URL-structure findings for one absolute http(s) `<loc>` at entry `j`, built
 # from the per-entry flags precomputed vectorized by `validate_loc_urls()`:
-# no-host (terminal), over-length, invalid escape, fragment, userinfo,
-# out-of-scope. `f` is a named logical list for this one entry.
-loc_single_url_findings <- function(l, j, f, sitemap_url, base) {
+# no-host (terminal), over-length, invalid escape, not-escaped (IRI/illegal
+# char), fragment, userinfo, out-of-scope. `f` is a named list for this one
+# entry; `canonical` is its RFC-3986 URI form (for the not-escaped `info`
+# message that names the resolved URL crawlers fetch).
+loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
   if (f$no_host) {
     return(list(protocol_url_finding(
       "PROTOCOL_URL_NO_HOST",
@@ -1301,6 +1329,41 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base) {
       j,
       l,
       sprintf("<loc> '%s' contains an invalid percent-escape.", l)
+    )
+  }
+
+  if (f$not_escaped_warn) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_NOT_ESCAPED",
+      "warning",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf(
+        paste0(
+          "<loc> '%s' contains a character illegal unescaped in both a URI ",
+          "and an IRI; sitemap URLs must be RFC-3986 percent-escaped."
+        ),
+        l
+      )
+    )
+  } else if (f$not_escaped_info) {
+    out[[length(out) + 1L]] <- protocol_url_finding(
+      "PROTOCOL_URL_NOT_ESCAPED",
+      "info",
+      "entry",
+      base,
+      j,
+      l,
+      sprintf(
+        paste0(
+          "<loc> '%s' is a valid IRI written unescaped; crawlers fetch its ",
+          "percent-encoded URI form: '%s'."
+        ),
+        l,
+        canonical
+      )
     )
   }
 
@@ -1353,38 +1416,56 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base) {
   out
 }
 
-# Duplicate detection on the full-URL identity key, over the absolute,
-# host-bearing entries only. Each repeat past the first occurrence of a key is
-# flagged against its own entry, naming the first occurrence.
-loc_duplicate_findings <- function(parsed, absolute, loc, base) {
+# Equivalence detection over the absolute, host-bearing entries only, split into
+# two confidence tiers (ADR-005 decision 1; both `warning`). A repeat whose RAW
+# `<loc>` bytes are identical to an earlier entry is a plain duplicate
+# (`PROTOCOL_DUPLICATE_LOC`, "identical to entry N"); a repeat whose raw bytes
+# differ but whose RFC-3986/3987-canonical key (`build_loc_key()`) matches an
+# earlier entry likely resolves to the same URL (`PROTOCOL_URL_EQUIVALENT`,
+# naming the resolved form). Each repeat is flagged against its own entry.
+# `keys` is the precomputed canonical key per absolute row (built once by the
+# caller and reused by the not-escaped `info` message).
+loc_duplicate_findings <- function(parsed, absolute, loc, base, keys) {
   has_host <- !is.na(parsed$host) & nzchar(as.character(parsed$host))
   if (!any(has_host)) {
     return(list())
   }
-  keys <- build_loc_key(parsed)
   keys[!has_host] <- NA_character_
   out <- list()
-  first_seen <- new.env(parent = emptyenv())
+  first_by_canon <- new.env(parent = emptyenv())
+  first_by_raw <- new.env(parent = emptyenv())
   for (k in which(has_host)) {
     key <- keys[k]
-    if (is.null(first_seen[[key]])) {
-      assign(key, absolute[k], envir = first_seen)
-    } else {
-      j <- absolute[k]
-      first_entry <- get(key, envir = first_seen)
+    j <- absolute[k]
+    raw <- loc[j]
+    if (!is.null(first_by_raw[[raw]])) {
       out[[length(out) + 1L]] <- protocol_url_finding(
         "PROTOCOL_DUPLICATE_LOC",
         "warning",
         "entry",
         base,
         j,
-        loc[j],
+        raw,
+        sprintf("<loc> is byte-identical to entry %d.", first_by_raw[[raw]])
+      )
+    } else if (!is.null(first_by_canon[[key]])) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_URL_EQUIVALENT",
+        "warning",
+        "entry",
+        base,
+        j,
+        raw,
         sprintf(
-          "<loc> duplicates entry %d (identity key '%s').",
-          first_entry,
+          "<loc> likely resolves to the same URL as entry %d: '%s'.",
+          first_by_canon[[key]],
           key
         )
       )
+      assign(raw, j, envir = first_by_raw)
+    } else {
+      assign(key, j, envir = first_by_canon)
+      assign(raw, j, envir = first_by_raw)
     }
   }
   out
@@ -1413,6 +1494,7 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
   }
 
   parsed <- parse_url_adapter(loc[absolute])
+  keys <- build_loc_key(parsed)
   authority_self <- NA_character_
   dir_self <- NA_character_
   if (!is.na(sitemap_url)) {
@@ -1435,6 +1517,11 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
   applies <- !no_host
   too_long <- applies & nchar(l) >= 2048L
   invalid_escape <- applies & has_invalid_escape(l)
+  # Encoding conformance (ADR-005 decision 2): a char illegal in both a URI and
+  # an IRI is a `warning`; a raw non-ASCII byte (a valid IRI) is an `info`. The
+  # warning tier takes precedence so a URL is never double-flagged.
+  not_escaped_warn <- applies & has_uri_illegal_char(l)
+  not_escaped_info <- applies & !not_escaped_warn & has_non_ascii(l)
   fragment <- applies & grepl("#", l, fixed = TRUE)
   userinfo <- applies & !is.na(user) & nzchar(user)
   out_of_scope <- rep(FALSE, length(l))
@@ -1445,24 +1532,40 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
   }
 
   hit <- which(
-    no_host | too_long | invalid_escape | fragment | userinfo | out_of_scope
+    no_host |
+      too_long |
+      invalid_escape |
+      not_escaped_warn |
+      not_escaped_info |
+      fragment |
+      userinfo |
+      out_of_scope
   )
   for (k in hit) {
     flags <- list(
       no_host = no_host[k],
       too_long = too_long[k],
       invalid_escape = invalid_escape[k],
+      not_escaped_warn = not_escaped_warn[k],
+      not_escaped_info = not_escaped_info[k],
       fragment = fragment[k],
       userinfo = userinfo[k],
       out_of_scope = out_of_scope[k]
     )
     out <- c(
       out,
-      loc_single_url_findings(l[k], absolute[k], flags, sitemap_url, base)
+      loc_single_url_findings(
+        l[k],
+        absolute[k],
+        flags,
+        sitemap_url,
+        base,
+        keys[k]
+      )
     )
   }
 
-  out <- c(out, loc_duplicate_findings(parsed, absolute, loc, base))
+  out <- c(out, loc_duplicate_findings(parsed, absolute, loc, base, keys))
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())

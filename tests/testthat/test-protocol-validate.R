@@ -143,9 +143,9 @@ test_that("scope is not checked when the sitemap URL is unknown", {
   expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% cc)
 })
 
-# --- Duplicate detection (full-URL identity key) ---------------------------
+# --- Duplicate / equivalent detection (ADR-005 two-tier) -------------------
 
-test_that("two identical locs produce PROTOCOL_DUPLICATE_LOC", {
+test_that("two byte-identical locs produce a warning PROTOCOL_DUPLICATE_LOC", {
   out <- validate_protocol(
     rows_for(c("https://example.com/a", "https://example.com/a")),
     sitemap_url = sm_url
@@ -153,14 +153,34 @@ test_that("two identical locs produce PROTOCOL_DUPLICATE_LOC", {
   dup <- out[out$code == "PROTOCOL_DUPLICATE_LOC", ]
   expect_identical(nrow(dup), 1L)
   expect_identical(dup$severity, "warning")
+  expect_false("PROTOCOL_URL_EQUIVALENT" %in% out$code)
+  expect_match(dup$message, "byte-identical to entry 1")
 })
 
-test_that("the default port collapses to the same identity for dedup", {
+test_that("canonically equal locs with differing bytes are equivalent", {
   out <- validate_protocol(
     rows_for(c("https://example.com:443/a", "https://example.com/a")),
     sitemap_url = sm_url
   )
-  expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
+  eq <- out[out$code == "PROTOCOL_URL_EQUIVALENT", ]
+  expect_identical(nrow(eq), 1L)
+  expect_identical(eq$severity, "warning")
+  expect_false("PROTOCOL_DUPLICATE_LOC" %in% out$code)
+  # The message names the canonical resolved URL (default port collapsed).
+  expect_match(eq$message, "https://example.com/a", fixed = TRUE)
+})
+
+test_that("a byte-identical repeat and a canonical collision split codes", {
+  out <- validate_protocol(
+    rows_for(c(
+      "https://example.com/a",
+      "https://example.com/a",
+      "https://example.com:443/a"
+    )),
+    sitemap_url = sm_url
+  )
+  expect_identical(sum(out$code == "PROTOCOL_DUPLICATE_LOC"), 1L)
+  expect_identical(sum(out$code == "PROTOCOL_URL_EQUIVALENT"), 1L)
 })
 
 test_that("a contentful query keeps two locs distinct (no false duplicate)", {
@@ -171,22 +191,43 @@ test_that("a contentful query keeps two locs distinct (no false duplicate)", {
   expect_false("PROTOCOL_DUPLICATE_LOC" %in% out$code)
 })
 
-# --- IRI acceptance + identity ---------------------------------------------
+# --- IRI acceptance + identity + encoding conformance ----------------------
 
-test_that("an IRI loc is accepted and keyed in its percent-encoded URI form", {
+test_that("a raw IRI loc is an info NOT_ESCAPED naming its URI form", {
   iri <- "https://example.com/パス"
   out <- validate_protocol(rows_for(iri))
-  expect_identical(nrow(out), 0L)
+  ne <- out[out$code == "PROTOCOL_URL_NOT_ESCAPED", ]
+  expect_identical(nrow(ne), 1L)
+  expect_identical(ne$severity, "info")
+  # The advisory names the percent-encoded URI form crawlers fetch.
+  expect_match(ne$message, "%E3%83%91%E3%82%B9", fixed = TRUE)
 
   key <- build_loc_key(parse_url_adapter(iri))
   expect_match(key, "%E3%83%91%E3%82%B9", fixed = TRUE)
 
-  # The IRI and its already-encoded URI form share one identity (dedup catches
-  # them) — proving the percent-encoded form is the comparison key.
+  # The IRI and its already-encoded URI form share one canonical key but differ
+  # byte-wise, so they are an equivalence (not a byte-identical duplicate) —
+  # proving the percent-encoded form is the comparison key.
   out2 <- validate_protocol(
     rows_for(c(iri, "https://example.com/%E3%83%91%E3%82%B9"))
   )
-  expect_true("PROTOCOL_DUPLICATE_LOC" %in% out2$code)
+  expect_true("PROTOCOL_URL_EQUIVALENT" %in% out2$code)
+  expect_false("PROTOCOL_DUPLICATE_LOC" %in% out2$code)
+})
+
+test_that("a URI-and-IRI-illegal char is a warning PROTOCOL_URL_NOT_ESCAPED", {
+  out <- validate_protocol(
+    rows_for("https://example.com/path{1}"),
+    sitemap_url = sm_url
+  )
+  ne <- out[out$code == "PROTOCOL_URL_NOT_ESCAPED", ]
+  expect_identical(nrow(ne), 1L)
+  expect_identical(ne$severity, "warning")
+})
+
+test_that("a fully-escaped ASCII loc yields no PROTOCOL_URL_NOT_ESCAPED", {
+  cc <- codes_for("https://example.com/a%20b", sm_url)
+  expect_false("PROTOCOL_URL_NOT_ESCAPED" %in% cc)
 })
 
 # --- Shape, refs, determinism ----------------------------------------------

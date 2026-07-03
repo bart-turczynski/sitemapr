@@ -23,16 +23,20 @@ Feature: Layer D — protocol and semantic validation
     # Reconciled (F.4): the protocol scope check only runs when the sitemap has
     # an origin URL (a local file has none), so this drives a mocked URL source.
 
-  Scenario: Two entries with the same normalized loc produce PROTOCOL_DUPLICATE_LOC
+  Scenario: Two byte-identical loc entries produce PROTOCOL_DUPLICATE_LOC
     Given fixture "urlset-duplicate-loc.xml"
     When I call validate_sitemap on the fixture
-    Then a finding with code PROTOCOL_DUPLICATE_LOC is produced
-    # Reconciled (F.4): the committed fixture is urlset-duplicate-loc.xml (F.3).
+    Then a finding with code PROTOCOL_DUPLICATE_LOC and severity "warning" is produced
+    # Reconciled (ADR-005): the committed fixture repeats a byte-identical <loc>,
+    # so it is a plain duplicate; the canonical-collision tier is PROTOCOL_URL_EQUIVALENT.
 
-  Scenario: Default port is stripped for loc identity comparison
+  Scenario: Canonically equal locs with differing bytes produce PROTOCOL_URL_EQUIVALENT
     Given two entries where one uses ":443" and the other omits the default port
     When I call validate_sitemap
-    Then a PROTOCOL_DUPLICATE_LOC finding is produced because the identity key is the same
+    Then a finding with code PROTOCOL_URL_EQUIVALENT and severity "warning" is produced
+    And no PROTOCOL_DUPLICATE_LOC finding is produced
+    # Reconciled (ADR-005): ":443" and the default-port-omitted form are not
+    # byte-identical, so they are an equivalence (likely resolves-to), not a duplicate.
 
   Scenario: Fragment in loc produces an PROTOCOL_URL_FRAGMENT info finding
     Given fixture "url-fragment.xml"
@@ -44,11 +48,18 @@ Feature: Layer D — protocol and semantic validation
     When I call validate_sitemap on the fixture
     Then a finding with code PROTOCOL_URL_INVALID_ESCAPE is produced
 
-  Scenario: IRI in loc is accepted; its mapped URI form is used for identity
+  Scenario: A raw IRI loc produces an info PROTOCOL_URL_NOT_ESCAPED and keys on its URI form
     Given fixture "url-iri-path.xml" with a Unicode path
     When I call validate_sitemap on the fixture
-    Then no URL finding is produced
+    Then a finding with code PROTOCOL_URL_NOT_ESCAPED and severity "info" is produced
     And the identity key uses the percent-encoded URI form
+    # Reconciled (ADR-005): a raw Unicode <loc> is a valid IRI (conformant), but
+    # the info advisory names the percent-encoded URI form crawlers actually fetch.
+
+  Scenario: A loc with a URI-and-IRI-illegal character produces a warning PROTOCOL_URL_NOT_ESCAPED
+    Given fixture "url-unescaped-illegal.xml"
+    When I call validate_sitemap on the fixture
+    Then a finding with code PROTOCOL_URL_NOT_ESCAPED and severity "warning" is produced
 
   # --- Count and field limits ---
 
