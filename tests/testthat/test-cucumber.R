@@ -4,6 +4,6 @@
 test_that("acceptance specs pass", {
   skip_if_not_installed("cucumber")
   # Working directory during the test run is tests/testthat/, where the .feature
-  # files live; steps were registered by setup-steps.R.
+  # files live; steps were registered by the setup-steps-*.R files.
   cucumber::run(".")
 })
