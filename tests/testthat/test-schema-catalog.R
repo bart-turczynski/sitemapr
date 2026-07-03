@@ -129,6 +129,32 @@ test_that("mixed namespaces without a pre-composed file need runtime gen", {
   )
 })
 
+test_that("a runtime sitemapindex combo imports the index core schema", {
+  res <- schema_resolve_profile(
+    "sitemapindex",
+    c(core_ns, news_ns),
+    schemas_dir = "/no-such-dir"
+  )
+  expect_identical(res$kind, "runtime")
+  # The runtime branch must select the index core file, not the urlset one.
+  expect_identical(
+    unname(res$imports[[core_ns]]),
+    file.path("/no-such-dir", "siteindex.xsd")
+  )
+})
+
+test_that("an arbitrary all-extensions combo resolves to runtime gen", {
+  every_ns <- c(names(schema_extension_catalog()), core_ns)
+  res <- schema_resolve_profile(
+    "urlset",
+    every_ns,
+    schemas_dir = "/no-such-dir"
+  )
+  expect_identical(res$kind, "runtime")
+  # Every namespace (core + all extensions) is imported.
+  expect_setequal(names(res$imports), every_ns)
+})
+
 test_that("an unrecognised namespace yields an unknown-namespace decision", {
   weird <- "https://example.com/ns/custom"
   res <- schema_resolve_profile(

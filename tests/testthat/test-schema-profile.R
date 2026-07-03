@@ -4,6 +4,7 @@
 core_ns <- "http://www.sitemaps.org/schemas/sitemap/0.9"
 image_ns <- "http://www.google.com/schemas/sitemap-image/1.1"
 news_ns <- "http://www.google.com/schemas/sitemap-news/0.9"
+video_ns <- "http://www.google.com/schemas/sitemap-video/1.1"
 
 test_that("the wrapper XSD imports every supplied namespace by abs path", {
   imports <- c(a = "/abs/sitemap.xsd", b = "/abs/sitemap-image.xsd")
@@ -141,4 +142,32 @@ test_that("a generated runtime wrapper actually validates a mixed document", {
   ))
   expect_true(as.logical(xml2::xml_validate(ok, schema)))
   expect_false(as.logical(xml2::xml_validate(bad, schema)))
+})
+
+test_that("an arbitrary multi-extension wrapper validates a real document", {
+  skip_if(identical(schema_dir(), ""), "package not installed")
+  res <- schema_profile(
+    "urlset",
+    c(core_ns, image_ns, video_ns, news_ns),
+    cache = new.env(parent = emptyenv()),
+    dir = withr::local_tempdir()
+  )
+  expect_identical(res$kind, "runtime")
+  schema <- xml2::read_xml(res$schema_path)
+  # A urlset mixing core + image + news markup validates against one wrapper.
+  ok <- xml2::read_xml(paste0(
+    "<urlset xmlns=\"", core_ns, "\"",
+    " xmlns:image=\"", image_ns, "\"",
+    " xmlns:news=\"", news_ns, "\">",
+    "<url><loc>https://example.com/a</loc>",
+    "<image:image><image:loc>https://example.com/i.jpg</image:loc>",
+    "</image:image>",
+    "<news:news><news:publication>",
+    "<news:name>Example</news:name><news:language>en</news:language>",
+    "</news:publication>",
+    "<news:publication_date>2026-07-04</news:publication_date>",
+    "<news:title>Headline</news:title></news:news>",
+    "</url></urlset>"
+  ))
+  expect_true(as.logical(xml2::xml_validate(ok, schema)))
 })
