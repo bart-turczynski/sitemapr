@@ -116,8 +116,14 @@ test_that("a mismatched default port (http:443) is not collapsed", {
 
 test_that("parse_url_adapter fast path matches rurl on read columns", {
   read_cols <- c(
-    "original_url", "scheme", "host", "port",
-    "path", "query", "user", "is_ip_host"
+    "original_url",
+    "scheme",
+    "host",
+    "port",
+    "path",
+    "query",
+    "user",
+    "is_ip_host"
   )
   corpus <- c(
     # fast-eligible
@@ -164,27 +170,54 @@ test_that("parse_url_adapter fast path is differentially equivalent to rurl", {
   skip_on_cran()
   set.seed(42)
   read_cols <- c(
-    "original_url", "scheme", "host", "port",
-    "path", "query", "user", "is_ip_host"
+    "original_url",
+    "scheme",
+    "host",
+    "port",
+    "path",
+    "query",
+    "user",
+    "is_ip_host"
   )
   scheme <- c("https", "http", "HTTP", "ftp", "")
   host <- c(
-    "example.com", "sub.ex.co.uk", "localhost", "1.2.3.4", "2130706433",
-    "xn--caf-dma.com", "café.com", "EXAMPLE.COM", "a-b.example.io", "[::1]"
+    "example.com",
+    "sub.ex.co.uk",
+    "localhost",
+    "1.2.3.4",
+    "2130706433",
+    "xn--caf-dma.com",
+    "café.com",
+    "EXAMPLE.COM",
+    "a-b.example.io",
+    "[::1]"
   )
   port <- c("", ":80", ":443", ":8080", ":x")
   path <- c(
-    "", "/", "/a/b", "/a/../b", "/a//b", "/p%41",
-    "/(x)", "/t~_-.d", "/é", "/a;b", "/a b"
+    "",
+    "/",
+    "/a/b",
+    "/a/../b",
+    "/a//b",
+    "/p%41",
+    "/(x)",
+    "/t~_-.d",
+    "/é",
+    "/a;b",
+    "/a b"
   )
   query <- c("", "?q=1", "?a=1&b=2", "?u=1+2", "?k=v;w", "?x=%20", "?z=9&ok=y")
   frag <- c("", "#f", "#sec 1")
   gen <- function() {
     paste0(
-      sample(scheme, 1), if (runif(1) < 0.85) "://" else ":",
+      sample(scheme, 1),
+      if (runif(1) < 0.85) "://" else ":",
       if (runif(1) < 0.1) "user:pw@" else "",
-      sample(host, 1), sample(port, 1),
-      sample(path, 1), sample(query, 1), sample(frag, 1)
+      sample(host, 1),
+      sample(port, 1),
+      sample(path, 1),
+      sample(query, 1),
+      sample(frag, 1)
     )
   }
   urls <- c(vapply(seq_len(2000L), function(i) gen(), character(1)), "http://")
@@ -209,8 +242,11 @@ test_that("url_needs_rurl flags exactly the non-no-op URLs", {
 
 test_that("an IP-literal host is never resolved on the fast path", {
   # is_ip_host feeds SSRF checks (R/ssrf.R); the fast path must defer every
-  # IP-literal form to rurl rather than guess.
-  expect_null(sitemapr:::url_fast_components("https://1.2.3.4/x"))
-  expect_null(sitemapr:::url_fast_components("https://2130706433/x"))
-  expect_null(sitemapr:::url_fast_components("https://[::1]/x"))
+  # IP-literal form to rurl rather than guess (resolved == FALSE).
+  ip_literals <- c(
+    "https://1.2.3.4/x",
+    "https://2130706433/x",
+    "https://[::1]/x"
+  )
+  expect_false(any(sitemapr:::url_fast_components_vec(ip_literals)$resolved))
 })
