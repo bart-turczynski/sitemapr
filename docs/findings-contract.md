@@ -95,8 +95,9 @@ these rules derive the mode-specific value:
   `PROTOCOL_LASTMOD_DATE_ONLY`, `HREFLANG_HREF_RELATIVE`,
   `PROTOCOL_TEXT_BLANK_LINE`.
 - **Schema-layer downgrade:** any `layer == "schema"` finding at `fatal`/`error`
-  is downgraded to `warning` in `non-strict`. This keys on the layer, so both
-  `SCHEMA_INVALID` and `SCHEMA_UNKNOWN_NAMESPACE` follow it.
+  is downgraded to `warning` in `non-strict`. This keys on the layer; the only
+  base-`error` schema code it affects is `SCHEMA_INVALID`
+  (`SCHEMA_UNKNOWN_NAMESPACE` is base `warning`, advisory in both modes).
 - **Strict elevation `info → warning`:** exactly two codes are emitted at `info`
   but elevated to `warning` in strict mode (they still appear as `info` in
   non-strict): `ENCODING_BOM_DECLARATION_CONFLICT` and
@@ -264,34 +265,47 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Five rows carry `reconcile = open`, grouped into the four decisions below: the
+Four rows carry `reconcile = open`, grouped into the three decisions below: the
 concept exists on both sides but the mapping is not a clean rename. These are
 the decisions the validator-alignment work must settle; until then, do not treat
 the two codes as interchangeable.
 
-1. **`SCHEMA_UNKNOWN_NAMESPACE`** ↔ validator `SCHEMA_NAMESPACE_MISSING`
-   (schema/error) **and** `PROTO_UNSUPPORTED_NAMESPACE` (protocol/warning). The
-   validator splits "required namespace missing" from "unsupported namespace
-   present" across two layers; sitemapr has one schema-layer code. Decide
-   whether sitemapr adopts the split or the validator collapses to one code.
-2. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
+1. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
    `PROTO_ENCODING_CONFLICT_STRICT`. sitemapr emits `info` in non-strict and
    elevates to `warning` in strict; the validator marks it strict-only
    (suppressed in non-strict). Reconcile the emission model, plus the
    `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras the validator has.
-3. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
+2. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
    ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_LARGE`,
    `DECOMPRESS_TOO_MANY_FILES`, `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two
    coarse codes; the validator has a richer, active `DECOMPRESS_*` family. Since
    sitemapr's are unimplemented, adopting the validator's set is the likely
    resolution — an exception to "sitemapr names win."
-4. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
+3. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
    sitemapr's is a 500 MB *decompressed* ceiling (ADR-003); the validator's is a
    fetch-body size limit. Confirm the thresholds describe the same guard before
    treating the codes as equivalent.
 
 ### Resolved reconciliations
 
+- **`SCHEMA_UNKNOWN_NAMESPACE`** ↔ validator `PROTO_UNSUPPORTED_NAMESPACE` (was:
+  mis-paired to validator `SCHEMA_NAMESPACE_MISSING`; severity `error` vs
+  `warning`). **Resolved → sitemapr name/layer win, `warning`.** sitemapr's code
+  fires once per *unrecognized namespace present* in the document — the same
+  event as the validator's `PROTO_UNSUPPORTED_NAMESPACE`, not the validator's
+  `SCHEMA_NAMESPACE_MISSING` (which flags a *required* namespace being *absent*).
+  The old alias conflated "unknown ns present" with "required ns missing" and was
+  a silent mis-mapping. Severity lands on `warning`: the sitemaps protocol is
+  extensible, so an uncatalogued namespace is content sitemapr could not validate
+  and a search engine may ignore — advisory, not a conformance failure (parallel
+  to the `HREFLANG_NONSTANDARD_CASE` reasoning). sitemapr keeps the code in the
+  **schema** layer (the catalog is a schema concern); the validator renames
+  `PROTO_UNSUPPORTED_NAMESPACE → SCHEMA_UNKNOWN_NAMESPACE` and moves it
+  protocol → schema (SMV-pkxdhqvq). The validator's `SCHEMA_NAMESPACE_MISSING`
+  (required-namespace-absent, surfaced from XSD errors) has no distinct sitemapr
+  code — that condition folds into sitemapr's generic `SCHEMA_INVALID` (see the
+  `missing-namespace.xml` golden row) — so it is now carried as a `validator-only`
+  registry row.
 - **`INDEX_CHILD_COUNT_EXCEEDED`** ↔ validator `INDEX_CHILD_LIMIT` (was: severity
   + granularity mismatch). **Resolved → sitemapr name wins, `error`.** Both codes
   fire on the *same* event — the index child cap is reached and remaining children
