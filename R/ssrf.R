@@ -348,8 +348,8 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
 
   # 2. Numeric-literal obfuscation (ADR-003): reject raw decimal/hex/octal
   #    encodings on the raw, pre-normalization host. Checked before the
-  #    empty-host guard so a numeric authority rurl fails to parse (host = NA) is
-  #    still rejected on its raw form instead of slipping through as "no host".
+  #    empty-host guard so a numeric authority rurl fails to parse (host = NA)
+  #    is still rejected on its raw form, not slipped through as "no host".
   if (ssrf_numeric_literal_blocked(raw_host)) {
     return(ssrf_result(FALSE, "numeric-literal"))
   }
@@ -400,7 +400,8 @@ ssrf_raw_scheme_of <- function(url) {
   if (length(url) != 1L || is.na(url) || !nzchar(url)) {
     return(NA_character_)
   }
-  m <- regmatches(url, regexpr("^[a-zA-Z][a-zA-Z0-9+.-]*(?=://)", url, perl = TRUE))
+  re <- "^[a-zA-Z][a-zA-Z0-9+.-]*(?=://)"
+  m <- regmatches(url, regexpr(re, url, perl = TRUE))
   if (length(m) == 0L) {
     return(NA_character_)
   }

@@ -215,10 +215,11 @@ url_fast_components_vec <- function(u) {
   )
 }
 
-# Assemble the fast rows onto sitemapr's canonical column set (`url_adapter_cols`)
-# from the resolved-component frame (`url_fast_components_vec()`, `resolved` rows
-# only). The host is a confirmed DNS name so is_ip_host is FALSE; parse_status is
-# "ok". The read columns (scheme, host, port, path, query, user, is_ip_host) are
+# Assemble the fast rows onto sitemapr's canonical column set
+# (`url_adapter_cols`) from the resolved-component frame
+# (`url_fast_components_vec()`, `resolved` rows only). The host is a confirmed
+# DNS name so is_ip_host is FALSE; parse_status is "ok". The read columns
+# (scheme, host, port, path, query, user, is_ip_host) are
 # byte-identical to rurl by the no-op invariant.
 url_fast_rows <- function(urls, fc) {
   data.frame(
