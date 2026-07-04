@@ -264,7 +264,7 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Six rows carry `reconcile = open`, grouped into the five decisions below: the
+Five rows carry `reconcile = open`, grouped into the four decisions below: the
 concept exists on both sides but the mapping is not a clean rename. These are
 the decisions the validator-alignment work must settle; until then, do not treat
 the two codes as interchangeable.
@@ -274,28 +274,36 @@ the two codes as interchangeable.
    validator splits "required namespace missing" from "unsupported namespace
    present" across two layers; sitemapr has one schema-layer code. Decide
    whether sitemapr adopts the split or the validator collapses to one code.
-2. **`INDEX_CHILD_COUNT_EXCEEDED`** ↔ validator `INDEX_CHILD_LIMIT` +
-   `INDEX_TOO_MANY_CHILDREN` (+ `INDEX_TOO_MANY_INDEXES`). The validator has
-   two/three finer child-cap codes at `warning`; sitemapr has one at `error`.
-   Reconcile both the granularity and the severity.
-3. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
+2. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
    `PROTO_ENCODING_CONFLICT_STRICT`. sitemapr emits `info` in non-strict and
    elevates to `warning` in strict; the validator marks it strict-only
    (suppressed in non-strict). Reconcile the emission model, plus the
    `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras the validator has.
-4. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
+3. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
    ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_LARGE`,
    `DECOMPRESS_TOO_MANY_FILES`, `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two
    coarse codes; the validator has a richer, active `DECOMPRESS_*` family. Since
    sitemapr's are unimplemented, adopting the validator's set is the likely
    resolution — an exception to "sitemapr names win."
-5. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
+4. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
    sitemapr's is a 500 MB *decompressed* ceiling (ADR-003); the validator's is a
    fetch-body size limit. Confirm the thresholds describe the same guard before
    treating the codes as equivalent.
 
 ### Resolved reconciliations
 
+- **`INDEX_CHILD_COUNT_EXCEEDED`** ↔ validator `INDEX_CHILD_LIMIT` (was: severity
+  + granularity mismatch). **Resolved → sitemapr name wins, `error`.** Both codes
+  fire on the *same* event — the index child cap is reached and remaining children
+  are dropped/skipped from expansion — so they are a clean 1:1 pairing. Dropping
+  children silently loses coverage, so `error` (not the validator's `warning`) is
+  correct; the validator renames `INDEX_CHILD_LIMIT → INDEX_CHILD_COUNT_EXCEEDED`
+  and bumps `warning → error`. The validator's other two child-cap codes are
+  *distinct concepts*, not finer spellings of this one, and stay validator-only:
+  `INDEX_TOO_MANY_CHILDREN` is a soft advisory (index references >1,000 children
+  per Google's old guideline, nothing dropped) and `INDEX_TOO_MANY_INDEXES` is a
+  job-level advisory (site has many index files). The `reconcile` flag is cleared;
+  `INDEX_TOO_MANY_CHILDREN` is now carried as a `validator-only` registry row.
 - **`HREFLANG_NONSTANDARD_CASE`** (was: sitemapr `warning` vs validator `info`).
   **Resolved → `info`** on both sides. BCP 47 (RFC 5646 §2.1.1) treats language
   tags as case-insensitive, so an off-case tag (`en-us`) is a fully valid,

@@ -55,7 +55,8 @@ PROTOCOL_TEXT_LINE_INVALID,error,protocol,entry,FALSE,validator-only,,PROTO_TEXT
 INDEX_CYCLE_DETECTED,error,index-expansion,index-child,FALSE,active,,INDEX_CYCLE_DETECTED
 INDEX_DEPTH_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_DEPTH_EXCEEDED
 SITEMAP_INDEX_NESTED,warning,index-expansion,index-child,FALSE,active,,INDEX_NESTED_INDEX
-INDEX_CHILD_COUNT_EXCEEDED,error,index-expansion,index-child,FALSE,active,open,INDEX_CHILD_LIMIT
+INDEX_CHILD_COUNT_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_CHILD_LIMIT
+INDEX_TOO_MANY_CHILDREN,warning,index-expansion,index-child,FALSE,validator-only,,INDEX_TOO_MANY_CHILDREN
 INDEX_TOO_MANY_INDEXES,warning,index-expansion,report,FALSE,validator-only,,INDEX_TOO_MANY_INDEXES
 HREFLANG_FORMAT_INVALID,error,protocol,entry,FALSE,active,,HREFLANG_FORMAT_INVALID
 HREFLANG_SEPARATOR_INVALID,error,protocol,entry,FALSE,active,,
