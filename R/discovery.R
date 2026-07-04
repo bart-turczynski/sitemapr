@@ -2,7 +2,7 @@
 #
 # Builds the ordered, deduplicated set of candidate sitemap URLs to try against
 # a site root from the enabled discovery sources: robots.txt `Sitemap:`
-# directives (R/robots.R; ADR-005) and the guessed-path catalog
+# directives (R/robots.R; ADR-006) and the guessed-path catalog
 # (R/discovery-catalog.R), each toggled by `use_robots` / `use_known_paths`.
 # robots directives take precedence over catalog guesses on dedup. This file
 # owns candidate-URL assembly, full-URL deduplication, the candidate-count cap,
@@ -278,7 +278,7 @@ assemble_candidates <- function(
 #' `guessed-path`), each toggled by `use_robots` / `use_known_paths`. robots.txt
 #' is fetched only
 #' for its `Sitemap:` directives; robots rules (`Disallow`/`Allow`) are never
-#' applied (ADR-005).
+#' applied (ADR-006).
 #'
 #' The fetch record for each evaluated response (carrying the body attribute) is
 #' returned in the `records` attribute, parallel to the result rows, so the

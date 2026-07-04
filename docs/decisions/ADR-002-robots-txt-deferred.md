@@ -1,11 +1,11 @@
 # ADR-002: Defer robots.txt parsing to post-v1
 
-- Status: Superseded in part by ADR-005 (2026-07-03)
+- Status: Superseded in part by ADR-006 (2026-07-03)
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
-- Related: `docs/PRD.md` (§2 scope, §9 open decisions), ADR-005
+- Related: `docs/PRD.md` (§2 scope, §9 open decisions), ADR-006
 
-> **Update (ADR-005, 2026-07-03):** the `Sitemap:` directive is now read for
+> **Update (ADR-006, 2026-07-03):** the `Sitemap:` directive is now read for
 > discovery. Because `Sitemap:` is a group-independent directive, the "thin
 > parser" objection below does not apply to it. This ADR's decision still holds
 > for robots *rule application* (`Disallow`/`Allow`), which remains out of scope.

@@ -1,4 +1,4 @@
-# ADR-005: Robots-aware sitemap discovery via the `Sitemap:` directive
+# ADR-006: Robots-aware sitemap discovery via the `Sitemap:` directive
 
 - Status: Accepted
 - Date: 2026-07-03

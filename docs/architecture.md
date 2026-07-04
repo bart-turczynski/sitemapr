@@ -165,7 +165,7 @@ Includes accepted and rejected discovery candidates as well as expanded index
 children.
 
 `provenance` column values: `guessed-path` (a `from = "root"` catalog
-candidate), `robots` (a `Sitemap:` directive from robots.txt; ADR-005), `seed`
+candidate), `robots` (a `Sitemap:` directive from robots.txt; ADR-006), `seed`
 (a `from = "sitemap"` exact-URL root or a `sitemap_tree_from_bytes()` root), and
 `child-of-index` (a node reached by recursive sitemapindex expansion).
 

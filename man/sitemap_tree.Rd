@@ -65,7 +65,7 @@ the guessed-path catalog (every generic guess first, then
 WordPress/Shopify), classifying each candidate. A guessed path that 404s
 is a \code{rejected} \code{not-found} row, never a validation finding, and a single
 unreachable guess never fails the call. Robots rules (\code{Disallow}/\code{Allow})
-are never applied — only the \verb{Sitemap:} directive is read (ADR-005). Turn
+are never applied — only the \verb{Sitemap:} directive is read (ADR-006). Turn
 either source off with \code{use_robots} / \code{use_known_paths}.}
 \item{\code{from = "sitemap"}}{\code{x} is an exact sitemap or sitemapindex URL.
 \code{sitemap_tree()} fetches that one URL (no catalog, no guessing) and, if

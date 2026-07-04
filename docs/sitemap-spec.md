@@ -385,7 +385,7 @@ preserve parent→child provenance.
 
 From a bare-domain / site-root entrypoint, candidate order (SPEC §10):
 robots.txt `Sitemap:` directives → generic guessed paths → CMS-oriented guesses
-→ dedupe + classify. robots.txt `Sitemap:` discovery is **enabled** (ADR-005,
+→ dedupe + classify. robots.txt `Sitemap:` discovery is **enabled** (ADR-006,
 default `use_robots = TRUE`); the guessed-path catalog is also enabled by default
 (`use_known_paths = TRUE`). robots *rule application* (`Disallow`/`Allow`)
 remains out of scope (ADR-002). Directives take precedence over catalog guesses

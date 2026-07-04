@@ -89,7 +89,7 @@ count_pages <- function(parsed) {
 #'     WordPress/Shopify), classifying each candidate. A guessed path that 404s
 #'     is a `rejected` `not-found` row, never a validation finding, and a single
 #'     unreachable guess never fails the call. Robots rules (`Disallow`/`Allow`)
-#'     are never applied — only the `Sitemap:` directive is read (ADR-005). Turn
+#'     are never applied — only the `Sitemap:` directive is read (ADR-006). Turn
 #'     either source off with `use_robots` / `use_known_paths`.}
 #'   \item{`from = "sitemap"`}{`x` is an exact sitemap or sitemapindex URL.
 #'     `sitemap_tree()` fetches that one URL (no catalog, no guessing) and, if
