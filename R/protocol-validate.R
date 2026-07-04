@@ -1040,8 +1040,12 @@ hreflang_token_outcome <- function(hl, base, i, m) {
       hreflang_token_message(code, raw)
     )
   }
+  # A blank/whitespace-only token normalizes to "" and is already reported as
+  # HREFLANG_FORMAT_INVALID above; keep it out of the token-normal set so it
+  # never becomes an empty duplicate-detection key (an env name of "" errors).
+  token_norm <- tolower(trimws(raw))
   list(
-    norm = if (is_xd) NA_character_ else tolower(trimws(raw)),
+    norm = if (is_xd || !nzchar(token_norm)) NA_character_ else token_norm,
     is_xdefault = is_xd,
     xdefault_clean = is_xd && identical(code, "valid-xdefault"),
     finding = finding
