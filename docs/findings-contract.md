@@ -265,7 +265,7 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Four rows carry `reconcile = open`, grouped into the three decisions below: the
+Three rows carry `reconcile = open`, grouped into the two decisions below: the
 concept exists on both sides but the mapping is not a clean rename. These are
 the decisions the validator-alignment work must settle; until then, do not treat
 the two codes as interchangeable.
@@ -276,18 +276,32 @@ the two codes as interchangeable.
    (suppressed in non-strict). Reconcile the emission model, plus the
    `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras the validator has.
 2. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
-   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_LARGE`,
-   `DECOMPRESS_TOO_MANY_FILES`, `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two
-   coarse codes; the validator has a richer, active `DECOMPRESS_*` family. Since
-   sitemapr's are unimplemented, adopting the validator's set is the likely
-   resolution — an exception to "sitemapr names win."
-3. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
-   sitemapr's is a 500 MB *decompressed* ceiling (ADR-003); the validator's is a
-   fetch-body size limit. Confirm the thresholds describe the same guard before
-   treating the codes as equivalent.
+   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
+   `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two coarse codes; the validator
+   has a richer, active `DECOMPRESS_*` family. sitemapr also carries the two
+   archive-guard limits (200 MB decompressed, 100 files — ADR-003) with no
+   finding codes assigned yet. The likely resolution keeps sitemapr's container
+   distinction (gzip vs archive → `DECOMPRESS_FAILED`) while adopting the
+   validator's failure-mode codes for the archive guards; settle it when the
+   decompression layer is implemented. (`DECOMPRESS_TOO_LARGE` is *not* in this
+   set — it reconciles with `FETCH_BODY_CEILING_EXCEEDED`; see below.)
 
 ### Resolved reconciliations
 
+- **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `DECOMPRESS_TOO_LARGE` (was:
+  mis-paired to validator `FETCH_BODY_TOO_LARGE`). **Resolved → sitemapr name
+  wins, `fatal`.** sitemapr's ceiling guards *decompressed/effective* bytes — a
+  memory-safety abort against a runaway/decompression-bomb resource (ADR-003) —
+  which is the same intent as the validator's `DECOMPRESS_TOO_LARGE`, not its
+  `FETCH_BODY_TOO_LARGE` (raw *wire* body, a guard sitemapr deliberately retired
+  when it moved to a buffered fetch with a single effective-byte backstop). The
+  old alias pointed at the retired wire-body concept and was a silent mis-map.
+  The two ports split their size guards on orthogonal axes — sitemapr by *surface*
+  (one per-resource ceiling, at the fetch layer) and the validator by *mechanism*
+  (`FETCH_BODY_TOO_LARGE` wire + `DECOMPRESS_TOO_LARGE` decompressed) — so this is
+  a best-match pairing, not an identity: `FETCH_BODY_TOO_LARGE` has no sitemapr
+  equivalent and is now carried `validator-only`. sitemapr keeps `fatal` (its
+  convention for a source-level abort → partial result) and the fetch layer.
 - **`SCHEMA_UNKNOWN_NAMESPACE`** ↔ validator `PROTO_UNSUPPORTED_NAMESPACE` (was:
   mis-paired to validator `SCHEMA_NAMESPACE_MISSING`; severity `error` vs
   `warning`). **Resolved → sitemapr name/layer win, `warning`.** sitemapr's code
