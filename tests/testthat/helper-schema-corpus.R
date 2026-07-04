@@ -105,6 +105,17 @@ schema_conformance_corpus <- function() {
         ),
         TRUE
       ),
+      # Child order is a significant xsd:sequence (loc, caption, geo_location,
+      # title, license): reordering legal children is SCHEMA_INVALID. This is
+      # the shape of sitemap-validator's valid-image.xml fixture (title before
+      # caption); sitemapr is canonical per Google's upstream (SITE-ibeevjwt).
+      list(
+        sprintf(
+          '<image xmlns="%s"><loc>https://example.com/a.jpg</loc><title>t</title><caption>c</caption></image>',
+          IMG
+        ),
+        FALSE
+      ),
       list(
         sprintf('<image xmlns="%s"><caption>c</caption></image>', IMG),
         FALSE
