@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This is a comment before the root element -->
+<?my-app data="some processing instruction"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Comment inside urlset -->
+  <url>
+    <loc>https://example.com/page1</loc>
+    <!-- Comment inside url -->
+  </url>
+  <?another-pi value="test"?>
+  <url>
+    <loc>https://example.com/page2</loc>
+  </url>
+</urlset>

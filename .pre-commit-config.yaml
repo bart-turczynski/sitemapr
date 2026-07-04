@@ -8,11 +8,17 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=5120']
+      # The imported validator corpus is deliberately byte-sensitive: fixtures
+      # exercise trailing whitespace, CR/CRLF/CR line endings, BOMs, and
+      # UTF-16, so the whitespace/EOL-normalizing hooks must not rewrite them.
       - id: end-of-file-fixer
+        exclude: ^tests/testthat/fixtures/corpus/
       - id: trailing-whitespace
+        exclude: ^tests/testthat/fixtures/corpus/
       - id: check-merge-conflict
       - id: check-yaml
       - id: mixed-line-ending
+        exclude: ^tests/testthat/fixtures/corpus/
       - id: check-case-conflict
   - repo: local
     hooks:

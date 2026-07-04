@@ -27,3 +27,28 @@ profiles; none is copied or adapted from an upstream corpus.
 | `ns-video-invalid-in-mixed.xml` | valid siblings, invalid video child (scoping) |
 | `ns-unknown.xml` | namespace absent from the catalog |
 | `xxe-attempt.xml` | external SYSTEM entity; must not expand |
+
+## Imported corpus (`corpus/`)
+
+The `corpus/` subdirectory is the fixture set imported wholesale from the
+sibling **sitemap-validator** project (SITE-uivyzfhe) to broaden coverage and
+serve as a shared golden reference across the two ports. The files are
+byte-identical to sitemap-validator's `fixtures/` tree, preserving its layout
+(`xml/`, `text/`, `hreflang/`, `encoding/`, `compressed/`) and names so the same
+inputs can be run through both implementations and their outcomes compared.
+
+Both projects are authored by the same maintainer; every corpus fixture is
+clean-room synthetic `example.com` content reproducing no third-party document,
+and is likewise covered by the package license (MIT). The `compressed/` archives
+were built from the same synthetic sources.
+
+`tests/testthat/test-corpus-fixtures.R` drives every corpus fixture through
+`validate_sitemap()` and snapshots the per-fixture finding codes (or the classed
+`sitemapr_*` error, for documented limitations: corrupt/tar archives, UTF-16,
+malformed/empty XML) as `_snaps/corpus-fixtures.md` — the golden map.
+
+sitemap-validator also ships a ~52 MB "kitchen-sink" generator that emits one
+document exercising every protocol/hreflang code. It is *not* imported: it
+exceeds the repo's 5 MB commit guard, and sitemapr already covers the equivalent
+runtime-generation cases in-memory (e.g. the 50 000-entry over-cap urlset built
+by `vp_urlset_with_n()` in `setup-steps-validate-protocol.R`).

@@ -1,2 +1,7 @@
 * text=auto eol=lf
 
+# The imported validator corpus is byte-sensitive: fixtures deliberately carry
+# CR/CRLF/CR line endings, BOMs, and UTF-16, and are a byte-identical mirror of
+# sitemap-validator's fixtures/. Store them verbatim — no EOL normalization.
+tests/testthat/fixtures/corpus/** -text
+

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Stub fixture: Use test helper to generate 50,001+ URL entries at runtime.
+     This file contains only 5 URLs and is valid XML for basic loading tests. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/page/1</loc>
+  </url>
+  <url>
+    <loc>https://example.com/page/2</loc>
+  </url>
+  <url>
+    <loc>https://example.com/page/3</loc>
+  </url>
+  <url>
+    <loc>https://example.com/page/4</loc>
+  </url>
+  <url>
+    <loc>https://example.com/page/5</loc>
+  </url>
+</urlset>

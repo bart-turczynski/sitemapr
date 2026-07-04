@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/en/products/widget</loc>
+    <lastmod>2024-01-15T10:00:00Z</lastmod>
+    <image:image>
+      <image:loc>https://example.com/images/widget.jpg</image:loc>
+      <image:title>Widget product photo</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://example.com/thumbs/widget-demo.jpg</video:thumbnail_loc>
+      <video:title>Widget Demo</video:title>
+      <video:description>See our widget in action</video:description>
+      <video:content_loc>https://example.com/videos/widget-demo.mp4</video:content_loc>
+    </video:video>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/products/widget"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/products/widget"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/products/widget"/>
+  </url>
+  <url>
+    <loc>https://example.com/en/gallery</loc>
+    <image:image>
+      <image:loc>https://example.com/images/gallery-hero.jpg</image:loc>
+      <image:title>Gallery hero image</image:title>
+    </image:image>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/gallery"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/gallery"/>
+  </url>
+</urlset>

@@ -1,0 +1,7 @@
+https://example.com/valid-page
+ftp://example.com/not-http
+just-some-text
+https://example.com/another-valid
+://missing-scheme.com/page
+mailto:user@example.com
+https://example.com/last-valid

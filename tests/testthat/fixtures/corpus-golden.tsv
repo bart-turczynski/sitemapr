@@ -1,0 +1,79 @@
+compressed/invalid.gz	!sitemapr_decompression_error
+compressed/invalid.tar.gz	PROTOCOL_URL_NOT_ABSOLUTE
+compressed/valid.tar.gz	!sitemapr_xml_parse_error
+compressed/valid.xml.gz	<none>
+encoding/bom-conflict.xml	<none>
+encoding/declared-iso8859-no-bom.xml	<none>
+encoding/declared-utf8-no-bom.xml	<none>
+encoding/no-encoding.xml	<none>
+encoding/utf16-le-bom.xml	!sitemapr_xml_parse_error
+encoding/utf8-bom.xml	<none>
+hreflang/duplicate-tokens.xml	HREFLANG_DUPLICATE HREFLANG_XDEFAULT_MISSING
+hreflang/empty-hreflang-value.xml	HREFLANG_FORMAT_INVALID HREFLANG_XDEFAULT_MISSING
+hreflang/missing-attrs.xml	HREFLANG_LINK_ATTR_INVALID HREFLANG_XDEFAULT_MISSING SCHEMA_INVALID
+hreflang/nonstandard-case.xml	HREFLANG_FORMAT_INVALID HREFLANG_NONSTANDARD_CASE HREFLANG_XDEFAULT_MISSING
+hreflang/three-part-subtag.xml	HREFLANG_FORMAT_INVALID HREFLANG_XDEFAULT_MISSING
+hreflang/underscore-separator.xml	HREFLANG_SEPARATOR_INVALID HREFLANG_XDEFAULT_MISSING
+hreflang/valid-tokens.xml	<none>
+hreflang/wrong-rel-value.xml	HREFLANG_LINK_ATTR_INVALID HREFLANG_XDEFAULT_MISSING
+hreflang/xdefault-malformed.xml	HREFLANG_XDEFAULT_INVALID
+text/blank-lines.txt	PROTOCOL_TEXT_BLANK_LINE
+text/empty.txt	!sitemapr_xml_parse_error
+text/invalid-urls.txt	PROTOCOL_URL_NOT_ABSOLUTE
+text/long-urls.txt	PROTOCOL_TEXT_URL_TOO_LONG
+text/mac-line-endings.txt	<none>
+text/mixed-schemes-and-query.txt	<none>
+text/trailing-whitespace.txt	<none>
+text/utf8-bom.txt	PROTOCOL_URL_NOT_ABSOLUTE
+text/valid.txt	<none>
+text/windows-line-endings.txt	<none>
+xml/bad-namespace.xml	SCHEMA_UNKNOWN_NAMESPACE
+xml/cdata-in-loc.xml	<none>
+xml/changefreq-invalid.xml	PROTOCOL_CHANGEFREQ_INVALID SCHEMA_INVALID
+xml/comments-and-pis.xml	<none>
+xml/declared-unused-namespace.xml	<none>
+xml/duplicate-locs.xml	PROTOCOL_DUPLICATE_LOC PROTOCOL_LASTMOD_DATE_ONLY
+xml/empty-urlset.xml	SCHEMA_INVALID
+xml/hreflang-escaped-ampersand.xml	HREFLANG_XDEFAULT_MISSING
+xml/html-as-sitemap.html	UNSUPPORTED_HTML_MASQUERADE
+xml/image-duplicate-locs.xml	PROTOCOL_DUPLICATE_LOC
+xml/image-missing-loc.xml	SCHEMA_INVALID
+xml/index-empty.xml	SCHEMA_INVALID
+xml/index-invalid-child-urls.xml	SCHEMA_INVALID
+xml/index-mixed-valid-invalid.xml	SCHEMA_INVALID
+xml/index-nested.xml	<none>
+xml/index-self-reference.xml	<none>
+xml/index-single-child.xml	<none>
+xml/lastmod-date-only.xml	PROTOCOL_LASTMOD_DATE_ONLY
+xml/lastmod-datetime.xml	<none>
+xml/lastmod-invalid.xml	PROTOCOL_LASTMOD_INVALID SCHEMA_INVALID
+xml/loc-all-escapable-chars.xml	<none>
+xml/malformed.xml	!sitemapr_xml_parse_error
+xml/missing-namespace.xml	PROTOCOL_LASTMOD_DATE_ONLY SCHEMA_INVALID
+xml/mixed-all-four.xml	<none>
+xml/mixed-image-news.xml	<none>
+xml/mixed-news-video-image.xml	<none>
+xml/mixed-video-hreflang.xml	HREFLANG_XDEFAULT_MISSING
+xml/namespace-prefix-variations.xml	<none>
+xml/namespace-uri-typo.xml	SCHEMA_UNKNOWN_NAMESPACE
+xml/namespace-version-wrong.xml	SCHEMA_UNKNOWN_NAMESPACE
+xml/news-invalid-lastmod.xml	PROTOCOL_LASTMOD_INVALID SCHEMA_INVALID
+xml/news-missing-publication.xml	SCHEMA_INVALID
+xml/news-missing-title.xml	SCHEMA_INVALID
+xml/priority-out-of-range.xml	PROTOCOL_PRIORITY_OUT_OF_RANGE SCHEMA_INVALID
+xml/schema-fail-valid-protocol.xml	SCHEMA_INVALID
+xml/single-url.xml	<none>
+xml/unsupported-root.xml	UNSUPPORTED_ROOT
+xml/url-count-exceeded.xml	<none>
+xml/valid-core.xml	<none>
+xml/valid-hreflang.xml	<none>
+xml/valid-image.xml	SCHEMA_INVALID
+xml/valid-index.xml	<none>
+xml/valid-mixed.xml	HREFLANG_XDEFAULT_MISSING
+xml/valid-news.xml	<none>
+xml/valid-schema-bad-protocol.xml	PROTOCOL_CHANGEFREQ_INVALID PROTOCOL_LASTMOD_INVALID PROTOCOL_PRIORITY_OUT_OF_RANGE SCHEMA_INVALID
+xml/valid-video.xml	<none>
+xml/video-missing-description.xml	SCHEMA_INVALID
+xml/video-missing-required.xml	SCHEMA_INVALID
+xml/whitespace-heavy.xml	PROTOCOL_LASTMOD_DATE_ONLY
+xml/xsi-schemalocation.xml	<none>

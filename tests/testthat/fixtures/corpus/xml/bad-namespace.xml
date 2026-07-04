@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.8"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/2.0">
+  <url>
+    <loc>https://example.com/page1</loc>
+    <image:image>
+      <image:loc>https://example.com/images/photo1.jpg</image:loc>
+    </image:image>
+  </url>
+</urlset>
