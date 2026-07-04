@@ -17,7 +17,7 @@ Imports:
     htmltools,
     httr2,
     rlang,
-    rurl (>= 1.4.0),
+    rurl (>= 2.1.0),
     tibble,
     utils,
     xml2
@@ -32,7 +32,7 @@ Suggests:
     testthat (>= 3.0.0),
     withr
 Remotes:
-    bart-turczynski/rurl@v1.4.0
+    bart-turczynski/rurl@v2.1.0
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

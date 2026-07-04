@@ -17,9 +17,9 @@ report_sitemap(
 )
 }
 \arguments{
-\item{x}{A single source: a sitemap URL (character) or a path to a local
-sitemap file. When both \code{urls} and \code{findings} are supplied, \code{x} is used only
-as the displayed source label.}
+\item{x}{A single source: a sitemap URL (character) or a path to a
+local sitemap file. When both \code{urls} and \code{findings} are supplied, \code{x} is
+used only as the displayed source label.}
 
 \item{output}{Optional path to write the HTML file to. When supplied, the
 report is written there (UTF-8) and the path is returned invisibly;
@@ -40,10 +40,10 @@ When \code{NULL} (the default) it is computed from \code{x}.}
 \item{user_agent}{The User-Agent header for HTTP fetches. Defaults to the
 package User-Agent.}
 
-\item{limits}{Network limits for HTTP fetches, as from \code{\link[=fetch_limits]{fetch_limits()}}.}
+\item{limits}{Network limits for HTTP fetches, as from \code{fetch_limits()}.}
 
-\item{index_limits}{Sitemapindex-expansion bounds, as from \code{\link[=index_limits]{index_limits()}}.
-Defaults to \code{\link[=index_limits]{index_limits()}}.}
+\item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
+Defaults to \code{index_limits()}.}
 }
 \value{
 If \code{output} is supplied, the output path, invisibly. Otherwise, the
@@ -67,10 +67,10 @@ code, with evidence excerpts), and a searchable, sortable, CSV-exportable URL
 table.
 
 The output is entirely self-contained: all CSS, JavaScript (search, sort,
-CSV export, tree toggle, and a light/dark theme toggle), and data are inlined,
-so the file references no external hosts and works offline. The palette
-follows the viewer's \code{prefers-color-scheme} by default; the in-page toggle
-stamps a \code{data-theme} attribute on the root element that wins in both
+CSV export, tree toggle, and a light/dark theme toggle), and data are
+inlined, so the file references no external hosts and works offline. The
+palette follows the viewer's \code{prefers-color-scheme} by default; the in-page
+toggle stamps a \code{data-theme} attribute on the root element that wins in both
 directions.
 
 By default the source \code{x} is both read (via \code{\link[=read_sitemap]{read_sitemap()}}, for the URL

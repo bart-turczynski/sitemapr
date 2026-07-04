@@ -52,9 +52,17 @@ test_that("build_loc_key keeps query/port/userinfo that clean_url drops", {
   expect_true(grepl("?q=1", key, fixed = TRUE))
   expect_true(grepl("user@", key, fixed = TRUE))
 
-  # clean_url drops exactly these components, proving the key is distinct.
-  expect_false(grepl("8443", parsed$clean_url, fixed = TRUE))
-  expect_false(grepl("q=1", parsed$clean_url, fixed = TRUE))
+  # rurl's clean_url display helper drops exactly these components (sitemapr
+  # does not carry it in its canonical column set), proving the key is distinct.
+  clean_url <- rurl::safe_parse_urls(
+    url,
+    host_encoding = "idna",
+    path_normalization = "both",
+    case_handling = "lower_host",
+    path_encoding = "encode"
+  )$clean_url
+  expect_false(grepl("8443", clean_url, fixed = TRUE))
+  expect_false(grepl("q=1", clean_url, fixed = TRUE))
 })
 
 test_that("build_loc_key keeps a contentful query verbatim (SITE-vrgszbnu)", {

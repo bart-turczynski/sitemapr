@@ -50,22 +50,35 @@ parse_url_adapter <- function(urls) {
     return(url_fast_rows(urls, fc_kept))
   }
 
-  # Build both halves with the identical 14-column schema, then restore order.
+  # Build both halves on the identical canonical schema, then restore order.
   fast_df <- url_fast_rows(urls[fast], fc_kept)
   slow_df <- rurl_parse(urls[!fast])
   combined <- rbind(fast_df, slow_df)
   combined[order(c(which(fast), which(!fast))), , drop = FALSE]
 }
 
-# The pinned rurl call (canonicalization options sitemapr relies on).
+# The canonical URL-component columns every sitemapr consumer reads. Both the
+# rurl output and the fast-path frame are projected onto exactly this set before
+# they are combined, so sitemapr depends on the columns it uses, not on rurl's
+# full schema width: rurl may add columns (as 2.1.0 did: password, domain, tld,
+# domain_ascii/unicode, tld_ascii/unicode, clean_url) without breaking the
+# fast/slow rbind. rurl must supply every name listed here.
+url_adapter_cols <- c(
+  "original_url", "scheme", "host", "port", "path", "query",
+  "fragment", "user", "is_ip_host", "parse_status"
+)
+
+# The pinned rurl call (canonicalization options sitemapr relies on), projected
+# onto sitemapr's canonical column set.
 rurl_parse <- function(urls) {
-  rurl::safe_parse_urls(
+  parsed <- rurl::safe_parse_urls(
     urls,
     host_encoding = "idna",
     path_normalization = "both",
     case_handling = "lower_host",
     path_encoding = "encode"
   )
+  parsed[, url_adapter_cols, drop = FALSE]
 }
 
 # Cheap, vectorized first cut: a URL MIGHT need rurl if it is not pure ASCII, or
@@ -202,12 +215,12 @@ url_fast_components_vec <- function(u) {
   )
 }
 
-# Assemble the rurl-shaped 14-column data.frame for the fast rows from the
-# resolved-component frame (`url_fast_components_vec()`, `resolved` rows only).
-# Columns no sitemapr consumer reads (domain, tld, clean_url, password,
-# parse_status) are left NA / "ok"; the host is a confirmed DNS name so
-# is_ip_host is FALSE. The read columns (scheme, host, port, path, query, user,
-# is_ip_host) are byte-identical to rurl by the no-op invariant.
+# Assemble the fast rows onto sitemapr's canonical column set
+# (`url_adapter_cols`) from the resolved-component frame
+# (`url_fast_components_vec()`, `resolved` rows only). The host is a confirmed
+# DNS name so is_ip_host is FALSE; parse_status is "ok". The read columns
+# (scheme, host, port, path, query, user, is_ip_host) are
+# byte-identical to rurl by the no-op invariant.
 url_fast_rows <- function(urls, fc) {
   data.frame(
     original_url = as.character(urls),
@@ -218,14 +231,10 @@ url_fast_rows <- function(urls, fc) {
     query = fc$query,
     fragment = fc$fragment,
     user = NA_character_,
-    password = NA_character_,
-    domain = NA_character_,
-    tld = NA_character_,
     is_ip_host = FALSE,
-    clean_url = NA_character_,
     parse_status = "ok",
     stringsAsFactors = FALSE
-  )
+  )[, url_adapter_cols, drop = FALSE]
 }
 
 #' Assemble sitemapr's canonical sitemap URL (fetch target and identity key)
