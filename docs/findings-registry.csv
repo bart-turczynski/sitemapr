@@ -6,7 +6,8 @@ FETCH_FAILED,fatal,fetch,source,FALSE,validator-only,,FETCH_FAILED
 FETCH_TIMEOUT,fatal,fetch,source,FALSE,reserved,,FETCH_TIMEOUT
 FETCH_REDIRECT_LIMIT,error,fetch,source,FALSE,validator-only,,FETCH_REDIRECT_LIMIT
 FETCH_SSRF_BLOCKED,error,fetch,source,FALSE,validator-only,,FETCH_SSRF_BLOCKED
-FETCH_BODY_CEILING_EXCEEDED,fatal,fetch,source,FALSE,reserved,open,FETCH_BODY_TOO_LARGE
+FETCH_BODY_CEILING_EXCEEDED,fatal,fetch,source,FALSE,reserved,,DECOMPRESS_TOO_LARGE
+FETCH_BODY_TOO_LARGE,error,fetch,source,FALSE,validator-only,,FETCH_BODY_TOO_LARGE
 FETCH_HTTP_CHARSET_NOT_UTF8,error,fetch,source,FALSE,validator-only,,FETCH_HTTP_CHARSET_NOT_UTF8
 DISCOVERY_GUESS_NOT_FOUND,info,discovery,source,FALSE,validator-only,,DISCOVERY_GUESS_NOT_FOUND
 DISCOVERY_ROBOTS_FAILED,warning,discovery,source,FALSE,validator-only,,DISCOVERY_ROBOTS_FAILED
@@ -20,7 +21,6 @@ ENCODING_BOM_DETECTED,info,classification,source,FALSE,validator-only,,PROTO_BOM
 ENCODING_NOT_UTF8,error,classification,source,FALSE,validator-only,,PROTO_ENCODING_NOT_UTF8
 UNSUPPORTED_MALFORMED_GZIP,error,decompression,source,FALSE,reserved,open,DECOMPRESS_FAILED
 UNSUPPORTED_MALFORMED_ARCHIVE,error,decompression,archive-member,FALSE,reserved,open,DECOMPRESS_FAILED
-DECOMPRESS_TOO_LARGE,error,decompression,source,FALSE,validator-only,,DECOMPRESS_TOO_LARGE
 DECOMPRESS_TOO_MANY_FILES,error,decompression,source,FALSE,validator-only,,DECOMPRESS_TOO_MANY_FILES
 DECOMPRESS_NOT_SITEMAP,info,decompression,archive-member,FALSE,validator-only,,DECOMPRESS_NOT_SITEMAP
 SCHEMA_INVALID,error,schema,field,FALSE,active,,SCHEMA_INVALID
