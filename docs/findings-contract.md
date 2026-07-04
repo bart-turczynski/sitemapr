@@ -265,17 +265,12 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Three rows carry `reconcile = open`, grouped into the two decisions below: the
-concept exists on both sides but the mapping is not a clean rename. These are
-the decisions the validator-alignment work must settle; until then, do not treat
-the two codes as interchangeable.
+Two rows carry `reconcile = open`, a single decision: the concept exists on both
+sides but the mapping is not a clean rename. This is the decision the
+validator-alignment work must settle; until then, do not treat the two codes as
+interchangeable.
 
-1. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
-   `PROTO_ENCODING_CONFLICT_STRICT`. sitemapr emits `info` in non-strict and
-   elevates to `warning` in strict; the validator marks it strict-only
-   (suppressed in non-strict). Reconcile the emission model, plus the
-   `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras the validator has.
-2. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
+1. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
    ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
    `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two coarse codes; the validator
    has a richer, active `DECOMPRESS_*` family. sitemapr also carries the two
@@ -288,6 +283,26 @@ the two codes as interchangeable.
 
 ### Resolved reconciliations
 
+- **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator `PROTO_ENCODING_CONFLICT`
+  (was: mis-paired to validator `PROTO_ENCODING_CONFLICT_STRICT`; model
+  mismatch). **Resolved → sitemapr's model wins.** Both ports detect the same
+  BOM-vs-XML-declaration conflict, but model it differently: sitemapr emits one
+  code at `info` and *elevates its severity* to `warning` in strict
+  (`findings_strict_elevations`); the validator emits *two different codes* for
+  the same conflict — `PROTO_ENCODING_CONFLICT` (non-strict, `info`) and
+  `PROTO_ENCODING_CONFLICT_STRICT` (strict, `warning`). sitemapr's model is
+  cleaner on two axes: severity is a mode elevation on one code rather than a
+  second code, and the conflict *type* is distinguished
+  (`ENCODING_BOM_DECLARATION_CONFLICT` for BOM/declaration vs `ENCODING_CONFLICT`
+  for HTTP-charset), which the validator overloads into a single
+  `PROTO_ENCODING_CONFLICT`. Resolution: the validator drops
+  `PROTO_ENCODING_CONFLICT_STRICT` and elevates the severity of
+  `PROTO_ENCODING_CONFLICT` in strict instead (SMV-pkxdhqvq); no sitemapr change
+  (it already works this way). Both sitemapr encoding-conflict codes therefore
+  reconcile to `PROTO_ENCODING_CONFLICT` (sitemapr finer on the conflict-type
+  axis). The `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras are separate,
+  already-clean concepts (carried as the `ENCODING_BOM_DETECTED` /
+  `ENCODING_NOT_UTF8` validator-only rows) and need no reconciliation.
 - **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `DECOMPRESS_TOO_LARGE` (was:
   mis-paired to validator `FETCH_BODY_TOO_LARGE`). **Resolved → sitemapr name
   wins, `fatal`.** sitemapr's ceiling guards *decompressed/effective* bytes — a

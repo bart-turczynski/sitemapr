@@ -16,7 +16,7 @@ UNSUPPORTED_HTML_MASQUERADE,error,classification,source,FALSE,active,,CLASSIFY_H
 UNSUPPORTED_FEED,error,classification,index-child,FALSE,active,,
 UNSUPPORTED_FORMAT,error,classification,source,FALSE,validator-only,,CLASSIFY_UNSUPPORTED_FORMAT
 ENCODING_CONFLICT,info,classification,source,FALSE,active,,PROTO_ENCODING_CONFLICT
-ENCODING_BOM_DECLARATION_CONFLICT,info,classification,source,FALSE,active,open,PROTO_ENCODING_CONFLICT_STRICT
+ENCODING_BOM_DECLARATION_CONFLICT,info,classification,source,FALSE,active,,PROTO_ENCODING_CONFLICT
 ENCODING_BOM_DETECTED,info,classification,source,FALSE,validator-only,,PROTO_BOM_DETECTED
 ENCODING_NOT_UTF8,error,classification,source,FALSE,validator-only,,PROTO_ENCODING_NOT_UTF8
 UNSUPPORTED_MALFORMED_GZIP,error,decompression,source,FALSE,reserved,open,DECOMPRESS_FAILED
