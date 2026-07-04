@@ -230,13 +230,29 @@ schema-profile cache keys on the exact sorted namespace set — `architecture.md
 | Hreflang | `http://www.w3.org/1999/xhtml` (the `xhtml:link` element) |
 
 **Combining** (Google): declare each as a prefixed `xmlns` on `<urlset>`;
-extension blocks nest inside `<url>` after `<loc>`; **order is irrelevant**;
-file-size / URL-count limits (§2) still apply.
+extension blocks nest inside `<url>` after `<loc>`; **order among the sibling
+extension blocks is irrelevant** (a `<video:video>` may precede an
+`<image:image>`, etc.); file-size / URL-count limits (§2) still apply. This does
+**not** relax child order *inside* an extension block — see §5.1.
 
 ### 5.1 Image
 - `<url>` → `<image:image>` (≤ 1,000 per `<url>`) → required `<image:loc>`.
 - `<image:loc>` may be a different host (must be Search-Console-verified +
   robots-crawlable — not something the library can check; informational).
+- **Child order is significant.** Google's canonical image XSD models
+  `<image:image>` as an `xsd:sequence` — `loc → caption → geo_location → title →
+  license` — so a document that reorders the optional children (e.g. `<title>`
+  before `<caption>`) is `SCHEMA_INVALID`, even though every element name is
+  legal. Verified against the live upstream schema
+  (`https://www.google.com/schemas/sitemap-image/1.1/sitemap-image.xsd`) by the
+  parity oracle (`data-raw/schemas/check-parity.R`).
+  - **Cross-port divergence (SITE-ibeevjwt):** sitemap-validator's imported
+    `corpus/xml/valid-image.xml` fixture orders `<title>` before `<caption>` and
+    its port accepts it. Per Google's canonical `sequence` that ordering is
+    invalid, so **sitemapr is canonical**: it classifies the fixture
+    `SCHEMA_INVALID`, and the shared golden (`corpus-golden.tsv`) records that.
+    The validator port and its (misnamed) fixture are the stale side and should
+    be aligned there; sitemapr's schema is unchanged.
 
 ### 5.2 News (recency-sensitive)
 - `<url>` → `<news:news>` (≤ 1,000 per file) with required:
