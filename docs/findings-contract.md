@@ -264,7 +264,7 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Seven rows carry `reconcile = open`, grouped into the six decisions below: the
+Six rows carry `reconcile = open`, grouped into the five decisions below: the
 concept exists on both sides but the mapping is not a clean rename. These are
 the decisions the validator-alignment work must settle; until then, do not treat
 the two codes as interchangeable.
@@ -278,23 +278,31 @@ the two codes as interchangeable.
    `INDEX_TOO_MANY_CHILDREN` (+ `INDEX_TOO_MANY_INDEXES`). The validator has
    two/three finer child-cap codes at `warning`; sitemapr has one at `error`.
    Reconcile both the granularity and the severity.
-3. **`HREFLANG_NONSTANDARD_CASE`** — sitemapr emits `warning`; the validator
-   emits `info`. Same concept, different severity.
-4. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
+3. **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator
    `PROTO_ENCODING_CONFLICT_STRICT`. sitemapr emits `info` in non-strict and
    elevates to `warning` in strict; the validator marks it strict-only
    (suppressed in non-strict). Reconcile the emission model, plus the
    `PROTO_BOM_DETECTED` / `PROTO_ENCODING_NOT_UTF8` extras the validator has.
-5. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
+4. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
    ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_LARGE`,
    `DECOMPRESS_TOO_MANY_FILES`, `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two
    coarse codes; the validator has a richer, active `DECOMPRESS_*` family. Since
    sitemapr's are unimplemented, adopting the validator's set is the likely
    resolution — an exception to "sitemapr names win."
-6. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
+5. **`FETCH_BODY_CEILING_EXCEEDED`** ↔ validator `FETCH_BODY_TOO_LARGE`.
    sitemapr's is a 500 MB *decompressed* ceiling (ADR-003); the validator's is a
    fetch-body size limit. Confirm the thresholds describe the same guard before
    treating the codes as equivalent.
+
+### Resolved reconciliations
+
+- **`HREFLANG_NONSTANDARD_CASE`** (was: sitemapr `warning` vs validator `info`).
+  **Resolved → `info`** on both sides. BCP 47 (RFC 5646 §2.1.1) treats language
+  tags as case-insensitive, so an off-case tag (`en-us`) is a fully valid,
+  engine-honored tag — a deviation from the RECOMMENDED canonical form, not a
+  conformance failure. `warning` over-stated it; `info` is the standards-faithful
+  severity. sitemapr downgraded `warning → info`; the `reconcile` flag is
+  cleared.
 
 Codes that fold cleanly (documented here, no `reconcile` flag needed): the
 validator's `HREFLANG_SCHEMA_INVALID` folds into sitemapr's `SCHEMA_INVALID`

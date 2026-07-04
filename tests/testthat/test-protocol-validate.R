@@ -797,6 +797,12 @@ test_that("hreflang evidence preserves the original off-case value", {
   expect_identical(case$evidence[[1]]$excerpt, "en-us")
 })
 
+test_that("off-case hreflang is only info (BCP 47: tags are case-insensitive)", {
+  out <- validate_hreflang(rows_with_alts(list(alt("en-us"))), base)
+  case <- out[out$code == "HREFLANG_NONSTANDARD_CASE", ]
+  expect_identical(case$severity, "info")
+})
+
 test_that("rows without alternates produce no hreflang findings", {
   out <- validate_hreflang(
     sitemap_rows(loc = c("https://example.com/a", "https://example.com/b")),
