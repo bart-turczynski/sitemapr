@@ -67,7 +67,7 @@ xml/unsupported-root.xml	UNSUPPORTED_ROOT
 xml/url-count-exceeded.xml	<none>
 xml/valid-core.xml	<none>
 xml/valid-hreflang.xml	<none>
-xml/valid-image.xml	SCHEMA_INVALID
+xml/valid-image.xml	<none>
 xml/valid-index.xml	<none>
 xml/valid-mixed.xml	HREFLANG_XDEFAULT_MISSING
 xml/valid-news.xml	<none>

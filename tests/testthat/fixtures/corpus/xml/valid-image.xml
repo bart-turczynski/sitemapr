@@ -5,8 +5,8 @@
     <loc>https://example.com/gallery</loc>
     <image:image>
       <image:loc>https://example.com/images/photo1.jpg</image:loc>
-      <image:title>Sunset over the mountains</image:title>
       <image:caption>A beautiful sunset captured at dusk</image:caption>
+      <image:title>Sunset over the mountains</image:title>
     </image:image>
     <image:image>
       <image:loc>https://example.com/images/photo2.jpg</image:loc>
