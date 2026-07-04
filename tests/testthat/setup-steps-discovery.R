@@ -296,7 +296,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     testthat::expect_false(any(endsWith(context$requested, path)))
   })
 
-  # --- robots.txt Sitemap: directive discovery (ADR-005) ---------------------
+  # --- robots.txt Sitemap: directive discovery (ADR-006) ---------------------
 
   robots_listed_path <- "/robots-only/deep.xml"
 

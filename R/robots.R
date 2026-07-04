@@ -5,7 +5,7 @@
 # discovery therefore needs only a focused directive extractor, NOT a full
 # robots.txt grammar with User-agent group parsing. (ADR-002's objection to a
 # "thin" parser concerned User-agent scoping for `Disallow`/`Allow` rules, which
-# does not apply to the `Sitemap:` directive; see ADR-005.)
+# does not apply to the `Sitemap:` directive; see ADR-006.)
 #
 # This engine never applies robots rules (`Disallow`/`Allow`) — that remains out
 # of scope. It only harvests `Sitemap:` URLs to feed the discovery pipeline.

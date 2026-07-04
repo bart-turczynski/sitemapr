@@ -3,7 +3,7 @@
 # Pure data. `discovery_catalog()` returns the fixed, documented-order list of
 # sitemap path guesses sitemapr tries against a site root. This catalog is the
 # guessed-path source only; robots.txt `Sitemap:` directives are a separate
-# discovery source (R/robots.R; ADR-005) and never appear here.
+# discovery source (R/robots.R; ADR-006) and never appear here.
 #
 # Order is contractual (SPEC §10): every GENERIC guess first, in the documented
 # sequence, then the CMS-oriented guesses. The candidate builder joins these
@@ -52,7 +52,7 @@ discovery_cms_entries <- function() {
 #' generic guess (Shopify's `/sitemap.xml`); the duplicate URL it would produce
 #' is collapsed by the candidate builder's full-URL dedup, not here. robots.txt
 #' is not part of the catalog; its `Sitemap:` directives are a separate source
-#' (R/robots.R; ADR-005).
+#' (R/robots.R; ADR-006).
 #'
 #' @return A tibble with columns `path` (character), `kind` (character, one of
 #'   `"generic"`/`"cms"`), and `source` (character, `NA` for generic). Generic
