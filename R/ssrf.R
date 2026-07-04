@@ -346,16 +346,17 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
     return(ssrf_result(FALSE, "scheme"))
   }
 
+  # 2. Numeric-literal obfuscation (ADR-003): reject raw decimal/hex/octal
+  #    encodings on the raw, pre-normalization host. Checked before the
+  #    empty-host guard so a numeric authority rurl fails to parse (host = NA) is
+  #    still rejected on its raw form instead of slipping through as "no host".
+  if (ssrf_numeric_literal_blocked(raw_host)) {
+    return(ssrf_result(FALSE, "numeric-literal"))
+  }
+
   if (length(host) != 1L || is.na(host) || !nzchar(host)) {
     # No host to evaluate — nothing to block here; let downstream rules decide.
     return(ssrf_result(TRUE))
-  }
-
-  # 2. Numeric-literal obfuscation (ADR-003): reject raw decimal/hex/octal
-  #    encodings that rurl would normalize into a dotted-quad. Inspected on the
-  #    raw, pre-normalization host.
-  if (ssrf_numeric_literal_blocked(raw_host)) {
-    return(ssrf_result(FALSE, "numeric-literal"))
   }
 
   # 3. IP-literal range matching and metadata-name check on the normalized host.
@@ -375,13 +376,35 @@ ssrf_check_parsed <- function(parsed_row) {
   host <- as.character(parsed_row$host)[[1L]]
   scheme <- as.character(parsed_row$scheme)[[1L]]
   is_ip <- isTRUE(as.logical(parsed_row$is_ip_host)[[1L]])
-  raw_host <- ssrf_raw_host_of(as.character(parsed_row$original_url)[[1L]])
+  original_url <- as.character(parsed_row$original_url)[[1L]]
+  # Recover the scheme from the raw URL when rurl reports none: rurl returns
+  # scheme = NA for an authority it cannot parse (e.g. a bare numeric-literal
+  # host), and without recovery the scheme gate would mask the numeric-literal
+  # reason with a "scheme" reject.
+  if (is.na(scheme)) {
+    scheme <- ssrf_raw_scheme_of(original_url)
+  }
+  raw_host <- ssrf_raw_host_of(original_url)
   ssrf_check(
     host = host,
     scheme = scheme,
     is_ip_host = is_ip,
     raw_host = raw_host
   )
+}
+
+# Recover the scheme from a raw URL string without full parsing, used only when
+# rurl reports scheme = NA for an authority it could not parse. Returns the
+# lowercased scheme (no "://") or NA when the string carries no scheme.
+ssrf_raw_scheme_of <- function(url) {
+  if (length(url) != 1L || is.na(url) || !nzchar(url)) {
+    return(NA_character_)
+  }
+  m <- regmatches(url, regexpr("^[a-zA-Z][a-zA-Z0-9+.-]*(?=://)", url, perl = TRUE))
+  if (length(m) == 0L) {
+    return(NA_character_)
+  }
+  tolower(m)
 }
 
 # Extract the host substring from a raw URL string WITHOUT re-parsing semantics:

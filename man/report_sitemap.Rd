@@ -40,10 +40,10 @@ When \code{NULL} (the default) it is computed from \code{x}.}
 \item{user_agent}{The User-Agent header for HTTP fetches. Defaults to the
 package User-Agent.}
 
-\item{limits}{Network limits for HTTP fetches, as from \code{\link[=fetch_limits]{fetch_limits()}}.}
+\item{limits}{Network limits for HTTP fetches, as from \code{fetch_limits()}.}
 
-\item{index_limits}{Sitemapindex-expansion bounds, as from \code{\link[=index_limits]{index_limits()}}.
-Defaults to \code{\link[=index_limits]{index_limits()}}.}
+\item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
+Defaults to \code{index_limits()}.}
 }
 \value{
 If \code{output} is supplied, the output path, invisibly. Otherwise, the

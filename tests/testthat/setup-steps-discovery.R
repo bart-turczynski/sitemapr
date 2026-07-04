@@ -152,6 +152,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   when("discovery runs against {string}", function(root, context) {
+    # Persist the root so later Then steps (e.g. the missing-guesses check) build
+    # absolute URLs from it; without this context$root stays NULL and a relative
+    # URL leaks into validate_sitemap().
+    context$root <- root
     run_discovery(context, root = root)
   })
 
