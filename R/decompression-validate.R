@@ -19,8 +19,8 @@
 #     ADR-003 100-file archive cap was exceeded (`sitemapr_archive_limit`,
 #     limit == "file_count").
 #   - DECOMPRESS_NOT_SITEMAP       (info,  subject_type archive-member)  — an
-#     archive member that is not a parseable sitemap was skipped (one per member;
-#     mapped from the archive extractor's info-severity `problems`).
+#     archive member that is not a parseable sitemap was skipped (one per
+#     member; mapped from the archive extractor's info-severity `problems`).
 #
 # sitemapr keeps its container distinction (gzip vs archive) on the
 # `UNSUPPORTED_` axis and adopts the validator's failure-mode codes on the
@@ -115,7 +115,7 @@ decompression_member_finding <- function(
 # is recovered from it for the evidence excerpt. Warning-severity problems
 # (path-traversal rejections) are a distinct concern and are not mapped here.
 # Returns a (possibly empty) decompression-findings tibble.
-decompression_findings_from_problems <- function(problems) {
+decompression_findings_from_problems <- function(problems) { # nolint: object_length_linter, line_length_linter.
   if (is.null(problems) || nrow(problems) == 0L) {
     return(empty_decompression_findings())
   }

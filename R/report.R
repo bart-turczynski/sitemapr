@@ -10,7 +10,8 @@
 #
 # Sections (mirroring the reference):
 #   1. hero            — source, overall status, URL / index / sitemap counts
-#   2. sitemap table   — per-source format, status, URL count, LM/Pri/CF presence
+#   2. sitemap table   — per-source format, status, URL count, and
+#                        LM/Pri/CF presence
 #   3. lastmod         — coverage stat cards + a by-month histogram
 #   4. URL tree        — collapsible folder tree grouped by path segment
 #   5. severity board  — fatal/error/warning/info counts (canonical colors)
@@ -98,7 +99,7 @@ report_hero <- function(source_label, urls, sources, findings, mode) {
 
   blocking <- sum(findings$severity %in% c("fatal", "error"))
   is_valid <- blocking == 0L
-  status_icon <- if (is_valid) "✅" else "⚠️"
+  status_icon <- if (is_valid) "\u2705" else "\u26a0\ufe0f"
   status_label <- if (is_valid) "Valid" else "Issues found"
 
   count_parts <- character(0)
@@ -156,9 +157,9 @@ report_node_meta <- function(urls_for_node) {
 
 report_check_cell <- function(present) {
   if (isTRUE(present)) {
-    htmltools::tags$td(class = "smr-c smr-yes", "✓")
+    htmltools::tags$td(class = "smr-c smr-yes", "\u2713")
   } else {
-    htmltools::tags$td(class = "smr-c smr-no", "✗")
+    htmltools::tags$td(class = "smr-c smr-no", "\u2717")
   }
 }
 
@@ -176,7 +177,8 @@ report_sitemap_table <- function(urls, sources) {
     key <- key_of(i)
     fmt <- as.character(sources$format[i])
     is_index <- identical(fmt, "xml-sitemapindex")
-    node_urls <- urls[!is.na(urls$source_sitemap) & urls$source_sitemap == key, ,
+    node_urls <- urls[
+      !is.na(urls$source_sitemap) & urls$source_sitemap == key, ,
       drop = FALSE
     ]
     n <- nrow(node_urls)
@@ -273,12 +275,16 @@ report_lastmod_section <- function(urls) {
     class = "smr-cards",
     htmltools::tags$div(
       class = "smr-card",
-      htmltools::tags$div(class = "smr-card-num", format(n_total, big.mark = ",")),
+      htmltools::tags$div(
+        class = "smr-card-num", format(n_total, big.mark = ",")
+      ),
       htmltools::tags$div(class = "smr-card-lbl", "Total URLs")
     ),
     htmltools::tags$div(
       class = "smr-card",
-      htmltools::tags$div(class = "smr-card-num", format(n_with, big.mark = ",")),
+      htmltools::tags$div(
+        class = "smr-card-num", format(n_with, big.mark = ",")
+      ),
       htmltools::tags$div(class = "smr-card-lbl", "With lastmod")
     ),
     htmltools::tags$div(
@@ -310,7 +316,9 @@ report_lastmod_section <- function(urls) {
             style = htmltools::css(width = paste0(pct, "%"))
           )
         ),
-        htmltools::tags$span(class = "smr-bar-count", format(count, big.mark = ","))
+        htmltools::tags$span(
+          class = "smr-bar-count", format(count, big.mark = ",")
+        )
       )
     })
     chart <- htmltools::tagList(
@@ -432,7 +440,9 @@ report_severity_dashboard <- function(findings) {
   tiles <- lapply(report_severity_levels, function(s) {
     htmltools::tags$div(
       class = paste0("smr-sev smr-sev-", s),
-      htmltools::tags$div(class = "smr-sev-num", format(counts[[s]], big.mark = ",")),
+      htmltools::tags$div(
+        class = "smr-sev-num", format(counts[[s]], big.mark = ",")
+      ),
       htmltools::tags$div(class = "smr-sev-lbl", s)
     )
   })
@@ -453,7 +463,11 @@ report_evidence_block <- function(ev) {
   if (!is.null(ev$line) && !is.na(ev$line)) {
     loc <- paste0(
       " (line ", ev$line,
-      if (!is.null(ev$column) && !is.na(ev$column)) paste0(", col ", ev$column) else "",
+      if (!is.null(ev$column) && !is.na(ev$column)) {
+        paste0(", col ", ev$column)
+      } else {
+        ""
+      },
       ")"
     )
   }
@@ -479,7 +493,7 @@ report_findings_section <- function(findings) {
   )
   present_layers <- report_layer_order[report_layer_order %in% findings$layer]
 
-  layer_blocks <- lapply(present_layers, function(layer){
+  layer_blocks <- lapply(present_layers, function(layer) {
     sub <- findings[findings$layer == layer, , drop = FALSE]
     codes <- unique(sub$code)
     # keep first sample per code, count total, order by severity then count.
@@ -502,7 +516,9 @@ report_findings_section <- function(findings) {
           class = paste0("smr-sevtext smr-sevtext-", sev), sev
         ),
         htmltools::tags$td(
-          htmltools::tags$span(class = paste0("smr-code smr-code-", sev), r$code),
+          htmltools::tags$span(
+            class = paste0("smr-code smr-code-", sev), r$code
+          ),
           htmltools::tags$div(class = "smr-dim smr-small", paste0(
             format(s$count, big.mark = ","), " total"
           ))
@@ -560,7 +576,11 @@ report_url_table <- function(urls) {
     return(NULL)
   }
   capped <- n_total > report_url_table_cap
-  show <- if (capped) urls[seq_len(report_url_table_cap), , drop = FALSE] else urls
+  show <- if (capped) {
+    urls[seq_len(report_url_table_cap), , drop = FALSE]
+  } else {
+    urls
+  }
 
   fmt_cell <- function(v) if (is.na(v)) "-" else as.character(v)
   fmt_lm <- function(v) if (is.na(v)) "-" else format(v, "%Y-%m-%d")
@@ -576,8 +596,12 @@ report_url_table <- function(urls) {
         show$loc[i]
       )),
       htmltools::tags$td(class = "smr-dim smr-small", fmt_lm(show$lastmod[i])),
-      htmltools::tags$td(class = "smr-dim smr-small", fmt_cell(show$changefreq[i])),
-      htmltools::tags$td(class = "smr-dim smr-small", fmt_cell(show$priority[i]))
+      htmltools::tags$td(
+        class = "smr-dim smr-small", fmt_cell(show$changefreq[i])
+      ),
+      htmltools::tags$td(
+        class = "smr-dim smr-small", fmt_cell(show$priority[i])
+      )
     )
   })
 
@@ -613,9 +637,13 @@ report_url_table <- function(urls) {
         class = "smr-table",
         htmltools::tags$thead(htmltools::tags$tr(
           htmltools::tags$th(class = "smr-sortable", `data-col` = "0", "URL"),
-          htmltools::tags$th(class = "smr-sortable", `data-col` = "1", "Modified"),
+          htmltools::tags$th(
+            class = "smr-sortable", `data-col` = "1", "Modified"
+          ),
           htmltools::tags$th(class = "smr-sortable", `data-col` = "2", "Freq"),
-          htmltools::tags$th(class = "smr-sortable", `data-col` = "3", "Priority")
+          htmltools::tags$th(
+            class = "smr-sortable", `data-col` = "3", "Priority"
+          )
         )),
         htmltools::tags$tbody(id = "smr-url-tbody", body_rows)
       )
@@ -647,7 +675,8 @@ report_styles <- function() {
 }
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg);color:var(--fg);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,
+  'Helvetica Neue',Arial,sans-serif;
   line-height:1.5;}
 .smr-main{max-width:1000px;margin:0 auto;padding:2rem 1rem;}
 h2{border-bottom:2px solid var(--border);padding-bottom:.4rem;font-size:1.3rem;}
@@ -657,7 +686,8 @@ h3{font-size:1rem;margin:1rem 0 .5rem;}
 .smr-dim{color:var(--muted);}
 .smr-small{font-size:.8rem;}
 .smr-num{text-align:right;white-space:nowrap;}
-.smr-url{font-family:monospace;font-size:.8rem;word-break:break-all;color:var(--link);}
+.smr-url{font-family:monospace;font-size:.8rem;word-break:break-all;
+  color:var(--link);}
 a.smr-url{text-decoration:none;}
 a.smr-url:hover{text-decoration:underline;}
 .smr-badge{display:inline-block;background:var(--badge);color:var(--muted);
@@ -668,22 +698,28 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-hero-row{display:flex;justify-content:space-between;align-items:flex-start;
   gap:1rem;flex-wrap:wrap;}
 .smr-hero-title{margin:0 0 .25rem;font-size:1.5rem;}
-.smr-hero-source{margin:0 0 .75rem;word-break:break-all;font-size:.9rem;opacity:.95;}
-.smr-hero-stats{display:flex;gap:1.25rem;flex-wrap:wrap;font-size:.9rem;align-items:center;}
+.smr-hero-source{margin:0 0 .75rem;word-break:break-all;font-size:.9rem;
+  opacity:.95;}
+.smr-hero-stats{display:flex;gap:1.25rem;flex-wrap:wrap;font-size:.9rem;
+  align-items:center;}
 .smr-hero-mode{opacity:.85;text-transform:capitalize;}
 .smr-theme-toggle{background:rgba(255,255,255,.15);color:#fff;
   border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:8px 14px;
   font-size:.8rem;cursor:pointer;white-space:nowrap;}
 /* tables */
-.smr-tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
+.smr-tablewrap{overflow-x:auto;border:1px solid var(--border);
+  border-radius:8px;}
 .smr-table{border-collapse:collapse;width:100%;font-size:.85rem;}
-.smr-table thead tr{background:var(--head);border-bottom:2px solid var(--border);}
+.smr-table thead tr{background:var(--head);
+  border-bottom:2px solid var(--border);}
 .smr-table th{text-align:left;padding:8px;font-weight:600;color:var(--muted);}
-.smr-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+.smr-table td{padding:6px 8px;border-bottom:1px solid var(--border);
+  vertical-align:top;}
 .smr-c{text-align:center;}
 .smr-yes{color:#16a34a;}
 .smr-no{color:var(--muted);opacity:.6;}
-.smr-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
+.smr-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:6px;}
 .smr-dot-ok{background:#16a34a;}
 .smr-dot-bad{background:#dc2626;}
 .smr-subject{word-break:break-all;}
@@ -699,9 +735,11 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-bar-row{display:flex;align-items:center;gap:8px;margin:2px 0;}
 .smr-bar-lbl{width:60px;text-align:right;font-size:.72rem;color:var(--muted);
   font-family:monospace;flex-shrink:0;}
-.smr-bar-track{flex:1;background:var(--track);border-radius:3px;height:18px;overflow:hidden;}
+.smr-bar-track{flex:1;background:var(--track);border-radius:3px;height:18px;
+  overflow:hidden;}
 .smr-bar-fill{background:var(--accent);height:100%;border-radius:3px;}
-.smr-bar-count{width:56px;font-size:.72rem;color:var(--muted);font-family:monospace;}
+.smr-bar-count{width:56px;font-size:.72rem;color:var(--muted);
+  font-family:monospace;}
 /* tree */
 .smr-tree{max-height:400px;overflow-y:auto;border:1px solid var(--border);
   border-radius:8px;padding:.75rem;}
@@ -710,14 +748,17 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-tree-node>summary::-webkit-details-marker{display:none;}
 .smr-tree-leaf{padding:3px 0 3px 16px;font-size:.85rem;font-family:monospace;
   color:var(--muted);display:flex;align-items:center;}
-.smr-tree-toggle{display:inline-block;width:16px;font-size:.7rem;color:var(--muted);flex-shrink:0;}
+.smr-tree-toggle{display:inline-block;width:16px;font-size:.7rem;
+  color:var(--muted);flex-shrink:0;}
 .smr-tree-name{color:var(--fg);}
 /* severity dashboard */
 .smr-sevgrid{display:flex;gap:.75rem;flex-wrap:wrap;}
-.smr-sev{flex:1;min-width:110px;padding:.75rem 1rem;border-radius:8px;text-align:center;
+.smr-sev{flex:1;min-width:110px;padding:.75rem 1rem;border-radius:8px;
+  text-align:center;
   border:1px solid var(--border);background:var(--card);}
 .smr-sev-num{font-size:1.6rem;font-weight:700;line-height:1.1;}
-.smr-sev-lbl{font-size:.78rem;text-transform:capitalize;margin-top:.15rem;color:var(--muted);}
+.smr-sev-lbl{font-size:.78rem;text-transform:capitalize;margin-top:.15rem;
+  color:var(--muted);}
 .smr-sev-fatal .smr-sev-num{color:#b91c1c;}
 .smr-sev-error .smr-sev-num{color:#dc2626;}
 .smr-sev-warning .smr-sev-num{color:#d97706;}
@@ -731,16 +772,21 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-code{font-family:monospace;font-size:.85rem;}
 .smr-code-fatal{color:#b91c1c;}.smr-code-error{color:#dc2626;}
 .smr-code-warning{color:#d97706;}.smr-code-info{color:#6b7280;}
-.smr-evidence{margin-top:4px;padding:4px 8px;background:var(--code);border-radius:3px;
-  font-family:monospace;font-size:.8rem;white-space:pre-wrap;word-break:break-all;}
-.smr-ok-note{display:inline-block;padding:4px 12px;background:rgba(22,163,74,.12);
+.smr-evidence{margin-top:4px;padding:4px 8px;background:var(--code);
+  border-radius:3px;
+  font-family:monospace;font-size:.8rem;white-space:pre-wrap;
+  word-break:break-all;}
+.smr-ok-note{display:inline-block;padding:4px 12px;
+  background:rgba(22,163,74,.12);
   color:#16a34a;border-radius:4px;font-weight:600;}
 /* url table */
-.smr-urltable-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:.75rem;}
+.smr-urltable-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin-bottom:.75rem;}
 .smr-urltable-head h2{margin:0;border:none;padding:0;}
 .smr-urltable-tools{margin-left:auto;display:flex;gap:8px;align-items:center;}
 .smr-urltable-tools input{padding:6px 12px;border:1px solid var(--border);
-  border-radius:6px;font-size:.85rem;width:200px;background:var(--bg);color:var(--fg);}
+  border-radius:6px;font-size:.85rem;width:200px;background:var(--bg);
+  color:var(--fg);}
 .smr-btn{padding:6px 14px;background:var(--accent2);color:#fff;border:none;
   border-radius:6px;font-size:.85rem;cursor:pointer;}
 .smr-sortable{cursor:pointer;user-select:none;}
@@ -762,7 +808,8 @@ report_scripts <- function() {
   if(toggle){
     toggle.addEventListener('click',function(){
       var cur=root.getAttribute('data-theme');
-      var dark=cur?cur==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var dark=cur?cur==='dark':
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
       root.setAttribute('data-theme',dark?'light':'dark');
     });
   }
@@ -790,7 +837,8 @@ report_scripts <- function() {
       th.addEventListener('click',function(){
         var col=parseInt(this.getAttribute('data-col'),10);
         if(sortCol===col){sortAsc=!sortAsc;}else{sortCol=col;sortAsc=true;}
-        var rows=Array.prototype.slice.call(tbody.querySelectorAll('tr.smr-urlrow'));
+        var rows=Array.prototype.slice.call(
+          tbody.querySelectorAll('tr.smr-urlrow'));
         rows.sort(function(a,b){
           var at=(a.children[col].textContent||'');
           var bt=(b.children[col].textContent||'');
@@ -887,10 +935,10 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
 #' table.
 #'
 #' The output is entirely self-contained: all CSS, JavaScript (search, sort,
-#' CSV export, tree toggle, and a light/dark theme toggle), and data are inlined,
-#' so the file references no external hosts and works offline. The palette
-#' follows the viewer's `prefers-color-scheme` by default; the in-page toggle
-#' stamps a `data-theme` attribute on the root element that wins in both
+#' CSV export, tree toggle, and a light/dark theme toggle), and data are
+#' inlined, so the file references no external hosts and works offline. The
+#' palette follows the viewer's `prefers-color-scheme` by default; the in-page
+#' toggle stamps a `data-theme` attribute on the root element that wins in both
 #' directions.
 #'
 #' By default the source `x` is both read (via [read_sitemap()], for the URL
@@ -899,9 +947,9 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
 #' have already computed, pass them via `urls` and/or `findings`; in that case
 #' `x` is used only as the report's source label.
 #'
-#' @param x A single source: a sitemap URL (character) or a path to a local
-#'   sitemap file. When both `urls` and `findings` are supplied, `x` is used only
-#'   as the displayed source label.
+#' @param x A single source: a sitemap URL (character) or a path to a
+#'   local sitemap file. When both `urls` and `findings` are supplied, `x` is
+#'   used only as the displayed source label.
 #' @param output Optional path to write the HTML file to. When supplied, the
 #'   report is written there (UTF-8) and the path is returned invisibly;
 #'   otherwise the HTML is returned as an [htmltools::HTML] string.
@@ -985,7 +1033,7 @@ report_sitemap <- function(
     )
   }
   if (is.null(title)) {
-    title <- paste0("Sitemap report — ", x)
+    title <- paste0("Sitemap report \u2014 ", x)
   }
 
   html <- report_render_html(

@@ -96,7 +96,8 @@ schema_document_namespaces <- function(doc) {
 # `warning`, not `error`: the sitemaps protocol is extensible, so a namespace
 # absent from the catalog is content sitemapr could not validate (and that a
 # search engine may simply ignore), not a conformance failure of the document.
-# Matches sitemap-validator's PROTO_UNSUPPORTED_NAMESPACE (findings-contract.md).
+# Matches sitemap-validator's PROTO_UNSUPPORTED_NAMESPACE
+# (findings-contract.md).
 schema_unknown_ns_findings <- function(namespaces, subject_ref) {
   rows <- lapply(namespaces, function(ns) {
     schema_findings(

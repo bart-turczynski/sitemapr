@@ -374,7 +374,9 @@ vs_urlset <- function(...) {
 
 # entries: list(list(name=, content=<chr>)) -> gzipped ustar tempfile path.
 vs_write_tar_gz <- function(entries) {
-  path <- withr::local_tempfile(fileext = ".tar.gz", .local_envir = parent.frame())
+  path <- withr::local_tempfile(
+    fileext = ".tar.gz", .local_envir = parent.frame()
+  )
   blocks <- raw(0L)
   for (e in entries) {
     body <- charToRaw(e$content)

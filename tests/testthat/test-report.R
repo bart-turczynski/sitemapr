@@ -8,8 +8,12 @@
 
 # A fixture with several path-bearing URLs (drives the tree + URL table); a
 # fixture that produces findings; and a valid index.
-core_fixture <- function() test_path("fixtures", "corpus", "xml", "valid-core.xml")
-findings_fixture <- function() test_path("fixtures", "priority-out-of-range.xml")
+core_fixture <- function() {
+  test_path("fixtures", "corpus", "xml", "valid-core.xml")
+}
+findings_fixture <- function() {
+  test_path("fixtures", "priority-out-of-range.xml")
+}
 
 render_string <- function(...) {
   as.character(report_sitemap(...))
@@ -17,7 +21,10 @@ render_string <- function(...) {
 
 # ---- return / write contract -------------------------------------------------
 
-test_that("report_sitemap() returns a self-contained HTML string with every section", {
+test_that(paste0(
+  "report_sitemap() returns a self-contained HTML string with every ",
+  "section"
+), {
   html <- render_string(core_fixture())
   expect_true(is.character(html) && length(html) == 1L)
 
@@ -38,7 +45,10 @@ test_that("report_sitemap() returns a self-contained HTML string with every sect
   expect_match(html, "URL analysis", fixed = TRUE) # 7. URL table
 })
 
-test_that("report_sitemap(output=) writes the file and returns the path invisibly", {
+test_that(paste0(
+  "report_sitemap(output=) writes the file and returns the path ",
+  "invisibly"
+), {
   out <- withr::local_tempfile(fileext = ".html")
   res <- report_sitemap(core_fixture(), output = out)
   expect_identical(res, out)
@@ -77,7 +87,10 @@ test_that("content anchor links to the sitemap's own URLs are still present", {
 
 # ---- dark-mode support -------------------------------------------------------
 
-test_that("the report ships a dark variant with a prefers-color-scheme default and a toggle", {
+test_that(paste0(
+  "the report ships a dark variant with a prefers-color-scheme ",
+  "default and a toggle"
+), {
   html <- render_string(core_fixture())
   # Default follows the OS via the media query...
   expect_match(html, "prefers-color-scheme: dark", fixed = TRUE)
@@ -101,7 +114,10 @@ test_that("the URL table wires search, sort, and CSV export", {
 
 # ---- findings rendering ------------------------------------------------------
 
-test_that("a fixture with findings renders a severity dashboard and layer-grouped findings", {
+test_that(paste0(
+  "a fixture with findings renders a severity dashboard and ",
+  "layer-grouped findings"
+), {
   findings <- validate_sitemap(findings_fixture())
   expect_gt(nrow(findings), 0L) # precondition: this fixture has findings
 
