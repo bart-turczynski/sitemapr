@@ -986,9 +986,12 @@ protocol_hreflang_set_finding <- function(code, severity, base, i, message) {
 }
 
 # Severity for the per-token classifier codes: structural/format failures are
-# errors, a casing deviation is a warning.
+# errors; a casing deviation is only `info`. BCP 47 (RFC 5646 §2.1.1) treats
+# language tags as case-insensitive, so an off-case tag (`en-us`) is a fully
+# valid, engine-honored tag — a deviation from the RECOMMENDED canonical form,
+# not a conformance problem. Aligns with sitemap-validator (SITE reconcile #3).
 hreflang_token_severity <- function(code) {
-  if (identical(code, "HREFLANG_NONSTANDARD_CASE")) "warning" else "error"
+  if (identical(code, "HREFLANG_NONSTANDARD_CASE")) "info" else "error"
 }
 
 # Build the LINK_ATTR_INVALID message from the specific attribute problems.

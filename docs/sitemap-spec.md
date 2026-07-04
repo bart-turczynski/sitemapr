@@ -440,7 +440,8 @@ amendment alongside the ADR-003 update):
 | `PROTOCOL_URL_TOO_LONG` | protocol | error | 2,048-char `<loc>` in XML (text variant already exists) |
 | `PROTOCOL_LASTMOD_ALL_IDENTICAL` | protocol | warning | Bing lastmod-honesty heuristic (corpus-level) |
 | `PROTOCOL_LASTMOD_LOOKS_GENERATED` | protocol | info | Bing lastmod-honesty heuristic (corpus-level) |
-| `HREFLANG_NONSTANDARD_CASE`, `HREFLANG_XDEFAULT_INVALID`, `HREFLANG_LINK_ATTR_INVALID` | protocol | error/warning | added to the canonical hreflang set (§5.4); `HREFLANG_SCHEMA_INVALID` dropped |
+| `HREFLANG_XDEFAULT_INVALID`, `HREFLANG_LINK_ATTR_INVALID` | protocol | error | added to the canonical hreflang set (§5.4); `HREFLANG_SCHEMA_INVALID` dropped |
+| `HREFLANG_NONSTANDARD_CASE` | protocol | info | off-canonical casing (BCP 47 §2.1.1: tags are case-insensitive → advisory, not a conformance failure) |
 
 The two `LASTMOD` heuristics introduce a **corpus-level** finding category
 (scanning all entries of one sitemap), distinct from per-entry checks — worth a
