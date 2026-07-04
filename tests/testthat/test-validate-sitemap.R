@@ -336,3 +336,128 @@ test_that("index_feed_children is an empty character vector for no sources", {
     expect_identical(out, character(0))
   }
 })
+
+# --- Decompression-layer findings (SITE-vtbolmya) --------------------------
+# validate_sitemap() promotes the decompression conditions that the parse API
+# raises (gzip_decompress() / parse_sitemap_archive()) into findings. A minimal
+# in-memory ustar writer builds .tar.gz fixtures so member names / bodies are
+# controlled exactly (including a truncated tar the real tar() would not emit).
+
+vs_tar_header <- function(name, size, typeflag = "0") {
+  h <- raw(512L)
+  put <- function(h, off, s) {
+    b <- charToRaw(s)
+    h[(off + 1L):(off + length(b))] <- b
+    h
+  }
+  h <- put(h, 0L, name)
+  h <- put(h, 124L, sprintf("%011o", size))
+  h <- put(h, 148L, "        ")
+  h <- put(h, 156L, typeflag)
+  h <- put(h, 257L, "ustar")
+  put(h, 263L, "00")
+}
+
+vs_pad_block <- function(x) {
+  r <- length(x) %% 512L
+  if (r == 0L) x else c(x, raw(512L - r))
+}
+
+vs_urlset <- function(...) {
+  urls <- paste0("<url><loc>", c(...), "</loc></url>", collapse = "")
+  paste0(
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    urls,
+    "</urlset>"
+  )
+}
+
+# entries: list(list(name=, content=<chr>)) -> gzipped ustar tempfile path.
+vs_write_tar_gz <- function(entries) {
+  path <- withr::local_tempfile(fileext = ".tar.gz", .local_envir = parent.frame())
+  blocks <- raw(0L)
+  for (e in entries) {
+    body <- charToRaw(e$content)
+    blocks <- c(blocks, vs_tar_header(e$name, length(body)), vs_pad_block(body))
+  }
+  blocks <- c(blocks, raw(1024L))
+  con <- gzfile(path, "wb")
+  writeBin(blocks, con)
+  close(con)
+  path
+}
+
+test_that("a corrupt gzip source yields UNSUPPORTED_MALFORMED_GZIP", {
+  path <- withr::local_tempfile(fileext = ".xml.gz")
+  # 1f 8b magic (sniffs as gzip) followed by garbage that fails to inflate.
+  writeBin(as.raw(c(0x1F, 0x8B, 0x08, 0x00, 0x99, 0x42, 0x17)), path)
+
+  out <- validate_sitemap(path)
+  expect_identical(names(out), contract_cols)
+  row <- out[out$code == "UNSUPPORTED_MALFORMED_GZIP", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$layer, "decompression")
+  expect_identical(row$subject_type, "source")
+  expect_identical(row$severity, "error")
+})
+
+test_that("a truncated tar archive yields UNSUPPORTED_MALFORMED_ARCHIVE", {
+  # A header claiming a 5000-byte body, but no body bytes follow, gzipped.
+  bad_tar <- c(vs_tar_header("big.xml", 5000L), raw(512L))
+  path <- withr::local_tempfile(fileext = ".tar.gz")
+  con <- gzfile(path, "wb")
+  writeBin(bad_tar, con)
+  close(con)
+
+  out <- validate_sitemap(path)
+  expect_identical(names(out), contract_cols)
+  row <- out[out$code == "UNSUPPORTED_MALFORMED_ARCHIVE", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$layer, "decompression")
+  expect_identical(row$subject_type, "archive-member")
+  expect_identical(row$severity, "error")
+})
+
+test_that("exceeding the archive file cap yields DECOMPRESS_TOO_MANY_FILES", {
+  withr::local_options(sitemapr.archive.max_files = 2L)
+  path <- vs_write_tar_gz(list(
+    list(name = "a.xml", content = vs_urlset("https://a/1")),
+    list(name = "b.xml", content = vs_urlset("https://b/1")),
+    list(name = "c.xml", content = vs_urlset("https://c/1"))
+  ))
+
+  out <- validate_sitemap(path)
+  expect_identical(names(out), contract_cols)
+  row <- out[out$code == "DECOMPRESS_TOO_MANY_FILES", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$layer, "decompression")
+  expect_identical(row$subject_type, "source")
+  expect_identical(row$severity, "error")
+})
+
+test_that("a non-sitemap archive member yields DECOMPRESS_NOT_SITEMAP", {
+  path <- vs_write_tar_gz(list(
+    list(name = "sitemap.xml", content = vs_urlset("https://a/1")),
+    list(name = "README.md", content = "# hello\nsome prose\n")
+  ))
+
+  out <- validate_sitemap(path)
+  expect_identical(names(out), contract_cols)
+  row <- out[out$code == "DECOMPRESS_NOT_SITEMAP", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$layer, "decompression")
+  expect_identical(row$subject_type, "archive-member")
+  expect_identical(row$severity, "info")
+  expect_match(row$subject_ref, "#archive-member:README.md", fixed = TRUE)
+})
+
+test_that("a clean archive yields no decompression findings", {
+  path <- vs_write_tar_gz(list(
+    list(name = "a.xml", content = vs_urlset("https://a/1", "https://a/2")),
+    list(name = "b.xml", content = vs_urlset("https://b/1"))
+  ))
+
+  out <- validate_sitemap(path)
+  expect_identical(names(out), contract_cols)
+  expect_false(any(out$layer == "decompression"))
+})

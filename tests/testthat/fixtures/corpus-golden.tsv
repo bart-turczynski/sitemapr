@@ -1,6 +1,6 @@
-compressed/invalid.gz	!sitemapr_decompression_error
+compressed/invalid.gz	UNSUPPORTED_MALFORMED_GZIP
 compressed/invalid.tar.gz	PROTOCOL_URL_NOT_ABSOLUTE
-compressed/valid.tar.gz	!sitemapr_xml_parse_error
+compressed/valid.tar.gz	<none>
 compressed/valid.xml.gz	<none>
 encoding/bom-conflict.xml	<none>
 encoding/declared-iso8859-no-bom.xml	<none>

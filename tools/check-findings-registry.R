@@ -118,7 +118,7 @@ if (!all(is.na(reg$reconcile) | reg$reconcile == "open")) {
 # R/ source. Keep this prefix set in sync when a new code family is introduced.
 code_pattern <- paste0(
   '"(SCHEMA_|PROTOCOL_|HREFLANG_|INDEX_|SITEMAP_INDEX|',
-  'UNSUPPORTED_|ENCODING_|FETCH_)[A-Z0-9_]+"'
+  'UNSUPPORTED_|ENCODING_|FETCH_|DECOMPRESS_)[A-Z0-9_]+"'
 )
 src <- unlist(lapply(
   list.files("R", pattern = "[.]R$", full.names = TRUE),

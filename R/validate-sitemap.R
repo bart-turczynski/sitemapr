@@ -34,7 +34,8 @@
 # the PROTOCOL_LASTMOD_LOOKS_GENERATED corpus heuristic is skipped (the protocol
 # producer treats NA `fetched_at` as "skip").
 resolve_validation_source <- function(x, user_agent, limits) {
-  if (file.exists(x)) {
+  is_local <- file.exists(x)
+  if (is_local) {
     bytes <- readBin(x, what = "raw", n = file.info(x)$size)
     final_url <- NA_character_
   } else {
@@ -55,20 +56,102 @@ resolve_validation_source <- function(x, user_agent, limits) {
     final_url <- rec$final_url
   }
 
+  base <- sitemap_subject_ref(if (is.na(final_url)) x else final_url)
   fmt <- sniff_format(bytes)
+
+  # A local `.tar.gz` (gzip whose inner stream is tar; tar.gz is local-only,
+  # PRD §1) is handed to the bounded archive extractor by path — its
+  # decompression conditions (malformed tar, the ADR-003 file-count cap,
+  # per-member non-sitemap skips) become findings in validate_archive_parts().
+  # A corrupt outer gzip makes this guard's decompress raise
+  # `sitemapr_decompression_error`, caught by validate_sitemap() as
+  # UNSUPPORTED_MALFORMED_GZIP.
+  if (
+    is_local && identical(fmt, "gzip") &&
+      identical(sniff_format(gzip_decompress(bytes)), "tar")
+  ) {
+    return(list(
+      kind = "archive",
+      path = x,
+      byte_size = as.numeric(length(bytes)),
+      final_url = final_url,
+      base = base,
+      fetched_at = NA
+    ))
+  }
+
   if (identical(fmt, "gzip")) {
     bytes <- gzip_decompress(bytes)
     fmt <- sniff_format(bytes)
   }
 
   list(
+    kind = "document",
     bytes = bytes,
     format = fmt,
     byte_size = as.numeric(length(bytes)),
     final_url = final_url,
-    base = sitemap_subject_ref(if (is.na(final_url)) x else final_url),
+    base = base,
     fetched_at = NA # TODO(layer-f-encoding) + no fetch-timestamp in source_meta
   )
+}
+
+# Assemble the producer parts for a local `.tar.gz` archive. The bounded
+# extractor (`parse_sitemap_archive()`) signals its failure modes as classed
+# conditions; each is caught and turned into a decompression finding per the
+# findings-contract mapping. On success the member-skip `problems` become
+# DECOMPRESS_NOT_SITEMAP findings and the extracted rows feed the protocol
+# producer (mirroring how index expansion routes its rows). Non-file_count
+# archive-byte limits (the 200 MB decompressed / 50 MB on-disk guards) are NOT
+# in this mapping and re-propagate as the existing condition, preserving the
+# guard behavior.
+validate_archive_parts <- function(src) {
+  result <- tryCatch(
+    list(ok = parse_sitemap_archive(src$path, source_ref = src$base)),
+    sitemapr_decompression_error = function(cnd) {
+      list(finding = decompression_source_finding(
+        "UNSUPPORTED_MALFORMED_GZIP",
+        src$base,
+        conditionMessage(cnd)
+      ))
+    },
+    sitemapr_malformed_archive = function(cnd) {
+      list(finding = decompression_member_finding(
+        "UNSUPPORTED_MALFORMED_ARCHIVE",
+        src$base,
+        conditionMessage(cnd),
+        severity = "error"
+      ))
+    },
+    sitemapr_archive_limit = function(cnd) {
+      if (!identical(cnd$limit, "file_count")) {
+        stop(cnd) # byte-ceiling guards are out of this mapping; re-propagate
+      }
+      list(finding = decompression_source_finding(
+        "DECOMPRESS_TOO_MANY_FILES",
+        src$base,
+        conditionMessage(cnd)
+      ))
+    }
+  )
+
+  if (!is.null(result$finding)) {
+    return(list(result$finding))
+  }
+
+  res <- result$ok
+  parts <- list(decompression_findings_from_problems(res$problems))
+  if (nrow(res$rows) > 0L) {
+    parts[[length(parts) + 1L]] <- validate_protocol(
+      res$rows,
+      sitemap_url = src$final_url,
+      subject_ref = src$base,
+      byte_size = src$byte_size,
+      fetched_at = src$fetched_at,
+      source_meta = NULL
+    )
+  }
+  parts
 }
 
 # Map one `expand_index()` problem row to its stable INDEX_* finding code from
@@ -322,9 +405,26 @@ validate_sitemap <- function(
     index_limits <- index_limits()
   }
 
-  src <- resolve_validation_source(x, user_agent, limits)
+  # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
+  # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
+  # surface UNSUPPORTED_MALFORMED_GZIP rather than propagating the condition. A
+  # genuine transport / SSRF / HTTP failure still propagates.
+  src <- tryCatch(
+    resolve_validation_source(x, user_agent, limits),
+    sitemapr_decompression_error = function(cnd) {
+      list(kind = "malformed-gzip", base = sitemap_subject_ref(x), cnd = cnd)
+    }
+  )
 
-  parts <- if (identical(src$format, "html")) {
+  parts <- if (identical(src$kind, "malformed-gzip")) {
+    list(decompression_source_finding(
+      "UNSUPPORTED_MALFORMED_GZIP",
+      src$base,
+      conditionMessage(src$cnd)
+    ))
+  } else if (identical(src$kind, "archive")) {
+    validate_archive_parts(src)
+  } else if (identical(src$format, "html")) {
     list(validate_classification(source_meta(html_masquerade = TRUE), src$base))
   } else if (identical(src$format, "text")) {
     list(validate_text_protocol(rawToChar(src$bytes), src$base))

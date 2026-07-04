@@ -19,10 +19,10 @@ ENCODING_CONFLICT,info,classification,source,FALSE,active,,PROTO_ENCODING_CONFLI
 ENCODING_BOM_DECLARATION_CONFLICT,info,classification,source,FALSE,active,,PROTO_ENCODING_CONFLICT
 ENCODING_BOM_DETECTED,info,classification,source,FALSE,validator-only,,PROTO_BOM_DETECTED
 ENCODING_NOT_UTF8,error,classification,source,FALSE,validator-only,,PROTO_ENCODING_NOT_UTF8
-UNSUPPORTED_MALFORMED_GZIP,error,decompression,source,FALSE,reserved,open,DECOMPRESS_FAILED
-UNSUPPORTED_MALFORMED_ARCHIVE,error,decompression,archive-member,FALSE,reserved,open,DECOMPRESS_FAILED
-DECOMPRESS_TOO_MANY_FILES,error,decompression,source,FALSE,validator-only,,DECOMPRESS_TOO_MANY_FILES
-DECOMPRESS_NOT_SITEMAP,info,decompression,archive-member,FALSE,validator-only,,DECOMPRESS_NOT_SITEMAP
+UNSUPPORTED_MALFORMED_GZIP,error,decompression,source,FALSE,active,,DECOMPRESS_FAILED
+UNSUPPORTED_MALFORMED_ARCHIVE,error,decompression,archive-member,FALSE,active,,DECOMPRESS_FAILED
+DECOMPRESS_TOO_MANY_FILES,error,decompression,source,FALSE,active,,DECOMPRESS_TOO_MANY_FILES
+DECOMPRESS_NOT_SITEMAP,info,decompression,archive-member,FALSE,active,,DECOMPRESS_NOT_SITEMAP
 SCHEMA_INVALID,error,schema,field,FALSE,active,,SCHEMA_INVALID
 SCHEMA_UNKNOWN_NAMESPACE,warning,schema,document,FALSE,active,,PROTO_UNSUPPORTED_NAMESPACE
 SCHEMA_NAMESPACE_MISSING,error,schema,document,FALSE,validator-only,,SCHEMA_NAMESPACE_MISSING
