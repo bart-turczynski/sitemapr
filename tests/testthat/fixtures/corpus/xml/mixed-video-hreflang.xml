@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/en/videos/tutorial</loc>
+    <video:video>
+      <video:thumbnail_loc>https://example.com/thumbs/tutorial.jpg</video:thumbnail_loc>
+      <video:title>Tutorial Video</video:title>
+      <video:description>Learn the basics</video:description>
+      <video:content_loc>https://example.com/videos/tutorial.mp4</video:content_loc>
+    </video:video>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/videos/tutorial"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://example.com/es/videos/tutorial"/>
+  </url>
+</urlset>

@@ -1,0 +1,5 @@
+https://example.com/
+https://example.com/about
+https://example.com/blog
+https://example.com/contact
+http://example.com/legacy-page

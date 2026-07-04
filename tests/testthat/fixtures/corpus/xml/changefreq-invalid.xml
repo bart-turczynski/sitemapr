@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/page1</loc>
+    <changefreq>biweekly</changefreq>
+  </url>
+  <url>
+    <loc>https://example.com/page2</loc>
+    <changefreq>sometimes</changefreq>
+  </url>
+</urlset>

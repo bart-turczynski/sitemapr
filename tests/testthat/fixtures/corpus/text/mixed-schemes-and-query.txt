@@ -1,0 +1,6 @@
+https://example.com/page1
+http://example.com/page2
+https://example.com/search?q=hello&lang=en
+https://example.com/path?a=1&b=2&c=3
+http://example.com/legacy#section1
+https://example.com/page?redirect=https%3A%2F%2Fother.com

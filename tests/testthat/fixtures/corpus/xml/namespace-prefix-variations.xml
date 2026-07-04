@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sm:url>
+    <sm:loc>https://example.com/page1</sm:loc>
+    <sm:lastmod>2024-01-15T10:00:00Z</sm:lastmod>
+    <sm:changefreq>daily</sm:changefreq>
+    <sm:priority>0.8</sm:priority>
+  </sm:url>
+  <sm:url>
+    <sm:loc>https://example.com/page2</sm:loc>
+  </sm:url>
+</sm:urlset>

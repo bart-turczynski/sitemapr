@@ -25,6 +25,8 @@ vectors/
 *.Rproj
 *.Rcheck/
 *.tar.gz
+# ...but the imported validator corpus ships intentional .tar.gz test fixtures.
+!tests/testthat/fixtures/corpus/compressed/*.tar.gz
 src/*.o
 src/*.so
 src/*.dll
