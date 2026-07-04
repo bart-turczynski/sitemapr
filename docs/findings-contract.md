@@ -208,8 +208,20 @@ hreflang-prefixed one (see `docs/sitemap-spec.md` §5.4).
   was expected to serve a sitemap
 - `UNSUPPORTED_FEED` — sitemap index child points at an RSS/Atom feed URL
   (out of scope for v1)
-- `UNSUPPORTED_MALFORMED_GZIP` — gzip stream is corrupt or truncated (reserved)
-- `UNSUPPORTED_MALFORMED_ARCHIVE` — tar.gz extraction failed (reserved)
+
+### Decompression codes
+Emitted under `layer = "decompression"` by `validate_sitemap()` when it inflates
+a gzip stream or extracts a bounded local `.tar.gz` archive. The parse API
+(`read_sitemap()`) surfaces the same events as classed conditions instead
+(architecture.md §3); Layer F promotes them to findings.
+- `UNSUPPORTED_MALFORMED_GZIP` — gzip stream is corrupt or truncated (`error`,
+  `subject_type = source`)
+- `UNSUPPORTED_MALFORMED_ARCHIVE` — tar.gz extraction failed on a truncated /
+  garbage tar (`error`, `subject_type = archive-member`)
+- `DECOMPRESS_TOO_MANY_FILES` — the archive exceeds the 100-file cap (ADR-003;
+  `error`, `subject_type = source`)
+- `DECOMPRESS_NOT_SITEMAP` — an archive member is not a parseable sitemap and was
+  skipped, one per member (`info`, `subject_type = archive-member`)
 
 ### Encoding codes (`ENCODING_*`)
 Emitted under `layer = "classification"`.
@@ -253,9 +265,9 @@ alignment is mechanical.
   `archive-entry` → `archive-member`.
 
 ### Row status semantics (`status` column)
-- `active` — emitted by the sitemapr v1 pipeline today (43 codes).
+- `active` — emitted by the sitemapr v1 pipeline today (47 codes).
 - `reserved` — canonical and documented, but surfaced as a condition rather than
-  a findings row in v1 (the two `FETCH_*` codes, `UNSUPPORTED_MALFORMED_*`).
+  a findings row in v1 (the two `FETCH_*` codes).
 - `deferred-v0.2` — belongs to the `page`/`robots` Layer E inspection epic;
   defined so the two catalogs stay aligned, not emitted in v1.
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
@@ -265,23 +277,30 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-Two rows carry `reconcile = open`, a single decision: the concept exists on both
-sides but the mapping is not a clean rename. This is the decision the
-validator-alignment work must settle; until then, do not treat the two codes as
-interchangeable.
-
-1. **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
-   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
-   `DECOMPRESS_NOT_SITEMAP`). sitemapr reserves two coarse codes; the validator
-   has a richer, active `DECOMPRESS_*` family. sitemapr also carries the two
-   archive-guard limits (200 MB decompressed, 100 files — ADR-003) with no
-   finding codes assigned yet. The likely resolution keeps sitemapr's container
-   distinction (gzip vs archive → `DECOMPRESS_FAILED`) while adopting the
-   validator's failure-mode codes for the archive guards; settle it when the
-   decompression layer is implemented. (`DECOMPRESS_TOO_LARGE` is *not* in this
-   set — it reconciles with `FETCH_BODY_CEILING_EXCEEDED`; see below.)
+No rows carry `reconcile = open`. Every finding-code reconciliation with the
+sibling `sitemap-validator` implementation has been settled (see the resolved
+list below).
 
 ### Resolved reconciliations
+
+- **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
+  ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
+  `DECOMPRESS_NOT_SITEMAP`). **Resolved → sitemapr keeps its container
+  distinction on the `UNSUPPORTED_` axis and adopts the validator's failure-mode
+  codes on the `DECOMPRESS_` axis (net superset, no specificity dropped).** The
+  decompression layer is now implemented (gzip inflation + bounded `.tar.gz`
+  extraction with the 200 MB-decompressed / 100-file ADR-003 guards), and
+  `validate_sitemap()` promotes each failure mode to an active finding: a
+  malformed gzip stream → `UNSUPPORTED_MALFORMED_GZIP` (the container
+  distinction sitemapr keeps over the validator's single `DECOMPRESS_FAILED`), a
+  malformed tar → `UNSUPPORTED_MALFORMED_ARCHIVE`, the 100-file cap →
+  `DECOMPRESS_TOO_MANY_FILES`, and a non-sitemap archive member →
+  `DECOMPRESS_NOT_SITEMAP`. sitemapr thus emits a superset of the validator's
+  `DECOMPRESS_*` failure modes while retaining the gzip-vs-archive container
+  distinction the validator collapses. The 200 MB / 50 MB byte-ceiling guards
+  stay classed conditions and reconcile separately via
+  `FETCH_BODY_CEILING_EXCEEDED` (see below); `DECOMPRESS_TOO_LARGE` is *not* in
+  this set. The `reconcile` flag is cleared on both rows.
 
 - **`ENCODING_BOM_DECLARATION_CONFLICT`** ↔ validator `PROTO_ENCODING_CONFLICT`
   (was: mis-paired to validator `PROTO_ENCODING_CONFLICT_STRICT`; model
