@@ -28,7 +28,9 @@ Depends:
 Suggests:
     cucumber (>= 2.0.0),
     knitr,
+    oysteR,
     rmarkdown,
+    rosv,
     testthat (>= 3.0.0),
     withr
 Remotes:
