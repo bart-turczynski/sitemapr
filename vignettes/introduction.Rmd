@@ -121,3 +121,14 @@ not consulted in this version.
   `user_agent` controls shared across the entry points.
 - `read_sitemap()` for extraction, `validate_sitemap()` for conformance, and
   `sitemap_tree()` for discovery cover the full public surface.
+
+## Acknowledgments
+
+`sitemapr` implements the [Sitemaps.org](https://www.sitemaps.org/protocol.html)
+protocol and Google's sitemap extensions, following the relevant W3C XML, RFC
+3986/3987, and robots-exclusion standards. It is built on `xml2` (libxml2),
+`httr2`, and the sibling `rurl` package.
+
+The full list of credits — prior art, dependencies, the standards this code
+implements, and the data sources it serves — is in
+[`ACKNOWLEDGMENTS.md`](https://github.com/bart-turczynski/sitemapr/blob/main/ACKNOWLEDGMENTS.md).
