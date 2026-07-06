@@ -120,7 +120,7 @@ tar_read_entries <- function(tar_bytes) {
     name <- tar_field_string(header, 0L, 100L)
     prefix <- tar_field_string(header, 345L, 155L)
     if (nzchar(prefix)) {
-      name <- paste0(prefix, "/", name)
+      name <- file.path(prefix, name)
     }
     typeflag <- as.integer(header[157L]) # offset 156 (0-based)
     size <- tar_field_octal(header, 124L, 12L)

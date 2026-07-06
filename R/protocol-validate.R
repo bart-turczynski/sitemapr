@@ -369,7 +369,7 @@ validate_field_values <- function(rows, base) {
       sprintf(
         "<changefreq> '%s' is not one of: %s.",
         cf[j],
-        paste(protocol_changefreq_values, collapse = ", ")
+        toString(protocol_changefreq_values)
       )
     )
   }

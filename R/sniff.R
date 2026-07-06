@@ -197,12 +197,11 @@ sniff_classify_root <- function(root) {
   # Ordered dispatch: the first matching pattern wins. Sitemap roots are listed
   # before feed roots so a urlset / sitemapindex always wins; the generic-XML
   # catch-all is last. (HTML, with several markers, is matched separately.)
-  # Duplicate "feed" names are intentional — RSS and Atom both classify as feed.
+  # RSS (`<rss>`) and Atom (`<feed>`) share the one "feed" classification.
   patterns <- c(
     "xml-urlset" = paste0("^<", ns, "urlset", tail),
     "xml-sitemapindex" = paste0("^<", ns, "sitemapindex", tail),
-    "feed" = paste0("^<", ns, "rss", tail),
-    "feed" = paste0("^<", ns, "feed", tail),
+    "feed" = paste0("^<", ns, "(rss|feed)", tail),
     "xml" = paste0("^<", ns, "[a-z][a-z0-9_.-]*", tail)
   )
   # HTML markers, checked before the generic-XML catch-all so markup like

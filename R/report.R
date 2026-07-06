@@ -129,7 +129,7 @@ report_hero <- function(source_label, urls, sources, findings, mode) {
             " URLs"
           ),
           if (length(count_parts) > 0L) {
-            htmltools::tags$span(paste(count_parts, collapse = ", "))
+            htmltools::tags$span(toString(count_parts))
           },
           htmltools::tags$span(class = "smr-hero-mode", paste0(mode, " mode"))
         )
