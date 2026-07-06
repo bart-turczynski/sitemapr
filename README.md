@@ -7,11 +7,11 @@
 
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/R-CMD-check.yaml)
-[![test-coverage](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/test-coverage.yaml)
-[![lint](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/lint.yaml)
-[![Security audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml)
-[![OSV audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml)
+[![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml)
+[![Security
+audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml)
+[![OSV
+audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml)
 <!-- badges: end -->
 
 sitemapr is a deterministic toolkit for reading and validating XML,
