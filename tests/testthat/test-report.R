@@ -26,7 +26,8 @@ test_that(paste0(
   "section"
 ), {
   html <- render_string(core_fixture())
-  expect_true(is.character(html) && length(html) == 1L)
+  expect_type(html, "character")
+  expect_length(html, 1L)
 
   # Full self-contained document scaffold.
   expect_match(html, "<!DOCTYPE html>", fixed = TRUE)

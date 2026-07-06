@@ -422,8 +422,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "format, root, namespaces, and profile_id"
     ),
     function(context) {
-      expect_identical(
-        names(context$result),
+      expect_named(
+        context$result,
         c(
           "requested_url",
           "final_url",
@@ -450,8 +450,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then("a warning-class condition is raised for the child", function(context) {
     raised <- vapply(
       context$warnings,
-      function(w) inherits(w, "sitemapr_http_error"),
-      logical(1)
+      inherits,
+      logical(1),
+      "sitemapr_http_error"
     )
     expect_true(any(raised))
   })

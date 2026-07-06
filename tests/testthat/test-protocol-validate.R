@@ -987,7 +987,7 @@ test_that("more than 32 video tags is flagged and configurable", {
 })
 
 test_that("a too-long video description is flagged", {
-  long <- paste(rep("x", 2049L), collapse = "")
+  long <- strrep("x", 2049L)
   expect_identical(
     ext_codes("video", list(mk_video(description = leaf(long)))),
     "PROTOCOL_VIDEO_FIELD_INVALID"

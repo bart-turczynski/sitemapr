@@ -78,8 +78,8 @@ test_that("a local gzipped XML sitemap is decompressed transparently", {
 test_that("the columns are exactly the parse contract, with no findings code", {
   path <- write_tempfile(urlset_xml("https://a/1"), ".xml")
   res <- read_sitemap(path)
-  expect_identical(
-    names(res),
+  expect_named(
+    res,
     c(
       "loc",
       "lastmod",

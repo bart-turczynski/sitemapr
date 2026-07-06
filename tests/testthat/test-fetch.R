@@ -165,7 +165,7 @@ test_that("read_capped_body raises sitemapr_body_ceiling on oversized input", {
 test_that("read_capped_body returns the bytes when under the cap", {
   chunks <- list(as.raw(rep(0x41, 30L)), as.raw(rep(0x42, 20L)))
   out <- read_capped_body(chunks, max_bytes = 100L)
-  expect_true(is.raw(out))
+  expect_type(out, "raw")
   expect_length(out, 50L)
 })
 
@@ -330,8 +330,8 @@ test_that("a successful fetch returns the 13-column metadata record", {
   meta <- fetch_source("https://example.com/sitemap.xml")
 
   expect_identical(ncol(meta), 13L)
-  expect_identical(
-    names(meta),
+  expect_named(
+    meta,
     c(
       "requested_url",
       "final_url",

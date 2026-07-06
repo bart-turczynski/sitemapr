@@ -4,8 +4,8 @@ test_that("empty_sitemap_rows is a 0-row tibble with the 9-column contract", {
   rows <- empty_sitemap_rows()
   expect_s3_class(rows, "tbl_df")
   expect_identical(nrow(rows), 0L)
-  expect_identical(
-    names(rows),
+  expect_named(
+    rows,
     c(
       "loc",
       "lastmod",

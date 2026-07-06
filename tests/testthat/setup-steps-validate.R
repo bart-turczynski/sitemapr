@@ -203,7 +203,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "subject_ref, message, evidence, mode, is_strict_only, remediation_hint"
     ),
     function(context) {
-      expect_identical(names(context$result), validate_contract_cols)
+      expect_named(context$result, validate_contract_cols)
     }
   )
 
@@ -437,7 +437,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "the process list shows no Java subprocess spawned during the call",
     function(context) {
       expect_s3_class(context$result, "tbl_df")
-      expect_identical(names(context$result), validate_contract_cols)
+      expect_named(context$result, validate_contract_cols)
     }
   )
 }

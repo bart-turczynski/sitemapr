@@ -6,7 +6,7 @@
 schemas_dir <- system.file("schemas", package = "sitemapr")
 
 validate_doc <- function(xml, xsd_path) {
-  doc <- xml2::read_xml(xml, options = c("NOBLANKS"))
+  doc <- xml2::read_xml(xml, options = "NOBLANKS")
   isTRUE(as.logical(xml2::xml_validate(doc, xml2::read_xml(xsd_path))))
 }
 

@@ -58,7 +58,7 @@ test_that("empty_sitemap_tree carries the column contract and types", {
   tree <- empty_sitemap_tree()
   expect_s3_class(tree, "tbl_df")
   expect_identical(nrow(tree), 0L)
-  expect_identical(names(tree), sitemap_tree_cols())
+  expect_named(tree, sitemap_tree_cols())
   expect_type(tree$depth, "integer")
   expect_type(tree$page_count, "integer")
   expect_type(tree$gzip, "logical")
@@ -67,7 +67,7 @@ test_that("empty_sitemap_tree carries the column contract and types", {
 test_that("each result row exposes the documented column contract", {
   httr2::local_mocked_responses(tree_mock(list()))
   tree <- sitemap_tree("https://example.com")
-  expect_identical(names(tree), sitemap_tree_cols())
+  expect_named(tree, sitemap_tree_cols())
 })
 
 test_that("an accepted candidate row carries status, page_count, and gzip", {

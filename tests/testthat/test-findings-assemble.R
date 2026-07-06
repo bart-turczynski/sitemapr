@@ -20,7 +20,7 @@ test_that("empty input yields a zero-row 10-column contract tibble", {
 
   expect_s3_class(out, "tbl_df")
   expect_identical(nrow(out), 0L)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
 })
 
 test_that("a list of only zero-row parts also yields the empty contract", {
@@ -29,7 +29,7 @@ test_that("a list of only zero-row parts also yields the empty contract", {
     "strict"
   )
   expect_identical(nrow(out), 0L)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
 })
 
 test_that("column set and types match the contract exactly", {
@@ -46,7 +46,7 @@ test_that("column set and types match the contract exactly", {
   )
   out <- assemble_findings(parts, "strict")
 
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_type(out$code, "character")
   expect_type(out$severity, "character")
   expect_type(out$layer, "character")

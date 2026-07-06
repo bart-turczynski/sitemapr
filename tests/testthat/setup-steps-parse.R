@@ -365,7 +365,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       attributes(t)[c("sources", "problems")] <- NULL
       t
     }
-    expect_equal(
+    expect_identical(
       drop_provenance(context$result),
       drop_provenance(context$expected)
     )
@@ -378,7 +378,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "the source_sitemap column distinguishes the two files",
     function(context) {
-      expect_identical(length(unique(context$result$source_sitemap)), 2L)
+      expect_length(unique(context$result$source_sitemap), 2L)
     }
   )
 

@@ -13,8 +13,8 @@ test_that("a urlset parses to the contract row tibble", {
   expect_identical(res$kind, "urlset")
   expect_null(res$children)
   expect_s3_class(res$rows, "tbl_df")
-  expect_identical(
-    names(res$rows),
+  expect_named(
+    res$rows,
     c(
       "loc",
       "lastmod",
@@ -72,11 +72,11 @@ test_that("core fields are parsed into the faithful (raw character) form", {
 })
 
 test_that("lastmod accepts date-only and timezone offsets, NA on garbage", {
-  expect_equal(
+  expect_identical(
     parse_lastmod("2026-06-01"),
     as.POSIXct("2026-06-01 00:00:00", tz = "UTC")
   )
-  expect_equal(
+  expect_identical(
     parse_lastmod("2026-01-02T03:04:05+02:00"),
     as.POSIXct("2026-01-02 01:04:05", tz = "UTC")
   )
@@ -162,7 +162,7 @@ test_that("a sitemapindex yields child loc/lastmod and empty rows", {
   expect_identical(nrow(res$rows), 0L)
   expect_identical(res$children$loc, c("https://a/s1.xml", "https://a/s2.xml"))
   expect_s3_class(res$children$lastmod, "POSIXct")
-  expect_equal(
+  expect_identical(
     res$children$lastmod[[1L]],
     as.POSIXct("2026-01-01 00:00:00", tz = "UTC")
   )

@@ -47,7 +47,7 @@ test_that("bytes leaf seed parses with no network access and provenance seed", {
     seed_urlset("https://ex.com/a", "https://ex.com/b"),
     source_url = "https://ex.com/sitemap.xml"
   )
-  expect_identical(names(tree), sitemap_tree_cols())
+  expect_named(tree, sitemap_tree_cols())
   expect_identical(nrow(tree), 1L)
   expect_identical(tree$depth, 0L)
   expect_identical(tree$status, "accepted")
