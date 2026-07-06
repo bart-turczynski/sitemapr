@@ -98,7 +98,7 @@ findings_dedup <- function(findings) {
     findings$subject_ref,
     findings$severity,
     findings$message,
-    sep = ""
+    sep = "\x1f"
   )
   findings[!duplicated(key), , drop = FALSE]
 }

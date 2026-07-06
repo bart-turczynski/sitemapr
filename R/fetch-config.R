@@ -56,7 +56,7 @@ default_user_agent <- function() {
   url <- utils::packageDescription("sitemapr")$URL
 
   if (is.null(url) || is.na(url) || !nzchar(url)) {
-    return(paste0("sitemapr/", version))
+    return(sprintf("sitemapr/%s", version))
   }
 
   # The URL field may list multiple URLs (comma/whitespace separated); the
@@ -64,7 +64,7 @@ default_user_agent <- function() {
   # GitHub repo first (ahead of the pkgdown site) so the crawler contact URL
   # points at the repo README/issues; keep that order.
   contact <- trimws(strsplit(url, "[,[:space:]]+")[[1L]][[1L]])
-  paste0("sitemapr/", version, " (+", contact, ")")
+  sprintf("sitemapr/%s (+%s)", version, contact)
 }
 
 #' Construct a one-row source-metadata record for a fetch

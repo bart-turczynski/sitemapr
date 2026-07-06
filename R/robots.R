@@ -17,7 +17,7 @@
 
 # Build the robots.txt URL for a normalized origin (`scheme://host[:port]`).
 robots_txt_url <- function(origin) {
-  paste0(origin, "/robots.txt")
+  file.path(origin, "robots.txt")
 }
 
 # Is `url` an absolute http(s) URL with a parseable host? A `Sitemap:` directive
@@ -54,7 +54,7 @@ parse_robots_sitemaps <- function(text) {
       sprintf(
         "Skipped %d non-absolute-http Sitemap: directive(s) in robots.txt: %s",
         sum(!valid),
-        paste(vals[!valid], collapse = ", ")
+        toString(vals[!valid])
       ),
       class = "sitemapr_robots_bad_directive"
     )
