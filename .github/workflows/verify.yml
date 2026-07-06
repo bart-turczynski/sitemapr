@@ -1,0 +1,160 @@
+# Fast verification gate: lint (+ this package's docs-reproducibility and
+# findings-registry guards) + a single Ubuntu R CMD check + coverage, on every
+# push to main and every PR. Full cross-platform coverage lives in
+# full-check.yml. Named "R-CMD-check" so tooling that discovers CI by the
+# conventional workflow name (e.g. pkgcheck's `cmd|coverage` heuristic) sees it.
+#
+# Unlike the sibling packages' fast gate (a light --no-manual check), this one
+# runs the strict --as-cran pass with error-on=warning even per-PR: sitemapr is
+# the most fragile link in the GitHub-source-only dependency chain
+# (sitemapr -> rurl -> pslr) and has no reliably-installed local pre-push gate,
+# so CI is the backstop.
+name: R-CMD-check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Install current-CRAN roxygen2; tools/check-docs.R then asserts it
+          # equals DESCRIPTION's Config/roxygen2/version pin, so the docs guard
+          # compares against the same generator the committed man/ + NAMESPACE
+          # were produced with. If CRAN moves past the pin the guard fails
+          # loudly — the signal to bump the pin and regenerate docs. local::.
+          # installs the package's own deps so roxygenise() and lintr can load
+          # the namespace. (An exact pak pin, roxygen2@x.y.z, trips a solver
+          # dependency conflict here, so we rely on the guard for the version
+          # check instead.)
+          extra-packages: any::lintr, any::roxygen2, local::.
+          needs: lint
+
+      - name: Docs are reproducible (tools/check-docs.R)
+        run: source("tools/check-docs.R")
+        shell: Rscript {0}
+
+      - name: Findings registry in sync (tools/check-findings-registry.R)
+        run: source("tools/check-findings-registry.R")
+        shell: Rscript {0}
+
+      - name: Lint
+        run: lintr::lint_package()
+        shell: Rscript {0}
+        env:
+          LINTR_ERROR_ON_LINT: true
+
+  readme:
+    runs-on: ubuntu-latest
+    name: README in sync with README.Rmd
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-pandoc@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # devtools::build_readme() installs the package and re-renders
+          # README.Rmd before diffing README.md.
+          extra-packages: any::devtools
+          needs: check
+      - name: Re-render README.md from README.Rmd
+        run: devtools::build_readme()
+        shell: Rscript {0}
+      - name: Fail if README.md is out of date
+        run: |
+          if ! git diff --exit-code -- README.md; then
+            echo "::error file=README.md::README.md is out of sync with README.Rmd. Run devtools::build_readme() and commit the result."
+            exit 1
+          fi
+
+  check:
+    needs: lint
+    runs-on: ubuntu-latest
+    name: R CMD check (ubuntu-latest, release)
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-pandoc@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          # --as-cran + fail on WARNING, matching the local pre-push verify gate.
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"warning"'
+          upload-snapshots: true
+          build_args: 'c("--no-manual")'
+
+  coverage:
+    needs: check
+    runs-on: ubuntu-latest
+    name: Test coverage
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr
+          needs: coverage
+      # Self-contained coverage backstop: covr computes the overall + per-file
+      # summary and prints it to the job log, and the cobertura report is kept as
+      # an artifact. No external upload service (codecov) is wired up — that
+      # would need a CODECOV_TOKEN secret; the number is tracked in the issue
+      # tracker instead.
+      - name: Test coverage
+        run: |
+          cov <- covr::package_coverage(
+            quiet = FALSE,
+            clean = FALSE,
+            install_path = file.path(normalizePath(Sys.getenv("RUNNER_TEMP"), winslash = "/"), "package")
+          )
+          print(cov)
+          covr::to_cobertura(cov, filename = "cobertura.xml")
+        shell: Rscript {0}
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: cobertura.xml
+          if-no-files-found: ignore
+
+      - name: Show testthat output
+        if: always()
+        run: |
+          ## --------------------------------------------------------------------
+          find '${{ runner.temp }}/package' -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash

@@ -20,18 +20,17 @@ repos:
       - id: mixed-line-ending
         exclude: ^tests/testthat/fixtures/corpus/
       - id: check-case-conflict
+  # Air: fast, R-free (Rust binary) formatter for R sources. Runs per commit and
+  # auto-fixes; air.toml controls style + exclusions (so data-raw/ dev scripts
+  # are skipped even when staged). Using the managed air-pre-commit repo instead
+  # of a local `air format` hook means contributors do not need air on PATH,
+  # and the version is pinned here. https://posit-dev.github.io/air/
+  - repo: https://github.com/posit-dev/air-pre-commit
+    rev: 0.8.2
+    hooks:
+      - id: air-format
   - repo: local
     hooks:
-      # Format R sources with air (https://posit-dev.github.io/air/) on commit.
-      # language: system => contributors must have air on PATH (brew install
-      # air; see CONTRIBUTING). air.toml controls style + exclusions, so the
-      # data-raw/ dev scripts are skipped even when they are staged.
-      - id: air-format
-        name: air (format R code)
-        entry: air format
-        language: system
-        types: [r]
-        stages: [pre-commit]
       - id: verify
         name: verify (mirrors CI)
         entry: Rscript -e
