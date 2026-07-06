@@ -79,8 +79,8 @@ test_that("source_metadata() returns the 13 contract columns in order", {
 
   expect_s3_class(meta, "data.frame")
   expect_identical(nrow(meta), 1L)
-  expect_identical(
-    names(meta),
+  expect_named(
+    meta,
     c(
       "requested_url",
       "final_url",
@@ -114,8 +114,8 @@ test_that("source_metadata() uses the contract column types", {
   expect_type(meta$root, "character")
   expect_type(meta$profile_id, "character")
 
-  expect_true(is.list(meta$redirect_chain))
-  expect_true(is.list(meta$namespaces))
+  expect_type(meta$redirect_chain, "list")
+  expect_type(meta$namespaces, "list")
 })
 
 test_that("source_metadata() defaults downstream fields to NA / empty", {
@@ -132,7 +132,7 @@ test_that("source_metadata() carries supplied values including list-columns", {
     requested_url = "https://example.com/sitemap.xml",
     final_url = "https://example.com/final.xml",
     status = 200L,
-    redirect_chain = c("https://example.com/sitemap.xml"),
+    redirect_chain = "https://example.com/sitemap.xml",
     content_type = "application/xml",
     charset = "UTF-8",
     bytes = 4096L,
@@ -145,6 +145,6 @@ test_that("source_metadata() carries supplied values including list-columns", {
   expect_identical(meta$timing, 0.5)
   expect_identical(
     meta$redirect_chain[[1L]],
-    c("https://example.com/sitemap.xml")
+    "https://example.com/sitemap.xml"
   )
 })

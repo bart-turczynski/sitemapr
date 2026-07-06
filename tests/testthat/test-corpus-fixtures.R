@@ -80,7 +80,7 @@ test_that("no corpus fixture crashes with an uncaught base-R error", {
     res <- corpus_outcome(rel)
     if (res$ok) {
       expect_true(inherits(res$tbl, "tbl_df"), info = rel)
-      expect_identical(names(res$tbl), contract_cols, info = rel)
+      expect_named(res$tbl, contract_cols, info = rel)
     } else {
       expect_true(
         res$classed,

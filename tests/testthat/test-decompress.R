@@ -57,7 +57,7 @@ test_that("a corrupt gzip stream raises a classed decompression error", {
 })
 
 test_that("a truncated gzip stream raises a classed decompression error", {
-  gz <- gzip_stream(paste(rep("https://example.com/p\n", 100), collapse = ""))
+  gz <- gzip_stream(strrep("https://example.com/p\n", 100))
   expect_error(
     gzip_decompress(head(gz, 12L)),
     class = "sitemapr_decompression_error"

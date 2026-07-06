@@ -3,8 +3,8 @@
 test_that("candidates carry the documented column contract", {
   cand <- discovery_candidates("https://example.com")
   expect_s3_class(cand, "tbl_df")
-  expect_identical(
-    names(cand),
+  expect_named(
+    cand,
     c("candidate_url", "catalog_path", "kind", "source", "loc_key")
   )
 })

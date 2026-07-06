@@ -175,7 +175,7 @@ test_that("both sources off yields an empty tree", {
     use_known_paths = FALSE
   )
   expect_identical(nrow(tree), 0L)
-  expect_identical(names(tree), sitemap_tree_cols())
+  expect_named(tree, sitemap_tree_cols())
 })
 
 test_that("a robots-listed index is expanded like any accepted index", {

@@ -5,8 +5,8 @@ test_that("a text sitemap parses to the contract row tibble", {
   txt <- "https://a/\nhttps://b/\nhttps://c/"
   rows <- parse_sitemap_text(txt)
   expect_s3_class(rows, "tbl_df")
-  expect_identical(
-    names(rows),
+  expect_named(
+    rows,
     c(
       "loc",
       "lastmod",

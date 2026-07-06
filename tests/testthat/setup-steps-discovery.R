@@ -244,7 +244,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       # 404 can never become a finding row. The given's `404 for all guesses`
       # fixture is re-mocked here because run_discovery's frame-scoped mock was
       # torn down when the WHEN returned.
-      missing <- paste0(context$root, "/sitemap.xml")
+      missing <- file.path(context$root, "sitemap.xml")
       httr2::local_mocked_responses(function(req) {
         httr2::response(status_code = 404L, url = req$url)
       })
@@ -280,8 +280,8 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "page_count, gzip, status, reason, provenance"
     ),
     function(context) {
-      testthat::expect_identical(
-        names(context$tree),
+      testthat::expect_named(
+        context$tree,
         c(
           "depth",
           "parent_sitemap",

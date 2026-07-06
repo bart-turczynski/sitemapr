@@ -154,8 +154,8 @@ test_that("an unsupported root element yields no schema findings", {
 test_that("findings carry the contract columns and types, minus Layer F bits", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   out <- validate_fixture("schema-invalid-urlset.xml")
-  expect_identical(
-    names(out),
+  expect_named(
+    out,
     c(
       "code",
       "severity",
@@ -175,8 +175,8 @@ test_that("findings carry the contract columns and types, minus Layer F bits", {
   # mode + filtering/dedup/sort are Layer F's; they are absent here.
   expect_false("mode" %in% names(out))
   # Evidence is the contract's named list.
-  expect_identical(
-    names(out$evidence[[1]]),
+  expect_named(
+    out$evidence[[1]],
     c("excerpt", "line", "column")
   )
   # Schema findings fire in both modes (not strict-only) at error severity.

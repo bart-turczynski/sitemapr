@@ -22,13 +22,13 @@ fixture <- function(name) test_path("fixtures", name)
 test_that("a valid urlset yields zero findings", {
   out <- validate_sitemap(fixture("valid-minimal.xml"))
   expect_s3_class(out, "tbl_df")
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_identical(nrow(out), 0L)
 })
 
 test_that("every branch returns the full 10-column contract", {
   out <- validate_sitemap(fixture("urlset-duplicate-loc.xml"))
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
 })
 
 test_that("a duplicate loc yields a PROTOCOL_DUPLICATE_LOC finding", {
@@ -66,7 +66,7 @@ test_that("an unsupported root yields UNSUPPORTED_ROOT", {
 test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
   long_url <- paste0(
     "https://example.com/",
-    paste(rep("a", 2100L), collapse = "")
+    strrep("a", 2100L)
   )
   path <- withr::local_tempfile(fileext = ".txt")
   writeLines(c("https://example.com/", long_url), path)
@@ -108,7 +108,7 @@ test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
   })
 
   out <- validate_sitemap(root)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_true("UNSUPPORTED_FEED" %in% out$code)
   row <- out[out$code == "UNSUPPORTED_FEED", ]
   expect_identical(nrow(row), 1L)
@@ -189,7 +189,7 @@ test_that("a 404 source raises sitemapr_entrypoint_error, never a finding", {
 
 test_that("an HTML masquerade source yields UNSUPPORTED_HTML_MASQUERADE", {
   out <- validate_sitemap(fixture("html-masquerade.html"))
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_true("UNSUPPORTED_HTML_MASQUERADE" %in% out$code)
   row <- out[out$code == "UNSUPPORTED_HTML_MASQUERADE", ]
   expect_identical(row$layer, "classification")
@@ -212,7 +212,7 @@ test_that("a gzip-compressed urlset is transparently decompressed", {
     )
   })
   out <- validate_sitemap("https://example.com/sitemap.xml.gz")
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_identical(nrow(out), 0L)
 })
 
@@ -220,7 +220,7 @@ test_that("a local sitemapindex is schema-checked without expansion", {
   # A local file has no origin URL, so children are never fetched: the index
   # branch returns the schema part only (no INDEX_* or protocol findings).
   out <- validate_sitemap(fixture("valid-index.xml"))
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_false(any(startsWith(out$code, "INDEX_")))
 })
 
@@ -233,7 +233,7 @@ test_that("an index cycle yields an INDEX_CYCLE_DETECTED error finding", {
 
   httr2::local_mocked_responses(mock_by_url(map))
   out <- validate_sitemap(root)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_true("INDEX_CYCLE_DETECTED" %in% out$code)
   row <- out[out$code == "INDEX_CYCLE_DETECTED", ]
   expect_identical(row$layer, "index-expansion")
@@ -257,7 +257,7 @@ test_that("a nested index warns SITEMAP_INDEX_NESTED and expands leaf rows", {
 
   httr2::local_mocked_responses(mock_by_url(map))
   out <- validate_sitemap(root)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
 
   nested_row <- out[out$code == "SITEMAP_INDEX_NESTED", ]
   expect_gt(nrow(nested_row), 0L)
@@ -282,7 +282,7 @@ test_that("an over-deep index chain yields INDEX_DEPTH_EXCEEDED", {
       max_depth = 1L
     )
   )
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_true("INDEX_DEPTH_EXCEEDED" %in% out$code)
   expect_true(all(out$severity[out$code == "INDEX_DEPTH_EXCEEDED"] == "error"))
 })
@@ -303,7 +303,7 @@ test_that("an over-wide index yields INDEX_CHILD_COUNT_EXCEEDED", {
       max_children = 1L
     )
   )
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_true("INDEX_CHILD_COUNT_EXCEEDED" %in% out$code)
 })
 
@@ -395,7 +395,7 @@ test_that("a corrupt gzip source yields UNSUPPORTED_MALFORMED_GZIP", {
   writeBin(as.raw(c(0x1F, 0x8B, 0x08, 0x00, 0x99, 0x42, 0x17)), path)
 
   out <- validate_sitemap(path)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   row <- out[out$code == "UNSUPPORTED_MALFORMED_GZIP", ]
   expect_identical(nrow(row), 1L)
   expect_identical(row$layer, "decompression")
@@ -412,7 +412,7 @@ test_that("a truncated tar archive yields UNSUPPORTED_MALFORMED_ARCHIVE", {
   close(con)
 
   out <- validate_sitemap(path)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   row <- out[out$code == "UNSUPPORTED_MALFORMED_ARCHIVE", ]
   expect_identical(nrow(row), 1L)
   expect_identical(row$layer, "decompression")
@@ -429,7 +429,7 @@ test_that("exceeding the archive file cap yields DECOMPRESS_TOO_MANY_FILES", {
   ))
 
   out <- validate_sitemap(path)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   row <- out[out$code == "DECOMPRESS_TOO_MANY_FILES", ]
   expect_identical(nrow(row), 1L)
   expect_identical(row$layer, "decompression")
@@ -444,7 +444,7 @@ test_that("a non-sitemap archive member yields DECOMPRESS_NOT_SITEMAP", {
   ))
 
   out <- validate_sitemap(path)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   row <- out[out$code == "DECOMPRESS_NOT_SITEMAP", ]
   expect_identical(nrow(row), 1L)
   expect_identical(row$layer, "decompression")
@@ -460,6 +460,6 @@ test_that("a clean archive yields no decompression findings", {
   ))
 
   out <- validate_sitemap(path)
-  expect_identical(names(out), contract_cols)
+  expect_named(out, contract_cols)
   expect_false(any(out$layer == "decompression"))
 })

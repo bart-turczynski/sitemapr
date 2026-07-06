@@ -217,7 +217,7 @@ test_that("the per-index child-count cap truncates and records one event", {
     limits = index_limits(max_children = 2L)
   )
 
-  expect_identical(length(tracker$urls), 2L)
+  expect_length(tracker$urls, 2L)
   expect_true(any(grepl("cap", res$problems$message, fixed = TRUE)))
 })
 
