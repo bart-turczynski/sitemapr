@@ -39,6 +39,7 @@ reference:
     desc: "Discover and expand a site's sitemaps as a tree."
     contents:
       - sitemap_tree
+      - sitemap_tree_from_bytes
 
   - title: "Validation"
     desc: >
@@ -46,6 +47,11 @@ reference:
       rules, returning stable, reproducible findings.
     contents:
       - validate_sitemap
+
+  - title: "Reporting"
+    desc: "Render a self-contained HTML report for a sitemap."
+    contents:
+      - report_sitemap
 
 footer:
   structure:
