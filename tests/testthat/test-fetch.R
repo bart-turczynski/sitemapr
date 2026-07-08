@@ -32,9 +32,10 @@ mock_redirect <- function(url, location, status = 301L) {
 # ---- SSRF: initial URL -------------------------------------------------------
 
 test_that("a loopback initial URL aborts before any network call", {
-  called <- FALSE
+  state <- new.env(parent = emptyenv())
+  state$called <- FALSE
   httr2::local_mocked_responses(function(req) {
-    called <<- TRUE
+    state$called <- TRUE
     mock_ok()
   })
 
@@ -42,7 +43,7 @@ test_that("a loopback initial URL aborts before any network call", {
     fetch_source("http://127.0.0.1/sitemap.xml"),
     class = "sitemapr_ssrf_blocked"
   )
-  expect_false(called)
+  expect_false(state$called)
 })
 
 test_that("the SSRF abort carries the reason and rejected url", {
@@ -298,25 +299,27 @@ test_that("a 404 raises a warning and returns a record with the status", {
 # ---- User-Agent --------------------------------------------------------------
 
 test_that("the request carries the default User-Agent", {
-  captured <- NULL
+  state <- new.env(parent = emptyenv())
+  state$captured <- NULL
   httr2::local_mocked_responses(function(req) {
-    captured <<- req
+    state$captured <- req
     mock_ok()
   })
 
   fetch_source("https://example.com/sitemap.xml")
-  expect_identical(captured$options$useragent, default_user_agent())
+  expect_identical(state$captured$options$useragent, default_user_agent())
 })
 
 test_that("a custom user_agent overrides the default", {
-  captured <- NULL
+  state <- new.env(parent = emptyenv())
+  state$captured <- NULL
   httr2::local_mocked_responses(function(req) {
-    captured <<- req
+    state$captured <- req
     mock_ok()
   })
 
   fetch_source("https://example.com/sitemap.xml", user_agent = "mybot/1.0")
-  expect_identical(captured$options$useragent, "mybot/1.0")
+  expect_identical(state$captured$options$useragent, "mybot/1.0")
 })
 
 # ---- Metadata contract -------------------------------------------------------
@@ -364,9 +367,10 @@ test_that("a successful fetch returns the 13-column metadata record", {
 # ---- https -> http fallback --------------------------------------------------
 
 test_that("scheme_inferred = TRUE falls back to http when https fails", {
-  schemes <- character(0)
+  state <- new.env(parent = emptyenv())
+  state$schemes <- character(0)
   httr2::local_mocked_responses(function(req) {
-    schemes <<- c(schemes, sub("://.*$", "", req$url))
+    state$schemes <- c(state$schemes, sub("://.*$", "", req$url))
     if (startsWith(req$url, "https://")) {
       rlang::abort(
         "Could not connect",
@@ -382,13 +386,14 @@ test_that("scheme_inferred = TRUE falls back to http when https fails", {
   )
   expect_identical(meta$status, 200L)
   expect_true(startsWith(meta$final_url, "http://"))
-  expect_identical(schemes, c("https", "http"))
+  expect_identical(state$schemes, c("https", "http"))
 })
 
 test_that("scheme_inferred = FALSE does not retry over http", {
-  schemes <- character(0)
+  state <- new.env(parent = emptyenv())
+  state$schemes <- character(0)
   httr2::local_mocked_responses(function(req) {
-    schemes <<- c(schemes, sub("://.*$", "", req$url))
+    state$schemes <- c(state$schemes, sub("://.*$", "", req$url))
     rlang::abort("Could not connect", class = c("httr2_failure", "httr2_error"))
   })
 
@@ -397,5 +402,5 @@ test_that("scheme_inferred = FALSE does not retry over http", {
     class = "sitemapr_timeout"
   )
   # Only the https attempt; no http downgrade.
-  expect_identical(schemes, "https")
+  expect_identical(state$schemes, "https")
 })

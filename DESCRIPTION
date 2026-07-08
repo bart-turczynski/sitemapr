@@ -3,7 +3,7 @@ Type: Package
 Title: Parse and Validate XML Sitemaps
 Version: 0.0.0.9000
 Authors@R:
-    person("Bart", "Turczynski", , "b.turczynski@tidio.net", role = c("aut", "cre"))
+    person("Bart", "Turczynski", , "bartek@turczynski.pl", role = c("aut", "cre"))
 Description: A deterministic toolkit for reading and validating XML, text, and
     index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC
     standards. It parses sitemap sources into tidy tibbles, expands sitemap

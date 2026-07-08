@@ -215,14 +215,17 @@ test_that("an NA subject_ref produces fragment-only refs", {
 
 test_that("schema validation spawns no subprocess (pure libxml2)", {
   skip_if(identical(schema_dir(), ""), "package not installed")
-  spawned <- 0L
+  state <- new.env(parent = emptyenv())
+  state$spawned <- 0L
   traced <- character()
   for (fn in c("system", "system2")) {
     ok <- tryCatch(
       {
         suppressMessages(trace(
           fn,
-          quote(spawned <<- spawned + 1L),
+          tracer = function() {
+            state$spawned <- state$spawned + 1L
+          },
           print = FALSE,
           where = baseenv()
         ))
@@ -241,7 +244,7 @@ test_that("schema validation spawns no subprocess (pure libxml2)", {
   )
   validate_fixture("ns-all-four.xml")
   validate_fixture("schema-invalid-urlset.xml")
-  expect_identical(spawned, 0L)
+  expect_identical(state$spawned, 0L)
 })
 
 test_that("the package declares no system requirement beyond xml2's", {

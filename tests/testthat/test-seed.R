@@ -140,9 +140,10 @@ test_that("sitemap_tree_from_bytes validates its inputs", {
 # ---- sitemap_tree(from = "sitemap"): exact-URL seed --------------------------
 
 test_that("from = 'sitemap' fetches one URL and expands it, no catalog", {
-  calls <- character(0)
+  state <- new.env(parent = emptyenv())
+  state$calls <- character(0)
   httr2::local_mocked_responses(function(req) {
-    calls <<- c(calls, req$url)
+    state$calls <- c(state$calls, req$url)
     body_map <- list(
       "https://ex.com/sitemap_index.xml" = seed_index("https://ex.com/a.xml"),
       "https://ex.com/a.xml" = seed_urlset(
@@ -171,8 +172,8 @@ test_that("from = 'sitemap' fetches one URL and expands it, no catalog", {
   )
   expect_identical(tree$provenance[tree$depth == 1L], "child-of-index")
   # Only the exact URL and its one child were fetched — no guessed-path catalog.
-  expect_true("https://ex.com/sitemap_index.xml" %in% calls)
-  expect_false("https://ex.com/sitemap.xml" %in% calls)
+  expect_true("https://ex.com/sitemap_index.xml" %in% state$calls)
+  expect_false("https://ex.com/sitemap.xml" %in% state$calls)
 })
 
 test_that("from = 'sitemap' returns a rejected seed row on a 404", {

@@ -10,7 +10,7 @@
 schema_conformance_corpus <- function() {
   # Short upper-case namespace handles and long XML literals below; neither the
   # object-name nor the line-length linter is meaningful for this fixture data.
-  # nolint start: line_length_linter, object_name_linter.
+  # nolint start
   S <- "http://www.sitemaps.org/schemas/sitemap/0.9"
   IMG <- "http://www.google.com/schemas/sitemap-image/1.1"
   VID <- "http://www.google.com/schemas/sitemap-video/1.1"
