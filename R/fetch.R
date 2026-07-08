@@ -42,17 +42,18 @@
 # once the running total exceeds the ceiling.
 read_capped_body <- function(source, max_bytes, chunk_size = 65536L) {
   max_bytes <- as.numeric(max_bytes)
-  total <- 0
-  acc <- list()
+  state <- new.env(parent = emptyenv())
+  state$total <- 0
+  state$acc <- list()
 
   consume <- function(chunk) {
     if (length(chunk) == 0L) {
       return(invisible())
     }
-    total <<- total + length(chunk)
-    if (total > max_bytes) {
+    state$total <- state$total + length(chunk)
+    if (state$total > max_bytes) {
       # Discard everything read so far; an over-ceiling body is never returned.
-      acc <<- list()
+      state$acc <- list()
       rlang::abort(
         sprintf(
           "Body exceeded the %.0f-byte per-resource safety ceiling; discarded.",
@@ -60,19 +61,19 @@ read_capped_body <- function(source, max_bytes, chunk_size = 65536L) {
         ),
         class = "sitemapr_body_ceiling",
         max_bytes = max_bytes,
-        bytes_read = total
+        bytes_read = state$total
       )
     }
-    acc[[length(acc) + 1L]] <<- chunk
+    state$acc[[length(state$acc) + 1L]] <- chunk
     invisible()
   }
 
   read_capped_drain(source, chunk_size, consume)
 
-  if (length(acc) == 0L) {
+  if (length(state$acc) == 0L) {
     return(raw())
   }
-  do.call(c, acc)
+  do.call(c, state$acc)
 }
 
 # Drive one body source through `consume`, one chunk at a time. The source is a
@@ -129,6 +130,65 @@ fetch_perform_one <- function(url, limits, user_agent) {
   httr2::req_perform(req)
 }
 
+fetch_source_input <- function(url, scheme_inferred) {
+  if (!(is.data.frame(url) || is.list(url))) {
+    return(list(
+      url = as.character(url)[[1L]],
+      scheme_inferred = scheme_inferred
+    ))
+  }
+
+  rec <- url
+  if (!is.null(rec$normalized_url)) {
+    url_str <- as.character(rec$normalized_url)[[1L]]
+  } else {
+    url_str <- as.character(rec$url)[[1L]]
+  }
+  if (!is.null(rec$scheme_inferred)) {
+    scheme_inferred <- isTRUE(as.logical(rec$scheme_inferred)[[1L]])
+  }
+  list(url = url_str, scheme_inferred = scheme_inferred)
+}
+
+fetch_connection_failure <- function(
+  cnd,
+  url_str,
+  scheme_inferred,
+  limits,
+  user_agent,
+  ssrf_guard
+) {
+  if (isTRUE(scheme_inferred) && startsWith(tolower(url_str), "https://")) {
+    http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
+    return(fetch_follow(
+      url = http_url,
+      limits = limits,
+      user_agent = user_agent,
+      ssrf_guard = ssrf_guard
+    ))
+  }
+  if (fetch_is_timeout(cnd)) {
+    rlang::abort(
+      sprintf(
+        "Request to %s timed out after %s s.",
+        url_str,
+        format(limits$timeout)
+      ),
+      class = "sitemapr_timeout",
+      url = url_str,
+      timeout = limits$timeout,
+      parent = cnd
+    )
+  }
+  rlang::abort(
+    sprintf("Request to %s failed at the connection level.", url_str),
+    class = "sitemapr_timeout",
+    url = url_str,
+    timeout = limits$timeout,
+    parent = cnd
+  )
+}
+
 #' Fetch one source with bounded, SSRF-safe HTTP
 #'
 #' Performs a single bounded HTTP fetch for one source and returns a one-row
@@ -165,21 +225,9 @@ fetch_source <- function(
   user_agent = default_user_agent(),
   ssrf_guard = TRUE
 ) {
-  # Accept either a bare URL string or a one-row source record.
-  if (is.data.frame(url) || is.list(url)) {
-    rec <- url
-    if (!is.null(rec$normalized_url)) {
-      url_str <- as.character(rec$normalized_url)[[1L]]
-    } else {
-      url_str <- as.character(rec$url)[[1L]]
-    }
-    if (!is.null(rec$scheme_inferred)) {
-      scheme_inferred <- isTRUE(as.logical(rec$scheme_inferred)[[1L]])
-    }
-  } else {
-    url_str <- as.character(url)[[1L]]
-  }
-
+  input <- fetch_source_input(url, scheme_inferred)
+  url_str <- input$url
+  scheme_inferred <- input$scheme_inferred
   requested_url <- url_str
 
   result <- tryCatch(
@@ -190,37 +238,8 @@ fetch_source <- function(
       ssrf_guard = ssrf_guard
     ),
     httr2_failure = function(cnd) {
-      # Connection-level failure. https->http fallback only when the scheme was
-      # inferred (never downgrade an explicit https). Otherwise re-raise as a
-      # timeout/transport abort.
-      if (isTRUE(scheme_inferred) && startsWith(tolower(url_str), "https://")) {
-        http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
-        return(fetch_follow(
-          url = http_url,
-          limits = limits,
-          user_agent = user_agent,
-          ssrf_guard = ssrf_guard
-        ))
-      }
-      if (fetch_is_timeout(cnd)) {
-        rlang::abort(
-          sprintf(
-            "Request to %s timed out after %s s.",
-            url_str,
-            format(limits$timeout)
-          ),
-          class = "sitemapr_timeout",
-          url = url_str,
-          timeout = limits$timeout,
-          parent = cnd
-        )
-      }
-      rlang::abort(
-        sprintf("Request to %s failed at the connection level.", url_str),
-        class = "sitemapr_timeout",
-        url = url_str,
-        timeout = limits$timeout,
-        parent = cnd
+      fetch_connection_failure(
+        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard
       )
     }
   )

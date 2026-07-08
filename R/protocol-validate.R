@@ -332,13 +332,8 @@ validate_doc_size <- function(byte_size, base, limit) {
   )
 }
 
-# Per-entry field-value rules: priority range, changefreq enum, and lastmod
-# format. Reads the FAITHFUL row tibble (ADR-004): `lastmod` and `priority` are
-# the raw `<lastmod>`/`<priority>` strings. Returns a (possibly empty)
-# protocol-findings tibble.
-validate_field_values <- function(rows, base) {
+validate_priority_values <- function(rows, base) {
   out <- list()
-
   pri <- suppressWarnings(as.numeric(rows$priority))
   bad_pri <- which(!is.na(pri) & (pri < 0 | pri > 1))
   for (j in bad_pri) {
@@ -355,7 +350,11 @@ validate_field_values <- function(rows, base) {
       )
     )
   }
+  out
+}
 
+validate_changefreq_values <- function(rows, base) {
+  out <- list()
   cf <- rows$changefreq
   bad_cf <- which(!is.na(cf) & !(cf %in% protocol_changefreq_values))
   for (j in bad_cf) {
@@ -373,7 +372,11 @@ validate_field_values <- function(rows, base) {
       )
     )
   }
+  out
+}
 
+validate_lastmod_values <- function(rows, base) {
+  out <- list()
   lm <- rows$lastmod
   cls <- classify_lastmod(lm)
   for (j in which(cls == "invalid")) {
@@ -405,6 +408,19 @@ validate_field_values <- function(rows, base) {
       is_strict_only = TRUE
     )
   }
+  out
+}
+
+# Per-entry field-value rules: priority range, changefreq enum, and lastmod
+# format. Reads the FAITHFUL row tibble (ADR-004): `lastmod` and `priority` are
+# the raw `<lastmod>`/`<priority>` strings. Returns a (possibly empty)
+# protocol-findings tibble.
+validate_field_values <- function(rows, base) {
+  out <- c(
+    validate_priority_values(rows, base),
+    validate_changefreq_values(rows, base),
+    validate_lastmod_values(rows, base)
+  )
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())
@@ -417,6 +433,51 @@ validate_field_values <- function(rows, base) {
 # `fetched_at` is the sitemap's fetch/generation time (NA skips the
 # looks-generated heuristic). The raw `lastmod` column is parsed to POSIXct once
 # here (parse-once, use-late; ADR-004).
+lastmod_identical_finding <- function(counts, dated, base, limits) {
+  modal_ratio <- max(counts) / length(dated)
+  if (modal_ratio < limits$lastmod_identical_ratio) {
+    return(NULL)
+  }
+  protocol_document_finding(
+    "PROTOCOL_LASTMOD_ALL_IDENTICAL",
+    "warning",
+    base,
+    sprintf(
+      paste0(
+        "%d of %d dated entries share one <lastmod> value; engines may ",
+        "distrust uniformly identical dates."
+      ),
+      max(counts),
+      length(dated)
+    )
+  )
+}
+
+lastmod_generated_finding <- function(dated, base, fetched_at, limits) {
+  if (is.na(fetched_at)) {
+    return(NULL)
+  }
+  near <- abs(as.numeric(dated) - as.numeric(fetched_at)) <=
+    limits$lastmod_generated_tolerance
+  if (mean(near) < limits$lastmod_identical_ratio) {
+    return(NULL)
+  }
+  protocol_document_finding(
+    "PROTOCOL_LASTMOD_LOOKS_GENERATED",
+    "info",
+    base,
+    sprintf(
+      paste0(
+        "%d of %d dated entries fall within %.0fs of the sitemap's ",
+        "fetch time; <lastmod> looks auto-generated, not content-derived."
+      ),
+      sum(near),
+      length(dated),
+      limits$lastmod_generated_tolerance
+    )
+  )
+}
+
 validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
   lastmod <- parse_lastmod(rows$lastmod)
   dated <- lastmod[!is.na(lastmod)]
@@ -426,44 +487,10 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
   }
 
   counts <- table(as.numeric(dated))
-  modal_ratio <- max(counts) / length(dated)
-
-  if (modal_ratio >= limits$lastmod_identical_ratio) {
-    out[[length(out) + 1L]] <- protocol_document_finding(
-      "PROTOCOL_LASTMOD_ALL_IDENTICAL",
-      "warning",
-      base,
-      sprintf(
-        paste0(
-          "%d of %d dated entries share one <lastmod> value; engines may ",
-          "distrust uniformly identical dates."
-        ),
-        max(counts),
-        length(dated)
-      )
-    )
-  }
-
-  if (!is.na(fetched_at)) {
-    near <- abs(as.numeric(dated) - as.numeric(fetched_at)) <=
-      limits$lastmod_generated_tolerance
-    if (mean(near) >= limits$lastmod_identical_ratio) {
-      out[[length(out) + 1L]] <- protocol_document_finding(
-        "PROTOCOL_LASTMOD_LOOKS_GENERATED",
-        "info",
-        base,
-        sprintf(
-          paste0(
-            "%d of %d dated entries fall within %.0fs of the sitemap's ",
-            "fetch time; <lastmod> looks auto-generated, not content-derived."
-          ),
-          sum(near),
-          length(dated),
-          limits$lastmod_generated_tolerance
-        )
-      )
-    }
-  }
+  out <- Filter(Negate(is.null), list(
+    lastmod_identical_finding(counts, dated, base, limits),
+    lastmod_generated_finding(dated, base, fetched_at, limits)
+  ))
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())
@@ -1313,7 +1340,7 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
   out <- list()
 
   if (f$too_long) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
+    out <- c(out, list(protocol_url_finding(
       "PROTOCOL_URL_TOO_LONG",
       "warning",
       "entry",
@@ -1324,29 +1351,53 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
         "<loc> is %d characters; sitemap URLs must be under 2048.",
         nchar(l)
       )
-    )
+    )))
   }
 
+  c(
+    out,
+    loc_escape_findings(l, j, f, base, canonical),
+    loc_url_component_findings(l, j, f, sitemap_url, base)
+  )
+}
+
+loc_invalid_escape_finding <- function(l, j, base) {
+  protocol_url_finding(
+    "PROTOCOL_URL_INVALID_ESCAPE",
+    "error",
+    "entry",
+    base,
+    j,
+    l,
+    sprintf("<loc> '%s' contains an invalid percent-escape.", l)
+  )
+}
+
+loc_not_escaped_finding <- function(l, j, base, severity, message) {
+  protocol_url_finding(
+    "PROTOCOL_URL_NOT_ESCAPED",
+    severity,
+    "entry",
+    base,
+    j,
+    l,
+    message
+  )
+}
+
+loc_escape_findings <- function(l, j, f, base, canonical) {
+  out <- list()
+
   if (f$invalid_escape) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_INVALID_ESCAPE",
-      "error",
-      "entry",
-      base,
-      j,
-      l,
-      sprintf("<loc> '%s' contains an invalid percent-escape.", l)
-    )
+    out <- c(out, list(loc_invalid_escape_finding(l, j, base)))
   }
 
   if (f$not_escaped_warn) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_NOT_ESCAPED",
-      "warning",
-      "entry",
-      base,
-      j,
+    out <- c(out, list(loc_not_escaped_finding(
       l,
+      j,
+      base,
+      "warning",
       sprintf(
         paste0(
           "<loc> '%s' contains a character illegal unescaped in both a URI ",
@@ -1354,15 +1405,13 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
         ),
         l
       )
-    )
+    )))
   } else if (f$not_escaped_info) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_NOT_ESCAPED",
-      "info",
-      "entry",
-      base,
-      j,
+    out <- c(out, list(loc_not_escaped_finding(
       l,
+      j,
+      base,
+      "info",
       sprintf(
         paste0(
           "<loc> '%s' is a valid IRI written unescaped; crawlers fetch its ",
@@ -1371,38 +1420,49 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
         l,
         canonical
       )
-    )
+    )))
   }
 
+  out
+}
+
+loc_fragment_finding <- function(l, j, base) {
+  protocol_url_finding(
+    "PROTOCOL_URL_FRAGMENT",
+    "info",
+    "entry",
+    base,
+    j,
+    l,
+    sprintf("<loc> '%s' contains a fragment, which crawlers ignore.", l)
+  )
+}
+
+loc_userinfo_finding <- function(l, j, base) {
+  protocol_url_finding(
+    "PROTOCOL_URL_USERINFO",
+    "info",
+    "entry",
+    base,
+    j,
+    l,
+    sprintf("<loc> '%s' contains userinfo, which crawlers ignore.", l)
+  )
+}
+
+loc_url_component_findings <- function(l, j, f, sitemap_url, base) {
+  out <- list()
+
   if (f$fragment) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_FRAGMENT",
-      "info",
-      "entry",
-      base,
-      j,
-      l,
-      sprintf(
-        "<loc> '%s' contains a fragment, which crawlers ignore.",
-        l
-      )
-    )
+    out <- c(out, list(loc_fragment_finding(l, j, base)))
   }
 
   if (f$userinfo) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
-      "PROTOCOL_URL_USERINFO",
-      "info",
-      "entry",
-      base,
-      j,
-      l,
-      sprintf("<loc> '%s' contains userinfo, which crawlers ignore.", l)
-    )
+    out <- c(out, list(loc_userinfo_finding(l, j, base)))
   }
 
   if (f$out_of_scope) {
-    out[[length(out) + 1L]] <- protocol_url_finding(
+    out <- c(out, list(protocol_url_finding(
       "PROTOCOL_URL_OUT_OF_SCOPE",
       "warning",
       "entry",
@@ -1417,7 +1477,7 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
         l,
         sitemap_url
       )
-    )
+    )))
   }
 
   out
@@ -1478,6 +1538,74 @@ loc_duplicate_findings <- function(parsed, absolute, loc, base, keys) {
   out
 }
 
+loc_scope_self <- function(sitemap_url) {
+  if (is.na(sitemap_url)) {
+    return(list(authority = NA_character_, directory = NA_character_))
+  }
+
+  parsed_self <- parse_url_adapter(sitemap_url)
+  list(
+    authority = loc_authority(parsed_self),
+    directory = loc_directory_prefix(parsed_self$path)
+  )
+}
+
+loc_rule_flags <- function(loc, absolute, parsed, sitemap_url) {
+  l <- loc[absolute]
+  host <- as.character(parsed$host)
+  user <- as.character(parsed$user)
+  path <- as.character(parsed$path)
+  self <- loc_scope_self(sitemap_url)
+
+  no_host <- is.na(host) | !nzchar(host)
+  applies <- !no_host
+  not_escaped_warn <- applies & has_uri_illegal_char(l)
+  out_of_scope <- rep(FALSE, length(l))
+  if (!is.na(self$authority)) {
+    in_scope <- loc_authority(parsed) == self$authority &
+      startsWith(path, self$directory)
+    out_of_scope <- applies & !(!is.na(in_scope) & in_scope)
+  }
+
+  list(
+    no_host = no_host,
+    too_long = applies & nchar(l) >= 2048L,
+    invalid_escape = applies & has_invalid_escape(l),
+    not_escaped_warn = not_escaped_warn,
+    not_escaped_info = applies & !not_escaped_warn & has_non_ascii(l),
+    fragment = applies & grepl("#", l, fixed = TRUE),
+    userinfo = applies & !is.na(user) & nzchar(user),
+    out_of_scope = out_of_scope
+  )
+}
+
+loc_flag_at <- function(flags, k) {
+  lapply(flags, function(x) x[k])
+}
+
+loc_flag_hits <- function(flags) {
+  Reduce(`|`, flags)
+}
+
+loc_rule_findings <- function(loc, absolute, flags, sitemap_url, base, keys) {
+  l <- loc[absolute]
+  out <- list()
+  for (k in which(loc_flag_hits(flags))) {
+    out <- c(
+      out,
+      loc_single_url_findings(
+        l[k],
+        absolute[k],
+        loc_flag_at(flags, k),
+        sitemap_url,
+        base,
+        keys[k]
+      )
+    )
+  }
+  out
+}
+
 validate_loc_urls <- function(rows, sitemap_url, base) {
   loc <- rows$loc
   keep <- !is.na(loc) & nzchar(loc)
@@ -1502,76 +1630,12 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
 
   parsed <- parse_url_adapter(loc[absolute])
   keys <- build_loc_key(parsed)
-  authority_self <- NA_character_
-  dir_self <- NA_character_
-  if (!is.na(sitemap_url)) {
-    parsed_self <- parse_url_adapter(sitemap_url)
-    authority_self <- loc_authority(parsed_self)
-    dir_self <- loc_directory_prefix(parsed_self$path)
-  }
 
-  # Compute every URL-rule predicate across ALL absolute rows at once, then
-  # iterate only over the entries that trip a rule — a clean sitemap loops zero
-  # times. Extract the parsed columns to plain vectors once (no per-URL
-  # `parsed[k, ]` row-subsetting). NO_HOST is terminal, so the other predicates
-  # apply only where a host is present.
-  l <- loc[absolute]
-  host <- as.character(parsed$host)
-  user <- as.character(parsed$user)
-  path <- as.character(parsed$path)
-
-  no_host <- is.na(host) | !nzchar(host)
-  applies <- !no_host
-  too_long <- applies & nchar(l) >= 2048L
-  invalid_escape <- applies & has_invalid_escape(l)
-  # Encoding conformance (ADR-005 decision 2): a char illegal in both a URI and
-  # an IRI is a `warning`; a raw non-ASCII byte (a valid IRI) is an `info`. The
-  # warning tier takes precedence so a URL is never double-flagged.
-  not_escaped_warn <- applies & has_uri_illegal_char(l)
-  not_escaped_info <- applies & !not_escaped_warn & has_non_ascii(l)
-  fragment <- applies & grepl("#", l, fixed = TRUE)
-  userinfo <- applies & !is.na(user) & nzchar(user)
-  out_of_scope <- rep(FALSE, length(l))
-  if (!is.na(authority_self)) {
-    in_scope <- loc_authority(parsed) == authority_self &
-      startsWith(path, dir_self)
-    out_of_scope <- applies & !(!is.na(in_scope) & in_scope)
-  }
-
-  hit <- which(
-    no_host |
-      too_long |
-      invalid_escape |
-      not_escaped_warn |
-      not_escaped_info |
-      fragment |
-      userinfo |
-      out_of_scope
+  flags <- loc_rule_flags(loc, absolute, parsed, sitemap_url)
+  out <- c(
+    out,
+    loc_rule_findings(loc, absolute, flags, sitemap_url, base, keys)
   )
-  for (k in hit) {
-    flags <- list(
-      no_host = no_host[k],
-      too_long = too_long[k],
-      invalid_escape = invalid_escape[k],
-      not_escaped_warn = not_escaped_warn[k],
-      not_escaped_info = not_escaped_info[k],
-      fragment = fragment[k],
-      userinfo = userinfo[k],
-      out_of_scope = out_of_scope[k]
-    )
-    out <- c(
-      out,
-      loc_single_url_findings(
-        l[k],
-        absolute[k],
-        flags,
-        sitemap_url,
-        base,
-        keys[k]
-      )
-    )
-  }
-
   out <- c(out, loc_duplicate_findings(parsed, absolute, loc, base, keys))
 
   if (length(out) == 0L) {

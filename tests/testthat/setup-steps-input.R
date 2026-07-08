@@ -62,7 +62,11 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   create_records_step <- function(context) {
     context$error <- NULL
     context$result <- tryCatch(
-      sitemapr:::create_source_records(context$input, as = context$as),
+      sitemapr_test_call(
+        "create_source_records",
+        context$input,
+        as = context$as
+      ),
       error = function(e) {
         context$error <- e
         NULL

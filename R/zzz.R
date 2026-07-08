@@ -21,16 +21,18 @@ rurl_cache_max <- function(
   as.integer(max_full_parse)
 }
 
-.onLoad <- function(libname, pkgname) {
-  # Guard against a rurl that is unavailable or a future release whose
-  # `rurl_cache_config()` no longer accepts `max_full_parse`: a failure here
-  # must never block package load.
-  if (!requireNamespace("rurl", quietly = TRUE)) {
-    return(invisible(NULL))
+.onLoad <- local({
+  function(libname, pkgname) {
+    # Guard against a rurl that is unavailable or a future release whose
+    # `rurl_cache_config()` no longer accepts `max_full_parse`: a failure here
+    # must never block package load.
+    if (!requireNamespace("rurl", quietly = TRUE)) {
+      return(invisible(NULL))
+    }
+    tryCatch(
+      rurl::rurl_cache_config(max_full_parse = rurl_cache_max()),
+      error = function(e) invisible(NULL)
+    )
+    invisible(NULL)
   }
-  tryCatch(
-    rurl::rurl_cache_config(max_full_parse = rurl_cache_max()),
-    error = function(e) invisible(NULL)
-  )
-  invisible(NULL)
-}
+})

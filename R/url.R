@@ -127,6 +127,104 @@ url_host_is_dns_name <- function(host) {
   ok & grepl("[A-Za-z]", last)
 }
 
+url_fast_authority <- function(auth) {
+  host <- auth
+  port <- rep(NA_integer_, length(auth))
+  has_colon <- grepl(":", auth, fixed = TRUE)
+  pm <- regmatches(auth, regexec("^([^:]+):([0-9]+)$", auth))
+  colon_ok <- lengths(pm) == 3L
+  ci <- which(has_colon & colon_ok)
+  if (length(ci)) {
+    cmat <- do.call(rbind, pm[ci])
+    host[ci] <- cmat[, 2L]
+    port[ci] <- as.integer(cmat[, 3L])
+  }
+  list(
+    host = host,
+    port = port,
+    colon_ok = !has_colon | colon_ok
+  )
+}
+
+url_fast_query <- function(u) {
+  has_q <- grepl("?", u, fixed = TRUE)
+  query <- rep(NA_character_, length(u))
+  query[has_q] <- sub("^[^?]*\\?([^#]*).*$", "\\1", u[has_q])
+  invalid <- has_q & (
+    is.na(query) | !nzchar(query) | !url_query_is_noop(query)
+  )
+  list(
+    query = query,
+    valid = !invalid
+  )
+}
+
+url_fast_fragment <- function(u) {
+  fragment <- rep(NA_character_, length(u))
+  has_f <- grepl("#", u, fixed = TRUE)
+  fragment[has_f] <- sub("^[^#]*#(.*)$", "\\1", u[has_f])
+  fragment[!is.na(fragment) & !nzchar(fragment)] <- NA_character_
+  fragment
+}
+
+url_fast_empty_components <- function(n) {
+  list(
+    scheme = rep(NA_character_, n),
+    host = rep(NA_character_, n),
+    port = rep(NA_integer_, n),
+    path = rep(NA_character_, n),
+    query = rep(NA_character_, n),
+    fragment = rep(NA_character_, n),
+    resolved = rep(FALSE, n)
+  )
+}
+
+url_fast_set_resolved <- function(out, oi, keep, sch, h, p, pth, q, frag) {
+  kept <- which(keep)
+  gi <- oi[kept]
+  out$resolved[gi] <- TRUE
+  out$scheme[gi] <- sch[kept]
+  out$host[gi] <- tolower(h[kept])
+  out$port[gi] <- p[kept]
+  out$path[gi] <- pth[kept]
+  out$query[gi] <- q[kept]
+  out$fragment[gi] <- frag[kept]
+  out
+}
+
+url_fast_apply_matches <- function(out, u, mm, ok) {
+  oi <- which(ok)
+  uok <- u[ok]
+  mat <- do.call(rbind, mm[ok]) # cols: full, scheme, authority, path
+  sch <- tolower(mat[, 2L])
+  auth <- mat[, 3L]
+  rawpath <- mat[, 4L]
+
+  keep <- sch %in% c("http", "https")
+  authority <- url_fast_authority(auth)
+  h <- authority$host
+  p <- authority$port
+  keep <- keep & authority$colon_ok
+  keep <- keep & url_host_is_dns_name(h)
+
+  pth <- ifelse(is.na(rawpath) | !nzchar(rawpath), "/", rawpath)
+  keep <- keep & url_path_is_noop(pth)
+
+  query <- url_fast_query(uok)
+  keep <- keep & query$valid
+  url_fast_set_resolved(
+    out,
+    oi,
+    keep,
+    sch,
+    h,
+    p,
+    pth,
+    query$query,
+    url_fast_fragment(uok)
+  )
+}
+
 # Split fast-prefiltered URLs into components by regex and confirm every one is
 # a proven rurl no-op, in a single vectorized pass. Returns a data.frame with
 # one row per input URL: the six component columns plus a `resolved` logical
@@ -136,81 +234,24 @@ url_host_is_dns_name <- function(host) {
 # the raw query) so the fast-path components are literally the input's — which,
 # for a no-op URL, is exactly what rurl emits.
 url_fast_components_vec <- function(u) {
-  n <- length(u)
-  scheme <- rep(NA_character_, n)
-  host <- rep(NA_character_, n)
-  port <- rep(NA_integer_, n)
-  path <- rep(NA_character_, n)
-  query <- rep(NA_character_, n)
-  fragment <- rep(NA_character_, n)
-  resolved <- rep(FALSE, n)
-
+  out <- url_fast_empty_components(length(u))
   mm <- regmatches(
     u,
     regexec("^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?", u)
   )
   ok <- lengths(mm) == 4L # full + 3 groups; 0 = no match -> defer to rurl
   if (any(ok)) {
-    oi <- which(ok)
-    uok <- u[ok]
-    mat <- do.call(rbind, mm[ok]) # cols: full, scheme, authority, path
-    sch <- tolower(mat[, 2L])
-    auth <- mat[, 3L]
-    rawpath <- mat[, 4L]
-
-    keep <- sch %in% c("http", "https")
-
-    # authority -> host[:port]; a colon authority must be exactly host:digits.
-    h <- auth
-    p <- rep(NA_integer_, length(auth))
-    has_colon <- grepl(":", auth, fixed = TRUE)
-    pm <- regmatches(auth, regexec("^([^:]+):([0-9]+)$", auth))
-    colon_ok <- lengths(pm) == 3L
-    keep <- keep & (!has_colon | colon_ok)
-    ci <- which(has_colon & colon_ok)
-    if (length(ci)) {
-      cmat <- do.call(rbind, pm[ci])
-      h[ci] <- cmat[, 2L]
-      p[ci] <- as.integer(cmat[, 3L])
-    }
-    keep <- keep & url_host_is_dns_name(h)
-
-    # rurl normalizes a missing path to "/" when a host is present.
-    pth <- ifelse(is.na(rawpath) | !nzchar(rawpath), "/", rawpath)
-    keep <- keep & url_path_is_noop(pth)
-
-    # Query: the slice between the first `?` and the `#`/end. An empty query
-    # (`...?` or `...?#`) is ambiguous against rurl's NA, so defer it.
-    has_q <- grepl("?", uok, fixed = TRUE)
-    q <- rep(NA_character_, length(uok))
-    q[has_q] <- sub("^[^?]*\\?([^#]*).*$", "\\1", uok[has_q])
-    q_bad <- has_q & (is.na(q) | !nzchar(q) | !url_query_is_noop(q))
-    keep <- keep & !q_bad
-
-    frag <- rep(NA_character_, length(uok))
-    has_f <- grepl("#", uok, fixed = TRUE)
-    frag[has_f] <- sub("^[^#]*#(.*)$", "\\1", uok[has_f])
-    frag[!is.na(frag) & !nzchar(frag)] <- NA_character_
-
-    kept <- which(keep)
-    gi <- oi[kept]
-    resolved[gi] <- TRUE
-    scheme[gi] <- sch[kept]
-    host[gi] <- tolower(h[kept])
-    port[gi] <- p[kept]
-    path[gi] <- pth[kept]
-    query[gi] <- q[kept]
-    fragment[gi] <- frag[kept]
+    out <- url_fast_apply_matches(out, u, mm, ok)
   }
 
   data.frame(
-    scheme = scheme,
-    host = host,
-    port = port,
-    path = path,
-    query = query,
-    fragment = fragment,
-    resolved = resolved,
+    scheme = out$scheme,
+    host = out$host,
+    port = out$port,
+    path = out$path,
+    query = out$query,
+    fragment = out$fragment,
+    resolved = out$resolved,
     stringsAsFactors = FALSE
   )
 }

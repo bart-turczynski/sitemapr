@@ -49,7 +49,7 @@ parse_robots_sitemaps <- function(text) {
   vals <- sub(pat, "\\1", lines[hits], perl = TRUE)
 
   valid <- vapply(vals, robots_is_http_url, logical(1L), USE.NAMES = FALSE)
-  if (any(!valid)) {
+  if (!all(valid)) {
     rlang::warn(
       sprintf(
         "Skipped %d non-absolute-http Sitemap: directive(s) in robots.txt: %s",

@@ -136,6 +136,41 @@ seed_tree_from_url <- function(x, user_agent, net_limits, index_limits) {
   )
 }
 
+seed_bytes_input <- function(bytes) {
+  if (is.character(bytes) && length(bytes) == 1L && !is.na(bytes)) {
+    return(charToRaw(bytes))
+  }
+  if (is.raw(bytes)) {
+    return(bytes)
+  }
+  rlang::abort(
+    "`bytes` must be a raw vector or a length-1 character string.",
+    class = "sitemapr_bad_input"
+  )
+}
+
+seed_source_url_input <- function(source_url) {
+  if (
+    is.character(source_url) &&
+      length(source_url) == 1L &&
+      !is.na(source_url) &&
+      nzchar(source_url)
+  ) {
+    return(source_url)
+  }
+  rlang::abort(
+    "`source_url` must be a single non-empty URL.",
+    class = "sitemapr_bad_input"
+  )
+}
+
+seed_parse_bytes <- function(bytes, source_url) {
+  tryCatch(
+    parse_dispatch(bytes, source_sitemap = source_url),
+    error = function(e) NULL
+  )
+}
+
 #' Discover a site's sitemaps from already-fetched bytes
 #'
 #' Builds the same discovery tree as [sitemap_tree()], but from sitemap bytes
@@ -184,35 +219,12 @@ sitemap_tree_from_bytes <- function(
   net_limits = fetch_limits(),
   index_limits = NULL
 ) {
-  if (is.character(bytes) && length(bytes) == 1L && !is.na(bytes)) {
-    bytes <- charToRaw(bytes)
-  }
-  if (!is.raw(bytes)) {
-    rlang::abort(
-      "`bytes` must be a raw vector or a length-1 character string.",
-      class = "sitemapr_bad_input"
-    )
-  }
-  if (
-    !is.character(source_url) ||
-      length(source_url) != 1L ||
-      is.na(source_url) ||
-      !nzchar(source_url)
-  ) {
-    rlang::abort(
-      "`source_url` must be a single non-empty URL.",
-      class = "sitemapr_bad_input"
-    )
-  }
-  if (is.null(index_limits)) {
-    index_limits <- index_limits()
-  }
+  bytes <- seed_bytes_input(bytes)
+  source_url <- seed_source_url_input(source_url)
+  index_limits <- resolve_index_limits(index_limits)
 
   gzip <- identical(sniff_format(bytes), "gzip")
-  parsed <- tryCatch(
-    parse_dispatch(bytes, source_sitemap = source_url),
-    error = function(e) NULL
-  )
+  parsed <- seed_parse_bytes(bytes, source_url)
   if (is.null(parsed)) {
     return(seed_rejected_tree(source_url, "unparseable"))
   }

@@ -73,9 +73,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     }
     httr2::local_mocked_responses(mock)
     limits <- if (is.null(cap)) {
-      sitemapr:::discovery_limits()
+      sitemapr_test_call("discovery_limits")
     } else {
-      sitemapr:::discovery_limits(max_candidates = cap)
+      sitemapr_test_call("discovery_limits", max_candidates = cap)
     }
     context$tree <- sitemapr::sitemap_tree(
       root,
@@ -182,7 +182,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   then(
     "candidates are tried in the documented catalog order",
     function(context) {
-      expected <- sitemapr:::discovery_candidates(context$root)$candidate_url
+      expected <- sitemapr_test_call(
+        "discovery_candidates",
+        context$root
+      )$candidate_url
       testthat::expect_identical(requested_candidates(context), expected)
     }
   )

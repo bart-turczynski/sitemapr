@@ -203,6 +203,32 @@ robots_candidates <- function(origin, user_agent, net_limits) {
   )
 }
 
+empty_discovery_candidates <- function(root) {
+  # Validate `root` even when both sources are off, for a consistent contract.
+  create_source_records(root, as = "site")
+  tibble::tibble(
+    candidate_url = character(0),
+    catalog_path = character(0),
+    kind = character(0),
+    source = character(0),
+    provenance = character(0),
+    loc_key = character(0)
+  )
+}
+
+guessed_path_candidates <- function(root, catalog, limits) {
+  g <- discovery_candidates(root, catalog = catalog, limits = limits)
+  data.frame(
+    candidate_url = g$candidate_url,
+    catalog_path = g$catalog_path,
+    kind = g$kind,
+    source = g$source,
+    provenance = "guessed-path",
+    loc_key = g$loc_key,
+    stringsAsFactors = FALSE
+  )
+}
+
 # Assemble the ordered, deduplicated candidate set for `root` from the enabled
 # discovery sources: robots.txt `Sitemap:` directives first (authoritative),
 # then the guessed-path catalog. Deduplication on the full-URL identity key
@@ -230,30 +256,16 @@ assemble_candidates <- function(
   }
 
   if (isTRUE(use_known_paths)) {
-    g <- discovery_candidates(root, catalog = catalog, limits = limits)
-    parts[[length(parts) + 1L]] <- data.frame(
-      candidate_url = g$candidate_url,
-      catalog_path = g$catalog_path,
-      kind = g$kind,
-      source = g$source,
-      provenance = "guessed-path",
-      loc_key = g$loc_key,
-      stringsAsFactors = FALSE
+    parts[[length(parts) + 1L]] <- guessed_path_candidates(
+      root,
+      catalog,
+      limits
     )
   }
 
   parts <- Filter(Negate(is.null), parts)
   if (length(parts) == 0L) {
-    # Validate `root` even when both sources are off, for a consistent contract.
-    create_source_records(root, as = "site")
-    return(tibble::tibble(
-      candidate_url = character(0),
-      catalog_path = character(0),
-      kind = character(0),
-      source = character(0),
-      provenance = character(0),
-      loc_key = character(0)
-    ))
+    return(empty_discovery_candidates(root))
   }
 
   cand <- do.call(rbind, parts)

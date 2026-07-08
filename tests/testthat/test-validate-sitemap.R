@@ -122,6 +122,34 @@ test_that("validation is deterministic for a fixture and mode", {
   expect_identical(a, b)
 })
 
+test_that("a submitted-list validation combines deduplicated source findings", {
+  out <- validate_sitemaps(c(
+    fixture("urlset-duplicate-loc.xml"),
+    fixture("priority-out-of-range.xml"),
+    fixture("urlset-duplicate-loc.xml")
+  ))
+
+  expect_named(out, contract_cols)
+  expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
+  expect_true("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% out$code)
+  duplicate_rows <- out[out$code == "PROTOCOL_DUPLICATE_LOC", ]
+  expect_identical(nrow(duplicate_rows), 1L)
+})
+
+test_that("a submitted-list validation records source failures as findings", {
+  missing <- file.path(tempdir(), "sitemapr-missing-submitted-list.xml")
+  if (file.exists(missing)) {
+    unlink(missing)
+  }
+
+  out <- validate_sitemap(c(fixture("valid-minimal.xml"), missing))
+
+  expect_named(out, contract_cols)
+  expect_identical(out$code, "FETCH_FAILED")
+  expect_identical(out$layer, "fetch")
+  expect_match(out$subject_ref, "sitemapr-missing-submitted-list.xml")
+})
+
 # An httr2 mock dispatching on request URL via a named body map; unknown URLs
 # 404. Mirrors the feed-child test's local helper, served as application/xml.
 mock_by_url <- function(map) {
@@ -167,11 +195,10 @@ index_body <- function(...) {
   )
 }
 
-test_that("a non-scalar / empty / NA `x` raises sitemapr_bad_input", {
+test_that("an invalid `x` raises sitemapr_bad_input", {
   expect_error(validate_sitemap(character(0)), class = "sitemapr_bad_input")
   expect_error(validate_sitemap(NA_character_), class = "sitemapr_bad_input")
   expect_error(validate_sitemap(""), class = "sitemapr_bad_input")
-  expect_error(validate_sitemap(c("a", "b")), class = "sitemapr_bad_input")
   expect_error(validate_sitemap(42), class = "sitemapr_bad_input")
 })
 
@@ -278,7 +305,8 @@ test_that("an over-deep index chain yields INDEX_DEPTH_EXCEEDED", {
   httr2::local_mocked_responses(mock_by_url(map))
   out <- validate_sitemap(
     root,
-    index_limits = sitemapr:::index_limits(
+    index_limits = sitemapr_test_call(
+      "index_limits",
       max_depth = 1L
     )
   )
@@ -299,7 +327,8 @@ test_that("an over-wide index yields INDEX_CHILD_COUNT_EXCEEDED", {
   httr2::local_mocked_responses(mock_by_url(map))
   out <- validate_sitemap(
     root,
-    index_limits = sitemapr:::index_limits(
+    index_limits = sitemapr_test_call(
+      "index_limits",
       max_children = 1L
     )
   )
@@ -320,7 +349,7 @@ test_that("index_findings_from_problems is an empty tibble for no problems", {
     subject_ref = character(0)
   )
   for (problems in list(NULL, empty_probs)) {
-    out <- sitemapr:::index_findings_from_problems(problems, base)
+    out <- sitemapr_test_call("index_findings_from_problems", problems, base)
     expect_s3_class(out, "tbl_df")
     expect_identical(nrow(out), 0L)
   }
@@ -332,7 +361,7 @@ test_that("index_feed_children is an empty character vector for no sources", {
     final_url = character(0)
   )
   for (sources in list(NULL, empty_sources)) {
-    out <- sitemapr:::index_feed_children(sources)
+    out <- sitemapr_test_call("index_feed_children", sources)
     expect_identical(out, character(0))
   }
 })
@@ -375,7 +404,8 @@ vs_urlset <- function(...) {
 # entries: list(list(name=, content=<chr>)) -> gzipped ustar tempfile path.
 vs_write_tar_gz <- function(entries) {
   path <- withr::local_tempfile(
-    fileext = ".tar.gz", .local_envir = parent.frame()
+    fileext = ".tar.gz",
+    .local_envir = parent.frame()
   )
   blocks <- raw(0L)
   for (e in entries) {

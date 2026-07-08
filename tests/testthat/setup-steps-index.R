@@ -211,7 +211,10 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     "a sitemapindex that declares more child URLs than the configured cap",
     function(context) {
       context$index_url <- "https://example.com/sitemap.xml"
-      context$index_limits <- sitemapr:::index_limits(max_children = 2L)
+      context$index_limits <- sitemapr_test_call(
+        "index_limits",
+        max_children = 2L
+      )
       context$capped_out <- "https://example.com/c3.xml"
       context$body_map <- list2env(list(
         "https://example.com/sitemap.xml" = idx_fixture("index-over-cap.xml"),

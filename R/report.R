@@ -84,35 +84,49 @@ report_count_badge <- function(n) {
 
 # ---- section: hero -----------------------------------------------------------
 
+report_source_counts <- function(urls, sources) {
+  if (!is.null(sources)) {
+    return(list(
+      index = sum(sources$format == "xml-sitemapindex", na.rm = TRUE),
+      sitemap = sum(
+        sources$format %in% c("xml-urlset", "xml", "text"),
+        na.rm = TRUE
+      )
+    ))
+  }
+  list(
+    index = 0L,
+    sitemap = length(unique(stats::na.omit(urls$source_sitemap)))
+  )
+}
+
+report_count_parts <- function(counts) {
+  out <- character(0)
+  if (counts$index > 0L) {
+    out <- c(out, sprintf(
+      "%d index%s", counts$index, if (counts$index != 1L) "es" else ""
+    ))
+  }
+  if (counts$sitemap > 0L) {
+    out <- c(out, sprintf(
+      "%d sitemap%s", counts$sitemap, if (counts$sitemap != 1L) "s" else ""
+    ))
+  }
+  out
+}
+
+report_status <- function(findings) {
+  is_valid <- !any(findings$severity %in% c("fatal", "error"))
+  list(
+    icon = if (is_valid) "\u2705" else "\u26a0\ufe0f",
+    label = if (is_valid) "Valid" else "Issues found"
+  )
+}
+
 report_hero <- function(source_label, urls, sources, findings, mode) {
   n_urls <- nrow(urls)
-  n_index <- if (!is.null(sources)) {
-    sum(sources$format == "xml-sitemapindex", na.rm = TRUE)
-  } else {
-    0L
-  }
-  n_sitemap <- if (!is.null(sources)) {
-    sum(sources$format %in% c("xml-urlset", "xml", "text"), na.rm = TRUE)
-  } else {
-    length(unique(stats::na.omit(urls$source_sitemap)))
-  }
-
-  blocking <- sum(findings$severity %in% c("fatal", "error"))
-  is_valid <- blocking == 0L
-  status_icon <- if (is_valid) "\u2705" else "\u26a0\ufe0f"
-  status_label <- if (is_valid) "Valid" else "Issues found"
-
-  count_parts <- character(0)
-  if (n_index > 0L) {
-    count_parts <- c(count_parts, sprintf(
-      "%d index%s", n_index, if (n_index != 1L) "es" else ""
-    ))
-  }
-  if (n_sitemap > 0L) {
-    count_parts <- c(count_parts, sprintf(
-      "%d sitemap%s", n_sitemap, if (n_sitemap != 1L) "s" else ""
-    ))
-  }
+  status <- report_status(findings)
+  count_parts <- report_count_parts(report_source_counts(urls, sources))
 
   htmltools::tags$section(
     class = "smr-hero",
@@ -123,7 +137,7 @@ report_hero <- function(source_label, urls, sources, findings, mode) {
         htmltools::tags$p(class = "smr-hero-source", source_label),
         htmltools::tags$div(
           class = "smr-hero-stats",
-          htmltools::tags$span(paste0(status_icon, " ", status_label)),
+          htmltools::tags$span(paste0(status$icon, " ", status$label)),
           htmltools::tags$span(
             htmltools::tags$strong(format(n_urls, big.mark = ",")),
             " URLs"
@@ -149,9 +163,9 @@ report_hero <- function(source_label, urls, sources, findings, mode) {
 # Per-source metadata presence (any URL from that source carries the field).
 report_node_meta <- function(urls_for_node) {
   list(
-    has_lastmod = any(!is.na(urls_for_node$lastmod)),
-    has_priority = any(!is.na(urls_for_node$priority)),
-    has_changefreq = any(!is.na(urls_for_node$changefreq))
+    has_lastmod = !all(is.na(urls_for_node$lastmod)),
+    has_priority = !all(is.na(urls_for_node$priority)),
+    has_changefreq = !all(is.na(urls_for_node$changefreq))
   )
 }
 
@@ -163,72 +177,76 @@ report_check_cell <- function(present) {
   }
 }
 
+report_source_key <- function(sources, i) {
+  fu <- sources$final_url[i]
+  if (is.na(fu) || !nzchar(fu)) sources$requested_url[i] else fu
+}
+
+report_source_meta_cells <- function(is_index, node_urls) {
+  if (is_index) {
+    return(list(htmltools::tags$td(
+      class = "smr-c smr-dim", colspan = "3", "-"
+    )))
+  }
+  meta <- report_node_meta(node_urls)
+  list(
+    report_check_cell(meta$has_lastmod),
+    report_check_cell(meta$has_priority),
+    report_check_cell(meta$has_changefreq)
+  )
+}
+
+report_source_row <- function(urls, sources, i) {
+  key <- report_source_key(sources, i)
+  fmt <- as.character(sources$format[i])
+  is_index <- identical(fmt, "xml-sitemapindex")
+  node_urls <- urls[
+    !is.na(urls$source_sitemap) & urls$source_sitemap == key, ,
+    drop = FALSE
+  ]
+  ok <- is.na(sources$error_class[i])
+  status_txt <- if (!is.na(sources$status[i])) {
+    as.character(sources$status[i])
+  } else {
+    "local"
+  }
+  size_kb <- if (!is.na(sources$bytes[i])) {
+    sprintf("%.1f", sources$bytes[i] / 1024)
+  } else {
+    "-"
+  }
+  time_ms <- if (!is.na(sources$timing[i])) {
+    as.character(round(sources$timing[i] * 1000))
+  } else {
+    "-"
+  }
+
+  htmltools::tags$tr(
+    htmltools::tags$td(
+      htmltools::tags$span(
+        class = paste0("smr-dot ", if (ok) "smr-dot-ok" else "smr-dot-bad")
+      ),
+      htmltools::tags$span(class = "smr-url", key)
+    ),
+    htmltools::tags$td(class = "smr-dim", report_format_label(fmt)),
+    htmltools::tags$td(class = "smr-num", status_txt),
+    htmltools::tags$td(class = "smr-num", if (is_index) "-" else format(
+      nrow(node_urls),
+      big.mark = ","
+    )),
+    htmltools::tags$td(class = "smr-num", size_kb),
+    htmltools::tags$td(class = "smr-num", time_ms),
+    report_source_meta_cells(is_index, node_urls)
+  )
+}
+
 report_sitemap_table <- function(urls, sources) {
   if (is.null(sources) || nrow(sources) == 0L) {
     return(NULL)
   }
 
-  key_of <- function(i) {
-    fu <- sources$final_url[i]
-    if (is.na(fu) || !nzchar(fu)) sources$requested_url[i] else fu
-  }
-
   rows <- lapply(seq_len(nrow(sources)), function(i) {
-    key <- key_of(i)
-    fmt <- as.character(sources$format[i])
-    is_index <- identical(fmt, "xml-sitemapindex")
-    node_urls <- urls[
-      !is.na(urls$source_sitemap) & urls$source_sitemap == key, ,
-      drop = FALSE
-    ]
-    n <- nrow(node_urls)
-    ok <- is.na(sources$error_class[i])
-    status_txt <- if (!is.na(sources$status[i])) {
-      as.character(sources$status[i])
-    } else {
-      "local"
-    }
-    size_kb <- if (!is.na(sources$bytes[i])) {
-      sprintf("%.1f", sources$bytes[i] / 1024)
-    } else {
-      "-"
-    }
-    time_ms <- if (!is.na(sources$timing[i])) {
-      as.character(round(sources$timing[i] * 1000))
-    } else {
-      "-"
-    }
-
-    meta_cells <- if (is_index) {
-      list(htmltools::tags$td(
-        class = "smr-c smr-dim", colspan = "3", "-"
-      ))
-    } else {
-      m <- report_node_meta(node_urls)
-      list(
-        report_check_cell(m$has_lastmod),
-        report_check_cell(m$has_priority),
-        report_check_cell(m$has_changefreq)
-      )
-    }
-
-    htmltools::tags$tr(
-      htmltools::tags$td(
-        htmltools::tags$span(
-          class = paste0("smr-dot ", if (ok) "smr-dot-ok" else "smr-dot-bad")
-        ),
-        htmltools::tags$span(class = "smr-url", key)
-      ),
-      htmltools::tags$td(class = "smr-dim", report_format_label(fmt)),
-      htmltools::tags$td(class = "smr-num", status_txt),
-      htmltools::tags$td(class = "smr-num", if (is_index) "-" else format(
-        n,
-        big.mark = ","
-      )),
-      htmltools::tags$td(class = "smr-num", size_kb),
-      htmltools::tags$td(class = "smr-num", time_ms),
-      meta_cells
-    )
+    report_source_row(urls, sources, i)
   })
 
   htmltools::tags$section(
@@ -257,11 +275,7 @@ report_sitemap_table <- function(urls, sources) {
 
 # ---- section: lastmod --------------------------------------------------------
 
-report_lastmod_section <- function(urls) {
-  n_total <- nrow(urls)
-  lm <- urls$lastmod
-  has <- !is.na(lm)
-  n_with <- sum(has)
+report_lastmod_cards <- function(n_total, n_with) {
   coverage <- if (n_total > 0L) round(100 * n_with / n_total) else 0L
   cov_class <- if (coverage >= 80L) {
     "smr-good"
@@ -271,7 +285,7 @@ report_lastmod_section <- function(urls) {
     "smr-bad"
   }
 
-  cards <- htmltools::tags$div(
+  htmltools::tags$div(
     class = "smr-cards",
     htmltools::tags$div(
       class = "smr-card",
@@ -296,42 +310,55 @@ report_lastmod_section <- function(urls) {
       htmltools::tags$div(class = "smr-card-lbl", "Coverage")
     )
   )
+}
 
-  chart <- NULL
-  if (n_with > 0L) {
-    months <- format(lm[has], "%Y-%m")
-    tab <- sort(table(months))
-    tab <- tab[order(names(tab))]
-    max_count <- max(as.integer(tab))
-    bars <- lapply(seq_along(tab), function(i) {
-      count <- as.integer(tab[i])
-      pct <- max(1, round(100 * count / max_count))
+report_lastmod_bar <- function(tab, i, max_count) {
+  count <- as.integer(tab[i])
+  pct <- max(1, round(100 * count / max_count))
+  htmltools::tags$div(
+    class = "smr-bar-row",
+    htmltools::tags$span(class = "smr-bar-lbl", names(tab)[i]),
+    htmltools::tags$div(
+      class = "smr-bar-track",
       htmltools::tags$div(
-        class = "smr-bar-row",
-        htmltools::tags$span(class = "smr-bar-lbl", names(tab)[i]),
-        htmltools::tags$div(
-          class = "smr-bar-track",
-          htmltools::tags$div(
-            class = "smr-bar-fill",
-            style = htmltools::css(width = paste0(pct, "%"))
-          )
-        ),
-        htmltools::tags$span(
-          class = "smr-bar-count", format(count, big.mark = ",")
-        )
+        class = "smr-bar-fill",
+        style = htmltools::css(width = paste0(pct, "%"))
       )
-    })
-    chart <- htmltools::tagList(
-      htmltools::tags$h3("Distribution by month"),
-      htmltools::tags$div(class = "smr-chart", bars)
+    ),
+    htmltools::tags$span(
+      class = "smr-bar-count", format(count, big.mark = ",")
     )
+  )
+}
+
+report_lastmod_chart <- function(lm, has) {
+  if (!any(has)) {
+    return(NULL)
   }
+  months <- format(lm[has], "%Y-%m")
+  tab <- sort(table(months))
+  tab <- tab[order(names(tab))]
+  max_count <- max(as.integer(tab))
+  bars <- lapply(seq_along(tab), function(i) {
+    report_lastmod_bar(tab, i, max_count)
+  })
+  htmltools::tagList(
+    htmltools::tags$h3("Distribution by month"),
+    htmltools::tags$div(class = "smr-chart", bars)
+  )
+}
+
+report_lastmod_section <- function(urls) {
+  n_total <- nrow(urls)
+  lm <- urls$lastmod
+  has <- !is.na(lm)
+  n_with <- sum(has)
 
   htmltools::tags$section(
     class = "smr-section",
     htmltools::tags$h2("lastmod"),
-    cards,
-    chart
+    report_lastmod_cards(n_total, n_with),
+    report_lastmod_chart(lm, has)
   )
 }
 
@@ -478,6 +505,75 @@ report_evidence_block <- function(ev) {
   )
 }
 
+report_finding_samples <- function(sub, sev_rank) {
+  codes <- unique(sub$code)
+  samples <- lapply(codes, function(cd) {
+    rows <- sub[sub$code == cd, , drop = FALSE]
+    list(row = rows[1, , drop = FALSE], count = nrow(rows))
+  })
+  ord <- order(
+    vapply(samples, function(s) sev_rank[[s$row$severity]], integer(1)),
+    -vapply(samples, function(s) s$count, integer(1))
+  )
+  samples[ord]
+}
+
+report_finding_row <- function(sample) {
+  r <- sample$row
+  sev <- r$severity
+  ev <- if (length(r$evidence) > 0L) r$evidence[[1]] else NULL
+  htmltools::tags$tr(
+    htmltools::tags$td(
+      class = paste0("smr-sevtext smr-sevtext-", sev), sev
+    ),
+    htmltools::tags$td(
+      htmltools::tags$span(
+        class = paste0("smr-code smr-code-", sev), r$code
+      ),
+      htmltools::tags$div(class = "smr-dim smr-small", paste0(
+        format(sample$count, big.mark = ","), " total"
+      ))
+    ),
+    htmltools::tags$td(
+      class = "smr-subject",
+      htmltools::tags$span(class = "smr-dim smr-small", r$subject_type),
+      if (!is.na(r$subject_ref)) htmltools::tags$div(r$subject_ref)
+    ),
+    htmltools::tags$td(
+      r$message,
+      report_evidence_block(ev)
+    )
+  )
+}
+
+report_layer_block <- function(layer, findings, sev_rank) {
+  sub <- findings[findings$layer == layer, , drop = FALSE]
+  samples <- report_finding_samples(sub, sev_rank)
+  body_rows <- lapply(samples, report_finding_row)
+  codes <- unique(sub$code)
+
+  htmltools::tags$div(
+    class = "smr-layer",
+    htmltools::tags$h3(sprintf(
+      "%s (%d issue%s, %d total)",
+      layer, length(codes), if (length(codes) != 1L) "s" else "", nrow(sub)
+    )),
+    htmltools::tags$div(
+      class = "smr-tablewrap",
+      htmltools::tags$table(
+        class = "smr-table",
+        htmltools::tags$thead(htmltools::tags$tr(
+          htmltools::tags$th("Severity"),
+          htmltools::tags$th("Code"),
+          htmltools::tags$th("Example subject"),
+          htmltools::tags$th("Example message")
+        )),
+        htmltools::tags$tbody(body_rows)
+      )
+    )
+  )
+}
+
 report_findings_section <- function(findings) {
   if (nrow(findings) == 0L) {
     return(htmltools::tags$section(
@@ -493,69 +589,12 @@ report_findings_section <- function(findings) {
   )
   present_layers <- report_layer_order[report_layer_order %in% findings$layer]
 
-  layer_blocks <- lapply(present_layers, function(layer) {
-    sub <- findings[findings$layer == layer, , drop = FALSE]
-    codes <- unique(sub$code)
-    # keep first sample per code, count total, order by severity then count.
-    samples <- lapply(codes, function(cd) {
-      rows <- sub[sub$code == cd, , drop = FALSE]
-      list(row = rows[1, , drop = FALSE], count = nrow(rows))
-    })
-    ord <- order(
-      vapply(samples, function(s) sev_rank[[s$row$severity]], integer(1)),
-      -vapply(samples, function(s) s$count, integer(1))
-    )
-    samples <- samples[ord]
-
-    body_rows <- lapply(samples, function(s) {
-      r <- s$row
-      sev <- r$severity
-      ev <- if (length(r$evidence) > 0L) r$evidence[[1]] else NULL
-      htmltools::tags$tr(
-        htmltools::tags$td(
-          class = paste0("smr-sevtext smr-sevtext-", sev), sev
-        ),
-        htmltools::tags$td(
-          htmltools::tags$span(
-            class = paste0("smr-code smr-code-", sev), r$code
-          ),
-          htmltools::tags$div(class = "smr-dim smr-small", paste0(
-            format(s$count, big.mark = ","), " total"
-          ))
-        ),
-        htmltools::tags$td(
-          class = "smr-subject",
-          htmltools::tags$span(class = "smr-dim smr-small", r$subject_type),
-          if (!is.na(r$subject_ref)) htmltools::tags$div(r$subject_ref)
-        ),
-        htmltools::tags$td(
-          r$message,
-          report_evidence_block(ev)
-        )
-      )
-    })
-
-    htmltools::tags$div(
-      class = "smr-layer",
-      htmltools::tags$h3(sprintf(
-        "%s (%d issue%s, %d total)",
-        layer, length(codes), if (length(codes) != 1L) "s" else "", nrow(sub)
-      )),
-      htmltools::tags$div(
-        class = "smr-tablewrap",
-        htmltools::tags$table(
-          class = "smr-table",
-          htmltools::tags$thead(htmltools::tags$tr(
-            htmltools::tags$th("Severity"),
-            htmltools::tags$th("Code"),
-            htmltools::tags$th("Example subject"),
-            htmltools::tags$th("Example message")
-          )),
-          htmltools::tags$tbody(body_rows)
-        )
-      )
-    )
-  })
+  layer_blocks <- lapply(
+    present_layers,
+    report_layer_block,
+    findings = findings,
+    sev_rank = sev_rank
+  )
 
   n_unique <- length(unique(findings$code))
   htmltools::tags$section(
@@ -570,6 +609,83 @@ report_findings_section <- function(findings) {
 
 # ---- section: URL table ------------------------------------------------------
 
+report_url_cell <- function(url) {
+  htmltools::tags$td(htmltools::tags$a(
+    href = url,
+    target = "_blank",
+    rel = "noopener noreferrer",
+    class = "smr-url",
+    url
+  ))
+}
+
+report_url_table_row <- function(show, i) {
+  fmt_cell <- function(v) if (is.na(v)) "-" else as.character(v)
+  fmt_lm <- function(v) if (is.na(v)) "-" else format(v, "%Y-%m-%d")
+  htmltools::tags$tr(
+    class = "smr-urlrow",
+    report_url_cell(show$loc[i]),
+    htmltools::tags$td(class = "smr-dim smr-small", fmt_lm(show$lastmod[i])),
+    htmltools::tags$td(
+      class = "smr-dim smr-small", fmt_cell(show$changefreq[i])
+    ),
+    htmltools::tags$td(
+      class = "smr-dim smr-small", fmt_cell(show$priority[i])
+    )
+  )
+}
+
+report_url_table_header <- function(n_total) {
+  htmltools::tags$div(
+    class = "smr-urltable-head",
+    htmltools::tags$h2("URL analysis"),
+    report_count_badge(n_total),
+    htmltools::tags$div(
+      class = "smr-urltable-tools",
+      htmltools::tags$input(
+        id = "smr-url-search",
+        type = "text",
+        placeholder = "Search URLs..."
+      ),
+      htmltools::tags$button(
+        id = "smr-csv-btn", type = "button", class = "smr-btn", "CSV"
+      )
+    )
+  )
+}
+
+report_url_table_note <- function(capped, n_total) {
+  if (!capped) {
+    return(NULL)
+  }
+  htmltools::tags$p(class = "smr-note", sprintf(
+    "Showing the first %s of %s URLs.",
+    format(report_url_table_cap, big.mark = ","),
+    format(n_total, big.mark = ",")
+  ))
+}
+
+report_url_table_grid <- function(body_rows) {
+  htmltools::tags$div(
+    class = "smr-tablewrap smr-urltable-scroll",
+    htmltools::tags$table(
+      id = "smr-url-table",
+      class = "smr-table",
+      htmltools::tags$thead(htmltools::tags$tr(
+        htmltools::tags$th(class = "smr-sortable", `data-col` = "0", "URL"),
+        htmltools::tags$th(
+          class = "smr-sortable", `data-col` = "1", "Modified"
+        ),
+        htmltools::tags$th(class = "smr-sortable", `data-col` = "2", "Freq"),
+        htmltools::tags$th(
+          class = "smr-sortable", `data-col` = "3", "Priority"
+        )
+      )),
+      htmltools::tags$tbody(id = "smr-url-tbody", body_rows)
+    )
+  )
+}
+
 report_url_table <- function(urls) {
   n_total <- nrow(urls)
   if (n_total == 0L) {
@@ -582,80 +698,21 @@ report_url_table <- function(urls) {
     urls
   }
 
-  fmt_cell <- function(v) if (is.na(v)) "-" else as.character(v)
-  fmt_lm <- function(v) if (is.na(v)) "-" else format(v, "%Y-%m-%d")
-
   body_rows <- lapply(seq_len(nrow(show)), function(i) {
-    htmltools::tags$tr(
-      class = "smr-urlrow",
-      htmltools::tags$td(htmltools::tags$a(
-        href = show$loc[i],
-        target = "_blank",
-        rel = "noopener noreferrer",
-        class = "smr-url",
-        show$loc[i]
-      )),
-      htmltools::tags$td(class = "smr-dim smr-small", fmt_lm(show$lastmod[i])),
-      htmltools::tags$td(
-        class = "smr-dim smr-small", fmt_cell(show$changefreq[i])
-      ),
-      htmltools::tags$td(
-        class = "smr-dim smr-small", fmt_cell(show$priority[i])
-      )
-    )
+    report_url_table_row(show, i)
   })
 
   htmltools::tags$section(
     class = "smr-section",
-    htmltools::tags$div(
-      class = "smr-urltable-head",
-      htmltools::tags$h2("URL analysis"),
-      report_count_badge(n_total),
-      htmltools::tags$div(
-        class = "smr-urltable-tools",
-        htmltools::tags$input(
-          id = "smr-url-search",
-          type = "text",
-          placeholder = "Search URLs..."
-        ),
-        htmltools::tags$button(
-          id = "smr-csv-btn", type = "button", class = "smr-btn", "CSV"
-        )
-      )
-    ),
-    if (capped) {
-      htmltools::tags$p(class = "smr-note", sprintf(
-        "Showing the first %s of %s URLs.",
-        format(report_url_table_cap, big.mark = ","),
-        format(n_total, big.mark = ",")
-      ))
-    },
-    htmltools::tags$div(
-      class = "smr-tablewrap smr-urltable-scroll",
-      htmltools::tags$table(
-        id = "smr-url-table",
-        class = "smr-table",
-        htmltools::tags$thead(htmltools::tags$tr(
-          htmltools::tags$th(class = "smr-sortable", `data-col` = "0", "URL"),
-          htmltools::tags$th(
-            class = "smr-sortable", `data-col` = "1", "Modified"
-          ),
-          htmltools::tags$th(class = "smr-sortable", `data-col` = "2", "Freq"),
-          htmltools::tags$th(
-            class = "smr-sortable", `data-col` = "3", "Priority"
-          )
-        )),
-        htmltools::tags$tbody(id = "smr-url-tbody", body_rows)
-      )
-    )
+    report_url_table_header(n_total),
+    report_url_table_note(capped, n_total),
+    report_url_table_grid(body_rows)
   )
 }
 
 # ---- inline CSS + JS ---------------------------------------------------------
 
-report_styles <- function() {
-  htmltools::tags$style(htmltools::HTML(
-    "
+report_css <- "
 :root{
   --bg:#ffffff;--fg:#1f2937;--muted:#6b7280;--card:#f8f9fa;--border:#e5e7eb;
   --link:#2563eb;--accent:#2563eb;--accent2:#1d4ed8;--badge:#f3f4f6;
@@ -795,12 +852,12 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);
   color:var(--muted);font-size:.82rem;}
 "
-  ))
+
+report_styles <- function() {
+  htmltools::tags$style(htmltools::HTML(report_css))
 }
 
-report_scripts <- function() {
-  htmltools::tags$script(htmltools::HTML(
-    "
+report_js <- "
 (function(){
   // theme toggle: stamp data-theme on the root; wins over the media query.
   var root=document.documentElement;
@@ -871,7 +928,9 @@ report_scripts <- function() {
   }
 })();
 "
-  ))
+
+report_scripts <- function() {
+  htmltools::tags$script(htmltools::HTML(report_js))
 }
 
 # ---- assembly ----------------------------------------------------------------
@@ -915,6 +974,63 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
   # NB: as.character() on an <html> tag drops <head> (a Shiny-UI convenience);
   # doRenderTags() renders the full document including <head>.
   paste0("<!DOCTYPE html>\n", htmltools::doRenderTags(page))
+}
+
+report_source_input <- function(x) {
+  if (is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)) {
+    return(x)
+  }
+  rlang::abort(
+    "`x` must be a single non-empty source: a URL or a local file path.",
+    class = "sitemapr_bad_input"
+  )
+}
+
+report_urls_input <- function(urls, x, user_agent, limits, index_limits) {
+  if (!is.null(urls)) {
+    return(urls)
+  }
+  read_sitemap(
+    x,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits
+  )
+}
+
+report_findings_input <- function(
+  findings,
+  x,
+  mode,
+  user_agent,
+  limits,
+  index_limits
+) {
+  if (!is.null(findings)) {
+    return(findings)
+  }
+  validate_sitemap(
+    x,
+    mode = mode,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits
+  )
+}
+
+report_title_input <- function(title, x) {
+  if (!is.null(title)) {
+    return(title)
+  }
+  paste0("Sitemap report \u2014 ", x)
+}
+
+report_return <- function(html, output) {
+  if (!is.null(output)) {
+    writeBin(charToRaw(enc2utf8(html)), output)
+    return(invisible(output))
+  }
+  htmltools::HTML(html)
 }
 
 #' Render a self-contained HTML report for a sitemap
@@ -984,15 +1100,15 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
 #' out <- tempfile(fileext = ".html")
 #' report_sitemap(path, output = out)
 #'
-#' \dontrun{
 #' # Render directly from a sitemap URL (fetches twice: read + validate).
-#' report_sitemap("https://example.com/sitemap.xml", output = "report.html")
+#' # report_sitemap("https://example.com/sitemap.xml", output = "report.html")
 #'
 #' # Reuse results you have already computed to avoid re-fetching.
-#' u <- read_sitemap("https://example.com/sitemap.xml")
-#' f <- validate_sitemap("https://example.com/sitemap.xml")
-#' report_sitemap("example.com", urls = u, findings = f, output = "report.html")
-#' }
+#' # u <- read_sitemap("https://example.com/sitemap.xml")
+#' # f <- validate_sitemap("https://example.com/sitemap.xml")
+#' # report_sitemap(
+#' #   "example.com", urls = u, findings = f, output = "report.html"
+#' # )
 report_sitemap <- function(
   x,
   output = NULL,
@@ -1005,36 +1121,18 @@ report_sitemap <- function(
   index_limits = NULL
 ) {
   mode <- match.arg(mode)
-  if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
-    rlang::abort(
-      "`x` must be a single non-empty source: a URL or a local file path.",
-      class = "sitemapr_bad_input"
-    )
-  }
-  if (is.null(index_limits)) {
-    index_limits <- index_limits()
-  }
-
-  if (is.null(urls)) {
-    urls <- read_sitemap(
-      x,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits
-    )
-  }
-  if (is.null(findings)) {
-    findings <- validate_sitemap(
-      x,
-      mode = mode,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits
-    )
-  }
-  if (is.null(title)) {
-    title <- paste0("Sitemap report \u2014 ", x)
-  }
+  x <- report_source_input(x)
+  index_limits <- resolve_index_limits(index_limits)
+  urls <- report_urls_input(urls, x, user_agent, limits, index_limits)
+  findings <- report_findings_input(
+    findings,
+    x,
+    mode,
+    user_agent,
+    limits,
+    index_limits
+  )
+  title <- report_title_input(title, x)
 
   html <- report_render_html(
     source_label = x,
@@ -1044,9 +1142,5 @@ report_sitemap <- function(
     title = title
   )
 
-  if (!is.null(output)) {
-    writeBin(charToRaw(enc2utf8(html)), output)
-    return(invisible(output))
-  }
-  htmltools::HTML(html)
+  report_return(html, output)
 }

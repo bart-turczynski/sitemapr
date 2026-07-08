@@ -93,15 +93,15 @@ writeLines(xml, path)
 out <- tempfile(fileext = ".html")
 report_sitemap(path, output = out)
 
-\dontrun{
 # Render directly from a sitemap URL (fetches twice: read + validate).
-report_sitemap("https://example.com/sitemap.xml", output = "report.html")
+# report_sitemap("https://example.com/sitemap.xml", output = "report.html")
 
 # Reuse results you have already computed to avoid re-fetching.
-u <- read_sitemap("https://example.com/sitemap.xml")
-f <- validate_sitemap("https://example.com/sitemap.xml")
-report_sitemap("example.com", urls = u, findings = f, output = "report.html")
-}
+# u <- read_sitemap("https://example.com/sitemap.xml")
+# f <- validate_sitemap("https://example.com/sitemap.xml")
+# report_sitemap(
+#   "example.com", urls = u, findings = f, output = "report.html"
+# )
 }
 \seealso{
 \code{\link[=read_sitemap]{read_sitemap()}} and \code{\link[=validate_sitemap]{validate_sitemap()}} for the underlying data.

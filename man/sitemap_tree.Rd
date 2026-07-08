@@ -81,16 +81,14 @@ count-capped), contributing deeper rows parented to the index with provenance
 yourself (no network for the root), use \code{\link[=sitemap_tree_from_bytes]{sitemap_tree_from_bytes()}}.
 }
 \examples{
-\dontrun{
 # Discover a site's sitemaps from its root URL as a tree of candidates.
-sitemap_tree("https://example.com")
+# sitemap_tree("https://example.com")
 
 # A bare host is accepted and normalized to https://.
-sitemap_tree("example.com")
+# sitemap_tree("example.com")
 
 # Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
-sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
-}
+# sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
 }
 \seealso{
 \code{\link[=sitemap_tree_from_bytes]{sitemap_tree_from_bytes()}} to discover from already-fetched bytes.

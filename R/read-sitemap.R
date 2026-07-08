@@ -60,6 +60,21 @@ parse_dispatch <- function(bytes, source_sitemap) {
   )
 }
 
+# A zero-row source-metadata frame, used when a batched read has no successful
+# sources but still needs the `sources` attribute schema.
+empty_source_metadata <- function() {
+  source_metadata()[0L, , drop = FALSE]
+}
+
+# Row-bind source-metadata records, preserving the schema when none exist.
+combine_source_metadata <- function(parts) {
+  parts <- parts[!vapply(parts, is.null, logical(1L))]
+  if (length(parts) == 0L) {
+    return(empty_source_metadata())
+  }
+  do.call(rbind, parts)
+}
+
 # Read and dispatch a local file. A local `.tar.gz` (gzip whose inner stream is
 # tar) goes to the bounded archive extractor by path; everything else is
 # dispatched from its bytes. Returns list(rows, sources, problems).
@@ -92,11 +107,12 @@ read_sitemap_local <- function(path) {
   list(rows = parsed$rows, sources = meta, problems = empty_problems())
 }
 
-# Fetch and dispatch a URL source. Returns list(rows, sources, problems). A
-# top-level sitemapindex is handed to the recursive index-expansion engine; the
-# root's own fetch record is prepended to the engine's per-child source records.
-read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
-  rec <- fetch_source(url, user_agent = user_agent, limits = limits)
+# Fetch and dispatch a URL source record. Returns list(rows, sources, problems).
+# A top-level sitemapindex is handed to the recursive index-expansion engine;
+# the root's own fetch record is prepended to the engine's per-child source
+# records.
+read_sitemap_url <- function(source, user_agent, limits, idx_limits) {
+  rec <- fetch_source(source, user_agent = user_agent, limits = limits)
   if (!is.na(rec$error_class)) {
     rlang::abort(
       sprintf(
@@ -126,27 +142,126 @@ read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
   list(rows = parsed$rows, sources = rec, problems = empty_problems())
 }
 
+# Read one normalized source record.
+read_sitemap_source <- function(source, user_agent, limits, index_limits) {
+  if (isTRUE(source$is_local_file[[1L]])) {
+    return(read_sitemap_local(source$normalized_url[[1L]]))
+  }
+  read_sitemap_url(
+    source,
+    user_agent = user_agent,
+    limits = limits,
+    idx_limits = index_limits
+  )
+}
+
+# Public entry-point input guard. `create_source_records()` owns URL/path
+# normalization; this helper keeps the historical public class for bad `x`.
+sitemap_public_source_records <- function(x) {
+  if (
+    !is.character(x) ||
+      length(x) == 0L ||
+      anyNA(x) ||
+      !all(nzchar(x))
+  ) {
+    rlang::abort(
+      "`x` must be a non-empty character vector of sitemap sources.",
+      class = "sitemapr_bad_input"
+    )
+  }
+  create_source_records(x, as = "sitemap")
+}
+
+# Turn one batched read failure into the parse-layer `problems` attribute.
+read_source_failure_problem <- function(source, cnd) {
+  category <- if (inherits(cnd, "sitemapr_unsupported_format")) {
+    "classification"
+  } else if (
+    inherits(cnd, "sitemapr_decompression_error") ||
+      inherits(cnd, "sitemapr_malformed_archive") ||
+      inherits(cnd, "sitemapr_archive_limit")
+  ) {
+    "decompression"
+  } else {
+    "fetch"
+  }
+  subject <- source$normalized_url[[1L]]
+  parse_problems(
+    severity = "warning",
+    category = category,
+    subject_ref = subject,
+    message = sprintf(
+      "Submitted sitemap source %s failed: %s",
+      subject,
+      conditionMessage(cnd)
+    )
+  )
+}
+
+# Read multiple normalized source records, continuing after per-source failures.
+read_sitemap_batch <- function(sources, user_agent, limits, index_limits) {
+  row_parts <- list()
+  source_parts <- list()
+  problem_parts <- list()
+
+  for (i in seq_len(nrow(sources))) {
+    source <- sources[i, , drop = FALSE]
+    out <- tryCatch(
+      suppressWarnings(
+        read_sitemap_source(source, user_agent, limits, index_limits)
+      ),
+      error = function(cnd) {
+        list(
+          rows = empty_sitemap_rows(),
+          sources = NULL,
+          problems = read_source_failure_problem(source, cnd)
+        )
+      }
+    )
+    row_parts[[length(row_parts) + 1L]] <- out$rows
+    source_parts[[length(source_parts) + 1L]] <- out$sources
+    problem_parts[[length(problem_parts) + 1L]] <- out$problems
+  }
+
+  rows <- if (length(row_parts) == 0L) {
+    empty_sitemap_rows()
+  } else {
+    do.call(rbind, row_parts)
+  }
+  list(
+    rows = rows,
+    sources = combine_source_metadata(source_parts),
+    problems = combine_problems(problem_parts)
+  )
+}
+
 #' Read a sitemap into a tidy tibble of URLs
 #'
-#' Parses a single sitemap source — a sitemap URL or a local sitemap file — into
-#' the tidy row tibble: one row per URL with `loc`, `lastmod`, `changefreq`,
-#' `priority`, the `images`/`video`/`news`/`alternates` extension list-columns,
-#' and `source_sitemap` provenance. Supported formats are XML `urlset` and
-#' `sitemapindex`, the plain-text format, transparent gzip
+#' Parses one or more sitemap sources — sitemap URLs or local sitemap files —
+#' into the tidy row tibble: one row per URL with `loc`, `lastmod`,
+#' `changefreq`, `priority`, the `images`/`video`/`news`/`alternates` extension
+#' list-columns, and `source_sitemap` provenance. Supported formats are XML
+#' `urlset` and `sitemapindex`, the plain-text format, transparent gzip
 #' (`.xml.gz`/`.txt.gz`), and — local files only — bounded `.tar.gz` archives.
 #'
 #' The result carries a `sources` attribute (the per-source fetch-metadata
 #' records) and a `problems` attribute (a tibble of non-fatal issues such as
-#' skipped archive members or unfetchable index children). `read_sitemap()`
-#' never returns a validation findings tibble; use `validate_sitemap()`
-#' for that.
+#' skipped archive members, unfetchable index children, or failed members of a
+#' submitted vector). `read_sitemap()` never returns a validation findings
+#' tibble; use `validate_sitemap()` for that.
 #'
 #' A top-level sitemap index is expanded recursively (cycle-safe, depth- and
 #' count-capped) so every reachable child sitemap's rows carry per-child
 #' provenance; the bounds are configurable via `index_limits`.
 #'
-#' @param x A single source: a sitemap URL (character) or a path to a local
-#'   sitemap file (`.xml`, `.txt`, `.gz`, or `.tar.gz`).
+#' When `x` contains more than one source, inputs are normalized, deduplicated,
+#' and capped using the submitted-list source-record policy. Per-source failures
+#' are recorded in the `problems` attribute and successful sources still
+#' contribute rows. Scalar calls keep the stricter historical behavior: an
+#' entry-point fetch failure or unsupported content raises a classed condition.
+#'
+#' @param x One or more sitemap URLs or paths to local sitemap files (`.xml`,
+#'   `.txt`, `.gz`, or `.tar.gz`).
 #' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
 #'   package User-Agent.
 #' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
@@ -170,34 +285,32 @@ read_sitemap_url <- function(url, user_agent, limits, idx_limits) {
 #' writeLines(xml, path)
 #' read_sitemap(path)
 #'
-#' \dontrun{
 #' # Read directly from a sitemap URL; a top-level index expands recursively.
-#' read_sitemap("https://example.com/sitemap.xml")
-#' }
+#' # read_sitemap("https://example.com/sitemap.xml")
 read_sitemap <- function(
   x,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL
 ) {
-  if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
-    rlang::abort(
-      "`x` must be a single non-empty source: a URL or a local file path.",
-      class = "sitemapr_bad_input"
-    )
-  }
+  sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
 
-  out <- if (file.exists(x)) {
-    read_sitemap_local(x)
-  } else {
-    read_sitemap_url(
-      x,
+  out <- if (length(x) == 1L) {
+    read_sitemap_source(
+      sources[1L, , drop = FALSE],
       user_agent = user_agent,
       limits = limits,
-      idx_limits = index_limits
+      index_limits = index_limits
+    )
+  } else {
+    read_sitemap_batch(
+      sources,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits
     )
   }
 
@@ -205,4 +318,20 @@ read_sitemap <- function(
   attr(result, "sources") <- out$sources
   attr(result, "problems") <- out$problems
   result
+}
+
+#' @rdname read_sitemap
+#' @export
+read_sitemaps <- function(
+  x,
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+) {
+  read_sitemap(
+    x,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits
+  )
 }

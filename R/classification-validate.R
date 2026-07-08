@@ -148,63 +148,82 @@ classification_child_finding <- function(code, base, child_url, message) {
   )
 }
 
+classification_root_present <- function(root) {
+  length(root) == 1L && !is.na(root) && nzchar(root)
+}
+
+classification_html_finding <- function(meta, base) {
+  if (!isTRUE(meta$html_masquerade)) {
+    return(empty_classification_findings())
+  }
+  classification_source_finding(
+    "UNSUPPORTED_HTML_MASQUERADE",
+    base,
+    paste0(
+      "The document looks like HTML, not a sitemap, at the URL expected to ",
+      "serve a sitemap."
+    )
+  )
+}
+
+classification_root_finding <- function(meta, base) {
+  root <- meta$unsupported_root
+  if (!classification_root_present(root)) {
+    return(empty_classification_findings())
+  }
+  classification_source_finding(
+    "UNSUPPORTED_ROOT",
+    base,
+    sprintf(
+      "Root element <%s> is neither <urlset> nor <sitemapindex>.",
+      root
+    ),
+    excerpt = root
+  )
+}
+
+classification_feed_finding <- function(child, base) {
+  if (is.na(child) || !nzchar(child)) {
+    return(empty_classification_findings())
+  }
+  classification_child_finding(
+    "UNSUPPORTED_FEED",
+    base,
+    child,
+    sprintf(
+      paste0(
+        "Sitemap-index child '%s' is an RSS/Atom feed; feeds are out of ",
+        "scope for v1 and are not parsed."
+      ),
+      child
+    )
+  )
+}
+
+classification_feed_findings <- function(meta, base) {
+  rows <- lapply(meta$feed_children, classification_feed_finding, base = base)
+  rows <- rows[vapply(rows, nrow, integer(1L)) > 0L]
+  if (length(rows) == 0L) {
+    return(empty_classification_findings())
+  }
+  do.call(rbind, rows)
+}
+
 # Unsupported-input diagnostics from `source_meta`: HTML masquerade, an
 # unsupported root element, and RSS/Atom feed children of a sitemap index.
 # `NULL` meta (or all-default fields) yields no findings. Returns a (possibly
 # empty) classification-findings tibble.
-# Accepted cyclocomp advisory exception (SITE-kpgkiikq): cyclocomp scores this
-# ~18 (threshold 15). It is three independent, flat `source_meta`-driven blocks
-# (HTML masquerade, unsupported root, feed children) emitting one finding each;
-# the score comes from the `&&` guards and the per-block branches, not nesting.
-# Splitting into one helper per block would not improve readability. Left as-is.
 validate_classification <- function(meta, base) {
   if (is.null(meta)) {
     return(empty_classification_findings())
   }
-  out <- list()
 
-  if (isTRUE(meta$html_masquerade)) {
-    out[[length(out) + 1L]] <- classification_source_finding(
-      "UNSUPPORTED_HTML_MASQUERADE",
-      base,
-      paste0(
-        "The document looks like HTML, not a sitemap, at the URL expected to ",
-        "serve a sitemap."
-      )
-    )
-  }
-
-  root <- meta$unsupported_root
-  if (length(root) == 1L && !is.na(root) && nzchar(root)) {
-    out[[length(out) + 1L]] <- classification_source_finding(
-      "UNSUPPORTED_ROOT",
-      base,
-      sprintf(
-        "Root element <%s> is neither <urlset> nor <sitemapindex>.",
-        root
-      ),
-      excerpt = root
-    )
-  }
-
-  for (child in meta$feed_children) {
-    if (is.na(child) || !nzchar(child)) {
-      next
-    }
-    out[[length(out) + 1L]] <- classification_child_finding(
-      "UNSUPPORTED_FEED",
-      base,
-      child,
-      sprintf(
-        paste0(
-          "Sitemap-index child '%s' is an RSS/Atom feed; feeds are out of ",
-          "scope for v1 and are not parsed."
-        ),
-        child
-      )
-    )
-  }
-
+  out <- list(
+    classification_html_finding(meta, base),
+    classification_root_finding(meta, base),
+    classification_feed_findings(meta, base)
+  )
+  out <- out[vapply(out, nrow, integer(1L)) > 0L]
   if (length(out) == 0L) {
     return(empty_classification_findings())
   }
@@ -228,6 +247,32 @@ resolve_encoding <- function(bom, decl, http, meta) {
   } else {
     "UTF-8"
   }
+}
+
+encoding_bom_decl_message <- function(meta, resolution) {
+  sprintf(
+    paste0(
+      "Byte-order mark indicates %s but the XML declaration says ",
+      "encoding=\"%s\"; resolved to %s (BOM wins)."
+    ),
+    meta$bom_encoding,
+    meta$declared_encoding,
+    resolution
+  )
+}
+
+encoding_conflict_message <- function(meta, resolution) {
+  sprintf(
+    paste0(
+      "Encoding signals disagree (BOM=%s, XML declaration=%s, HTTP ",
+      "charset=%s); resolved to %s by priority (BOM > XML declaration > ",
+      "HTTP charset)."
+    ),
+    encoding_signal_label(meta$bom_encoding),
+    encoding_signal_label(meta$declared_encoding),
+    encoding_signal_label(meta$http_charset),
+    resolution
+  )
 }
 
 # Encoding-conflict diagnostics from `source_meta`. Resolution priority is
@@ -254,15 +299,7 @@ validate_encoding <- function(meta, base) {
     out[[length(out) + 1L]] <- classification_source_finding(
       "ENCODING_BOM_DECLARATION_CONFLICT",
       base,
-      sprintf(
-        paste0(
-          "Byte-order mark indicates %s but the XML declaration says ",
-          "encoding=\"%s\"; resolved to %s (BOM wins)."
-        ),
-        meta$bom_encoding,
-        meta$declared_encoding,
-        resolution
-      ),
+      encoding_bom_decl_message(meta, resolution),
       severity = "info"
     )
   }
@@ -271,17 +308,7 @@ validate_encoding <- function(meta, base) {
     out[[length(out) + 1L]] <- classification_source_finding(
       "ENCODING_CONFLICT",
       base,
-      sprintf(
-        paste0(
-          "Encoding signals disagree (BOM=%s, XML declaration=%s, HTTP ",
-          "charset=%s); resolved to %s by priority (BOM > XML declaration > ",
-          "HTTP charset)."
-        ),
-        encoding_signal_label(meta$bom_encoding),
-        encoding_signal_label(meta$declared_encoding),
-        encoding_signal_label(meta$http_charset),
-        resolution
-      ),
+      encoding_conflict_message(meta, resolution),
       severity = "info"
     )
   }

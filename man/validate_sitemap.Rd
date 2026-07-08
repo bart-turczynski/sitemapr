@@ -2,6 +2,7 @@
 % Please edit documentation in R/validate-sitemap.R
 \name{validate_sitemap}
 \alias{validate_sitemap}
+\alias{validate_sitemaps}
 \title{Validate a sitemap source against the schema, protocol, and classification
 rules}
 \usage{
@@ -12,10 +13,17 @@ validate_sitemap(
   limits = fetch_limits(),
   index_limits = NULL
 )
+
+validate_sitemaps(
+  x,
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+)
 }
 \arguments{
-\item{x}{A single source: a sitemap URL (character) or a path to a local
-sitemap file.}
+\item{x}{One or more sitemap URLs or paths to local sitemap files.}
 
 \item{mode}{\code{"strict"} (the default) or \code{"non-strict"}. In \code{non-strict},
 strict-only findings are dropped and schema violations are downgraded to
@@ -39,11 +47,11 @@ identical tibble across calls. A genuine transport, SSRF, or HTTP failure
 raises a classed error condition.
 }
 \description{
-The public validation entry point. Reads a single sitemap source — a sitemap
-URL or a local sitemap file — runs every finding-producer over it (the XSD
-schema layer, the protocol/semantic layer, the byte-level classification
-layer, and, for a sitemap index, the bounded index-expansion layer), and
-assembles the results into the stable findings contract.
+The public validation entry point. Reads one or more sitemap sources —
+sitemap URLs or local sitemap files — runs every finding-producer over them
+(the XSD schema layer, the protocol/semantic layer, the byte-level
+classification layer, and, for a sitemap index, the bounded index-expansion
+layer), and assembles the results into the stable findings contract.
 }
 \details{
 The source is read once and branched on its sniffed format: an HTML document
@@ -54,10 +62,24 @@ document is dispatched on its root element. An XML root that is neither
 an error. A \code{urlset} is schema- and protocol-validated; a \code{sitemapindex} is
 schema-validated and recursively expanded (cycle-, depth-, and count-capped),
 with the traversal events surfaced as \verb{INDEX_*} findings.
+
+When \code{x} contains more than one source, inputs are normalized, deduplicated,
+and capped using the submitted-list source-record policy. Per-source failures
+are returned as fetch-layer findings and successful sources still contribute
+their findings. Scalar calls keep the stricter historical behavior: genuine
+transport, SSRF, or HTTP failures raise classed conditions.
 }
 \examples{
-\dontrun{
-validate_sitemap("https://example.com/sitemap.xml")
-validate_sitemap("path/to/sitemap.xml", mode = "non-strict")
-}
+xml <- paste0(
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  '<url><loc>https://example.com/</loc>',
+  '<priority>2.0</priority></url>',
+  '</urlset>'
+)
+path <- tempfile(fileext = ".xml")
+writeLines(xml, path)
+validate_sitemap(path, mode = "non-strict")
+
+# Validate directly from a sitemap URL.
+# validate_sitemap("https://example.com/sitemap.xml")
 }

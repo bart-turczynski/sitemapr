@@ -2,11 +2,11 @@ code,severity,layer,subject_type,is_strict_only,status,reconcile,validator_code
 INPUT_INVALID,error,input,report,FALSE,validator-only,,INPUT_INVALID
 INPUT_URL_UNSAFE,error,input,report,FALSE,validator-only,,INPUT_URL_UNSAFE
 INPUT_LIST_DUPLICATE,info,input,report,FALSE,validator-only,,INPUT_LIST_DUPLICATE
-FETCH_FAILED,fatal,fetch,source,FALSE,validator-only,,FETCH_FAILED
-FETCH_TIMEOUT,fatal,fetch,source,FALSE,reserved,,FETCH_TIMEOUT
+FETCH_FAILED,fatal,fetch,source,FALSE,active,,FETCH_FAILED
+FETCH_TIMEOUT,fatal,fetch,source,FALSE,active,,FETCH_TIMEOUT
 FETCH_REDIRECT_LIMIT,error,fetch,source,FALSE,validator-only,,FETCH_REDIRECT_LIMIT
 FETCH_SSRF_BLOCKED,error,fetch,source,FALSE,validator-only,,FETCH_SSRF_BLOCKED
-FETCH_BODY_CEILING_EXCEEDED,fatal,fetch,source,FALSE,reserved,,DECOMPRESS_TOO_LARGE
+FETCH_BODY_CEILING_EXCEEDED,fatal,fetch,source,FALSE,active,,DECOMPRESS_TOO_LARGE
 FETCH_BODY_TOO_LARGE,error,fetch,source,FALSE,validator-only,,FETCH_BODY_TOO_LARGE
 FETCH_HTTP_CHARSET_NOT_UTF8,error,fetch,source,FALSE,validator-only,,FETCH_HTTP_CHARSET_NOT_UTF8
 DISCOVERY_GUESS_NOT_FOUND,info,discovery,source,FALSE,validator-only,,DISCOVERY_GUESS_NOT_FOUND

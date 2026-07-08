@@ -121,17 +121,20 @@ the reconciling `sitemap-validator` code — is `findings-registry.csv`. The
 prose below documents the semantics of the v1 codes sitemapr emits or reserves.
 
 ### Fetch codes (`FETCH_*`)
+- `FETCH_FAILED` — the submitted source could not be fetched or read for a
+  reason not covered by a more specific fetch code; in batched validation this
+  lets other submitted sources continue. `fatal`.
 - `FETCH_BODY_CEILING_EXCEEDED` — the per-resource safety ceiling (default
   500 MB of decompressed/effective bytes) was exceeded; the body is discarded
-  and the source returns a partial result. `fatal`. (See ADR-003 §3.) In
-  `read_sitemap()` / `sitemap_tree()` the same event surfaces as a classed
-  `sitemapr_body_ceiling` condition rather than a findings row.
+  and the source returns a partial result. `fatal`. (See ADR-003 §3.)
 - `FETCH_TIMEOUT` — the request exceeded the wall-clock timeout (default 30 s);
-  no usable body. `fatal`. Surfaces as a `sitemapr_timeout` condition in the
-  parse APIs.
+  no usable body. `fatal`.
 
-Both fetch codes are **reserved**: documented and canonical, but surfaced as
-conditions rather than findings rows in the v1 parse APIs.
+Scalar `read_sitemap()` / `validate_sitemap()` calls and parse APIs still
+surface these as classed conditions where that was the historical behavior.
+Batched `validate_sitemap()` / `validate_sitemaps()` calls emit the fetch
+finding and continue with other submitted sources; batched `read_sitemap()` /
+`read_sitemaps()` records the failed source in the `problems` attribute.
 
 ### Schema codes (`SCHEMA_*`)
 - `SCHEMA_INVALID` — document fails XSD validation (Layer C)

@@ -151,21 +151,34 @@ ssrf_expand_zero_run <- function(low) {
   c(left, rep("0", fill), right)
 }
 
-# Expand an IPv6 literal (brackets already stripped) into a numeric vector of
-# exactly 8 hextets (each 0..65535), or NULL when `s` is not a well-formed IPv6
-# literal. Hextets are stored as doubles so downstream arithmetic stays clear of
-# R's signed-32-bit overflow. This single expander unifies every spelling rurl
-# may or may not normalize, so the embedding detector works off bit positions
-# rather than fragile per-form regexes. The dotted-quad-tail fold and "::"
-# expansion are factored into ssrf_fold_ipv4_tail / ssrf_expand_zero_run; the
-# residual cyclocomp here is the input-shape gauntlet (length/NA/charset/hextet
-# validation) and is an accepted advisory exception for this literal parser.
-ssrf_ipv6_hextets <- function(s) {
+ssrf_ipv6_candidate <- function(s) {
   if (length(s) != 1L || is.na(s) || !nzchar(s)) {
     return(NULL)
   }
   low <- tolower(s)
   if (!grepl(":", low, fixed = TRUE) || !grepl("^[0-9a-f:.]+$", low)) {
+    return(NULL)
+  }
+  low
+}
+
+ssrf_ipv6_numeric_groups <- function(low) {
+  groups <- ssrf_expand_zero_run(low)
+  if (is.null(groups) || !all(grepl("^[0-9a-f]{1,4}$", groups))) {
+    return(NULL)
+  }
+  as.numeric(strtoi(groups, base = 16L))
+}
+
+# Expand an IPv6 literal (brackets already stripped) into a numeric vector of
+# exactly 8 hextets (each 0..65535), or NULL when `s` is not a well-formed IPv6
+# literal. Hextets are stored as doubles so downstream arithmetic stays clear of
+# R's signed-32-bit overflow. This single expander unifies every spelling rurl
+# may or may not normalize, so the embedding detector works off bit positions
+# rather than fragile per-form regexes.
+ssrf_ipv6_hextets <- function(s) {
+  low <- ssrf_ipv6_candidate(s)
+  if (is.null(low)) {
     return(NULL)
   }
 
@@ -174,13 +187,7 @@ ssrf_ipv6_hextets <- function(s) {
     return(NULL)
   }
 
-  # ssrf_expand_zero_run guarantees a length-8 result or NULL, so the only
-  # residual check is that every hextet is 1-4 hex digits.
-  groups <- ssrf_expand_zero_run(low)
-  if (is.null(groups) || !all(grepl("^[0-9a-f]{1,4}$", groups))) {
-    return(NULL)
-  }
-  as.numeric(strtoi(groups, base = 16L))
+  ssrf_ipv6_numeric_groups(low)
 }
 
 # Render a 32-bit unsigned integer as a dotted-quad string ("." between octets).

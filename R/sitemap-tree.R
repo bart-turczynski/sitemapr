@@ -40,7 +40,7 @@ sitemap_tree_rows <- function(
   reason,
   provenance
 ) {
-  tibble::tibble(
+  rows <- tibble::tibble(
     depth = as.integer(depth),
     parent_sitemap = as.character(parent_sitemap),
     sitemap_url = as.character(sitemap_url),
@@ -50,6 +50,7 @@ sitemap_tree_rows <- function(
     reason = as.character(reason),
     provenance = as.character(provenance)
   )
+  rows[sitemap_tree_cols()]
 }
 
 # A 0-row tree tibble carrying the column contract and types.
@@ -73,6 +74,98 @@ count_pages <- function(parsed) {
     nrow(parsed$children)
   } else {
     nrow(parsed$rows)
+  }
+}
+
+sitemap_tree_expansions <- function(
+  disc,
+  records,
+  user_agent,
+  net_limits,
+  index_limits
+) {
+  n <- nrow(disc)
+  page_count <- rep(NA_integer_, n)
+  gzip <- rep(NA, n)
+  expansion_parts <- list()
+
+  for (i in seq_len(n)) {
+    rec <- records[[i]]
+    if (is.null(rec)) {
+      next
+    }
+    gzip[i] <- identical(as.character(rec$format), "gzip")
+    if (!identical(disc$status[[i]], "accepted")) {
+      next
+    }
+
+    candidate_url <- disc$candidate_url[[i]]
+    parsed <- tryCatch(
+      parse_dispatch(attr(rec, "body"), source_sitemap = candidate_url),
+      error = function(e) NULL
+    )
+    if (is.null(parsed)) {
+      next
+    }
+    page_count[i] <- count_pages(parsed)
+
+    if (identical(parsed$kind, "sitemapindex")) {
+      ex <- expand_index(
+        candidate_url,
+        parsed$children,
+        depth = 0L,
+        user_agent = user_agent,
+        limits = index_limits,
+        net_limits = net_limits
+      )
+      expansion_parts[[length(expansion_parts) + 1L]] <- ex$tree
+    }
+  }
+
+  list(page_count = page_count, gzip = gzip, expansion_parts = expansion_parts)
+}
+
+sitemap_tree_from_root <- function(
+  x,
+  use_robots,
+  use_known_paths,
+  user_agent,
+  limits,
+  net_limits,
+  index_limits
+) {
+  disc <- discover_candidates(
+    x,
+    limits = limits,
+    user_agent = user_agent,
+    net_limits = net_limits,
+    use_known_paths = use_known_paths,
+    use_robots = use_robots
+  )
+  records <- attr(disc, "records")
+  expanded <- sitemap_tree_expansions(
+    disc,
+    records,
+    user_agent,
+    net_limits,
+    index_limits
+  )
+
+  base <- sitemap_tree_rows(
+    depth = 0L,
+    parent_sitemap = NA_character_,
+    sitemap_url = disc$candidate_url,
+    page_count = expanded$page_count,
+    gzip = expanded$gzip,
+    status = disc$status,
+    reason = disc$reason,
+    provenance = disc$provenance
+  )
+
+  if (length(expanded$expansion_parts) > 0L) {
+    do.call(rbind, c(list(base), expanded$expansion_parts))
+  } else {
+    base
   }
 }
 
@@ -133,16 +226,14 @@ count_pages <- function(parsed) {
 #' @seealso [sitemap_tree_from_bytes()] to discover from already-fetched bytes.
 #' @export
 #' @examples
-#' \dontrun{
 #' # Discover a site's sitemaps from its root URL as a tree of candidates.
-#' sitemap_tree("https://example.com")
+#' # sitemap_tree("https://example.com")
 #'
 #' # A bare host is accepted and normalized to https://.
-#' sitemap_tree("example.com")
+#' # sitemap_tree("example.com")
 #'
 #' # Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
-#' sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
-#' }
+#' # sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
 sitemap_tree <- function(
   x,
   from = c("root", "sitemap"),
@@ -167,69 +258,13 @@ sitemap_tree <- function(
     ))
   }
 
-  disc <- discover_candidates(
+  sitemap_tree_from_root(
     x,
-    limits = limits,
-    user_agent = user_agent,
-    net_limits = net_limits,
-    use_known_paths = use_known_paths,
-    use_robots = use_robots
+    use_robots,
+    use_known_paths,
+    user_agent,
+    limits,
+    net_limits,
+    index_limits
   )
-  records <- attr(disc, "records")
-  n <- nrow(disc)
-
-  page_count <- rep(NA_integer_, n)
-  gzip <- rep(NA, n)
-  expansion_parts <- list()
-
-  for (i in seq_len(n)) {
-    rec <- records[[i]]
-    if (is.null(rec)) {
-      next
-    }
-    gzip[i] <- identical(as.character(rec$format), "gzip")
-    if (!identical(disc$status[[i]], "accepted")) {
-      next
-    }
-
-    candidate_url <- disc$candidate_url[[i]]
-    parsed <- tryCatch(
-      parse_dispatch(attr(rec, "body"), source_sitemap = candidate_url),
-      error = function(e) NULL
-    )
-    if (is.null(parsed)) {
-      next
-    }
-    page_count[i] <- count_pages(parsed)
-
-    # An accepted index candidate contributes deeper, parented rows.
-    if (identical(parsed$kind, "sitemapindex")) {
-      ex <- expand_index(
-        candidate_url,
-        parsed$children,
-        depth = 0L,
-        user_agent = user_agent,
-        limits = index_limits,
-        net_limits = net_limits
-      )
-      expansion_parts[[length(expansion_parts) + 1L]] <- ex$tree
-    }
-  }
-
-  base <- sitemap_tree_rows(
-    depth = 0L,
-    parent_sitemap = NA_character_,
-    sitemap_url = disc$candidate_url,
-    page_count = page_count,
-    gzip = gzip,
-    status = disc$status,
-    reason = disc$reason,
-    provenance = disc$provenance
-  )
-
-  if (length(expansion_parts) > 0L) {
-    do.call(rbind, c(list(base), expansion_parts))
-  } else {
-    base
-  }
 }

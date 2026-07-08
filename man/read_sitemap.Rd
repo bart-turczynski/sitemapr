@@ -2,6 +2,7 @@
 % Please edit documentation in R/read-sitemap.R
 \name{read_sitemap}
 \alias{read_sitemap}
+\alias{read_sitemaps}
 \title{Read a sitemap into a tidy tibble of URLs}
 \usage{
 read_sitemap(
@@ -10,10 +11,17 @@ read_sitemap(
   limits = fetch_limits(),
   index_limits = NULL
 )
+
+read_sitemaps(
+  x,
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+)
 }
 \arguments{
-\item{x}{A single source: a sitemap URL (character) or a path to a local
-sitemap file (\code{.xml}, \code{.txt}, \code{.gz}, or \code{.tar.gz}).}
+\item{x}{One or more sitemap URLs or paths to local sitemap files (\code{.xml},
+\code{.txt}, \code{.gz}, or \code{.tar.gz}).}
 
 \item{user_agent}{The User-Agent header for HTTP fetches. Defaults to the
 package User-Agent.}
@@ -30,23 +38,29 @@ An entry-point fetch failure or unsupported content raises a classed error
 condition.
 }
 \description{
-Parses a single sitemap source — a sitemap URL or a local sitemap file — into
-the tidy row tibble: one row per URL with \code{loc}, \code{lastmod}, \code{changefreq},
-\code{priority}, the \code{images}/\code{video}/\code{news}/\code{alternates} extension list-columns,
-and \code{source_sitemap} provenance. Supported formats are XML \code{urlset} and
-\code{sitemapindex}, the plain-text format, transparent gzip
+Parses one or more sitemap sources — sitemap URLs or local sitemap files —
+into the tidy row tibble: one row per URL with \code{loc}, \code{lastmod},
+\code{changefreq}, \code{priority}, the \code{images}/\code{video}/\code{news}/\code{alternates} extension
+list-columns, and \code{source_sitemap} provenance. Supported formats are XML
+\code{urlset} and \code{sitemapindex}, the plain-text format, transparent gzip
 (\code{.xml.gz}/\code{.txt.gz}), and — local files only — bounded \code{.tar.gz} archives.
 }
 \details{
 The result carries a \code{sources} attribute (the per-source fetch-metadata
 records) and a \code{problems} attribute (a tibble of non-fatal issues such as
-skipped archive members or unfetchable index children). \code{read_sitemap()}
-never returns a validation findings tibble; use \code{validate_sitemap()}
-for that.
+skipped archive members, unfetchable index children, or failed members of a
+submitted vector). \code{read_sitemap()} never returns a validation findings
+tibble; use \code{validate_sitemap()} for that.
 
 A top-level sitemap index is expanded recursively (cycle-safe, depth- and
 count-capped) so every reachable child sitemap's rows carry per-child
 provenance; the bounds are configurable via \code{index_limits}.
+
+When \code{x} contains more than one source, inputs are normalized, deduplicated,
+and capped using the submitted-list source-record policy. Per-source failures
+are recorded in the \code{problems} attribute and successful sources still
+contribute rows. Scalar calls keep the stricter historical behavior: an
+entry-point fetch failure or unsupported content raises a classed condition.
 }
 \examples{
 # Read a local sitemap file into a tidy tibble of URLs.
@@ -61,8 +75,6 @@ path <- tempfile(fileext = ".xml")
 writeLines(xml, path)
 read_sitemap(path)
 
-\dontrun{
 # Read directly from a sitemap URL; a top-level index expands recursively.
-read_sitemap("https://example.com/sitemap.xml")
-}
+# read_sitemap("https://example.com/sitemap.xml")
 }

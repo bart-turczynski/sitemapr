@@ -50,7 +50,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     context$warning <- NULL
     context$result <- withCallingHandlers(
       tryCatch(
-        sitemapr:::fetch_source(...),
+        sitemapr_test_call("fetch_source", ...),
         error = function(e) {
           context$error <- e
           NULL
@@ -238,7 +238,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     fetch_capture(
       context,
       url = "https://example.com/sitemap.xml",
-      limits = sitemapr:::fetch_limits(timeout = 5)
+      limits = sitemapr_test_call("fetch_limits", timeout = 5)
     )
   })
 
@@ -260,7 +260,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     fetch_capture(
       context,
       url = "https://example.com/sitemap.xml",
-      limits = sitemapr:::fetch_limits(max_bytes = 10L)
+      limits = sitemapr_test_call("fetch_limits", max_bytes = 10L)
     )
   })
 
@@ -277,7 +277,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     fetch_capture(
       context,
       url = "https://example.com/0",
-      limits = sitemapr:::fetch_limits(max_redirects = 5L)
+      limits = sitemapr_test_call("fetch_limits", max_redirects = 5L)
     )
   })
 
@@ -305,7 +305,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   when("sitemapr classifies the content", function(context) {
-    context$format <- sitemapr:::sniff_format(context$bytes)
+    context$format <- sitemapr_test_call("sniff_format", context$bytes)
   })
 
   when("I inspect the sources attribute", function(context) {

@@ -33,30 +33,86 @@
 # skipped). `fetched_at` is NA: source_metadata() carries no fetch timestamp, so
 # the PROTOCOL_LASTMOD_LOOKS_GENERATED corpus heuristic is skipped (the protocol
 # producer treats NA `fetched_at` as "skip").
-resolve_validation_source <- function(x, user_agent, limits) {
-  is_local <- file.exists(x)
+validation_target <- function(x) {
+  if (is.data.frame(x) || is.list(x)) {
+    return(list(
+      target = as.character(x$normalized_url)[[1L]],
+      is_local = isTRUE(as.logical(x$is_local_file)[[1L]]),
+      source = x
+    ))
+  }
+  target <- as.character(x)[[1L]]
+  list(target = target, is_local = file.exists(target), source = target)
+}
+
+validation_source_bytes <- function(
+  target,
+  source,
+  is_local,
+  user_agent,
+  limits
+) {
   if (is_local) {
-    bytes <- readBin(x, what = "raw", n = file.info(x)$size)
-    final_url <- NA_character_
-  } else {
-    rec <- fetch_source(x, user_agent = user_agent, limits = limits)
-    if (!is.na(rec$error_class)) {
-      rlang::abort(
-        sprintf(
-          "Entry-point fetch of %s failed with HTTP %s.",
-          rec$final_url,
-          rec$status
-        ),
-        class = "sitemapr_entrypoint_error",
-        url = rec$final_url,
-        status = rec$status
-      )
-    }
-    bytes <- attr(rec, "body")
-    final_url <- rec$final_url
+    return(list(
+      bytes = readBin(target, what = "raw", n = file.info(target)$size),
+      final_url = NA_character_
+    ))
   }
 
-  base <- sitemap_subject_ref(if (is.na(final_url)) x else final_url)
+  rec <- fetch_source(source, user_agent = user_agent, limits = limits)
+  if (!is.na(rec$error_class)) {
+    rlang::abort(
+      sprintf(
+        "Entry-point fetch of %s failed with HTTP %s.",
+        rec$final_url,
+        rec$status
+      ),
+      class = "sitemapr_entrypoint_error",
+      url = rec$final_url,
+      status = rec$status
+    )
+  }
+  list(bytes = attr(rec, "body"), final_url = rec$final_url)
+}
+
+validation_archive_source <- function(target, bytes, final_url, base) {
+  list(
+    kind = "archive",
+    path = target,
+    byte_size = as.numeric(length(bytes)),
+    final_url = final_url,
+    base = base,
+    fetched_at = NA
+  )
+}
+
+validation_document_source <- function(bytes, fmt, final_url, base) {
+  list(
+    kind = "document",
+    bytes = bytes,
+    format = fmt,
+    byte_size = as.numeric(length(bytes)),
+    final_url = final_url,
+    base = base,
+    fetched_at = NA # TODO(layer-f-encoding) + no fetch-timestamp in source_meta
+  )
+}
+
+resolve_validation_source <- function(x, user_agent, limits) {
+  target <- validation_target(x)
+  source <- validation_source_bytes(
+    target$target,
+    target$source,
+    target$is_local,
+    user_agent,
+    limits
+  )
+  bytes <- source$bytes
+  final_url <- source$final_url
+
+  base <- sitemap_subject_ref(
+    if (is.na(final_url)) target$target else final_url
+  )
   fmt <- sniff_format(bytes)
 
   # A local `.tar.gz` (gzip whose inner stream is tar; tar.gz is local-only,
@@ -67,17 +123,11 @@ resolve_validation_source <- function(x, user_agent, limits) {
   # `sitemapr_decompression_error`, caught by validate_sitemap() as
   # UNSUPPORTED_MALFORMED_GZIP.
   if (
-    is_local && identical(fmt, "gzip") &&
+    target$is_local &&
+      identical(fmt, "gzip") &&
       identical(sniff_format(gzip_decompress(bytes)), "tar")
   ) {
-    return(list(
-      kind = "archive",
-      path = x,
-      byte_size = as.numeric(length(bytes)),
-      final_url = final_url,
-      base = base,
-      fetched_at = NA
-    ))
+    return(validation_archive_source(target$target, bytes, final_url, base))
   }
 
   if (identical(fmt, "gzip")) {
@@ -85,14 +135,40 @@ resolve_validation_source <- function(x, user_agent, limits) {
     fmt <- sniff_format(bytes)
   }
 
+  validation_document_source(bytes, fmt, final_url, base)
+}
+
+archive_gzip_error_part <- function(cnd, src) {
   list(
-    kind = "document",
-    bytes = bytes,
-    format = fmt,
-    byte_size = as.numeric(length(bytes)),
-    final_url = final_url,
-    base = base,
-    fetched_at = NA # TODO(layer-f-encoding) + no fetch-timestamp in source_meta
+    finding = decompression_source_finding(
+      "UNSUPPORTED_MALFORMED_GZIP",
+      src$base,
+      conditionMessage(cnd)
+    )
+  )
+}
+
+archive_malformed_part <- function(cnd, src) {
+  list(
+    finding = decompression_member_finding(
+      "UNSUPPORTED_MALFORMED_ARCHIVE",
+      src$base,
+      conditionMessage(cnd),
+      severity = "error"
+    )
+  )
+}
+
+archive_limit_part <- function(cnd, src) {
+  if (!identical(cnd$limit, "file_count")) {
+    stop(cnd) # byte-ceiling guards are out of this mapping; re-propagate
+  }
+  list(
+    finding = decompression_source_finding(
+      "DECOMPRESS_TOO_MANY_FILES",
+      src$base,
+      conditionMessage(cnd)
+    )
   )
 }
 
@@ -109,29 +185,13 @@ validate_archive_parts <- function(src) {
   result <- tryCatch(
     list(ok = parse_sitemap_archive(src$path, source_ref = src$base)),
     sitemapr_decompression_error = function(cnd) {
-      list(finding = decompression_source_finding(
-        "UNSUPPORTED_MALFORMED_GZIP",
-        src$base,
-        conditionMessage(cnd)
-      ))
+      archive_gzip_error_part(cnd, src)
     },
     sitemapr_malformed_archive = function(cnd) {
-      list(finding = decompression_member_finding(
-        "UNSUPPORTED_MALFORMED_ARCHIVE",
-        src$base,
-        conditionMessage(cnd),
-        severity = "error"
-      ))
+      archive_malformed_part(cnd, src)
     },
     sitemapr_archive_limit = function(cnd) {
-      if (!identical(cnd$limit, "file_count")) {
-        stop(cnd) # byte-ceiling guards are out of this mapping; re-propagate
-      }
-      list(finding = decompression_source_finding(
-        "DECOMPRESS_TOO_MANY_FILES",
-        src$base,
-        conditionMessage(cnd)
-      ))
+      archive_limit_part(cnd, src)
     }
   )
 
@@ -346,73 +406,54 @@ index_feed_children <- function(sources) {
   as.character(sources$final_url[is_feed])
 }
 
-#' Validate a sitemap source against the schema, protocol, and classification
-#' rules
-#'
-#' The public validation entry point. Reads a single sitemap source — a sitemap
-#' URL or a local sitemap file — runs every finding-producer over it (the XSD
-#' schema layer, the protocol/semantic layer, the byte-level classification
-#' layer, and, for a sitemap index, the bounded index-expansion layer), and
-#' assembles the results into the stable findings contract.
-#'
-#' The source is read once and branched on its sniffed format: an HTML document
-#' served where a sitemap was expected yields an `UNSUPPORTED_HTML_MASQUERADE`
-#' classification finding; a plain-text sitemap is checked line-by-line; an XML
-#' document is dispatched on its root element. An XML root that is neither
-#' `urlset` nor `sitemapindex` yields an `UNSUPPORTED_ROOT` finding rather than
-#' an error. A `urlset` is schema- and protocol-validated; a `sitemapindex` is
-#' schema-validated and recursively expanded (cycle-, depth-, and count-capped),
-#' with the traversal events surfaced as `INDEX_*` findings.
-#'
-#' @param x A single source: a sitemap URL (character) or a path to a local
-#'   sitemap file.
-#' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
-#'   strict-only findings are dropped and schema violations are downgraded to
-#'   `warning`; in `strict`, the documented info-to-warning codes are elevated.
-#' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
-#'   package User-Agent.
-#' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
-#' @param index_limits Sitemapindex-expansion bounds (recursion depth and
-#'   per-index child-count cap), as from `index_limits()`. Defaults to
-#'   `index_limits()`.
-#' @return The findings tibble described in `docs/findings-contract.md`: the
-#'   columns `code`, `severity`, `layer`, `subject_type`, `subject_ref`,
-#'   `message`, `evidence`, `mode`, `is_strict_only`, and `remediation_hint`, in
-#'   the contract's stable order. The same source and mode yield a row-for-row
-#'   identical tibble across calls. A genuine transport, SSRF, or HTTP failure
-#'   raises a classed error condition.
-#' @export
-#' @examples
-#' \dontrun{
-#' validate_sitemap("https://example.com/sitemap.xml")
-#' validate_sitemap("path/to/sitemap.xml", mode = "non-strict")
-#' }
-validate_sitemap <- function(
-  x,
-  mode = c("strict", "non-strict"),
-  user_agent = default_user_agent(),
-  limits = fetch_limits(),
-  index_limits = NULL
-) {
-  mode <- match.arg(mode)
-  if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
-    rlang::abort(
-      "`x` must be a single non-empty source: a URL or a local file path.",
-      class = "sitemapr_bad_input"
-    )
+# Build a fetch-layer finding for a source that failed during batched
+# validation. Scalar validate_sitemap() calls still propagate these conditions.
+validate_failure_finding <- function(source, cnd) {
+  code <- if (inherits(cnd, "sitemapr_timeout")) {
+    "FETCH_TIMEOUT"
+  } else if (inherits(cnd, "sitemapr_body_ceiling")) {
+    "FETCH_BODY_CEILING_EXCEEDED"
+  } else {
+    "FETCH_FAILED"
   }
-  if (is.null(index_limits)) {
-    index_limits <- index_limits()
-  }
+  subject <- source$normalized_url[[1L]]
+  tibble::tibble(
+    code = code,
+    severity = "fatal",
+    layer = "fetch",
+    subject_type = "source",
+    subject_ref = sitemap_subject_ref(subject),
+    message = sprintf(
+      "Submitted sitemap source %s failed: %s",
+      subject,
+      conditionMessage(cnd)
+    ),
+    evidence = list(finding_evidence(excerpt = subject)),
+    is_strict_only = FALSE
+  )
+}
 
+# Validate one normalized source record. This is the former scalar
+# validate_sitemap() body, factored so batched calls can continue per source.
+validate_sitemap_source <- function(
+  source,
+  mode,
+  user_agent,
+  limits,
+  index_limits
+) {
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
   # surface UNSUPPORTED_MALFORMED_GZIP rather than propagating the condition. A
   # genuine transport / SSRF / HTTP failure still propagates.
   src <- tryCatch(
-    resolve_validation_source(x, user_agent, limits),
+    resolve_validation_source(source, user_agent, limits),
     sitemapr_decompression_error = function(cnd) {
-      list(kind = "malformed-gzip", base = sitemap_subject_ref(x), cnd = cnd)
+      list(
+        kind = "malformed-gzip",
+        base = sitemap_subject_ref(source$normalized_url[[1L]]),
+        cnd = cnd
+      )
     }
   )
 
@@ -433,4 +474,149 @@ validate_sitemap <- function(
   }
 
   assemble_findings(parts, mode)
+}
+
+# Row-bind already assembled findings contracts from per-source validation.
+combine_findings_contracts <- function(parts) {
+  parts <- parts[vapply(parts, nrow, integer(1L)) > 0L]
+  if (length(parts) == 0L) {
+    return(empty_findings_contract())
+  }
+  findings <- do.call(rbind, parts)
+  findings <- findings_dedup(findings)
+  findings <- findings_sort(findings)
+  cols <- names(empty_findings_contract())
+  findings <- findings[, cols, drop = FALSE]
+  tibble::new_tibble(findings, nrow = nrow(findings))
+}
+
+# Validate multiple normalized source records, converting source-level failures
+# into fetch-layer findings so successful sources still contribute rows.
+validate_sitemap_batch <- function(
+  sources,
+  mode,
+  user_agent,
+  limits,
+  index_limits
+) {
+  parts <- list()
+  for (i in seq_len(nrow(sources))) {
+    source <- sources[i, , drop = FALSE]
+    parts[[length(parts) + 1L]] <- tryCatch(
+      suppressWarnings(
+        validate_sitemap_source(source, mode, user_agent, limits, index_limits)
+      ),
+      error = function(cnd) {
+        assemble_findings(
+          list(validate_failure_finding(source, cnd)),
+          mode
+        )
+      }
+    )
+  }
+  combine_findings_contracts(parts)
+}
+
+#' Validate a sitemap source against the schema, protocol, and classification
+#' rules
+#'
+#' The public validation entry point. Reads one or more sitemap sources —
+#' sitemap URLs or local sitemap files — runs every finding-producer over them
+#' (the XSD schema layer, the protocol/semantic layer, the byte-level
+#' classification layer, and, for a sitemap index, the bounded index-expansion
+#' layer), and assembles the results into the stable findings contract.
+#'
+#' The source is read once and branched on its sniffed format: an HTML document
+#' served where a sitemap was expected yields an `UNSUPPORTED_HTML_MASQUERADE`
+#' classification finding; a plain-text sitemap is checked line-by-line; an XML
+#' document is dispatched on its root element. An XML root that is neither
+#' `urlset` nor `sitemapindex` yields an `UNSUPPORTED_ROOT` finding rather than
+#' an error. A `urlset` is schema- and protocol-validated; a `sitemapindex` is
+#' schema-validated and recursively expanded (cycle-, depth-, and count-capped),
+#' with the traversal events surfaced as `INDEX_*` findings.
+#'
+#' When `x` contains more than one source, inputs are normalized, deduplicated,
+#' and capped using the submitted-list source-record policy. Per-source failures
+#' are returned as fetch-layer findings and successful sources still contribute
+#' their findings. Scalar calls keep the stricter historical behavior: genuine
+#' transport, SSRF, or HTTP failures raise classed conditions.
+#'
+#' @param x One or more sitemap URLs or paths to local sitemap files.
+#' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
+#'   strict-only findings are dropped and schema violations are downgraded to
+#'   `warning`; in `strict`, the documented info-to-warning codes are elevated.
+#' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
+#'   package User-Agent.
+#' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
+#' @param index_limits Sitemapindex-expansion bounds (recursion depth and
+#'   per-index child-count cap), as from `index_limits()`. Defaults to
+#'   `index_limits()`.
+#' @return The findings tibble described in `docs/findings-contract.md`: the
+#'   columns `code`, `severity`, `layer`, `subject_type`, `subject_ref`,
+#'   `message`, `evidence`, `mode`, `is_strict_only`, and `remediation_hint`, in
+#'   the contract's stable order. The same source and mode yield a row-for-row
+#'   identical tibble across calls. A genuine transport, SSRF, or HTTP failure
+#'   raises a classed error condition.
+#' @export
+#' @examples
+#' xml <- paste0(
+#'   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+#'   '<url><loc>https://example.com/</loc>',
+#'   '<priority>2.0</priority></url>',
+#'   '</urlset>'
+#' )
+#' path <- tempfile(fileext = ".xml")
+#' writeLines(xml, path)
+#' validate_sitemap(path, mode = "non-strict")
+#'
+#' # Validate directly from a sitemap URL.
+#' # validate_sitemap("https://example.com/sitemap.xml")
+validate_sitemap <- function(
+  x,
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+) {
+  mode <- match.arg(mode)
+  sources <- sitemap_public_source_records(x)
+  if (is.null(index_limits)) {
+    index_limits <- index_limits()
+  }
+
+  if (length(x) == 1L) {
+    validate_sitemap_source(
+      sources[1L, , drop = FALSE],
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits
+    )
+  } else {
+    validate_sitemap_batch(
+      sources,
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits
+    )
+  }
+}
+
+#' @rdname validate_sitemap
+#' @export
+validate_sitemaps <- function(
+  x,
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL
+) {
+  validate_sitemap(
+    x,
+    mode = mode,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits
+  )
 }

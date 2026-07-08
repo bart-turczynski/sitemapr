@@ -75,6 +75,31 @@ test_that("a local gzipped XML sitemap is decompressed transparently", {
   expect_identical(res$loc, "https://g/1")
 })
 
+test_that("a submitted-list read combines deduplicated local sources", {
+  p1 <- write_tempfile(urlset_xml("https://a/1"), ".xml")
+  p2 <- write_tempfile(urlset_xml("https://b/1"), ".xml")
+
+  res <- read_sitemaps(c(p1, p2, p1))
+
+  expect_identical(res$loc, c("https://a/1", "https://b/1"))
+  expect_identical(res$source_sitemap, c(p1, p2))
+  expect_identical(nrow(attr(res, "sources")), 2L)
+  expect_identical(nrow(attr(res, "problems")), 0L)
+})
+
+test_that("a submitted-list read records partial failures as problems", {
+  good <- write_tempfile(urlset_xml("https://ok/1"), ".xml")
+  bad <- write_tempfile("<html><body>not a sitemap</body></html>", ".html")
+
+  res <- read_sitemap(c(good, bad))
+
+  expect_identical(res$loc, "https://ok/1")
+  problems <- attr(res, "problems")
+  expect_identical(nrow(problems), 1L)
+  expect_identical(problems$category, "classification")
+  expect_identical(problems$subject_ref, bad)
+})
+
 test_that("the columns are exactly the parse contract, with no findings code", {
   path <- write_tempfile(urlset_xml("https://a/1"), ".xml")
   res <- read_sitemap(path)
@@ -222,11 +247,11 @@ test_that("an unfetchable index child becomes a warning problem", {
 
 # ---- input validation --------------------------------------------------------
 
-test_that("a non-scalar or empty input raises sitemapr_bad_input", {
-  expect_error(read_sitemap(c("a", "b")), class = "sitemapr_bad_input")
+test_that("an invalid input raises sitemapr_bad_input", {
   expect_error(read_sitemap(character(0)), class = "sitemapr_bad_input")
   expect_error(read_sitemap(NA_character_), class = "sitemapr_bad_input")
   expect_error(read_sitemap(""), class = "sitemapr_bad_input")
+  expect_error(read_sitemap(42), class = "sitemapr_bad_input")
 })
 
 # ---- fetch body exposure -----------------------------------------------------

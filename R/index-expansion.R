@@ -55,6 +55,13 @@ index_limits <- function(
   )
 }
 
+resolve_index_limits <- function(limits) {
+  if (is.null(limits)) {
+    return(index_limits())
+  }
+  limits
+}
+
 # Full-URL identity key for one URL: the canonical form used for cycle detection
 # and child deduplication. Mirrors discovery's loc-key composition (parse via
 # the URL adapter, then build the identity key; see R/discovery.R) so an index
@@ -163,6 +170,61 @@ index_child_reject <- function(child_url, key, child_depth, limits, acc) {
   NA_character_
 }
 
+index_unfetchable_child <- function(acc, child_url, child_depth, parent_url) {
+  add_index_problem(
+    acc,
+    "fetch",
+    child_url,
+    sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
+  )
+  add_tree_row(
+    acc,
+    child_depth,
+    parent_url,
+    child_url,
+    status = "rejected",
+    reason = "unfetchable"
+  )
+}
+
+index_http_error_child <- function(acc, crec, child_depth, parent_url) {
+  add_index_problem(
+    acc,
+    "fetch",
+    crec$final_url,
+    sprintf(
+      "Child sitemap %s returned HTTP %s; skipped.",
+      crec$final_url,
+      crec$status
+    )
+  )
+  add_tree_row(
+    acc,
+    child_depth,
+    parent_url,
+    crec$final_url,
+    status = "rejected",
+    reason = "http-error"
+  )
+}
+
+index_unparseable_child <- function(acc, final_url, child_depth, parent_url) {
+  add_index_problem(
+    acc,
+    "classification",
+    final_url,
+    sprintf("Child sitemap %s could not be parsed; skipped.", final_url)
+  )
+  add_tree_row(
+    acc,
+    child_depth,
+    parent_url,
+    final_url,
+    status = "rejected",
+    reason = "unparseable"
+  )
+}
+
 # Fetch one child sitemap and parse it, recording its source metadata and any
 # fetch/HTTP/parse failure as a problem + rejected tree row. Returns
 # `list(crec, cparsed)` on success, or `NULL` when the child was skipped (the
@@ -179,25 +241,10 @@ fetch_and_parse_child <- function(
 ) {
   crec <- tryCatch(
     fetch_source(child_url, user_agent = user_agent, limits = net_limits),
-    error = function(e) {
-      add_index_problem(
-        acc,
-        "fetch",
-        child_url,
-        sprintf("Child sitemap %s could not be fetched; skipped.", child_url)
-      )
-      NULL
-    }
+    error = function(e) NULL
   )
   if (is.null(crec)) {
-    add_tree_row(
-      acc,
-      child_depth,
-      parent_url,
-      child_url,
-      status = "rejected",
-      reason = "unfetchable"
-    )
+    index_unfetchable_child(acc, child_url, child_depth, parent_url)
     return(NULL)
   }
   acc$sources[[length(acc$sources) + 1L]] <- crec
@@ -205,55 +252,117 @@ fetch_and_parse_child <- function(
   acc$visited <- c(acc$visited, index_loc_key(crec$final_url))
 
   if (!is.na(crec$error_class)) {
-    add_index_problem(
-      acc,
-      "fetch",
-      crec$final_url,
-      sprintf(
-        "Child sitemap %s returned HTTP %s; skipped.",
-        crec$final_url,
-        crec$status
-      )
-    )
-    add_tree_row(
-      acc,
-      child_depth,
-      parent_url,
-      crec$final_url,
-      status = "rejected",
-      reason = "http-error"
-    )
+    index_http_error_child(acc, crec, child_depth, parent_url)
     return(NULL)
   }
 
   cparsed <- tryCatch(
     parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
-    error = function(e) {
-      add_index_problem(
-        acc,
-        "classification",
-        crec$final_url,
-        sprintf(
-          "Child sitemap %s could not be parsed; skipped.",
-          crec$final_url
-        )
-      )
-      NULL
-    }
+    error = function(e) NULL
   )
   if (is.null(cparsed)) {
-    add_tree_row(
-      acc,
-      child_depth,
-      parent_url,
-      crec$final_url,
-      status = "rejected",
-      reason = "unparseable"
-    )
+    index_unparseable_child(acc, crec$final_url, child_depth, parent_url)
     return(NULL)
   }
 
   list(crec = crec, cparsed = cparsed)
+}
+
+add_nested_index_child <- function(
+  crec,
+  cparsed,
+  child_depth,
+  parent_url,
+  user_agent,
+  limits,
+  net_limits,
+  acc,
+  gzip
+) {
+  add_index_problem(
+    acc,
+    "index-expansion",
+    crec$final_url,
+    sprintf(
+      "Nested sitemap index at %s; expanded with a warning.",
+      crec$final_url
+    )
+  )
+  add_tree_row(
+    acc,
+    child_depth,
+    parent_url,
+    crec$final_url,
+    page_count = nrow(cparsed$children),
+    gzip = gzip,
+    status = "accepted"
+  )
+  expand_index_node(
+    crec$final_url,
+    cparsed$children,
+    child_depth,
+    user_agent,
+    limits,
+    net_limits,
+    acc
+  )
+}
+
+add_leaf_index_child <- function(
+  crec,
+  cparsed,
+  child_depth,
+  parent_url,
+  acc,
+  gzip
+) {
+  acc$rows[[length(acc$rows) + 1L]] <- cparsed$rows
+  add_tree_row(
+    acc,
+    child_depth,
+    parent_url,
+    crec$final_url,
+    page_count = nrow(cparsed$rows),
+    gzip = gzip,
+    status = "accepted"
+  )
+}
+
+expand_index_child <- function(
+  child_url,
+  child_depth,
+  parent_url,
+  user_agent,
+  limits,
+  net_limits,
+  acc
+) {
+  res <- fetch_and_parse_child(
+    child_url,
+    child_depth,
+    parent_url,
+    user_agent,
+    net_limits,
+    acc
+  )
+  if (is.null(res)) {
+    return(invisible(NULL))
+  }
+
+  crec <- res$crec
+  cparsed <- res$cparsed
+  gzip <- identical(as.character(crec$format), "gzip")
+
+  if (identical(cparsed$kind, "sitemapindex")) {
+    add_nested_index_child(
+      crec, cparsed, child_depth, parent_url, user_agent, limits, net_limits,
+      acc, gzip
+    )
+    return(invisible(NULL))
+  }
+
+  add_leaf_index_child(crec, cparsed, child_depth, parent_url, acc, gzip)
+  invisible(NULL)
 }
 
 # Expand one already-parsed sitemapindex node's children into the accumulator,
@@ -295,64 +404,15 @@ expand_index_node <- function(
 
     acc$visited <- c(acc$visited, key)
 
-    res <- fetch_and_parse_child(
+    expand_index_child(
       child_url,
       child_depth,
       parent_url,
       user_agent,
+      limits,
       net_limits,
       acc
     )
-    if (is.null(res)) {
-      next
-    }
-    crec <- res$crec
-    cparsed <- res$cparsed
-
-    gzip <- identical(as.character(crec$format), "gzip")
-
-    if (identical(cparsed$kind, "sitemapindex")) {
-      # Nested index: non-conformant per the protocol, but still expanded with a
-      # warning so the deeper children surface (subject to the same caps).
-      add_index_problem(
-        acc,
-        "index-expansion",
-        crec$final_url,
-        sprintf(
-          "Nested sitemap index at %s; expanded with a warning.",
-          crec$final_url
-        )
-      )
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        crec$final_url,
-        page_count = nrow(cparsed$children),
-        gzip = gzip,
-        status = "accepted"
-      )
-      expand_index_node(
-        crec$final_url,
-        cparsed$children,
-        child_depth,
-        user_agent,
-        limits,
-        net_limits,
-        acc
-      )
-    } else {
-      acc$rows[[length(acc$rows) + 1L]] <- cparsed$rows
-      add_tree_row(
-        acc,
-        child_depth,
-        parent_url,
-        crec$final_url,
-        page_count = nrow(cparsed$rows),
-        gzip = gzip,
-        status = "accepted"
-      )
-    }
   }
 
   invisible(NULL)

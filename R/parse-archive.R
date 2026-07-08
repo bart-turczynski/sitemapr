@@ -289,6 +289,59 @@ read_archive_bytes <- function(path, limits) {
   tar_bytes
 }
 
+archive_unsafe_problem <- function(member_ref, name) {
+  parse_problems(
+    severity = "warning",
+    category = "classification",
+    subject_ref = member_ref,
+    message = sprintf(
+      "Rejected unsafe archive member path '%s' (path traversal).",
+      name
+    )
+  )
+}
+
+archive_member_result <- function(entry, source_ref) {
+  member_ref <- sprintf("%s#archive-member:%s", source_ref, entry$name)
+  if (tar_is_unsafe_name(entry$name)) {
+    return(list(problem = archive_unsafe_problem(member_ref, entry$name)))
+  }
+
+  member <- archive_parse_member(entry$content, entry$name, member_ref)
+  if (is.null(member$rows)) {
+    return(list(problem = parse_problems(
+      severity = "info",
+      category = "classification",
+      subject_ref = member_ref,
+      message = sprintf("Skipped %s: %s.", entry$name, member$reason)
+    )))
+  }
+
+  list(rows = member$rows)
+}
+
+archive_check_file_count <- function(file_count, limits) {
+  if (file_count <= limits$max_file_count) {
+    return(invisible(NULL))
+  }
+  rlang::abort(
+    sprintf(
+      "Archive member count exceeds the limit of %d files.",
+      limits$max_file_count
+    ),
+    class = "sitemapr_archive_limit",
+    limit = "file_count"
+  )
+}
+
+archive_rows <- function(rows_parts) {
+  if (length(rows_parts) > 0L) {
+    do.call(rbind, rows_parts)
+  } else {
+    empty_sitemap_rows()
+  }
+}
+
 parse_sitemap_archive <- function(
   path,
   source_ref = path,
@@ -306,43 +359,14 @@ parse_sitemap_archive <- function(
       next # directories and special entries are skipped silently
     }
 
-    member_ref <- sprintf("%s#archive-member:%s", source_ref, e$name)
-
-    if (tar_is_unsafe_name(e$name)) {
-      problem_parts[[length(problem_parts) + 1L]] <- parse_problems(
-        severity = "warning",
-        category = "classification",
-        subject_ref = member_ref,
-        message = sprintf(
-          "Rejected unsafe archive member path '%s' (path traversal).",
-          e$name
-        )
-      )
-      next
-    }
-
     file_count <- file_count + 1L
-    if (file_count > limits$max_file_count) {
-      rlang::abort(
-        sprintf(
-          "Archive member count exceeds the limit of %d files.",
-          limits$max_file_count
-        ),
-        class = "sitemapr_archive_limit",
-        limit = "file_count"
-      )
-    }
+    archive_check_file_count(file_count, limits)
 
-    member <- archive_parse_member(e$content, e$name, member_ref)
-    if (is.null(member$rows)) {
-      problem_parts[[length(problem_parts) + 1L]] <- parse_problems(
-        severity = "info",
-        category = "classification",
-        subject_ref = member_ref,
-        message = sprintf("Skipped %s: %s.", e$name, member$reason)
-      )
+    result <- archive_member_result(e, source_ref)
+    if (!is.null(result$problem)) {
+      problem_parts[[length(problem_parts) + 1L]] <- result$problem
     } else {
-      rows_parts[[length(rows_parts) + 1L]] <- member$rows
+      rows_parts[[length(rows_parts) + 1L]] <- result$rows
     }
   }
 
@@ -353,11 +377,8 @@ parse_sitemap_archive <- function(
     )
   }
 
-  rows <- if (length(rows_parts) > 0L) {
-    do.call(rbind, rows_parts)
-  } else {
-    empty_sitemap_rows()
-  }
-
-  list(rows = rows, problems = combine_problems(problem_parts))
+  list(
+    rows = archive_rows(rows_parts),
+    problems = combine_problems(problem_parts)
+  )
 }

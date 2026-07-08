@@ -142,6 +142,30 @@ schema_cache_key <- function(
 #'     `"unknown-namespace"`).
 #' @keywords internal
 #' @noRd
+schema_base_profile <- function(root_kind, namespaces, cache_key) {
+  list(
+    cache_key = cache_key,
+    root_kind = root_kind,
+    namespaces = namespaces,
+    schema_path = NA_character_,
+    imports = character(),
+    unknown_namespaces = character()
+  )
+}
+
+schema_runtime_profile <- function(base, schemas_dir, catalog, extension_ns) {
+  core_path <- file.path(schemas_dir, schema_core_file(base$root_kind))
+  imports <- c(core_path, file.path(schemas_dir, catalog[extension_ns]))
+  names(imports) <- c(schema_core_namespace, extension_ns)
+  utils::modifyList(
+    base,
+    list(
+      kind = "runtime",
+      imports = imports
+    )
+  )
+}
+
 schema_resolve_profile <- function(
   root_kind,
   namespaces,
@@ -149,15 +173,7 @@ schema_resolve_profile <- function(
 ) {
   ns <- schema_sorted_namespace_set(namespaces)
   cache_key <- schema_cache_key(root_kind, ns)
-
-  base <- list(
-    cache_key = cache_key,
-    root_kind = root_kind,
-    namespaces = ns,
-    schema_path = NA_character_,
-    imports = character(),
-    unknown_namespaces = character()
-  )
+  base <- schema_base_profile(root_kind, ns, cache_key)
 
   extension_ns <- setdiff(ns, schema_core_namespace)
   catalog <- schema_extension_catalog()
@@ -187,13 +203,5 @@ schema_resolve_profile <- function(
 
   # Mixed namespaces: a wrapper must import the core schema and each extension
   # schema, generated at runtime (R/schema-profile.R, S6.3).
-  imports <- c(core_path, file.path(schemas_dir, catalog[extension_ns]))
-  names(imports) <- c(schema_core_namespace, extension_ns)
-  utils::modifyList(
-    base,
-    list(
-      kind = "runtime",
-      imports = imports
-    )
-  )
+  schema_runtime_profile(base, schemas_dir, catalog, extension_ns)
 }

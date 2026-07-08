@@ -8,6 +8,7 @@
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml)
+[![pkgcheck](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml)
 [![Security
 audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml)
 [![OSV
@@ -57,7 +58,7 @@ sitemap <- '<?xml version="1.0" encoding="UTF-8"?>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://example.com/about</loc>
+    <loc>https://example.com/?page=about</loc>
     <changefreq>monthly</changefreq>
   </url>
 </urlset>'

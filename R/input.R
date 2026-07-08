@@ -168,38 +168,31 @@ create_source_records <- function(
 #' @return A one-row data.frame with the source-record columns.
 #' @keywords internal
 #' @noRd
-normalize_one <- function(raw, as, provenance) {
-  if (is_local_file_input(raw)) {
-    path <- strip_file_scheme(raw)
-    return(source_record_row(
-      original_input = raw,
-      normalized_url = path,
-      scheme = NA_character_,
-      host = NA_character_,
-      port = NA_integer_,
-      path = path,
-      query = NA_character_,
-      fragment = NA_character_,
-      is_local_file = TRUE,
-      scheme_inferred = FALSE,
-      provenance = provenance,
-      loc_key = path
-    ))
-  }
+local_source_record <- function(raw, provenance) {
+  path <- strip_file_scheme(raw)
+  source_record_row(
+    original_input = raw,
+    normalized_url = path,
+    scheme = NA_character_,
+    host = NA_character_,
+    port = NA_integer_,
+    path = path,
+    query = NA_character_,
+    fragment = NA_character_,
+    is_local_file = TRUE,
+    scheme_inferred = FALSE,
+    provenance = provenance,
+    loc_key = path
+  )
+}
 
-  scheme_inferred <- !has_explicit_scheme(raw)
-  to_parse <- if (scheme_inferred) paste0("https://", raw) else raw
-
-  parsed <- parse_url_adapter(to_parse)
-
-  if (!identical(parsed$parse_status[[1L]], "ok")) {
-    rlang::abort(
-      sprintf("Could not parse input as a URL: %s", raw),
-      class = "sitemapr_input_parse_error",
-      input = raw
-    )
-  }
-
+parsed_url_source_record <- function(
+  raw,
+  as,
+  provenance,
+  parsed,
+  scheme_inferred
+) {
   scheme <- parsed$scheme[[1L]]
   host <- parsed$host[[1L]]
   port <- parsed$port[[1L]]
@@ -208,25 +201,12 @@ normalize_one <- function(raw, as, provenance) {
   fragment <- parsed$fragment[[1L]]
 
   if (identical(as, "site")) {
-    # Reduce to origin: scheme://host[:port], dropping path/query/fragment.
     normalized_url <- build_origin(scheme, host, port)
     path <- NA_character_
     query <- NA_character_
     fragment <- NA_character_
-    loc_key <- build_loc_key(data.frame(
-      scheme = scheme,
-      host = host,
-      port = port,
-      path = NA_character_,
-      query = NA_character_,
-      fragment = NA_character_,
-      user = NA_character_,
-      stringsAsFactors = FALSE
-    ))
+    loc_key <- site_origin_key(scheme, host, port)
   } else {
-    # The canonical sitemap URL is both the fetch target and the identity key:
-    # `clean_url` would drop a contentful query or a non-default port and so
-    # fetch the wrong resource (SITE-vrgszbnu).
     loc_key <- build_loc_key(parsed)[[1L]]
     normalized_url <- loc_key
   }
@@ -245,6 +225,40 @@ normalize_one <- function(raw, as, provenance) {
     provenance = provenance,
     loc_key = loc_key
   )
+}
+
+site_origin_key <- function(scheme, host, port) {
+  build_loc_key(data.frame(
+    scheme = scheme,
+    host = host,
+    port = port,
+    path = NA_character_,
+    query = NA_character_,
+    fragment = NA_character_,
+    user = NA_character_,
+    stringsAsFactors = FALSE
+  ))
+}
+
+normalize_one <- function(raw, as, provenance) {
+  if (is_local_file_input(raw)) {
+    return(local_source_record(raw, provenance))
+  }
+
+  scheme_inferred <- !has_explicit_scheme(raw)
+  to_parse <- if (scheme_inferred) paste0("https://", raw) else raw
+
+  parsed <- parse_url_adapter(to_parse)
+
+  if (!identical(parsed$parse_status[[1L]], "ok")) {
+    rlang::abort(
+      sprintf("Could not parse input as a URL: %s", raw),
+      class = "sitemapr_input_parse_error",
+      input = raw
+    )
+  }
+
+  parsed_url_source_record(raw, as, provenance, parsed, scheme_inferred)
 }
 
 #' Construct one source-record row with a stable column set and types
