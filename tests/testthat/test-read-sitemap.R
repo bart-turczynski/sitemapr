@@ -120,6 +120,50 @@ test_that("the columns are exactly the parse contract, with no findings code", {
   expect_false("code" %in% names(res)) # never a findings tibble
 })
 
+test_that("combining no source metadata preserves the source schema", {
+  out <- combine_source_metadata(list(NULL))
+
+  expect_s3_class(out, "data.frame")
+  expect_identical(nrow(out), 0L)
+  expect_named(out, names(source_metadata()))
+})
+
+test_that("read_sitemap_batch handles an empty source table", {
+  empty_sources <- create_source_records(
+    "https://example.com/sitemap.xml"
+  )[0L, ]
+
+  out <- read_sitemap_batch(
+    empty_sources,
+    user_agent = default_user_agent(),
+    limits = fetch_limits(),
+    index_limits = index_limits()
+  )
+
+  expect_identical(nrow(out$rows), 0L)
+  expect_named(out$rows, names(empty_sitemap_rows()))
+  expect_identical(nrow(out$sources), 0L)
+  expect_identical(nrow(out$problems), 0L)
+})
+
+test_that("source failure problems classify decompression and fetch errors", {
+  source <- create_source_records("https://example.com/sitemap.xml")
+  gzip_error <- rlang::error_cnd(
+    "sitemapr_decompression_error",
+    message = "bad gzip"
+  )
+  fetch_error <- rlang::error_cnd(
+    "sitemapr_timeout",
+    message = "timed out"
+  )
+
+  decompression <- read_source_failure_problem(source, gzip_error)
+  fetch <- read_source_failure_problem(source, fetch_error)
+
+  expect_identical(decompression$category, "decompression")
+  expect_identical(fetch$category, "fetch")
+})
+
 # ---- URL sources -------------------------------------------------------------
 
 test_that("a fetched urlset is parsed with provenance from the final URL", {

@@ -157,3 +157,24 @@ test_that("classify_candidate marks a statusless errored record unreachable", {
   expect_identical(out$reason, "unreachable")
   expect_true(is.na(out$http_status))
 })
+
+test_that("discover_candidates caps candidates before fetch", {
+  log_env <- new.env()
+  httr2::local_mocked_responses(mock_server(list(), log_env))
+
+  res <- discover_candidates(
+    "https://example.com",
+    limits = discovery_limits(max_candidates = 2L),
+    use_robots = FALSE
+  )
+
+  expect_identical(nrow(res), 2L)
+  expect_length(log_env$urls, 2L)
+  expect_identical(
+    res$candidate_url,
+    c(
+      "https://example.com/sitemap.xml",
+      "https://example.com/sitemap_index.xml"
+    )
+  )
+})

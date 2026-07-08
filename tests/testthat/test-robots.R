@@ -83,6 +83,15 @@ test_that("parse_robots_sitemaps skips non-http directives with a warning", {
   expect_identical(out, "https://ex.com/ok.xml")
 })
 
+test_that("parse_robots_sitemaps returns empty for only invalid directives", {
+  expect_warning(
+    out <- parse_robots_sitemaps("Sitemap: /relative/sitemap.xml"),
+    class = "sitemapr_robots_bad_directive"
+  )
+
+  expect_identical(out, character(0))
+})
+
 test_that("parse_robots_sitemaps returns empty when there are no directives", {
   expect_identical(
     parse_robots_sitemaps("User-agent: *\nDisallow: /"),
@@ -109,6 +118,19 @@ test_that("discover_robots_sitemaps returns empty on a missing robots.txt", {
 
 test_that("discover_robots_sitemaps swallows a transport failure", {
   httr2::local_mocked_responses(function(req) stop("boom"))
+  expect_identical(discover_robots_sitemaps("https://ex.com"), character(0))
+})
+
+test_that("discover_robots_sitemaps returns empty for an empty robots body", {
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "text/plain"),
+      body = raw(0L)
+    )
+  })
+
   expect_identical(discover_robots_sitemaps("https://ex.com"), character(0))
 })
 

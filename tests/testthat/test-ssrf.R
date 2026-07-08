@@ -9,6 +9,14 @@ guard <- function(url) {
   sitemapr:::ssrf_check_parsed(parsed)
 }
 
+test_that("ssrf_raw_scheme_of returns NA for missing scalar schemes", {
+  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of(character(0))))
+  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of(NA_character_)))
+  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of("")))
+  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of("example.com/path")))
+  expect_identical(sitemapr:::ssrf_raw_scheme_of("HTTP://example.com"), "http")
+})
+
 # ---- loopback ----------------------------------------------------------------
 
 test_that("loopback IPv4 127.0.0.1 is rejected (feature scenario)", {

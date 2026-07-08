@@ -3,6 +3,14 @@ test_that("parse_url_adapter emits Punycode host for Unicode input", {
   expect_identical(parsed$host, "xn--mnchen-3ya.de")
 })
 
+test_that("parse_url_adapter preserves rurl's empty-input schema", {
+  parsed <- sitemapr:::parse_url_adapter(character(0))
+
+  expect_s3_class(parsed, "data.frame")
+  expect_identical(nrow(parsed), 0L)
+  expect_true(all(c("original_url", "scheme", "host") %in% names(parsed)))
+})
+
 test_that("parse_url_adapter maps an IRI path to its percent-encoded URI", {
   parsed <- sitemapr:::parse_url_adapter("https://example.com/パス?q=テスト")
   expect_identical(parsed$path, "/%E3%83%91%E3%82%B9")

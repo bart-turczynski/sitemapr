@@ -56,6 +56,21 @@ test_that("an empty urlset yields the zero-row schema", {
   expect_type(rows$lastmod, "character")
 })
 
+test_that("collect_extension returns an empty list for zero url nodes", {
+  root <- xml2::read_xml(paste0(
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ',
+    'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"/>'
+  ))
+  out <- collect_extension(
+    xml2::xml_root(root),
+    xml2::xml_find_all(root, ".//*[local-name()='url']"),
+    "http://www.google.com/schemas/sitemap-image/1.1",
+    "image"
+  )
+
+  expect_identical(out, list())
+})
+
 test_that("core fields are parsed into the faithful (raw character) form", {
   xml <- paste0(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url>',

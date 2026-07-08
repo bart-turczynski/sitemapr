@@ -372,6 +372,37 @@ test_that("index_feed_children is an empty character vector for no sources", {
 # in-memory ustar writer builds .tar.gz fixtures so member names / bodies are
 # controlled exactly (including a truncated tar the real tar() would not emit).
 
+test_that("decompression member findings scope archive members by fragment", {
+  out <- sitemapr_test_call(
+    "decompression_member_finding",
+    code = "DECOMPRESS_NOT_SITEMAP",
+    base = "sitemap://archive.tar.gz",
+    message = "Skipped archive member.",
+    member_path = "README.md"
+  )
+
+  expect_identical(out$subject_type, "archive-member")
+  expect_identical(
+    out$subject_ref,
+    "sitemap://archive.tar.gz#archive-member:README.md"
+  )
+  expect_identical(out$evidence[[1L]]$excerpt, "README.md")
+})
+
+test_that("warning archive problems are not decompression findings", {
+  problems <- parse_problems(
+    severity = "warning",
+    category = "archive",
+    subject_ref = "sitemap://archive.tar.gz#archive-member:../evil.xml",
+    message = "Skipped unsafe archive member."
+  )
+
+  out <- sitemapr_test_call("decompression_findings_from_problems", problems)
+
+  expect_s3_class(out, "tbl_df")
+  expect_identical(nrow(out), 0L)
+})
+
 vs_tar_header <- function(name, size, typeflag = "0") {
   h <- raw(512L)
   put <- function(h, off, s) {
