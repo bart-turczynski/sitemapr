@@ -42,8 +42,9 @@ package User-Agent.}
 
 \item{limits}{Network limits for HTTP fetches, as from \code{fetch_limits()}.}
 
-\item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
-Defaults to \code{index_limits()}.}
+\item{index_limits}{Sitemapindex-expansion bounds (recursion depth and
+per-index child-count cap), as from \code{index_limits()}. Defaults to
+\code{index_limits()}.}
 }
 \value{
 If \code{output} is supplied, the output path, invisibly. Otherwise, the

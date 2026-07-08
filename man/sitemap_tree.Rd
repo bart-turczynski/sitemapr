@@ -42,8 +42,9 @@ package User-Agent.}
 \item{net_limits}{Network limits for the per-candidate fetches, as from
 \code{fetch_limits()}.}
 
-\item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
-Defaults to \code{index_limits()}.}
+\item{index_limits}{Sitemapindex-expansion bounds (recursion depth and
+per-index child-count cap), as from \code{index_limits()}. Defaults to
+\code{index_limits()}.}
 }
 \value{
 A tibble with one row per evaluated sitemap (and per expanded index

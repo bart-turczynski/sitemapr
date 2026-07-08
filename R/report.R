@@ -1077,11 +1077,7 @@ report_return <- function(html, output) {
 #'   When `NULL` (the default) it is computed from `x`.
 #' @param title The HTML document `<title>`. Defaults to a title derived from
 #'   `x`.
-#' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
-#'   package User-Agent.
-#' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
-#' @param index_limits Sitemapindex-expansion bounds, as from `index_limits()`.
-#'   Defaults to `index_limits()`.
+#' @inheritParams read_sitemap
 #' @return If `output` is supplied, the output path, invisibly. Otherwise, the
 #'   report HTML as an [htmltools::HTML] character string.
 #' @seealso [read_sitemap()] and [validate_sitemap()] for the underlying data.

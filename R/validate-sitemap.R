@@ -541,16 +541,10 @@ validate_sitemap_batch <- function(
 #' their findings. Scalar calls keep the stricter historical behavior: genuine
 #' transport, SSRF, or HTTP failures raise classed conditions.
 #'
-#' @param x One or more sitemap URLs or paths to local sitemap files.
 #' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
 #'   strict-only findings are dropped and schema violations are downgraded to
 #'   `warning`; in `strict`, the documented info-to-warning codes are elevated.
-#' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
-#'   package User-Agent.
-#' @param limits Network limits for HTTP fetches, as from `fetch_limits()`.
-#' @param index_limits Sitemapindex-expansion bounds (recursion depth and
-#'   per-index child-count cap), as from `index_limits()`. Defaults to
-#'   `index_limits()`.
+#' @inheritParams read_sitemap
 #' @return The findings tibble described in `docs/findings-contract.md`: the
 #'   columns `code`, `severity`, `layer`, `subject_type`, `subject_ref`,
 #'   `message`, `evidence`, `mode`, `is_strict_only`, and `remediation_hint`, in

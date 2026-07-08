@@ -210,14 +210,11 @@ sitemap_tree_from_root <- function(
 #' @param use_known_paths When `from = "root"`, try the guessed-path catalog
 #'   (provenance `"guessed-path"`). Default `TRUE`. Set both `use_robots` and
 #'   `use_known_paths` to `FALSE` for an empty tree.
-#' @param user_agent The User-Agent header for HTTP fetches. Defaults to the
-#'   package User-Agent.
 #' @param limits Discovery limits (the candidate cap), as from
 #'   `discovery_limits()`. Used only when `from = "root"`.
 #' @param net_limits Network limits for the per-candidate fetches, as from
 #'   `fetch_limits()`.
-#' @param index_limits Sitemapindex-expansion bounds, as from `index_limits()`.
-#'   Defaults to `index_limits()`.
+#' @inheritParams read_sitemap
 #' @return A tibble with one row per evaluated sitemap (and per expanded index
 #'   child) and columns `depth`, `parent_sitemap`, `sitemap_url`, `page_count`,
 #'   `gzip`, `status`, `reason`, and `provenance`. Accepted rows carry a

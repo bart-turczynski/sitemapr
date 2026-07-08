@@ -299,13 +299,7 @@ assemble_candidates <- function(
 #'
 #' @param root A single site-root URL (character). A bare host is accepted.
 #' @param catalog The guess catalog, as from `discovery_catalog()`.
-#' @param limits Discovery limits, as from `discovery_limits()`.
-#' @param user_agent The User-Agent header for HTTP fetches.
-#' @param net_limits Network limits for the per-candidate fetches, as from
-#'   `fetch_limits()`.
-#' @param use_known_paths Fetch the guessed-path catalog (default `TRUE`).
-#' @param use_robots Fetch robots.txt for its `Sitemap:` directives (default
-#'   `TRUE`).
+#' @inheritParams sitemap_tree
 #' @return A tibble with one row per evaluated candidate and columns
 #'   `candidate_url`, `catalog_path`, `kind`, `source`, `provenance`, `status`,
 #'   `reason`, `http_status`, and `final_url`. The `records` attribute holds the

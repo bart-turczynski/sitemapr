@@ -23,7 +23,8 @@ validate_sitemaps(
 )
 }
 \arguments{
-\item{x}{One or more sitemap URLs or paths to local sitemap files.}
+\item{x}{One or more sitemap URLs or paths to local sitemap files (\code{.xml},
+\code{.txt}, \code{.gz}, or \code{.tar.gz}).}
 
 \item{mode}{\code{"strict"} (the default) or \code{"non-strict"}. In \code{non-strict},
 strict-only findings are dropped and schema violations are downgraded to
