@@ -1,8 +1,10 @@
 name: pkgcheck
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["R-CMD-check"]
+    types: [completed]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:

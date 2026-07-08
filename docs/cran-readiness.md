@@ -28,6 +28,20 @@ Keep new `:::` usage rare. Prefer public API tests when they can express the
 same behavior clearly, and use direct internal tests only for small, stable
 helpers whose edge cases would be obscured through the public entry points.
 
+## Continuous Integration
+
+The repository has GitHub Actions coverage for the local verify gate
+(`R-CMD-check`), pkgcheck, security audits, pkgdown, and release-oriented
+cross-platform checks. The pkgcheck workflow is triggered after `R-CMD-check`
+completes on main/master so pkgcheck can evaluate completed workflow results
+rather than racing active CI jobs.
+
+When `pkgcheck::pkgcheck()` is run locally without a GitHub token, pkgcheck
+0.1.3.5 can still report "Package has no continuous integration checks" because
+it does not fetch GitHub workflow runs without token-bearing environment
+variables. Treat that local message as a tooling/access limitation unless the
+workflow files or README badges have actually been removed.
+
 ## Superassignment In Tests
 
 Test callbacks should avoid `<<-` when ordinary lexical state is sufficient.

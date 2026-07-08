@@ -178,3 +178,34 @@ test_that("discover_candidates caps candidates before fetch", {
     )
   )
 })
+
+test_that("discover_candidates caps the combined robots and catalog set", {
+  log_env <- new.env()
+  httr2::local_mocked_responses(
+    mock_server(
+      status_map = list("https://example.com/robots.txt" = 200L),
+      log_env = log_env,
+      body_map = list(
+        "https://example.com/robots.txt" = "Sitemap: https://example.com/from-robots.xml"
+      )
+    )
+  )
+
+  res <- discover_candidates(
+    "https://example.com",
+    limits = discovery_limits(max_candidates = 2L)
+  )
+
+  expect_identical(nrow(res), 2L)
+  expect_identical(res$provenance, c("robots", "guessed-path"))
+  expect_identical(
+    res$candidate_url,
+    c(
+      "https://example.com/from-robots.xml",
+      "https://example.com/sitemap.xml"
+    )
+  )
+  expect_true("https://example.com/robots.txt" %in% log_env$urls)
+  expect_true("https://example.com/from-robots.xml" %in% log_env$urls)
+  expect_false("https://example.com/sitemap_index.xml" %in% log_env$urls)
+})
