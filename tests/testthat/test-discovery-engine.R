@@ -186,7 +186,8 @@ test_that("discover_candidates caps the combined robots and catalog set", {
       status_map = list("https://example.com/robots.txt" = 200L),
       log_env = log_env,
       body_map = list(
-        "https://example.com/robots.txt" = "Sitemap: https://example.com/from-robots.xml"
+        "https://example.com/robots.txt" =
+          "Sitemap: https://example.com/from-robots.xml"
       )
     )
   )
