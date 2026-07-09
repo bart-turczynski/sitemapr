@@ -12,6 +12,8 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 coverage](https://codecov.io/gh/bart-turczynski/sitemapr/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/sitemapr)
 [![DOI](https://zenodo.org/badge/1282558407.svg)](https://zenodo.org/badge/latestdoi/1282558407)
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
+[![OpenSSF Best
+Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
 [![pkgcheck](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml)
 [![Security
 audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml)
