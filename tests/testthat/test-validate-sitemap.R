@@ -366,6 +366,81 @@ test_that("index_feed_children is an empty character vector for no sources", {
   }
 })
 
+test_that("validation_target handles a raw character target", {
+  out <- sitemapr_test_ns$validation_target(fixture("valid-minimal.xml"))
+
+  expect_identical(out$target, fixture("valid-minimal.xml"))
+  expect_true(out$is_local)
+  expect_identical(out$source, fixture("valid-minimal.xml"))
+})
+
+test_that("archive gzip errors are mapped inside archive validation", {
+  src <- list(
+    path = fixture("valid-minimal.xml"),
+    base = "sitemap://archive.tar.gz",
+    final_url = NA_character_,
+    byte_size = 10,
+    fetched_at = NA
+  )
+  testthat::local_mocked_bindings(
+    parse_sitemap_archive = function(...) {
+      rlang::abort("bad gzip", class = "sitemapr_decompression_error")
+    }
+  )
+
+  parts <- sitemapr_test_ns$validate_archive_parts(src)
+
+  expect_length(parts, 1L)
+  expect_identical(parts[[1L]]$code, "UNSUPPORTED_MALFORMED_GZIP")
+  expect_identical(parts[[1L]]$layer, "decompression")
+})
+
+test_that("archive byte limits re-propagate instead of mapping to findings", {
+  cnd <- structure(
+    list(message = "archive byte limit", call = NULL, limit = "byte_count"),
+    class = c("sitemapr_archive_limit", "error", "condition")
+  )
+  src <- list(base = "sitemap://archive.tar.gz")
+
+  expect_error(
+    sitemapr_test_ns$archive_limit_part(cnd, src),
+    class = "sitemapr_archive_limit"
+  )
+})
+
+test_that("batched validation source failures classify timeout and body cap", {
+  source <- sitemapr_test_ns$create_source_records(
+    "https://ex.com/sitemap.xml",
+    as = "sitemap"
+  )
+  timeout <- structure(
+    list(message = "timed out", call = NULL),
+    class = c("sitemapr_timeout", "error", "condition")
+  )
+  body_cap <- structure(
+    list(message = "too large", call = NULL),
+    class = c("sitemapr_body_ceiling", "error", "condition")
+  )
+
+  expect_identical(
+    sitemapr_test_ns$validate_failure_finding(source, timeout)$code,
+    "FETCH_TIMEOUT"
+  )
+  expect_identical(
+    sitemapr_test_ns$validate_failure_finding(source, body_cap)$code,
+    "FETCH_BODY_CEILING_EXCEEDED"
+  )
+})
+
+test_that("combining empty findings returns the empty contract", {
+  out <- sitemapr_test_ns$combine_findings_contracts(list(
+    sitemapr_test_ns$empty_findings_contract()
+  ))
+
+  expect_named(out, contract_cols)
+  expect_identical(nrow(out), 0L)
+})
+
 # --- Decompression-layer findings (SITE-vtbolmya) --------------------------
 # validate_sitemap() promotes the decompression conditions that the parse API
 # raises (gzip_decompress() / parse_sitemap_archive()) into findings. A minimal
@@ -390,7 +465,7 @@ test_that("decompression member findings scope archive members by fragment", {
 })
 
 test_that("warning archive problems are not decompression findings", {
-  problems <- parse_problems(
+  problems <- sitemapr_test_ns$parse_problems(
     severity = "warning",
     category = "archive",
     subject_ref = "sitemap://archive.tar.gz#archive-member:../evil.xml",

@@ -15,22 +15,31 @@ test_that("load bounds rurl's full_parse cache to the default", {
 test_that("the cache bound is overridable via the sitemapr option", {
   skip_if_not_installed("rurl")
   withr::defer({
-    rurl::rurl_cache_config(max_full_parse = sitemapr:::rurl_cache_max())
+    rurl::rurl_cache_config(max_full_parse = sitemapr_test_ns$rurl_cache_max())
   })
   withr::with_options(
     list(sitemapr.rurl_cache_max = 123L),
-    sitemapr:::.onLoad(NULL, "sitemapr")
+    sitemapr_test_ns$.onLoad(NULL, "sitemapr")
   )
   info <- rurl::rurl_cache_info()
   full <- info[info$cache == "full_parse", ]
   expect_identical(full$max_entries, 123)
 })
 
+test_that("load hook is a no-op when rurl is unavailable", {
+  testthat::local_mocked_bindings(
+    requireNamespace = function(...) FALSE,
+    .package = "base"
+  )
+
+  expect_null(sitemapr_test_ns$.onLoad(NULL, "sitemapr"))
+})
+
 test_that("distinct URLs beyond the bound evict rather than accumulate", {
   skip_if_not_installed("rurl")
   bound <- 10L
   withr::defer({
-    rurl::rurl_cache_config(max_full_parse = sitemapr:::rurl_cache_max())
+    rurl::rurl_cache_config(max_full_parse = sitemapr_test_ns$rurl_cache_max())
     rurl::rurl_clear_caches()
   })
   rurl::rurl_clear_caches()
@@ -39,7 +48,7 @@ test_that("distinct URLs beyond the bound evict rather than accumulate", {
   # Unicode hosts force the rurl slow path (url_needs_rurl()), so each distinct
   # URL populates the full_parse cache.
   urls <- sprintf("https://münchen-%d.de/", seq_len(bound * 5L))
-  parsed <- sitemapr:::parse_url_adapter(urls)
+  parsed <- sitemapr_test_ns$parse_url_adapter(urls)
 
   info <- rurl::rurl_cache_info()
   full <- info[info$cache == "full_parse", ]

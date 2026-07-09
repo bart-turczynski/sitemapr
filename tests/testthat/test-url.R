@@ -1,10 +1,10 @@
 test_that("parse_url_adapter emits Punycode host for Unicode input", {
-  parsed <- sitemapr:::parse_url_adapter("https://münchen.de/")
+  parsed <- sitemapr_test_ns$parse_url_adapter("https://münchen.de/")
   expect_identical(parsed$host, "xn--mnchen-3ya.de")
 })
 
 test_that("parse_url_adapter preserves rurl's empty-input schema", {
-  parsed <- sitemapr:::parse_url_adapter(character(0))
+  parsed <- sitemapr_test_ns$parse_url_adapter(character(0))
 
   expect_s3_class(parsed, "data.frame")
   expect_identical(nrow(parsed), 0L)
@@ -12,13 +12,13 @@ test_that("parse_url_adapter preserves rurl's empty-input schema", {
 })
 
 test_that("parse_url_adapter maps an IRI path to its percent-encoded URI", {
-  parsed <- sitemapr:::parse_url_adapter("https://example.com/パス?q=テスト")
+  parsed <- sitemapr_test_ns$parse_url_adapter("https://example.com/パス?q=テスト")
   expect_identical(parsed$path, "/%E3%83%91%E3%82%B9")
   expect_identical(parsed$query, "q=%E3%83%86%E3%82%B9%E3%83%88")
 })
 
 test_that("parse_url_adapter leaves an ASCII path/query untouched", {
-  parsed <- sitemapr:::parse_url_adapter(
+  parsed <- sitemapr_test_ns$parse_url_adapter(
     "https://example.com/sitemap.php?page=2&type=products"
   )
   expect_identical(parsed$path, "/sitemap.php")
@@ -26,35 +26,35 @@ test_that("parse_url_adapter leaves an ASCII path/query untouched", {
 })
 
 test_that("parse_url_adapter does not double-encode an existing %XX octet", {
-  parsed <- sitemapr:::parse_url_adapter("https://example.com/a%20b/x")
+  parsed <- sitemapr_test_ns$parse_url_adapter("https://example.com/a%20b/x")
   expect_identical(parsed$path, "/a%20b/x")
 })
 
 test_that("parse_url_adapter resolves dot-segments in the path", {
-  parsed <- sitemapr:::parse_url_adapter(
+  parsed <- sitemapr_test_ns$parse_url_adapter(
     "https://example.com/a/../sitemaps/./sitemap.xml"
   )
   expect_identical(parsed$path, "/sitemaps/sitemap.xml")
 })
 
 test_that("build_loc_key retains the port", {
-  parsed <- sitemapr:::parse_url_adapter("https://example.com:8443/p")
-  key <- sitemapr:::build_loc_key(parsed)
+  parsed <- sitemapr_test_ns$parse_url_adapter("https://example.com:8443/p")
+  key <- sitemapr_test_ns$build_loc_key(parsed)
   expect_true(grepl("8443", key, fixed = TRUE))
 })
 
 test_that("build_loc_key distinguishes URLs that differ only by port", {
-  parsed <- sitemapr:::parse_url_adapter(
+  parsed <- sitemapr_test_ns$parse_url_adapter(
     c("https://example.com/p", "https://example.com:8443/p")
   )
-  keys <- sitemapr:::build_loc_key(parsed)
+  keys <- sitemapr_test_ns$build_loc_key(parsed)
   expect_false(keys[[1]] == keys[[2]])
 })
 
 test_that("build_loc_key keeps query/port/userinfo that clean_url drops", {
   url <- "https://user@example.com:8443/p?q=1"
-  parsed <- sitemapr:::parse_url_adapter(url)
-  key <- sitemapr:::build_loc_key(parsed)
+  parsed <- sitemapr_test_ns$parse_url_adapter(url)
+  key <- sitemapr_test_ns$build_loc_key(parsed)
 
   expect_true(grepl("8443", key, fixed = TRUE))
   expect_true(grepl("?q=1", key, fixed = TRUE))
@@ -74,44 +74,50 @@ test_that("build_loc_key keeps query/port/userinfo that clean_url drops", {
 })
 
 test_that("build_loc_key keeps a contentful query verbatim (SITE-vrgszbnu)", {
-  parsed <- sitemapr:::parse_url_adapter(
+  parsed <- sitemapr_test_ns$parse_url_adapter(
     "https://example.com/sitemap.php?page=2&type=products"
   )
   expect_identical(
-    sitemapr:::build_loc_key(parsed),
+    sitemapr_test_ns$build_loc_key(parsed),
     "https://example.com/sitemap.php?page=2&type=products"
   )
 })
 
 test_that("build_loc_key drops the fragment (not part of fetch or identity)", {
-  parsed <- sitemapr:::parse_url_adapter("https://example.com/sitemap.xml#frag")
-  key <- sitemapr:::build_loc_key(parsed)
+  parsed <- sitemapr_test_ns$parse_url_adapter(
+    "https://example.com/sitemap.xml#frag"
+  )
+  key <- sitemapr_test_ns$build_loc_key(parsed)
   expect_identical(key, "https://example.com/sitemap.xml")
   expect_false(grepl("#", key, fixed = TRUE))
 })
 
 test_that("two URLs differing only by fragment share one identity", {
-  parsed <- sitemapr:::parse_url_adapter(
+  parsed <- sitemapr_test_ns$parse_url_adapter(
     c("https://example.com/s", "https://example.com/s#a")
   )
-  keys <- sitemapr:::build_loc_key(parsed)
+  keys <- sitemapr_test_ns$build_loc_key(parsed)
   expect_identical(keys[[1]], keys[[2]])
 })
 
 test_that("build_loc_key collapses the scheme's default port to identity", {
-  http_pair <- sitemapr:::build_loc_key(sitemapr:::parse_url_adapter(
-    c("http://example.com:80/s", "http://example.com/s")
-  ))
+  http_pair <- sitemapr_test_ns$build_loc_key(
+    sitemapr_test_ns$parse_url_adapter(
+      c("http://example.com:80/s", "http://example.com/s")
+    )
+  )
   expect_identical(http_pair[[1]], http_pair[[2]])
 
-  https_pair <- sitemapr:::build_loc_key(sitemapr:::parse_url_adapter(
-    c("https://example.com:443/s", "https://example.com/s")
-  ))
+  https_pair <- sitemapr_test_ns$build_loc_key(
+    sitemapr_test_ns$parse_url_adapter(
+      c("https://example.com:443/s", "https://example.com/s")
+    )
+  )
   expect_identical(https_pair[[1]], https_pair[[2]])
 })
 
 test_that("a non-default port is still retained and distinguishing", {
-  keys <- sitemapr:::build_loc_key(sitemapr:::parse_url_adapter(
+  keys <- sitemapr_test_ns$build_loc_key(sitemapr_test_ns$parse_url_adapter(
     c("https://example.com:8443/s", "https://example.com/s")
   ))
   expect_true(grepl(":8443", keys[[1]], fixed = TRUE))
@@ -119,8 +125,8 @@ test_that("a non-default port is still retained and distinguishing", {
 })
 
 test_that("a mismatched default port (http:443) is not collapsed", {
-  key <- sitemapr:::build_loc_key(
-    sitemapr:::parse_url_adapter("http://example.com:443/s")
+  key <- sitemapr_test_ns$build_loc_key(
+    sitemapr_test_ns$parse_url_adapter("http://example.com:443/s")
   )
   expect_true(grepl(":443", key, fixed = TRUE))
 })
@@ -171,8 +177,8 @@ test_that("parse_url_adapter fast path matches rurl on read columns", {
     "not a url",
     NA_character_
   )
-  fast <- sitemapr:::parse_url_adapter(corpus)
-  slow <- sitemapr:::rurl_parse(corpus)
+  fast <- sitemapr_test_ns$parse_url_adapter(corpus)
+  slow <- sitemapr_test_ns$rurl_parse(corpus)
   for (col in read_cols) {
     expect_identical(
       as.character(fast[[col]]),
@@ -237,8 +243,8 @@ test_that("parse_url_adapter fast path is differentially equivalent to rurl", {
     )
   }
   urls <- c(vapply(seq_len(2000L), function(i) gen(), character(1)), "http://")
-  fast <- sitemapr:::parse_url_adapter(urls)
-  slow <- sitemapr:::rurl_parse(urls)
+  fast <- sitemapr_test_ns$parse_url_adapter(urls)
+  slow <- sitemapr_test_ns$rurl_parse(urls)
   for (col in read_cols) {
     expect_identical(
       as.character(fast[[col]]),
@@ -249,11 +255,13 @@ test_that("parse_url_adapter fast path is differentially equivalent to rurl", {
 })
 
 test_that("url_needs_rurl flags exactly the non-no-op URLs", {
-  expect_false(sitemapr:::url_needs_rurl("https://example.com/a/b?x=1&y=2"))
-  expect_true(sitemapr:::url_needs_rurl("https://example.com/café"))
-  expect_true(sitemapr:::url_needs_rurl("https://example.com/p%20q"))
-  expect_true(sitemapr:::url_needs_rurl("https://user@example.com/p"))
-  expect_true(sitemapr:::url_needs_rurl("https://example.com/(x)"))
+  expect_false(
+    sitemapr_test_ns$url_needs_rurl("https://example.com/a/b?x=1&y=2")
+  )
+  expect_true(sitemapr_test_ns$url_needs_rurl("https://example.com/café"))
+  expect_true(sitemapr_test_ns$url_needs_rurl("https://example.com/p%20q"))
+  expect_true(sitemapr_test_ns$url_needs_rurl("https://user@example.com/p"))
+  expect_true(sitemapr_test_ns$url_needs_rurl("https://example.com/(x)"))
 })
 
 test_that("an IP-literal host is never resolved on the fast path", {
@@ -264,5 +272,6 @@ test_that("an IP-literal host is never resolved on the fast path", {
     "https://2130706433/x",
     "https://[::1]/x"
   )
-  expect_false(any(sitemapr:::url_fast_components_vec(ip_literals)$resolved))
+  resolved <- sitemapr_test_ns$url_fast_components_vec(ip_literals)$resolved
+  expect_false(any(resolved))
 })

@@ -249,6 +249,27 @@ test_that("precomputed source metadata drives sitemap summary rows", {
   expect_match(html, ">100<", fixed = TRUE)
 })
 
+test_that("source rows render local fallbacks for missing fetch metrics", {
+  sources <- report_sources_fixture(
+    requested_url = "https://ex.com/local.xml",
+    final_url = NA_character_,
+    format = "xml"
+  )
+  sources$status <- NA_integer_
+  sources$bytes <- NA_integer_
+  sources$timing <- NA_real_
+  urls <- report_urls_fixture(
+    loc = "https://ex.com/page",
+    source_sitemap = sources$requested_url
+  )
+
+  row <- as.character(sitemapr_test_ns$report_source_row(urls, sources, 1L))
+
+  expect_match(row, "https://ex.com/local.xml", fixed = TRUE)
+  expect_match(row, ">local<", fixed = TRUE)
+  expect_match(row, "<td class=\"smr-num\">-</td>", fixed = TRUE)
+})
+
 test_that("precomputed urls without sources still render fallback summaries", {
   urls <- report_urls_fixture(
     loc = c("https://ex.com/a", "https://ex.com/b"),
@@ -286,6 +307,17 @@ test_that("report sections skip empty trees and URL tables cleanly", {
   )
   expect_no_match(html_root, "URL structure", fixed = TRUE)
   expect_match(html_root, "URL analysis", fixed = TRUE)
+})
+
+test_that("empty tree nodes and evidence render as absent content", {
+  node <- new.env(parent = emptyenv())
+  node$children <- list()
+
+  expect_null(sitemapr_test_ns$report_render_tree_node(node, 0L))
+  expect_null(sitemapr_test_ns$report_evidence_block(NULL))
+  expect_null(sitemapr_test_ns$report_evidence_block(list(
+    excerpt = NA_character_
+  )))
 })
 
 test_that("large reports cap tree and URL table rendering", {
@@ -332,6 +364,17 @@ test_that("custom titles and evidence locations are rendered", {
   expect_match(html, "<title>Custom sitemap report</title>", fixed = TRUE)
   expect_match(html, "bad priority", fixed = TRUE)
   expect_match(html, "line 3, col 9", fixed = TRUE)
+})
+
+test_that("evidence locations omit the column when it is absent", {
+  block <- as.character(sitemapr_test_ns$report_evidence_block(list(
+    excerpt = "bad priority",
+    line = 3L,
+    column = NA_integer_
+  )))
+
+  expect_match(block, "line 3", fixed = TRUE)
+  expect_no_match(block, "col", fixed = TRUE)
 })
 
 test_that("the source label appears in the hero and the document title", {

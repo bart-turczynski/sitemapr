@@ -195,6 +195,55 @@ test_that("from = 'sitemap' returns a rejected row on transport failure", {
   expect_identical(tree$provenance, "seed")
 })
 
+test_that("seed fetch maps SSRF blocks to a rejected seed", {
+  rec <- sitemapr_test_ns$create_source_records(
+    "https://ex.com/sitemap.xml",
+    as = "sitemap"
+  )
+  testthat::local_mocked_bindings(
+    fetch_source = function(...) {
+      rlang::abort("blocked", class = "sitemapr_ssrf_blocked")
+    }
+  )
+
+  out <- sitemapr_test_ns$seed_fetch(
+    rec,
+    sitemapr_test_ns$default_user_agent(),
+    sitemapr_test_ns$fetch_limits()
+  )
+
+  expect_identical(out$status, "rejected")
+  expect_identical(out$reason, "blocked")
+  expect_null(out$rec)
+})
+
+test_that("from = 'sitemap' rejects accepted bytes that fail parsing", {
+  testthat::local_mocked_bindings(
+    fetch_source = function(...) {
+      rec <- sitemapr_test_ns$source_metadata(
+        requested_url = "https://ex.com/bad.xml",
+        final_url = "https://ex.com/bad.xml",
+        status = 200L,
+        error_class = NA_character_,
+        format = "xml"
+      )
+      attr(rec, "body") <- charToRaw("<not-a-sitemap/>")
+      rec
+    }
+  )
+
+  tree <- sitemapr_test_ns$seed_tree_from_url(
+    "https://ex.com/bad.xml",
+    sitemapr_test_ns$default_user_agent(),
+    sitemapr_test_ns$fetch_limits(),
+    sitemapr_test_ns$index_limits()
+  )
+
+  expect_identical(tree$status, "rejected")
+  expect_identical(tree$reason, "unparseable")
+  expect_identical(tree$provenance, "seed")
+})
+
 test_that("from = 'sitemap' rejects a non-scalar x", {
   expect_error(
     sitemap_tree(c("a", "b"), from = "sitemap"),

@@ -1,20 +1,23 @@
 # SSRF guard unit tests (ADR-003 §1 matrix + fetch_classification.feature
-# acceptance scenarios). Internal fns are referenced via sitemapr:::.
+# acceptance scenarios). Internal fns are referenced via sitemapr_test_ns$.
 
 # Helper: run the guard the way the fetch engine will, by parsing a full URL
 # through the real adapter and feeding the row to ssrf_check_parsed(). This
 # exercises the integration surface and the rurl normalization behaviour.
 guard <- function(url) {
-  parsed <- sitemapr:::parse_url_adapter(url)
-  sitemapr:::ssrf_check_parsed(parsed)
+  parsed <- sitemapr_test_ns$parse_url_adapter(url)
+  sitemapr_test_ns$ssrf_check_parsed(parsed)
 }
 
 test_that("ssrf_raw_scheme_of returns NA for missing scalar schemes", {
-  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of(character(0))))
-  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of(NA_character_)))
-  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of("")))
-  expect_true(is.na(sitemapr:::ssrf_raw_scheme_of("example.com/path")))
-  expect_identical(sitemapr:::ssrf_raw_scheme_of("HTTP://example.com"), "http")
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_scheme_of(character(0))))
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_scheme_of(NA_character_)))
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_scheme_of("")))
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_scheme_of("example.com/path")))
+  expect_identical(
+    sitemapr_test_ns$ssrf_raw_scheme_of("HTTP://example.com"),
+    "http"
+  )
 })
 
 # ---- loopback ----------------------------------------------------------------
@@ -113,7 +116,7 @@ test_that("IPv4-mapped IPv6 of a private address is rejected (feature)", {
 })
 
 test_that("IPv4-mapped IPv6 of loopback is rejected", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "[::ffff:127.0.0.1]",
     scheme = "http",
     raw_host = "[::ffff:127.0.0.1]"
@@ -123,7 +126,7 @@ test_that("IPv4-mapped IPv6 of loopback is rejected", {
 })
 
 test_that("IPv4-mapped IPv6 of a PUBLIC address is allowed", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "[::ffff:8.8.8.8]",
     scheme = "http",
     raw_host = "[::ffff:8.8.8.8]"
@@ -170,7 +173,7 @@ test_that("::ffff:1 is a plain IPv6 address, not an IPv4-mapped form", {
 })
 
 test_that("fully-expanded hex-hextet mapped loopback is rejected", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "[0:0:0:0:0:ffff:7f00:1]",
     scheme = "http",
     raw_host = "[0:0:0:0:0:ffff:7f00:1]"
@@ -180,7 +183,7 @@ test_that("fully-expanded hex-hextet mapped loopback is rejected", {
 })
 
 test_that("hex-hextet mapped form is case-insensitive", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "[::FFFF:7F00:1]",
     scheme = "http",
     raw_host = "[::FFFF:7F00:1]"
@@ -319,7 +322,7 @@ test_that("octal IPv4 literal is rejected as numeric-literal", {
 
 test_that("octal-dotted IPv4 literal is rejected as numeric-literal", {
   # 0177.0.0.1 == 127.0.0.1 with a leading-zero (octal) first octet.
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "127.0.0.1",
     scheme = "http",
     raw_host = "0177.0.0.1"
@@ -331,7 +334,7 @@ test_that("octal-dotted IPv4 literal is rejected as numeric-literal", {
 # ---- scheme gate -------------------------------------------------------------
 
 test_that("non-http(s) scheme is rejected", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "example.com",
     scheme = "ftp",
     raw_host = "example.com"
@@ -341,7 +344,7 @@ test_that("non-http(s) scheme is rejected", {
 })
 
 test_that("file scheme is rejected", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "",
     scheme = "file",
     raw_host = ""
@@ -351,7 +354,7 @@ test_that("file scheme is rejected", {
 })
 
 test_that("https scheme is permitted through the scheme gate", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "example.com",
     scheme = "https",
     raw_host = "example.com"
@@ -381,7 +384,7 @@ test_that("public IPv6 literal is allowed", {
 # ---- result shape ------------------------------------------------------------
 
 test_that("the guard returns a list with allowed + reason fields", {
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "example.com",
     scheme = "https",
     raw_host = "example.com"
@@ -396,7 +399,7 @@ test_that("the guard returns a list with allowed + reason fields", {
 test_that("ssrf_check evaluates ranges regardless of any caller toggle", {
   # The guard has no disable flag; disabling is the caller's job. Confirm the
   # core matcher always evaluates and blocks a private address.
-  res <- sitemapr:::ssrf_check(
+  res <- sitemapr_test_ns$ssrf_check(
     host = "10.0.0.1",
     scheme = "http",
     raw_host = "10.0.0.1"
@@ -412,44 +415,44 @@ test_that("ssrf_check evaluates ranges regardless of any caller toggle", {
 
 test_that("ssrf_is_dotted_quad rejects malformed dotted-quads", {
   # Non-scalar, NA, or empty input.
-  expect_false(sitemapr:::ssrf_is_dotted_quad(NA_character_))
-  expect_false(sitemapr:::ssrf_is_dotted_quad(c("1", "2")))
-  expect_false(sitemapr:::ssrf_is_dotted_quad(""))
+  expect_false(sitemapr_test_ns$ssrf_is_dotted_quad(NA_character_))
+  expect_false(sitemapr_test_ns$ssrf_is_dotted_quad(c("1", "2")))
+  expect_false(sitemapr_test_ns$ssrf_is_dotted_quad(""))
   # Leading-zero octet (octal obfuscation form) is rejected.
-  expect_false(sitemapr:::ssrf_is_dotted_quad("127.017.0.1"))
+  expect_false(sitemapr_test_ns$ssrf_is_dotted_quad("127.017.0.1"))
   # Octet out of the 0-255 range is rejected.
-  expect_false(sitemapr:::ssrf_is_dotted_quad("256.0.0.1"))
+  expect_false(sitemapr_test_ns$ssrf_is_dotted_quad("256.0.0.1"))
 })
 
 test_that("ssrf_ipv6_hextets returns NULL for non-IPv6 / malformed input", {
   # Non-scalar, NA, or empty.
-  expect_null(sitemapr:::ssrf_ipv6_hextets(NA_character_))
-  expect_null(sitemapr:::ssrf_ipv6_hextets(""))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets(NA_character_))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets(""))
   # No colon, or colon present but illegal characters.
-  expect_null(sitemapr:::ssrf_ipv6_hextets("12345"))
-  expect_null(sitemapr:::ssrf_ipv6_hextets("::zz"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("12345"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("::zz"))
   # Trailing dotted-quad tail that is not a valid IPv4 address.
-  expect_null(sitemapr:::ssrf_ipv6_hextets("::1.2.3.999"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("::1.2.3.999"))
   # More than one "::" zero-compression run.
-  expect_null(sitemapr:::ssrf_ipv6_hextets("1::2::3"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("1::2::3"))
   # "::" present but no room to fill (already eight groups).
-  expect_null(sitemapr:::ssrf_ipv6_hextets("1:2:3:4:5:6:7:8::"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("1:2:3:4:5:6:7:8::"))
   # No "::" and the wrong number of groups.
-  expect_null(sitemapr:::ssrf_ipv6_hextets("1:2:3"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("1:2:3"))
   # Correct group count but an over-long hextet.
-  expect_null(sitemapr:::ssrf_ipv6_hextets("::12345"))
+  expect_null(sitemapr_test_ns$ssrf_ipv6_hextets("::12345"))
 })
 
 test_that("ssrf_embedded_reason returns NA when no blocked embedding", {
   # Malformed literal: hextet parse fails, so there is nothing to decode.
-  expect_true(is.na(sitemapr:::ssrf_embedded_reason("::zz")))
+  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("::zz")))
   # Well-formed IPv6 with no embedding prefix.
-  expect_true(is.na(sitemapr:::ssrf_embedded_reason("fe80::1")))
+  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("fe80::1")))
   # Embedding prefix but a PUBLIC embedded address is allowed (NA).
-  expect_true(is.na(sitemapr:::ssrf_embedded_reason("::ffff:8.8.8.8")))
+  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("::ffff:8.8.8.8")))
   # Embedding prefix wrapping a blocked address yields its reason code.
   expect_identical(
-    sitemapr:::ssrf_embedded_reason("::ffff:127.0.0.1"),
+    sitemapr_test_ns$ssrf_embedded_reason("::ffff:127.0.0.1"),
     "ipv4-mapped"
   )
 })
@@ -457,12 +460,12 @@ test_that("ssrf_embedded_reason returns NA when no blocked embedding", {
 test_that("ssrf_check allows when there is no host to evaluate", {
   # An NA or empty host is not blockable here; downstream rules decide.
   expect_true(
-    sitemapr:::ssrf_check(host = NA_character_, scheme = "http")$allowed
+    sitemapr_test_ns$ssrf_check(host = NA_character_, scheme = "http")$allowed
   )
-  expect_true(sitemapr:::ssrf_check(host = "", scheme = "http")$allowed)
+  expect_true(sitemapr_test_ns$ssrf_check(host = "", scheme = "http")$allowed)
 })
 
 test_that("ssrf_raw_host_of returns NA for non-scalar / NA / empty input", {
-  expect_true(is.na(sitemapr:::ssrf_raw_host_of(NA_character_)))
-  expect_true(is.na(sitemapr:::ssrf_raw_host_of("")))
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of(NA_character_)))
+  expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of("")))
 })

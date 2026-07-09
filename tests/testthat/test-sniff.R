@@ -1,5 +1,5 @@
 # Byte-level format sniffer unit tests (Layer B + fetch_classification.feature
-# sniff scenarios). Internal fns are referenced via sitemapr:::.
+# sniff scenarios). Internal fns are referenced via sitemapr_test_ns$.
 #
 # Inputs are built as raw vectors: charToRaw() for text/markup, as.raw() for
 # fixed magic bytes, gzfile()+writeBin() for real gzip-container bytes (NB:
@@ -7,7 +7,7 @@
 # with the 1f 8b magic, so it cannot be used to exercise the sniffer), and a
 # synthesized 512-byte block with "ustar" at offset 257 for an uncompressed tar.
 
-sniff <- function(x) sitemapr:::sniff_format(x)
+sniff <- function(x) sitemapr_test_ns$sniff_format(x)
 
 # Produce real gzip-container bytes (leading magic 1f 8b) for a raw payload.
 gzip_bytes <- function(payload) {
@@ -263,13 +263,13 @@ test_that("a closed internal subset with no trailing '>' strands no root", {
 # ---- helper-level defensive branches -----------------------------------------
 
 test_that("sniff_is_text() treats zero-length input as not text", {
-  expect_false(sitemapr:::sniff_is_text(raw(0)))
+  expect_false(sitemapr_test_ns$sniff_is_text(raw(0)))
 })
 
 test_that("sniff_markup_preview() of empty bytes is the empty string", {
-  expect_identical(sitemapr:::sniff_markup_preview(raw(0)), "")
+  expect_identical(sitemapr_test_ns$sniff_markup_preview(raw(0)), "")
 })
 
 test_that("sniff_strip_prologue() of whitespace-only input is empty", {
-  expect_identical(sitemapr:::sniff_strip_prologue("   \n\t"), "")
+  expect_identical(sitemapr_test_ns$sniff_strip_prologue("   \n\t"), "")
 })
