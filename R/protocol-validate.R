@@ -162,7 +162,7 @@ has_uri_illegal_char <- function(loc) {
 # `info` tier of PROTOCOL_URL_NOT_ESCAPED (ADR-005 decision 2). Byte-wise so a
 # multibyte UTF-8 sequence is detected regardless of the string's declared enc.
 has_non_ascii <- function(loc) {
-  grepl("[\x80-\xff]", loc, useBytes = TRUE)
+  grepl("[\\x80-\\xff]", loc, perl = TRUE, useBytes = TRUE)
 }
 
 # The scheme+host+port authority of a parsed row, with the scheme's default port

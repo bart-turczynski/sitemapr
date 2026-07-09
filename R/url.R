@@ -88,7 +88,7 @@ rurl_parse <- function(urls) {
 # Conservative by design: a false TRUE costs only speed, never correctness.
 url_needs_rurl <- function(urls) {
   is.na(urls) |
-    grepl("[\x80-\xff]", urls, useBytes = TRUE) | # any non-ASCII byte
+    grepl("[\\x80-\\xff]", urls, perl = TRUE, useBytes = TRUE) | # non-ASCII
     grepl("%", urls, fixed = TRUE) | # existing escape; rurl owns it
     grepl("@", urls, fixed = TRUE) | # userinfo; defer to rurl
     grepl("[^A-Za-z0-9._~:/?#&=-]", urls) # any char outside the no-op set
