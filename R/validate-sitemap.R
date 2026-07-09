@@ -384,14 +384,7 @@ validate_index_parts <- function(
   }
 
   if (nrow(ex$rows) > 0L) {
-    parts[[length(parts) + 1L]] <- validate_protocol(
-      ex$rows,
-      sitemap_url = src$final_url,
-      subject_ref = src$base,
-      byte_size = src$byte_size,
-      fetched_at = src$fetched_at,
-      source_meta = NULL
-    )
+    parts <- c(parts, index_protocol_parts(ex$rows, ex$sources, src$base))
   }
   parts
 }
@@ -404,6 +397,64 @@ index_feed_children <- function(sources) {
   }
   is_feed <- as.character(sources$format) == "feed"
   as.character(sources$final_url[is_feed])
+}
+
+index_source_row <- function(sources, sitemap_url) {
+  if (is.null(sources) || nrow(sources) == 0L || is.na(sitemap_url)) {
+    return(NULL)
+  }
+  i <- match(sitemap_url, as.character(sources$final_url))
+  if (is.na(i)) {
+    return(NULL)
+  }
+  sources[i, , drop = FALSE]
+}
+
+index_source_byte_size <- function(source) {
+  if (is.null(source) || nrow(source) == 0L) {
+    return(NA_real_)
+  }
+  # `source_metadata()$bytes` records the fetched body size. For gzip children
+  # that is the compressed size, while the protocol limit is uncompressed.
+  if (identical(as.character(source$format)[[1L]], "gzip")) {
+    return(NA_real_)
+  }
+  as.numeric(source$bytes[[1L]])
+}
+
+index_protocol_parts <- function(rows, sources, fallback_base) {
+  if (is.null(rows) || nrow(rows) == 0L) {
+    return(list())
+  }
+
+  sitemap_url <- as.character(rows$source_sitemap)
+  known <- !is.na(sitemap_url) & nzchar(sitemap_url)
+  if (!any(known)) {
+    return(list(validate_protocol(
+      rows,
+      sitemap_url = NA_character_,
+      subject_ref = fallback_base,
+      byte_size = NA_real_,
+      fetched_at = NA,
+      source_meta = NULL
+    )))
+  }
+
+  groups <- split(which(known), sitemap_url[known], drop = TRUE)
+  parts <- vector("list", length(groups))
+  for (i in seq_along(groups)) {
+    child_url <- names(groups)[[i]]
+    child_source <- index_source_row(sources, child_url)
+    parts[[i]] <- validate_protocol(
+      rows[groups[[i]], , drop = FALSE],
+      sitemap_url = child_url,
+      subject_ref = sitemap_subject_ref(child_url),
+      byte_size = index_source_byte_size(child_source),
+      fetched_at = NA,
+      source_meta = NULL
+    )
+  }
+  parts
 }
 
 # Build a fetch-layer finding for a source that failed during batched

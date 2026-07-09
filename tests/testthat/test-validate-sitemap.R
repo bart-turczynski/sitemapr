@@ -293,6 +293,20 @@ test_that("a nested index warns SITEMAP_INDEX_NESTED and expands leaf rows", {
   expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
 })
 
+test_that("expanded index leaf rows are scoped to their source sitemap", {
+  root <- "https://example.com/sitemap/sitemap.xml"
+  leaf <- "https://example.com/sitemap.xml"
+  map <- list()
+  map[[root]] <- index_body(leaf)
+  map[[leaf]] <- urlset_body("https://example.com/page")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(root)
+
+  expect_named(out, contract_cols)
+  expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
 test_that("an over-deep index chain yields INDEX_DEPTH_EXCEEDED", {
   root <- "https://example.com/d0.xml"
   d1 <- "https://example.com/d1.xml"
