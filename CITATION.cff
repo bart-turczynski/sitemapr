@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "sitemapr: Parse and Validate XML Sitemaps"
+version: 0.0.0.9000
+abstract: >-
+  A deterministic toolkit for reading and validating XML, text, and index
+  sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards.
+  It parses sitemap sources into tidy tibbles, expands sitemap indexes, and
+  reports schema and protocol findings with stable, reproducible output.
+authors:
+  - family-names: Turczynski
+    given-names: Bart
+    orcid: "https://orcid.org/0000-0002-8788-7980"
+repository-code: "https://github.com/bart-turczynski/sitemapr"
+url: "https://bart-turczynski.github.io/sitemapr/"
+license: MIT
+keywords:
+  - sitemap
+  - sitemaps
+  - XML sitemap
+  - sitemap index
+  - Sitemap Protocol
+  - URL discovery
+  - XML validation
+  - RSS
+  - Atom
+  - SEO
+  - web crawling
+  - R
+  - rstats

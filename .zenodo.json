@@ -1,0 +1,59 @@
+{
+  "upload_type": "software",
+  "title": "sitemapr: Parse and Validate XML Sitemaps",
+  "version": "0.0.0.9000",
+  "language": "eng",
+  "access_right": "open",
+  "license": "MIT",
+  "description": "<p>A deterministic R toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It parses sitemap sources into tidy tibbles, expands sitemap indexes, discovers a site's sitemaps from its root URL, and reports schema and protocol findings with stable, reproducible output.</p>",
+  "creators": [
+    {
+      "name": "Turczynski, Bart",
+      "orcid": "0000-0002-8788-7980"
+    }
+  ],
+  "keywords": [
+    "sitemap",
+    "sitemaps",
+    "XML sitemap",
+    "sitemap index",
+    "Sitemap Protocol",
+    "URL discovery",
+    "XML validation",
+    "RSS",
+    "Atom",
+    "SEO",
+    "web crawling",
+    "R",
+    "rstats"
+  ],
+  "notes": "sitemapr is part of a URL-handling ecosystem for R and depends on rurl for URL parsing and normalization. It bundles clean-room XSD profiles for the core Sitemap Protocol and image, video, news, pagemap, and xhtml-hreflang extensions.",
+  "related_identifiers": [
+    {
+      "identifier": "https://bart-turczynski.github.io/sitemapr/",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-softwaredocumentation",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://github.com/bart-turczynski/sitemapr",
+      "relation": "isSupplementTo",
+      "resource_type": "software",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://github.com/bart-turczynski/rurl",
+      "relation": "requires",
+      "resource_type": "software",
+      "scheme": "url"
+    }
+  ],
+  "references": [
+    "Google, Yahoo, and Microsoft. Sitemap Protocol 0.9. https://www.sitemaps.org/protocol.html",
+    "Bray, T., Paoli, J., Sperberg-McQueen, C. M., Maler, E., and Yergeau, F. Extensible Markup Language (XML) 1.0. W3C.",
+    "Thompson, H. S., Beech, D., Maloney, M., and Mendelsohn, N. XML Schema Part 1: Structures. W3C.",
+    "Biron, P. V. and Malhotra, A. XML Schema Part 2: Datatypes. W3C.",
+    "Berners-Lee, T., Fielding, R., and Masinter, L. (2005). RFC 3986: Uniform Resource Identifier (URI): Generic Syntax. IETF.",
+    "Duerst, M. and Suignard, M. (2005). RFC 3987: Internationalized Resource Identifiers (IRIs). IETF."
+  ]
+}

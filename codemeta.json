@@ -1,0 +1,139 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "identifier": "sitemapr",
+  "description": "A deterministic toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It parses sitemap sources into tidy tibbles, expands sitemap indexes, and reports schema and protocol findings with stable, reproducible output.",
+  "name": "sitemapr: Parse and Validate XML Sitemaps",
+  "relatedLink": "https://bart-turczynski.github.io/sitemapr/",
+  "codeRepository": "https://github.com/bart-turczynski/sitemapr",
+  "issueTracker": "https://github.com/bart-turczynski/sitemapr/issues",
+  "license": "https://spdx.org/licenses/MIT",
+  "version": "0.0.0.9000",
+  "programmingLanguage": {
+    "@type": "ComputerLanguage",
+    "name": "R",
+    "url": "https://r-project.org"
+  },
+  "runtimePlatform": "R version 4.6.0 (2026-04-24)",
+  "author": [
+    {
+      "@type": "Person",
+      "givenName": "Bart",
+      "familyName": "Turczynski",
+      "email": "bartek@turczynski.pl"
+    }
+  ],
+  "maintainer": [
+    {
+      "@type": "Person",
+      "givenName": "Bart",
+      "familyName": "Turczynski",
+      "email": "bartek@turczynski.pl"
+    }
+  ],
+  "softwareSuggestions": [
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "cucumber",
+      "name": "cucumber",
+      "version": ">= 2.0.0"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "knitr",
+      "name": "knitr"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "oysteR",
+      "name": "oysteR"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "rmarkdown",
+      "name": "rmarkdown"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "rosv",
+      "name": "rosv"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "testthat",
+      "name": "testthat",
+      "version": ">= 3.0.0"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "withr",
+      "name": "withr"
+    }
+  ],
+  "softwareRequirements": {
+    "1": {
+      "@type": "SoftwareApplication",
+      "identifier": "htmltools",
+      "name": "htmltools"
+    },
+    "2": {
+      "@type": "SoftwareApplication",
+      "identifier": "httr2",
+      "name": "httr2"
+    },
+    "3": {
+      "@type": "SoftwareApplication",
+      "identifier": "rlang",
+      "name": "rlang"
+    },
+    "4": {
+      "@type": "SoftwareApplication",
+      "identifier": "rurl",
+      "name": "rurl",
+      "version": ">= 2.1.0"
+    },
+    "5": {
+      "@type": "SoftwareApplication",
+      "identifier": "tibble",
+      "name": "tibble"
+    },
+    "6": {
+      "@type": "SoftwareApplication",
+      "identifier": "utils",
+      "name": "utils"
+    },
+    "7": {
+      "@type": "SoftwareApplication",
+      "identifier": "xml2",
+      "name": "xml2"
+    },
+    "8": {
+      "@type": "SoftwareApplication",
+      "identifier": "R",
+      "name": "R",
+      "version": ">= 4.0.0"
+    },
+    "SystemRequirements": null
+  },
+  "fileSize": "866.363KB",
+  "citation": [
+    {
+      "@type": "SoftwareSourceCode",
+      "datePublished": "2026",
+      "author": [
+        {
+          "@type": "Person",
+          "givenName": "Bart",
+          "familyName": "Turczynski",
+          "@id": "https://orcid.org/0000-0002-8788-7980"
+        }
+      ],
+      "name": "{sitemapr}: Parse and Validate XML Sitemaps",
+      "url": "https://bart-turczynski.github.io/sitemapr/",
+      "description": "R package version 0.0.0.9000"
+    }
+  ],
+  "releaseNotes": "https://github.com/bart-turczynski/sitemapr/blob/main/NEWS.md",
+  "contIntegration": ["https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml", "https://app.codecov.io/gh/bart-turczynski/sitemapr", "https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml", "https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml", "https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml"],
+  "developmentStatus": "https://lifecycle.r-lib.org/articles/stages.html#experimental"
+}
