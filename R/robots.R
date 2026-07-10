@@ -81,12 +81,18 @@ parse_robots_sitemaps <- function(text) {
 discover_robots_sitemaps <- function(
   origin,
   user_agent = default_user_agent(),
-  net_limits = fetch_limits()
+  net_limits = fetch_limits(),
+  policy = request_policy()
 ) {
   url <- robots_txt_url(origin)
   rec <- tryCatch(
     withCallingHandlers(
-      fetch_source(url, user_agent = user_agent, limits = net_limits),
+      fetch_source(
+        url,
+        user_agent = user_agent,
+        limits = net_limits,
+        policy = policy
+      ),
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),
     sitemapr_ssrf_blocked = function(e) NULL,

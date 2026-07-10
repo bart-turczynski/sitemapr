@@ -111,8 +111,13 @@ read_sitemap_local <- function(path) {
 # A top-level sitemapindex is handed to the recursive index-expansion engine;
 # the root's own fetch record is prepended to the engine's per-child source
 # records.
-read_sitemap_url <- function(source, user_agent, limits, idx_limits) {
-  rec <- fetch_source(source, user_agent = user_agent, limits = limits)
+read_sitemap_url <- function(source, user_agent, limits, idx_limits, policy) {
+  rec <- fetch_source(
+    source,
+    user_agent = user_agent,
+    limits = limits,
+    policy = policy
+  )
   if (!is.na(rec$error_class)) {
     rlang::abort(
       sprintf(
@@ -134,7 +139,8 @@ read_sitemap_url <- function(source, user_agent, limits, idx_limits) {
       depth = 0L,
       user_agent = user_agent,
       limits = idx_limits,
-      net_limits = limits
+      net_limits = limits,
+      policy = policy
     )
     sources <- if (is.null(ex$sources)) rec else rbind(rec, ex$sources)
     return(list(rows = ex$rows, sources = sources, problems = ex$problems))
@@ -143,7 +149,13 @@ read_sitemap_url <- function(source, user_agent, limits, idx_limits) {
 }
 
 # Read one normalized source record.
-read_sitemap_source <- function(source, user_agent, limits, index_limits) {
+read_sitemap_source <- function(
+  source,
+  user_agent,
+  limits,
+  index_limits,
+  policy
+) {
   if (isTRUE(source$is_local_file[[1L]])) {
     return(read_sitemap_local(source$normalized_url[[1L]]))
   }
@@ -151,7 +163,8 @@ read_sitemap_source <- function(source, user_agent, limits, index_limits) {
     source,
     user_agent = user_agent,
     limits = limits,
-    idx_limits = index_limits
+    idx_limits = index_limits,
+    policy = policy
   )
 }
 
@@ -199,7 +212,13 @@ read_source_failure_problem <- function(source, cnd) {
 }
 
 # Read multiple normalized source records, continuing after per-source failures.
-read_sitemap_batch <- function(sources, user_agent, limits, index_limits) {
+read_sitemap_batch <- function(
+  sources,
+  user_agent,
+  limits,
+  index_limits,
+  policy
+) {
   row_parts <- list()
   source_parts <- list()
   problem_parts <- list()
@@ -208,7 +227,7 @@ read_sitemap_batch <- function(sources, user_agent, limits, index_limits) {
     source <- sources[i, , drop = FALSE]
     out <- tryCatch(
       suppressWarnings(
-        read_sitemap_source(source, user_agent, limits, index_limits)
+        read_sitemap_source(source, user_agent, limits, index_limits, policy)
       ),
       error = function(cnd) {
         list(
@@ -268,6 +287,8 @@ read_sitemap_batch <- function(sources, user_agent, limits, index_limits) {
 #' @param index_limits Sitemapindex-expansion bounds (recursion depth and
 #'   per-index child-count cap), as from `index_limits()`. Defaults to
 #'   `index_limits()`.
+#' @param policy A request policy applied to every HTTP hop (root, robots.txt,
+#'   discovery, redirects, and index children). Defaults to the no-op policy.
 #' @return A tibble of URL rows with `sources` and `problems` attributes.
 #'   An entry-point fetch failure or unsupported content raises a classed error
 #'   condition.
@@ -291,7 +312,8 @@ read_sitemap <- function(
   x,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
@@ -303,14 +325,16 @@ read_sitemap <- function(
       sources[1L, , drop = FALSE],
       user_agent = user_agent,
       limits = limits,
-      index_limits = index_limits
+      index_limits = index_limits,
+      policy = policy
     )
   } else {
     read_sitemap_batch(
       sources,
       user_agent = user_agent,
       limits = limits,
-      index_limits = index_limits
+      index_limits = index_limits,
+      policy = policy
     )
   }
 
@@ -326,12 +350,14 @@ read_sitemaps <- function(
   x,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   read_sitemap(
     x,
     user_agent = user_agent,
     limits = limits,
-    index_limits = index_limits
+    index_limits = index_limits,
+    policy = policy
   )
 }

@@ -50,7 +50,8 @@ validation_source_bytes <- function(
   source,
   is_local,
   user_agent,
-  limits
+  limits,
+  policy
 ) {
   if (is_local) {
     return(list(
@@ -59,7 +60,12 @@ validation_source_bytes <- function(
     ))
   }
 
-  rec <- fetch_source(source, user_agent = user_agent, limits = limits)
+  rec <- fetch_source(
+    source,
+    user_agent = user_agent,
+    limits = limits,
+    policy = policy
+  )
   if (!is.na(rec$error_class)) {
     rlang::abort(
       sprintf(
@@ -98,14 +104,15 @@ validation_document_source <- function(bytes, fmt, final_url, base) {
   )
 }
 
-resolve_validation_source <- function(x, user_agent, limits) {
+resolve_validation_source <- function(x, user_agent, limits, policy) {
   target <- validation_target(x)
   source <- validation_source_bytes(
     target$target,
     target$source,
     target$is_local,
     user_agent,
-    limits
+    limits,
+    policy
   )
   bytes <- source$bytes
   final_url <- source$final_url
@@ -308,7 +315,7 @@ empty_index_findings <- function() {
 
 # Build the producer `parts` list for an XML source, branching on the root
 # local-name. `src` is a resolved source; `index_limits` bounds the expansion.
-validate_xml_parts <- function(src, user_agent, limits, index_limits) {
+validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
   doc <- read_sitemap_xml(src$bytes)
   root <- xml2::xml_name(xml2::xml_root(doc))
 
@@ -340,7 +347,15 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits) {
   # sitemapindex: schema + bounded expansion. The expansion problems become
   # INDEX_* findings; RSS/Atom feed children become UNSUPPORTED_FEED; the rows
   # gathered from leaf children feed the protocol layer.
-  validate_index_parts(src, schema, doc, user_agent, limits, index_limits)
+  validate_index_parts(
+    src,
+    schema,
+    doc,
+    user_agent,
+    limits,
+    index_limits,
+    policy
+  )
 }
 
 # Assemble the producer parts for a `sitemapindex` root. A local index has no
@@ -351,7 +366,8 @@ validate_index_parts <- function(
   doc,
   user_agent,
   limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   parts <- list(schema)
   if (is.na(src$final_url)) {
@@ -365,7 +381,8 @@ validate_index_parts <- function(
     depth = 0L,
     user_agent = user_agent,
     limits = index_limits,
-    net_limits = limits
+    net_limits = limits,
+    policy = policy
   )
 
   parts[[length(parts) + 1L]] <-
@@ -491,14 +508,15 @@ validate_sitemap_source <- function(
   mode,
   user_agent,
   limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
   # surface UNSUPPORTED_MALFORMED_GZIP rather than propagating the condition. A
   # genuine transport / SSRF / HTTP failure still propagates.
   src <- tryCatch(
-    resolve_validation_source(source, user_agent, limits),
+    resolve_validation_source(source, user_agent, limits, policy),
     sitemapr_decompression_error = function(cnd) {
       list(
         kind = "malformed-gzip",
@@ -521,7 +539,7 @@ validate_sitemap_source <- function(
   } else if (identical(src$format, "text")) {
     list(validate_text_protocol(rawToChar(src$bytes), src$base))
   } else {
-    validate_xml_parts(src, user_agent, limits, index_limits)
+    validate_xml_parts(src, user_agent, limits, index_limits, policy)
   }
 
   assemble_findings(parts, mode)
@@ -548,14 +566,22 @@ validate_sitemap_batch <- function(
   mode,
   user_agent,
   limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   parts <- list()
   for (i in seq_len(nrow(sources))) {
     source <- sources[i, , drop = FALSE]
     parts[[length(parts) + 1L]] <- tryCatch(
       suppressWarnings(
-        validate_sitemap_source(source, mode, user_agent, limits, index_limits)
+        validate_sitemap_source(
+          source,
+          mode,
+          user_agent,
+          limits,
+          index_limits,
+          policy
+        )
       ),
       error = function(cnd) {
         assemble_findings(
@@ -621,7 +647,8 @@ validate_sitemap <- function(
   mode = c("strict", "non-strict"),
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   mode <- match.arg(mode)
   sources <- sitemap_public_source_records(x)
@@ -635,7 +662,8 @@ validate_sitemap <- function(
       mode = mode,
       user_agent = user_agent,
       limits = limits,
-      index_limits = index_limits
+      index_limits = index_limits,
+      policy = policy
     )
   } else {
     validate_sitemap_batch(
@@ -643,7 +671,8 @@ validate_sitemap <- function(
       mode = mode,
       user_agent = user_agent,
       limits = limits,
-      index_limits = index_limits
+      index_limits = index_limits,
+      policy = policy
     )
   }
 }
@@ -655,13 +684,15 @@ validate_sitemaps <- function(
   mode = c("strict", "non-strict"),
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   validate_sitemap(
     x,
     mode = mode,
     user_agent = user_agent,
     limits = limits,
-    index_limits = index_limits
+    index_limits = index_limits,
+    policy = policy
   )
 }

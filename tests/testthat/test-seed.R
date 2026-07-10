@@ -250,3 +250,42 @@ test_that("from = 'sitemap' rejects a non-scalar x", {
     class = "sitemapr_bad_input"
   )
 })
+
+# ---- request policy propagation ----------------------------------------------
+
+test_that("sitemap_tree_from_bytes threads the policy to index children", {
+  httr2::local_mocked_responses(seed_mock(list(
+    "https://ex.com/a.xml" = seed_urlset("https://ex.com/1")
+  )))
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  sitemap_tree_from_bytes(
+    seed_index("https://ex.com/a.xml"),
+    source_url = "https://ex.com/sitemap_index.xml",
+    policy = policy
+  )
+  # The in-memory root does no network; its index child fetch saw the policy.
+  expect_true("https://ex.com/a.xml" %in% sink$urls)
+})
+
+test_that("sitemap_tree from = 'sitemap' threads the policy to root and kids", {
+  root <- "https://ex.com/sitemap_index.xml"
+  child <- "https://ex.com/a.xml"
+  httr2::local_mocked_responses(seed_mock(list(
+    "https://ex.com/sitemap_index.xml" = seed_index(child),
+    "https://ex.com/a.xml" = seed_urlset("https://ex.com/1")
+  )))
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  sitemap_tree(root, from = "sitemap", policy = policy)
+  expect_true(root %in% sink$urls)
+  expect_true(child %in% sink$urls)
+})

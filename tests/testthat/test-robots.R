@@ -222,3 +222,35 @@ test_that("a robots-listed index is expanded like any accepted index", {
   expect_identical(child$depth, 1L)
   expect_identical(child$page_count, 2L)
 })
+
+# ---- request policy propagation ----------------------------------------------
+
+test_that("discover_robots_sitemaps threads the policy to the robots.txt hop", {
+  httr2::local_mocked_responses(robots_mock(list(
+    "https://ex.com/robots.txt" = "Sitemap: https://ex.com/a.xml"
+  )))
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  discover_robots_sitemaps("https://ex.com", policy = policy)
+  expect_true("https://ex.com/robots.txt" %in% sink$urls)
+})
+
+test_that("sitemap_tree threads the policy to robots.txt and its candidate", {
+  httr2::local_mocked_responses(robots_mock(list(
+    "https://ex.com/robots.txt" = "Sitemap: https://ex.com/deep.xml",
+    "https://ex.com/deep.xml" = robots_urlset("https://ex.com/1")
+  )))
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  sitemap_tree("https://ex.com", policy = policy)
+  expect_true("https://ex.com/robots.txt" %in% sink$urls)
+  expect_true("https://ex.com/deep.xml" %in% sink$urls)
+})

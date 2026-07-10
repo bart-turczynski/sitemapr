@@ -193,3 +193,41 @@ test_that("an accepted candidate with an unparseable body skips page_count", {
   expect_true(is.na(row$page_count))
   expect_false(row$gzip)
 })
+
+# ---- request policy propagation ----------------------------------------------
+
+test_that("sitemap_tree threads the policy through a candidate redirect hop", {
+  candidate <- "https://example.com/sitemap.xml"
+  target <- "https://example.com/final.xml"
+  mock <- function(req) {
+    if (identical(req$url, candidate)) {
+      return(httr2::response(
+        status_code = 301L,
+        url = req$url,
+        headers = list(Location = target)
+      ))
+    }
+    if (identical(req$url, target)) {
+      return(httr2::response(
+        status_code = 200L,
+        url = req$url,
+        headers = list("Content-Type" = "application/xml"),
+        body = charToRaw(tree_urlset("https://a/1"))
+      ))
+    }
+    httr2::response(status_code = 404L, url = req$url)
+  }
+  httr2::local_mocked_responses(mock)
+
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  sitemap_tree("https://example.com", policy = policy)
+
+  # Both the guessed candidate hop and its redirect target saw the policy.
+  expect_true(candidate %in% sink$urls)
+  expect_true(target %in% sink$urls)
+})

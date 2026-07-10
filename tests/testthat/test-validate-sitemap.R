@@ -613,3 +613,25 @@ test_that("a clean archive yields no decompression findings", {
   expect_named(out, contract_cols)
   expect_false(any(out$layer == "decompression"))
 })
+
+# ---- request policy propagation ----------------------------------------------
+
+test_that("validate_sitemap threads the policy to root and index children", {
+  root <- "https://example.com/sitemap_index.xml"
+  child <- "https://example.com/child.xml"
+  httr2::local_mocked_responses(mock_by_url(list(
+    "https://example.com/sitemap_index.xml" = index_body(child),
+    "https://example.com/child.xml" = urlset_body("https://example.com/1")
+  )))
+
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  policy <- request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+  validate_sitemap(root, policy = policy)
+
+  expect_true(root %in% sink$urls)
+  expect_true(child %in% sink$urls)
+})

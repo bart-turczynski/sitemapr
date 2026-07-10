@@ -9,7 +9,8 @@ sitemap_tree_from_bytes(
   source_url,
   user_agent = default_user_agent(),
   net_limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ triggers. Defaults to the package User-Agent.}
 
 \item{index_limits}{Sitemapindex-expansion bounds, as from \code{index_limits()}.
 Defaults to \code{index_limits()}.}
+
+\item{policy}{A request policy applied to every index-child HTTP hop.
+Defaults to the no-op policy.}
 }
 \value{
 A tibble with the same 8-column contract as \code{\link[=sitemap_tree]{sitemap_tree()}}:
