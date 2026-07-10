@@ -364,6 +364,118 @@ test_that("a successful fetch returns the 13-column metadata record", {
   expect_true(is.na(meta$profile_id))
 })
 
+# ---- request policy (fetch-boundary extension seam) --------------------------
+
+test_that("the no-op request policy reproduces the default fetch behavior", {
+  body <- charToRaw("<?xml version=\"1.0\"?><urlset></urlset>")
+  httr2::local_mocked_responses(list(
+    mock_ok(url = "https://example.com/sitemap.xml", body = body)
+  ))
+
+  meta <- fetch_source(
+    "https://example.com/sitemap.xml",
+    policy = request_policy()
+  )
+  expect_identical(meta$status, 200L)
+  expect_identical(meta$format, "xml-urlset")
+})
+
+test_that("a request policy can add a harmless header to the request", {
+  state <- new.env(parent = emptyenv())
+  state$captured <- NULL
+  httr2::local_mocked_responses(function(req) {
+    state$captured <- req
+    mock_ok()
+  })
+
+  policy <- request_policy(
+    prepare = function(req, ctx) httr2::req_headers(req, "X-Test" = "sitemapr")
+  )
+  fetch_source("https://example.com/sitemap.xml", policy = policy)
+  expect_identical(state$captured$headers[["X-Test"]], "sitemapr")
+})
+
+test_that("request_policy rejects a non-function prepare hook", {
+  expect_error(
+    request_policy(prepare = "not a function"),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("a prepare hook returning a non-request is rejected", {
+  policy <- request_policy(prepare = function(req, ctx) "not a request")
+  httr2::local_mocked_responses(list(mock_ok()))
+  expect_error(
+    fetch_source("https://example.com/sitemap.xml", policy = policy),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("the policy hook receives each hop's resolved url as context", {
+  state <- new.env(parent = emptyenv())
+  state$urls <- character(0)
+  httr2::local_mocked_responses(list(
+    mock_redirect("https://example.com/0", "https://example.com/1"),
+    mock_ok(url = "https://example.com/1")
+  ))
+
+  policy <- request_policy(prepare = function(req, ctx) {
+    state$urls <- c(state$urls, ctx$url)
+    req
+  })
+  fetch_source("https://example.com/0", policy = policy)
+  # One prepare per hop, each carrying that hop's resolved URL.
+  expect_identical(
+    state$urls,
+    c("https://example.com/0", "https://example.com/1")
+  )
+})
+
+test_that("a policy cannot override sitemapr's redirect controls", {
+  state <- new.env(parent = emptyenv())
+  state$captured <- NULL
+  httr2::local_mocked_responses(function(req) {
+    state$captured <- req
+    mock_ok()
+  })
+
+  # A hostile hook tries to re-enable auto-redirect; sitemapr re-asserts its
+  # own transport controls AFTER the hook, so these get overwritten.
+  policy <- request_policy(prepare = function(req, ctx) {
+    httr2::req_options(req, followlocation = 1L, maxredirs = 99L)
+  })
+  fetch_source("https://example.com/sitemap.xml", policy = policy)
+  expect_identical(state$captured$options$followlocation, 0L)
+  expect_identical(state$captured$options$maxredirs, 0L)
+})
+
+test_that("guard runs before prepare, and prepare before perform", {
+  order <- new.env(parent = emptyenv())
+  order$events <- character(0)
+  httr2::local_mocked_responses(function(req) {
+    order$events <- c(order$events, "perform")
+    mock_ok()
+  })
+
+  policy <- request_policy(prepare = function(req, ctx) {
+    order$events <- c(order$events, "prepare")
+    req
+  })
+
+  # Allowed host: prepare records before perform.
+  fetch_source("https://example.com/sitemap.xml", policy = policy)
+  expect_identical(order$events, c("prepare", "perform"))
+
+  # Blocked host: the SSRF guard aborts BEFORE prepare or perform can run,
+  # proving guard precedes prepare (which precedes perform).
+  order$events <- character(0)
+  expect_error(
+    fetch_source("http://127.0.0.1/sitemap.xml", policy = policy),
+    class = "sitemapr_ssrf_blocked"
+  )
+  expect_identical(order$events, character(0))
+})
+
 # ---- https -> http fallback --------------------------------------------------
 
 test_that("scheme_inferred = TRUE falls back to http when https fails", {
