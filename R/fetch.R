@@ -112,16 +112,79 @@ fetch_is_timeout <- function(cnd) {
   grepl("tim\\s*e?d?\\s*out|timeout", msg, ignore.case = TRUE)
 }
 
+# ---- request policy (fetch-boundary extension seam) --------------------------
+
+# Construct and validate a request-policy: a small object carrying an optional
+# request-preparation hook applied to each hop's httr2 request. This is the one
+# safe extension seam at the fetch boundary (headers/auth/proxies later); the
+# DEFAULT is a no-op (identity) policy, so existing callers behave identically.
+#
+# `prepare`, when supplied, is a `function(req, ctx)` that receives the built
+# httr2 request plus a hop-context list (currently the resolved hop `url`) and
+# returns the possibly-modified request. It runs AFTER the per-hop SSRF guard
+# and BEFORE sitemapr's own transport controls (timeout, redirect ownership,
+# error policy) are asserted, so it can add headers but cannot weaken those
+# safety semantics.
+#
+# Raises `sitemapr_invalid_request_policy` (abort) when `prepare` is neither
+# NULL nor a function.
+#
+# @keywords internal
+# @noRd
+request_policy <- function(prepare = NULL) {
+  if (!is.null(prepare) && !is.function(prepare)) {
+    rlang::abort(
+      "`prepare` must be NULL or a function(req, ctx) returning a request.",
+      class = "sitemapr_invalid_request_policy"
+    )
+  }
+  structure(list(prepare = prepare), class = "sitemapr_request_policy")
+}
+
+# Apply a request-policy's preparation hook to one hop's request. A NULL hook is
+# the no-op identity. The hook MUST return an httr2 request; any other return is
+# rejected with `sitemapr_invalid_request_policy` so a misbehaving hook cannot
+# smuggle an arbitrary object into req_perform().
+#
+# @keywords internal
+# @noRd
+request_policy_prepare <- function(policy, req, url) {
+  if (!inherits(policy, "sitemapr_request_policy")) {
+    rlang::abort(
+      "`policy` must be a sitemapr_request_policy (see request_policy()).",
+      class = "sitemapr_invalid_request_policy"
+    )
+  }
+  if (is.null(policy$prepare)) {
+    return(req)
+  }
+  out <- policy$prepare(req, list(url = url))
+  if (!inherits(out, "httr2_request")) {
+    rlang::abort(
+      "The request-policy `prepare` hook must return an httr2 request.",
+      class = "sitemapr_invalid_request_policy"
+    )
+  }
+  out
+}
+
 # ---- single bounded request --------------------------------------------------
 
 # Build and perform ONE request (no redirect following) for `url`, returning the
 # raw httr2 response. Auto-redirect is disabled so the caller drives the loop
 # and re-runs the SSRF guard on each hop. Non-2xx codes are NOT promoted to
 # errors
-# here; transport failures still throw.
-fetch_perform_one <- function(url, limits, user_agent) {
+# here; transport failures still throw. The `policy` preparation hook runs
+# between the base request and sitemapr's own transport controls: the timeout,
+# redirect ownership, and error policy are (re-)asserted AFTER the hook, so a
+# policy can add headers but cannot override those safety semantics.
+fetch_perform_one <- function(url, limits, user_agent,
+                              policy = request_policy()) {
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
+  # Caller-supplied preparation hook (after the SSRF guard, before our own
+  # transport controls). A no-op for the default policy.
+  req <- request_policy_prepare(policy, req, url)
   req <- httr2::req_timeout(req, limits$timeout)
   # Disable httr2's own redirect following: we follow manually, per hop.
   req <- httr2::req_options(req, followlocation = 0L, maxredirs = 0L)
@@ -156,7 +219,8 @@ fetch_connection_failure <- function(
   scheme_inferred,
   limits,
   user_agent,
-  ssrf_guard
+  ssrf_guard,
+  policy = request_policy()
 ) {
   if (isTRUE(scheme_inferred) && startsWith(tolower(url_str), "https://")) {
     http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
@@ -164,7 +228,8 @@ fetch_connection_failure <- function(
       url = http_url,
       limits = limits,
       user_agent = user_agent,
-      ssrf_guard = ssrf_guard
+      ssrf_guard = ssrf_guard,
+      policy = policy
     ))
   }
   if (fetch_is_timeout(cnd)) {
@@ -213,6 +278,9 @@ fetch_connection_failure <- function(
 #'   `default_user_agent()`.
 #' @param ssrf_guard Logical; when `TRUE` (default) the structural SSRF guard
 #'   runs on every hop. When `FALSE` the guard is skipped entirely.
+#' @param policy A `request_policy()` object whose preparation hook is applied
+#'   to every hop's request, after the SSRF guard and before sitemapr's own
+#'   transport controls. Defaults to the no-op policy.
 #' @return A one-row data.frame from `source_metadata()`. The raw response body
 #'   is attached as a `"body"` attribute (a raw vector; off the 13-column
 #'   contract) so the parse entry point can dispatch on it without re-fetching.
@@ -223,7 +291,8 @@ fetch_source <- function(
   scheme_inferred = FALSE,
   limits = fetch_limits(),
   user_agent = default_user_agent(),
-  ssrf_guard = TRUE
+  ssrf_guard = TRUE,
+  policy = request_policy()
 ) {
   input <- fetch_source_input(url, scheme_inferred)
   url_str <- input$url
@@ -235,11 +304,12 @@ fetch_source <- function(
       url = url_str,
       limits = limits,
       user_agent = user_agent,
-      ssrf_guard = ssrf_guard
+      ssrf_guard = ssrf_guard,
+      policy = policy
     ),
     httr2_failure = function(cnd) {
       fetch_connection_failure(
-        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard
+        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard, policy
       )
     }
   )
@@ -339,7 +409,13 @@ fetch_terminal_record <- function(resp, url, redirect_chain, body, elapsed) {
 # all surface as classed aborts; transport failures propagate to the caller
 # (`fetch_source`) for the https->http fallback decision. Ordering is load-
 # bearing (ADR-003): guard -> perform -> follow, on every hop.
-fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
+fetch_follow <- function(
+  url,
+  limits,
+  user_agent,
+  ssrf_guard,
+  policy = request_policy()
+) {
   start <- Sys.time()
   current_url <- url
   redirect_chain <- character(0)
@@ -349,8 +425,9 @@ fetch_follow <- function(url, limits, user_agent, ssrf_guard) {
     # 1. Per-hop SSRF guard BEFORE any network activity for this hop.
     fetch_hop_ssrf_guard(current_url, ssrf_guard)
 
-    # 2. Perform one request (no auto-redirect).
-    resp <- fetch_perform_one(current_url, limits, user_agent)
+    # 2. Perform one request (no auto-redirect); the policy hook prepares it
+    #    AFTER the guard above and BEFORE req_perform() inside the helper.
+    resp <- fetch_perform_one(current_url, limits, user_agent, policy)
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.
     next_url <- fetch_redirect_target(resp, current_url)
