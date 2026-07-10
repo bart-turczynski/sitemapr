@@ -34,6 +34,13 @@
 #' `max_depth` is not descended (an `INDEX_DEPTH_EXCEEDED` event).
 #' `max_children` caps how many child entries one index contributes after dedup;
 #' entries beyond the cap are dropped (an `INDEX_CHILD_COUNT_EXCEEDED` event).
+#' `max_total_sitemaps` and `max_total_urls` are TRAVERSAL-WIDE aggregate
+#' budgets spanning the whole recursive expansion: the first caps how many child
+#' sitemaps are fetched in total (an `INDEX_TOTAL_SITEMAPS_EXCEEDED` event), the
+#' second caps how many URL rows are gathered in total (an
+#' `INDEX_TOTAL_URLS_EXCEEDED` event). Both default to `Inf` (no aggregate
+#' bound), preserving the historical behavior; when a budget is reached the
+#' traversal stops and returns the accumulated PARTIAL result.
 #'
 #' @param max_depth Maximum recursion depth below the root index (integer).
 #'   Resolves from the argument, then `getOption("sitemapr.max_index_depth")`,
@@ -42,16 +49,28 @@
 #'   index (integer). Resolves from the argument, then
 #'   `getOption("sitemapr.max_index_children")`, then the default of 50 000 (the
 #'   sitemap-protocol per-index entry limit).
+#' @param max_total_sitemaps Maximum number of child sitemaps fetched across the
+#'   entire traversal (numeric). Resolves from the argument, then
+#'   `getOption("sitemapr.max_total_sitemaps")`, then the default of `Inf` (no
+#'   aggregate bound). Kept numeric so `Inf` is representable.
+#' @param max_total_urls Maximum number of URL rows gathered across the entire
+#'   traversal (numeric). Resolves from the argument, then
+#'   `getOption("sitemapr.max_total_urls")`, then the default of `Inf` (no
+#'   aggregate bound). Kept numeric so `Inf` is representable.
 #' @return A named list of limits with coerced types.
 #' @keywords internal
 #' @noRd
 index_limits <- function(
   max_depth = getOption("sitemapr.max_index_depth", 3L),
-  max_children = getOption("sitemapr.max_index_children", 50000L)
+  max_children = getOption("sitemapr.max_index_children", 50000L),
+  max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", Inf),
+  max_total_urls = getOption("sitemapr.max_total_urls", Inf)
 ) {
   list(
     max_depth = as.integer(max_depth),
-    max_children = as.integer(max_children)
+    max_children = as.integer(max_children),
+    max_total_sitemaps = as.numeric(max_total_sitemaps),
+    max_total_urls = as.numeric(max_total_urls)
   )
 }
 
@@ -104,6 +123,36 @@ add_index_problem <- function(acc, category, subject_ref, message) {
     subject_ref = subject_ref,
     message = message
   )
+}
+
+# Traversal-wide aggregate-budget gate, evaluated at the top of every child
+# loop (so it spans nested recursion via the shared accumulator). Returns TRUE
+# once a budget stops the traversal, recording a single code-free problem the
+# first time. The sitemap-count budget is enforced here (before fetching one
+# more child); the URL-row budget is enforced in `add_leaf_index_child()`, which
+# knows a leaf's row count and sets `acc$stopped` for this gate to honor.
+index_budget_stop <- function(acc, parent_url, limits) {
+  if (isTRUE(acc$stopped)) {
+    return(TRUE)
+  }
+  if (acc$total_sitemaps >= limits$max_total_sitemaps) {
+    add_index_problem(
+      acc,
+      "index-expansion",
+      parent_url,
+      sprintf(
+        paste0(
+          "Aggregate sitemap budget reached: %d child sitemaps fetched ",
+          "(max_total_sitemaps = %s); traversal stopped, partial result."
+        ),
+        acc$total_sitemaps,
+        format(limits$max_total_sitemaps)
+      )
+    )
+    acc$stopped <- TRUE
+    return(TRUE)
+  }
+  FALSE
 }
 
 # Deduplicate an index's children on the full-URL identity key (keeping catalog
@@ -254,6 +303,7 @@ fetch_and_parse_child <- function(
     return(NULL)
   }
   acc$sources[[length(acc$sources) + 1L]] <- crec
+  acc$total_sitemaps <- acc$total_sitemaps + 1L
   # A redirected child may resolve to an already-visited resource; key both.
   acc$visited <- c(acc$visited, index_loc_key(crec$final_url))
 
@@ -321,16 +371,52 @@ add_leaf_index_child <- function(
   cparsed,
   child_depth,
   parent_url,
+  limits,
   acc,
   gzip
 ) {
+  n <- nrow(cparsed$rows)
+  # Stop before emitting rows that would breach the aggregate URL budget: the
+  # leaf is left out whole (never partially), so the partial result stays
+  # internally consistent, and the leaf is recorded as a rejected tree node.
+  if (acc$total_urls + n > limits$max_total_urls) {
+    add_index_problem(
+      acc,
+      "index-expansion",
+      crec$final_url,
+      sprintf(
+        paste0(
+          "Aggregate URL budget reached: %d URL rows gathered, %d more from ",
+          "%s would breach max_total_urls = %s; traversal stopped, partial ",
+          "result."
+        ),
+        acc$total_urls,
+        n,
+        crec$final_url,
+        format(limits$max_total_urls)
+      )
+    )
+    acc$stopped <- TRUE
+    add_tree_row(
+      acc,
+      child_depth,
+      parent_url,
+      crec$final_url,
+      page_count = n,
+      gzip = gzip,
+      status = "rejected",
+      reason = "url-budget"
+    )
+    return(invisible(NULL))
+  }
   acc$rows[[length(acc$rows) + 1L]] <- cparsed$rows
+  acc$total_urls <- acc$total_urls + n
   add_tree_row(
     acc,
     child_depth,
     parent_url,
     crec$final_url,
-    page_count = nrow(cparsed$rows),
+    page_count = n,
     gzip = gzip,
     status = "accepted"
   )
@@ -371,7 +457,9 @@ expand_index_child <- function(
     return(invisible(NULL))
   }
 
-  add_leaf_index_child(crec, cparsed, child_depth, parent_url, acc, gzip)
+  add_leaf_index_child(
+    crec, cparsed, child_depth, parent_url, limits, acc, gzip
+  )
   invisible(NULL)
 }
 
@@ -397,6 +485,9 @@ expand_index_node <- function(
   child_depth <- parent_depth + 1L
 
   for (i in seq_along(locs)) {
+    if (index_budget_stop(acc, parent_url, limits)) {
+      break
+    }
     child_url <- locs[[i]]
     key <- keys[[i]]
 
@@ -461,6 +552,10 @@ expand_index <- function(
   acc$problems <- list()
   acc$tree <- list()
   acc$visited <- if (is.null(visited)) index_loc_key(root_url) else visited
+  # Traversal-wide aggregate-budget accounting (spans the whole recursion).
+  acc$total_sitemaps <- 0L
+  acc$total_urls <- 0L
+  acc$stopped <- FALSE
 
   expand_index_node(
     root_url,

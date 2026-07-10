@@ -260,6 +260,104 @@ test_that("an index with no children yields an empty tree", {
   expect_identical(nrow(res$rows), 0L)
 })
 
+test_that("index_limits() defaults to no aggregate budget (Inf)", {
+  withr::local_options(list(
+    sitemapr.max_total_sitemaps = NULL,
+    sitemapr.max_total_urls = NULL
+  ))
+
+  lim <- index_limits()
+
+  expect_identical(lim$max_total_sitemaps, Inf)
+  expect_identical(lim$max_total_urls, Inf)
+  expect_type(lim$max_total_sitemaps, "double")
+  expect_type(lim$max_total_urls, "double")
+})
+
+test_that("max_total_sitemaps stops at the exact total with a partial result", {
+  root <- "https://example.com/sitemap.xml"
+  c1 <- "https://example.com/c1.xml"
+  c2 <- "https://example.com/c2.xml"
+  c3 <- "https://example.com/c3.xml"
+  map <- list()
+  map[[c1]] <- urlset_xml("https://example.com/1")
+  map[[c2]] <- urlset_xml("https://example.com/2")
+  map[[c3]] <- urlset_xml("https://example.com/3")
+  tracker <- local_index_server(map)
+
+  res <- expand_root(
+    root,
+    index_xml(c1, c2, c3),
+    limits = index_limits(max_total_sitemaps = 2)
+  )
+
+  # Exactly two child sitemaps fetched; the third is never requested.
+  expect_length(tracker$urls, 2L)
+  expect_false(c3 %in% tracker$urls)
+  # Partial result is internally consistent: sources, tree, and rows all align.
+  expect_identical(nrow(res$sources), 2L)
+  expect_identical(nrow(res$tree), 2L)
+  expect_true(all(res$tree$status == "accepted"))
+  expect_setequal(
+    res$rows$loc,
+    c("https://example.com/1", "https://example.com/2")
+  )
+  # The partial-result problem is exposed for later finding mapping.
+  expect_true(any(
+    res$problems$category == "index-expansion" &
+      grepl("Aggregate sitemap budget", res$problems$message, fixed = TRUE)
+  ))
+})
+
+test_that("max_total_urls stops at the exact total, leaving rows consistent", {
+  root <- "https://example.com/sitemap.xml"
+  c1 <- "https://example.com/c1.xml"
+  c2 <- "https://example.com/c2.xml"
+  c3 <- "https://example.com/c3.xml"
+  map <- list()
+  map[[c1]] <- urlset_xml("https://example.com/1", "https://example.com/2")
+  map[[c2]] <- urlset_xml("https://example.com/3", "https://example.com/4")
+  map[[c3]] <- urlset_xml("https://example.com/5", "https://example.com/6")
+  local_index_server(map)
+
+  res <- expand_root(
+    root,
+    index_xml(c1, c2, c3),
+    limits = index_limits(max_total_urls = 2)
+  )
+
+  # The first leaf fills the budget exactly; no partial leaf is ever emitted.
+  expect_identical(nrow(res$rows), 2L)
+  expect_setequal(
+    res$rows$loc,
+    c("https://example.com/1", "https://example.com/2")
+  )
+  # The over-budget leaf is recorded as rejected, not silently dropped.
+  expect_true(any(
+    res$tree$status == "rejected" & res$tree$reason == "url-budget"
+  ))
+  expect_true(any(
+    res$problems$category == "index-expansion" &
+      grepl("Aggregate URL budget", res$problems$message, fixed = TRUE)
+  ))
+})
+
+test_that("default aggregate budgets expand every child unchanged", {
+  root <- "https://example.com/sitemap.xml"
+  c1 <- "https://example.com/c1.xml"
+  c2 <- "https://example.com/c2.xml"
+  map <- list()
+  map[[c1]] <- urlset_xml("https://example.com/1")
+  map[[c2]] <- urlset_xml("https://example.com/2")
+  local_index_server(map)
+
+  res <- expand_root(root, index_xml(c1, c2))
+
+  expect_identical(nrow(res$rows), 2L)
+  expect_identical(nrow(res$tree), 2L)
+  expect_false(any(grepl("budget", res$problems$message, fixed = TRUE)))
+})
+
 test_that("a nested sitemapindex warns but is still expanded", {
   root <- "https://example.com/root.xml"
   nested <- "https://example.com/nested.xml"
