@@ -238,6 +238,12 @@ index_problem_code <- function(category, message) {
   if (grepl("Nested sitemap index", message, fixed = TRUE)) {
     return("SITEMAP_INDEX_NESTED")
   }
+  if (grepl("Aggregate sitemap budget", message, fixed = TRUE)) {
+    return("INDEX_TOTAL_SITEMAPS_EXCEEDED")
+  }
+  if (grepl("Aggregate URL budget", message, fixed = TRUE)) {
+    return("INDEX_TOTAL_URLS_EXCEEDED")
+  }
   if (grepl("children", message, fixed = TRUE)) {
     return("INDEX_CHILD_COUNT_EXCEEDED")
   }

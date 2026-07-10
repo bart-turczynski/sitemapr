@@ -350,6 +350,54 @@ test_that("an over-wide index yields INDEX_CHILD_COUNT_EXCEEDED", {
   expect_true("INDEX_CHILD_COUNT_EXCEEDED" %in% out$code)
 })
 
+test_that("an over-budget sitemap total yields INDEX_TOTAL_SITEMAPS_EXCEEDED", {
+  root <- "https://example.com/root.xml"
+  a <- "https://example.com/a.xml"
+  b <- "https://example.com/b.xml"
+  map <- list()
+  map[[root]] <- index_body(a, b)
+  map[[a]] <- urlset_body("https://example.com/p1")
+  map[[b]] <- urlset_body("https://example.com/p2")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(
+    root,
+    index_limits = sitemapr_test_call(
+      "index_limits",
+      max_total_sitemaps = 1
+    )
+  )
+  expect_named(out, contract_cols)
+  expect_true("INDEX_TOTAL_SITEMAPS_EXCEEDED" %in% out$code)
+  row <- out[out$code == "INDEX_TOTAL_SITEMAPS_EXCEEDED", ]
+  expect_identical(row$layer, "index-expansion")
+  expect_true(all(row$severity == "error"))
+})
+
+test_that("an over-budget URL total yields INDEX_TOTAL_URLS_EXCEEDED", {
+  root <- "https://example.com/root.xml"
+  a <- "https://example.com/a.xml"
+  b <- "https://example.com/b.xml"
+  map <- list()
+  map[[root]] <- index_body(a, b)
+  map[[a]] <- urlset_body("https://example.com/p1")
+  map[[b]] <- urlset_body("https://example.com/p2")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(
+    root,
+    index_limits = sitemapr_test_call(
+      "index_limits",
+      max_total_urls = 1
+    )
+  )
+  expect_named(out, contract_cols)
+  expect_true("INDEX_TOTAL_URLS_EXCEEDED" %in% out$code)
+  row <- out[out$code == "INDEX_TOTAL_URLS_EXCEEDED", ]
+  expect_identical(row$layer, "index-expansion")
+  expect_true(all(row$severity == "error"))
+})
+
 # --- Internal helper guards (empty/NULL inputs) ----------------------------
 # These map/feed helpers are only reached with non-empty inputs by the public
 # entry point, but each documents an empty-input contract (a zero-row tibble /
