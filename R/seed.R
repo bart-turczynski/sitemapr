@@ -26,7 +26,8 @@ seed_accepted_tree <- function(
   gzip,
   user_agent,
   index_limits,
-  net_limits
+  net_limits,
+  policy
 ) {
   root_row <- sitemap_tree_rows(
     depth = 0L,
@@ -47,7 +48,8 @@ seed_accepted_tree <- function(
     depth = 0L,
     user_agent = user_agent,
     limits = index_limits,
-    net_limits = net_limits
+    net_limits = net_limits,
+    policy = policy
   )
   rbind(root_row, ex$tree)
 }
@@ -73,10 +75,15 @@ seed_rejected_tree <- function(root_url, reason) {
 # warning is muffled. Reuses `classify_candidate()` for the reason mapping,
 # overriding its accepted reason (a seed is not a catalog hit) to NA. Returns
 # `list(rec, status, reason)`; `rec` is the fetch record on accept, else NULL.
-seed_fetch <- function(rec_row, user_agent, net_limits) {
+seed_fetch <- function(rec_row, user_agent, net_limits, policy) {
   out <- tryCatch(
     withCallingHandlers(
-      fetch_source(rec_row, user_agent = user_agent, limits = net_limits),
+      fetch_source(
+        rec_row,
+        user_agent = user_agent,
+        limits = net_limits,
+        policy = policy
+      ),
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),
     sitemapr_ssrf_blocked = function(e) {
@@ -100,7 +107,13 @@ seed_fetch <- function(rec_row, user_agent, net_limits) {
 # Build a seed tree from an exact sitemap/sitemapindex URL: normalize the URL,
 # fetch it once (no catalog), parse the body, and expand a sitemapindex. A
 # fetch/HTTP/parse failure yields a single rejected seed row.
-seed_tree_from_url <- function(x, user_agent, net_limits, index_limits) {
+seed_tree_from_url <- function(
+  x,
+  user_agent,
+  net_limits,
+  index_limits,
+  policy
+) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(
       "`x` must be a single non-empty sitemap URL when `from = \"sitemap\"`.",
@@ -111,7 +124,7 @@ seed_tree_from_url <- function(x, user_agent, net_limits, index_limits) {
   rec_row <- create_source_records(x, as = "sitemap")
   url <- rec_row$normalized_url[[1L]]
 
-  fetched <- seed_fetch(rec_row, user_agent, net_limits)
+  fetched <- seed_fetch(rec_row, user_agent, net_limits, policy)
   if (identical(fetched$status, "rejected")) {
     return(seed_rejected_tree(url, fetched$reason))
   }
@@ -132,7 +145,8 @@ seed_tree_from_url <- function(x, user_agent, net_limits, index_limits) {
     gzip,
     user_agent,
     index_limits,
-    net_limits
+    net_limits,
+    policy
   )
 }
 
@@ -198,6 +212,8 @@ seed_parse_bytes <- function(bytes, source_url) {
 #'   `fetch_limits()`.
 #' @param index_limits Sitemapindex-expansion bounds, as from `index_limits()`.
 #'   Defaults to `index_limits()`.
+#' @param policy A request policy applied to every index-child HTTP hop.
+#'   Defaults to the no-op policy.
 #' @return A tibble with the same 8-column contract as [sitemap_tree()]:
 #'   `depth`, `parent_sitemap`, `sitemap_url`, `page_count`, `gzip`, `status`,
 #'   `reason`, and `provenance`.
@@ -217,7 +233,8 @@ sitemap_tree_from_bytes <- function(
   source_url,
   user_agent = default_user_agent(),
   net_limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   bytes <- seed_bytes_input(bytes)
   source_url <- seed_source_url_input(source_url)
@@ -235,6 +252,7 @@ sitemap_tree_from_bytes <- function(
     gzip,
     user_agent,
     index_limits,
-    net_limits
+    net_limits,
+    policy
   )
 }

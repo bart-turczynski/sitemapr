@@ -82,7 +82,8 @@ sitemap_tree_expansions <- function(
   records,
   user_agent,
   net_limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   n <- nrow(disc)
   page_count <- rep(NA_integer_, n)
@@ -116,7 +117,8 @@ sitemap_tree_expansions <- function(
         depth = 0L,
         user_agent = user_agent,
         limits = index_limits,
-        net_limits = net_limits
+        net_limits = net_limits,
+        policy = policy
       )
       expansion_parts[[length(expansion_parts) + 1L]] <- ex$tree
     }
@@ -132,13 +134,15 @@ sitemap_tree_from_root <- function(
   user_agent,
   limits,
   net_limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   disc <- discover_candidates(
     x,
     limits = limits,
     user_agent = user_agent,
     net_limits = net_limits,
+    policy = policy,
     use_known_paths = use_known_paths,
     use_robots = use_robots
   )
@@ -148,7 +152,8 @@ sitemap_tree_from_root <- function(
     records,
     user_agent,
     net_limits,
-    index_limits
+    index_limits,
+    policy
   )
 
   base <- sitemap_tree_rows(
@@ -239,7 +244,8 @@ sitemap_tree <- function(
   user_agent = default_user_agent(),
   limits = discovery_limits(),
   net_limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   from <- match.arg(from)
   if (is.null(index_limits)) {
@@ -251,7 +257,8 @@ sitemap_tree <- function(
       x,
       user_agent = user_agent,
       net_limits = net_limits,
-      index_limits = index_limits
+      index_limits = index_limits,
+      policy = policy
     ))
   }
 
@@ -262,6 +269,7 @@ sitemap_tree <- function(
     user_agent,
     limits,
     net_limits,
-    index_limits
+    index_limits,
+    policy
   )
 }

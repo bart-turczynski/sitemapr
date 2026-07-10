@@ -986,7 +986,14 @@ report_source_input <- function(x) {
   )
 }
 
-report_urls_input <- function(urls, x, user_agent, limits, index_limits) {
+report_urls_input <- function(
+  urls,
+  x,
+  user_agent,
+  limits,
+  index_limits,
+  policy
+) {
   if (!is.null(urls)) {
     return(urls)
   }
@@ -994,7 +1001,8 @@ report_urls_input <- function(urls, x, user_agent, limits, index_limits) {
     x,
     user_agent = user_agent,
     limits = limits,
-    index_limits = index_limits
+    index_limits = index_limits,
+    policy = policy
   )
 }
 
@@ -1004,7 +1012,8 @@ report_findings_input <- function(
   mode,
   user_agent,
   limits,
-  index_limits
+  index_limits,
+  policy
 ) {
   if (!is.null(findings)) {
     return(findings)
@@ -1014,7 +1023,8 @@ report_findings_input <- function(
     mode = mode,
     user_agent = user_agent,
     limits = limits,
-    index_limits = index_limits
+    index_limits = index_limits,
+    policy = policy
   )
 }
 
@@ -1114,19 +1124,21 @@ report_sitemap <- function(
   title = NULL,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 ) {
   mode <- match.arg(mode)
   x <- report_source_input(x)
   index_limits <- resolve_index_limits(index_limits)
-  urls <- report_urls_input(urls, x, user_agent, limits, index_limits)
+  urls <- report_urls_input(urls, x, user_agent, limits, index_limits, policy)
   findings <- report_findings_input(
     findings,
     x,
     mode,
     user_agent,
     limits,
-    index_limits
+    index_limits,
+    policy
   )
   title <- report_title_input(title, x)
 

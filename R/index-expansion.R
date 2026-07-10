@@ -237,10 +237,16 @@ fetch_and_parse_child <- function(
   parent_url,
   user_agent,
   net_limits,
+  policy,
   acc
 ) {
   crec <- tryCatch(
-    fetch_source(child_url, user_agent = user_agent, limits = net_limits),
+    fetch_source(
+      child_url,
+      user_agent = user_agent,
+      limits = net_limits,
+      policy = policy
+    ),
     error = function(e) NULL
   )
   if (is.null(crec)) {
@@ -276,6 +282,7 @@ add_nested_index_child <- function(
   user_agent,
   limits,
   net_limits,
+  policy,
   acc,
   gzip
 ) {
@@ -304,6 +311,7 @@ add_nested_index_child <- function(
     user_agent,
     limits,
     net_limits,
+    policy,
     acc
   )
 }
@@ -335,6 +343,7 @@ expand_index_child <- function(
   user_agent,
   limits,
   net_limits,
+  policy,
   acc
 ) {
   res <- fetch_and_parse_child(
@@ -343,6 +352,7 @@ expand_index_child <- function(
     parent_url,
     user_agent,
     net_limits,
+    policy,
     acc
   )
   if (is.null(res)) {
@@ -356,7 +366,7 @@ expand_index_child <- function(
   if (identical(cparsed$kind, "sitemapindex")) {
     add_nested_index_child(
       crec, cparsed, child_depth, parent_url, user_agent, limits, net_limits,
-      acc, gzip
+      policy, acc, gzip
     )
     return(invisible(NULL))
   }
@@ -377,6 +387,7 @@ expand_index_node <- function(
   user_agent,
   limits,
   net_limits,
+  policy,
   acc
 ) {
   capped <- dedup_and_cap_children(children$loc, parent_url, limits, acc)
@@ -411,6 +422,7 @@ expand_index_node <- function(
       user_agent,
       limits,
       net_limits,
+      policy,
       acc
     )
   }
@@ -440,6 +452,7 @@ expand_index <- function(
   user_agent = default_user_agent(),
   limits = index_limits(),
   net_limits = fetch_limits(),
+  policy = request_policy(),
   visited = NULL
 ) {
   acc <- new.env(parent = emptyenv())
@@ -456,6 +469,7 @@ expand_index <- function(
     user_agent,
     limits,
     net_limits,
+    policy,
     acc
   )
 

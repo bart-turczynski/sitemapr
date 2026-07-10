@@ -307,3 +307,44 @@ test_that("fetch_source attaches the raw body as an attribute", {
   rec <- fetch_source(url)
   expect_identical(attr(rec, "body"), charToRaw(body))
 })
+
+# ---- request policy propagation ----------------------------------------------
+
+# A spy policy recording every hop URL its prepare hook observes.
+policy_spy <- function(sink) {
+  request_policy(prepare = function(req, ctx) {
+    sink$urls <- c(sink$urls, ctx$url)
+    req
+  })
+}
+
+test_that("read_sitemap threads the policy to the root and index children", {
+  index_url <- "https://example.com/sitemap_index.xml"
+  child <- "https://example.com/child.xml"
+  index_xml <- paste0(
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "<sitemap><loc>", child, "</loc></sitemap></sitemapindex>"
+  )
+  httr2::local_mocked_responses(mock_by_url(setNames(
+    list(index_xml, urlset_xml("https://a/1")),
+    c(index_url, child)
+  )))
+
+  sink <- new.env(parent = emptyenv())
+  sink$urls <- character(0)
+  read_sitemap(index_url, policy = policy_spy(sink))
+
+  # The policy reached both the root index fetch and the recursive child fetch.
+  expect_true(index_url %in% sink$urls)
+  expect_true(child %in% sink$urls)
+})
+
+test_that("read_sitemap default call matches an explicit no-op policy", {
+  url <- "https://example.com/sitemap.xml"
+  httr2::local_mocked_responses(
+    mock_by_url(setNames(list(urlset_xml("https://a/1", "https://a/2")), url))
+  )
+  default <- read_sitemap(url)
+  explicit <- read_sitemap(url, policy = request_policy())
+  expect_identical(default$loc, explicit$loc)
+})

@@ -140,11 +140,17 @@ fetch_candidate <- function(
   source,
   user_agent,
   limits,
+  policy = request_policy(),
   provenance = "guessed-path"
 ) {
   rec <- tryCatch(
     withCallingHandlers(
-      fetch_source(candidate_url, user_agent = user_agent, limits = limits),
+      fetch_source(
+        candidate_url,
+        user_agent = user_agent,
+        limits = limits,
+        policy = policy
+      ),
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),
     sitemapr_ssrf_blocked = function(e) {
@@ -178,11 +184,12 @@ fetch_candidate <- function(
 # Build the robots.txt `Sitemap:` candidate frame for a normalized origin, in
 # the same column shape as `discovery_candidates()` plus a `provenance` column.
 # Returns a 0-row frame when robots discovery is off or yields no directives.
-robots_candidates <- function(origin, user_agent, net_limits) {
+robots_candidates <- function(origin, user_agent, net_limits, policy) {
   urls <- discover_robots_sitemaps(
     origin,
     user_agent = user_agent,
-    net_limits = net_limits
+    net_limits = net_limits,
+    policy = policy
   )
   if (length(urls) == 0L) {
     return(NULL)
@@ -241,6 +248,7 @@ assemble_candidates <- function(
   limits,
   user_agent,
   net_limits,
+  policy,
   use_known_paths,
   use_robots
 ) {
@@ -251,7 +259,8 @@ assemble_candidates <- function(
     parts[[length(parts) + 1L]] <- robots_candidates(
       origin,
       user_agent,
-      net_limits
+      net_limits,
+      policy
     )
   }
 
@@ -312,6 +321,7 @@ discover_candidates <- function(
   limits = discovery_limits(),
   user_agent = default_user_agent(),
   net_limits = fetch_limits(),
+  policy = request_policy(),
   use_known_paths = TRUE,
   use_robots = TRUE
 ) {
@@ -321,6 +331,7 @@ discover_candidates <- function(
     limits = limits,
     user_agent = user_agent,
     net_limits = net_limits,
+    policy = policy,
     use_known_paths = use_known_paths,
     use_robots = use_robots
   )
@@ -332,6 +343,7 @@ discover_candidates <- function(
       cand$source[[i]],
       user_agent = user_agent,
       limits = net_limits,
+      policy = policy,
       provenance = cand$provenance[[i]]
     )
   })

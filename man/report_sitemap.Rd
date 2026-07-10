@@ -13,7 +13,8 @@ report_sitemap(
   title = NULL,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
-  index_limits = NULL
+  index_limits = NULL,
+  policy = request_policy()
 )
 }
 \arguments{
@@ -45,6 +46,9 @@ package User-Agent.}
 \item{index_limits}{Sitemapindex-expansion bounds (recursion depth and
 per-index child-count cap), as from \code{index_limits()}. Defaults to
 \code{index_limits()}.}
+
+\item{policy}{A request policy applied to every HTTP hop (root, robots.txt,
+discovery, redirects, and index children). Defaults to the no-op policy.}
 }
 \value{
 If \code{output} is supplied, the output path, invisibly. Otherwise, the
