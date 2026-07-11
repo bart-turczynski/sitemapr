@@ -234,3 +234,124 @@ test_that("audit threads the request policy to root and index children", {
   expect_true(root %in% seen$urls)
   expect_true(child %in% seen$urls)
 })
+
+# ---- streaming mode (SITE-lzynozgl) ------------------------------------------
+#
+# collect = FALSE / on_urls hands each completed leaf's rows to a callback and
+# does NOT retain them, bounding peak retained-row memory to one leaf. Findings,
+# sources, problems, and tree stay identical to a collected audit.
+
+test_that("streaming a URL index keeps findings, empties urls, records count", {
+  root <- "https://example.com/sitemap_index.xml"
+  c1 <- "https://example.com/child1.xml"
+  c2 <- "https://example.com/child2.xml"
+  map <- list()
+  map[[root]] <- au_index_body(c1, c2)
+  map[[c1]] <- au_urlset_body("https://example.com/a", "https://example.com/b")
+  map[[c2]] <- au_urlset_body("https://example.com/c")
+
+  s1 <- new.env(parent = emptyenv())
+  s1$urls <- character(0)
+  httr2::local_mocked_responses(au_counting_mock(map, s1))
+  collected <- audit_sitemap(root)
+
+  s2 <- new.env(parent = emptyenv())
+  s2$urls <- character(0)
+  httr2::local_mocked_responses(au_counting_mock(map, s2))
+  seen <- new.env(parent = emptyenv())
+  seen$leaves <- 0L
+  seen$rows <- 0L
+  seen$srcs <- character(0)
+  streamed <- audit_sitemap(
+    root,
+    collect = FALSE,
+    on_urls = function(rows, source) {
+      seen$leaves <- seen$leaves + 1L
+      seen$rows <- seen$rows + nrow(rows)
+      seen$srcs <- c(seen$srcs, as.character(source$final_url))
+    }
+  )
+
+  # Findings are COMPLETE and identical to the collected audit (per-leaf).
+  expect_equal(
+    audit_findings(streamed),
+    audit_findings(collected),
+    ignore_attr = TRUE
+  )
+  # The callback fired once per completed leaf, with per-source provenance.
+  expect_identical(seen$leaves, 2L)
+  expect_setequal(seen$srcs, c(c1, c2))
+  # urls is empty; the streamed count is recorded and matches the collected.
+  expect_identical(nrow(audit_urls(streamed)), 0L)
+  n_collected <- as.numeric(nrow(audit_urls(collected)))
+  expect_identical(
+    as.numeric(attr(audit_urls(streamed), "streamed_row_count")),
+    n_collected
+  )
+  expect_identical(as.numeric(seen$rows), n_collected)
+  # sources and tree are unchanged from the collected audit.
+  expect_identical(
+    nrow(audit_sources(streamed)),
+    nrow(audit_sources(collected))
+  )
+  expect_identical(nrow(audit_tree(streamed)), nrow(audit_tree(collected)))
+})
+
+test_that("streaming a non-index urlset emits one leaf and empties urls", {
+  f <- audit_fixture("valid-minimal.xml")
+  seen <- new.env(parent = emptyenv())
+  seen$n <- 0L
+  seen$rows <- 0L
+  a <- audit_sitemap(
+    f,
+    collect = FALSE,
+    on_urls = function(rows, source) {
+      seen$n <- seen$n + 1L
+      seen$rows <- seen$rows + nrow(rows)
+    }
+  )
+
+  expect_identical(seen$n, 1L)
+  expect_gt(seen$rows, 0L)
+  expect_identical(nrow(audit_urls(a)), 0L)
+  expect_identical(
+    as.numeric(attr(audit_urls(a), "streamed_row_count")),
+    as.numeric(seen$rows)
+  )
+  # Findings still match the standalone validate_sitemap().
+  expect_equal(audit_findings(a), validate_sitemap(f), ignore_attr = TRUE)
+})
+
+test_that("a throwing streaming callback aborts the audit cleanly", {
+  root <- "https://example.com/sitemap_index.xml"
+  c1 <- "https://example.com/child1.xml"
+  map <- list()
+  map[[root]] <- au_index_body(c1)
+  map[[c1]] <- au_urlset_body("https://example.com/a")
+  s <- new.env(parent = emptyenv())
+  s$urls <- character(0)
+  httr2::local_mocked_responses(au_counting_mock(map, s))
+
+  expect_error(
+    audit_sitemap(
+      root,
+      collect = FALSE,
+      on_urls = function(rows, source) stop("boom")
+    ),
+    class = "sitemapr_stream_callback_error"
+  )
+
+  cnd <- rlang::catch_cnd(audit_sitemap(
+    root,
+    collect = FALSE,
+    on_urls = function(rows, source) stop("boom")
+  ))
+  expect_identical(cnd$leaf, c1)
+})
+
+test_that("on_urls must be a function", {
+  expect_error(
+    audit_sitemap(audit_fixture("valid-minimal.xml"), on_urls = "nope"),
+    class = "sitemapr_bad_input"
+  )
+})

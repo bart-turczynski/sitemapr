@@ -375,3 +375,58 @@ test_that("a nested sitemapindex warns but is still expanded", {
   ))
   expect_true("https://example.com/deep" %in% res$rows$loc)
 })
+
+# ---- Chunked row sink (SITE-lzynozgl) ---------------------------------------
+#
+# A caller-supplied sink consumes each completed leaf as it lands, so the
+# combined tibble is never materialized. The default (NULL) sink retains rows in
+# the accumulator exactly as before; these tests pin both behaviors.
+
+test_that("a caller row sink streams each leaf once, retaining no rows", {
+  root <- "https://example.com/sitemap.xml"
+  c1 <- "https://example.com/child-1.xml"
+  c2 <- "https://example.com/child-2.xml"
+  map <- list()
+  map[[c1]] <- urlset_xml("https://example.com/a", "https://example.com/b")
+  map[[c2]] <- urlset_xml("https://example.com/c")
+  local_index_server(map)
+
+  seen <- new.env(parent = emptyenv())
+  seen$rows <- list()
+  seen$srcs <- character(0)
+  sink <- function(rows, source) {
+    seen$rows[[length(seen$rows) + 1L]] <- rows
+    seen$srcs <- c(seen$srcs, as.character(source$final_url))
+  }
+
+  res <- expand_root(root, index_xml(c1, c2), sink = sink)
+
+  # The sink saw each completed leaf exactly once, with its source provenance.
+  expect_identical(length(seen$rows), 2L)
+  expect_setequal(seen$srcs, c(c1, c2))
+  # The combined result retains NO rows (bounded retention), yet the tree and
+  # per-source metadata are still recorded.
+  expect_identical(nrow(res$rows), 0L)
+  expect_identical(nrow(res$tree), 2L)
+  expect_identical(nrow(res$sources), 2L)
+
+  # The streamed rows are exactly what the default in-memory sink collects.
+  streamed <- do.call(rbind, seen$rows)
+  default <- expand_root(root, index_xml(c1, c2))$rows
+  expect_identical(nrow(streamed), nrow(default))
+  expect_setequal(streamed$loc, default$loc)
+})
+
+test_that("stream_emit_leaf wraps a callback error with leaf context", {
+  src <- tibble::tibble(final_url = "https://example.com/leaf.xml")
+  cb <- function(rows, source) stop("kaboom")
+
+  expect_error(
+    stream_emit_leaf(cb, data.frame(), src),
+    class = "sitemapr_stream_callback_error"
+  )
+
+  cnd <- rlang::catch_cnd(stream_emit_leaf(cb, data.frame(), src))
+  expect_identical(cnd$leaf, "https://example.com/leaf.xml")
+  expect_identical(conditionMessage(cnd$parent), "kaboom")
+})

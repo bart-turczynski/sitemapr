@@ -366,6 +366,54 @@ add_nested_index_child <- function(
   )
 }
 
+# A "row sink" consumes one completed leaf sitemap: it receives that leaf's tidy
+# URL rows plus the leaf's fetch record (a `source_metadata` row) each time the
+# expander admits a leaf under the aggregate URL budget. The DEFAULT sink keeps
+# the rows in the accumulator, so `expand_index()` returns one combined tibble
+# exactly as it always has (the "default collection is byte-identical" bar). A
+# caller-supplied sink instead consumes each leaf as it lands (e.g. streaming it
+# out) and retains nothing, bounding peak retained-row memory to a single leaf.
+# The sink is invoked for its side effect only; its return value is ignored.
+default_row_sink <- function(acc) {
+  function(rows, source) {
+    acc$rows[[length(acc$rows) + 1L]] <- rows
+  }
+}
+
+# The leaf's identity for a callback-error message: its redirect-resolved final
+# URL, or NA when the record is absent.
+stream_leaf_ref <- function(source) {
+  if (is.null(source) || !("final_url" %in% names(source))) {
+    return(NA_character_)
+  }
+  as.character(source$final_url[[1L]])
+}
+
+# Hand one completed leaf's rows to a caller streaming callback, translating any
+# error the callback throws into a classed `sitemapr_stream_callback_error` that
+# names the leaf sitemap whose callback failed. This aborts the traversal
+# cleanly and attributably instead of leaking the raw callback error or a
+# half-updated accumulator.
+stream_emit_leaf <- function(on_urls, rows, source) {
+  tryCatch(
+    on_urls(rows, source),
+    error = function(cnd) {
+      leaf <- stream_leaf_ref(source)
+      rlang::abort(
+        sprintf(
+          "Streaming callback failed for leaf %s: %s",
+          leaf,
+          conditionMessage(cnd)
+        ),
+        class = "sitemapr_stream_callback_error",
+        leaf = leaf,
+        parent = cnd
+      )
+    }
+  )
+  invisible(NULL)
+}
+
 add_leaf_index_child <- function(
   crec,
   cparsed,
@@ -409,7 +457,10 @@ add_leaf_index_child <- function(
     )
     return(invisible(NULL))
   }
-  acc$rows[[length(acc$rows) + 1L]] <- cparsed$rows
+  # Hand the leaf to the row sink (default: retain in `acc`; streaming: consume
+  # and drop). Sink failures propagate BEFORE the budget/tree updates below, so
+  # the accumulator is never left half-updated for this leaf.
+  acc$sink(cparsed$rows, crec)
   acc$total_urls <- acc$total_urls + n
   add_tree_row(
     acc,
@@ -544,7 +595,8 @@ expand_index <- function(
   limits = index_limits(),
   net_limits = fetch_limits(),
   policy = request_policy(),
-  visited = NULL
+  visited = NULL,
+  sink = NULL
 ) {
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()
@@ -556,6 +608,9 @@ expand_index <- function(
   acc$total_sitemaps <- 0L
   acc$total_urls <- 0L
   acc$stopped <- FALSE
+  # `sink` receives each completed leaf's rows; NULL selects the in-memory
+  # collector, keeping the default return byte-identical to the historical one.
+  acc$sink <- if (is.null(sink)) default_row_sink(acc) else sink
 
   expand_index_node(
     root_url,
