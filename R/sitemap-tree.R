@@ -83,7 +83,8 @@ sitemap_tree_expansions <- function(
   user_agent,
   net_limits,
   index_limits,
-  policy
+  policy,
+  throttle_state = NULL
 ) {
   n <- nrow(disc)
   page_count <- rep(NA_integer_, n)
@@ -118,7 +119,8 @@ sitemap_tree_expansions <- function(
         user_agent = user_agent,
         limits = index_limits,
         net_limits = net_limits,
-        policy = policy
+        policy = policy,
+        throttle_state = throttle_state
       )
       expansion_parts[[length(expansion_parts) + 1L]] <- ex$tree
     }
@@ -135,8 +137,17 @@ sitemap_tree_from_root <- function(
   limits,
   net_limits,
   index_limits,
-  policy
+  policy,
+  throttle_state = NULL
 ) {
+  # ADR-008 §6: one per-host throttle store for the WHOLE walk, so discovery and
+  # every same-host index expansion share a single per-host bucket rather than
+  # each phase pacing from its own reset state. NULL (throttle unset) stays a
+  # no-op -> byte-identical default. The state is injectable so a clock-driven
+  # test can prove the store is shared across phases (the default builds one).
+  if (is.null(throttle_state)) {
+    throttle_state <- throttle_state_new(policy$throttle)
+  }
   disc <- discover_candidates(
     x,
     limits = limits,
@@ -144,7 +155,8 @@ sitemap_tree_from_root <- function(
     net_limits = net_limits,
     policy = policy,
     use_known_paths = use_known_paths,
-    use_robots = use_robots
+    use_robots = use_robots,
+    throttle_state = throttle_state
   )
   records <- attr(disc, "records")
   expanded <- sitemap_tree_expansions(
@@ -153,7 +165,8 @@ sitemap_tree_from_root <- function(
     user_agent,
     net_limits,
     index_limits,
-    policy
+    policy,
+    throttle_state
   )
 
   base <- sitemap_tree_rows(
@@ -245,9 +258,11 @@ sitemap_tree <- function(
   limits = discovery_limits(),
   net_limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  max_active = NULL
 ) {
   from <- match.arg(from)
+  policy <- policy_set_max_active(policy, max_active)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }

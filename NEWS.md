@@ -15,6 +15,11 @@ related W3C and RFC standards.
   extraction.
 * A top-level sitemap index is expanded recursively — cycle-safe, depth- and
   count-capped — so every reachable child sitemap's rows carry provenance.
+* `max_active` opts into bounded-concurrency index expansion in `read_sitemap()`,
+  `audit_sitemap()`, and `sitemap_tree()`: up to that many child sitemaps are
+  fetched at once while the per-host pace is respected. It is a scheduling
+  optimization only — the rows, findings, tree, and budget-truncation point are
+  byte-identical to the sequential default (ADR-008).
 * XML parsing is XXE-safe: external entities are never expanded.
 
 ## Validation

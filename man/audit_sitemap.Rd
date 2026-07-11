@@ -12,7 +12,8 @@ audit_sitemap(
   index_limits = NULL,
   policy = request_policy(),
   collect = TRUE,
-  on_urls = NULL
+  on_urls = NULL,
+  max_active = NULL
 )
 }
 \arguments{
@@ -48,6 +49,14 @@ per-source fetch-metadata record. Supplying it activates streaming mode
 (as if \code{collect = FALSE}). An error thrown by the callback aborts the audit
 cleanly with a classed \code{sitemapr_stream_callback_error} condition naming
 the leaf; the accumulator is not left half-updated.}
+
+\item{max_active}{Optional worker cap for opt-in bounded-concurrency
+expansion of a sitemap index (ADR-008). \code{NULL} (the default) keeps child
+fetches sequential; a larger value (a small, polite bound such as \code{4}–\code{6}
+is typical) fetches up to that many independent child sitemaps at once.
+Concurrency changes only \emph{when} a child's bytes arrive, never the row
+order or budget-truncation point — the result is byte-identical to
+sequential mode.}
 }
 \value{
 A \code{\link[=sitemap_audit]{sitemap_audit()}} object: a classed list with the components

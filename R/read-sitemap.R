@@ -302,6 +302,13 @@ read_sitemap_batch <- function(
 #'   `index_limits()`.
 #' @param policy A request policy applied to every HTTP hop (root, robots.txt,
 #'   discovery, redirects, and index children). Defaults to the no-op policy.
+#' @param max_active Optional worker cap for opt-in bounded-concurrency
+#'   expansion of a sitemap index (ADR-008). `NULL` (the default) keeps child
+#'   fetches sequential; a larger value (a small, polite bound such as `4`–`6`
+#'   is typical) fetches up to that many independent child sitemaps at once.
+#'   Concurrency changes only *when* a child's bytes arrive, never the row
+#'   order or budget-truncation point — the result is byte-identical to
+#'   sequential mode.
 #' @return A tibble of URL rows with `sources` and `problems` attributes.
 #'   An entry-point fetch failure or unsupported content raises a classed error
 #'   condition.
@@ -326,8 +333,10 @@ read_sitemap <- function(
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  max_active = NULL
 ) {
+  policy <- policy_set_max_active(policy, max_active)
   sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
@@ -364,13 +373,15 @@ read_sitemaps <- function(
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  max_active = NULL
 ) {
   read_sitemap(
     x,
     user_agent = user_agent,
     limits = limits,
     index_limits = index_limits,
-    policy = policy
+    policy = policy,
+    max_active = max_active
   )
 }

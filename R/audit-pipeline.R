@@ -653,9 +653,11 @@ audit_sitemap <- function(
   index_limits = NULL,
   policy = request_policy(),
   collect = TRUE,
-  on_urls = NULL
+  on_urls = NULL,
+  max_active = NULL
 ) {
   mode <- match.arg(mode)
+  policy <- policy_set_max_active(policy, max_active)
   if (!is.null(on_urls) && !is.function(on_urls)) {
     rlang::abort(
       "`on_urls` must be a function of (rows, source) or NULL.",

@@ -600,6 +600,43 @@ test_that("request_policy rejects an unnamed tls value", {
   )
 })
 
+# ---- request policy: max_active worker cap (ADR-008) -------------------------
+
+test_that("request_policy defaults max_active to NULL (sequential)", {
+  policy <- request_policy()
+  expect_null(policy$max_active)
+  # policy_max_active() resolves the unset cap to the sequential 1L.
+  expect_identical(policy_max_active(policy), 1L)
+})
+
+test_that("request_policy normalizes max_active to an integer", {
+  policy <- request_policy(max_active = 6)
+  expect_identical(policy$max_active, 6L)
+  expect_identical(policy_max_active(policy), 6L)
+})
+
+test_that("request_policy rejects a non-positive or non-whole max_active", {
+  for (bad in list(0L, -1L, 2.5, c(2L, 3L), NA_integer_, "6")) {
+    expect_error(
+      request_policy(max_active = bad),
+      class = "sitemapr_invalid_request_policy"
+    )
+  }
+})
+
+test_that("policy_set_max_active injects a top-level cap, overriding policy", {
+  # NULL top-level arg leaves the policy untouched (the byte-identical default).
+  base <- request_policy(max_active = 3)
+  expect_identical(policy_set_max_active(base, NULL)$max_active, 3L)
+  # A supplied top-level value wins over whatever the policy already carried.
+  expect_identical(policy_set_max_active(base, 8)$max_active, 8L)
+  # It validates the same way the constructor does.
+  expect_error(
+    policy_set_max_active(request_policy(), 0L),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
 # ---- request policy: retry and exponential backoff ---------------------------
 
 # A response with a specific status (retryable-status fixtures).

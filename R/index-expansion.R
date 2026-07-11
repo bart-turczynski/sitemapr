@@ -777,7 +777,7 @@ expand_index <- function(
   visited = NULL,
   sink = NULL,
   throttle_state = NULL,
-  max_active = 1L
+  max_active = policy_max_active(policy)
 ) {
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()

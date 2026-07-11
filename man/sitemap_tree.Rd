@@ -13,7 +13,8 @@ sitemap_tree(
   limits = discovery_limits(),
   net_limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  max_active = NULL
 )
 }
 \arguments{
@@ -49,6 +50,14 @@ per-index child-count cap), as from \code{index_limits()}. Defaults to
 
 \item{policy}{A request policy applied to every HTTP hop (root, robots.txt,
 discovery, redirects, and index children). Defaults to the no-op policy.}
+
+\item{max_active}{Optional worker cap for opt-in bounded-concurrency
+expansion of a sitemap index (ADR-008). \code{NULL} (the default) keeps child
+fetches sequential; a larger value (a small, polite bound such as \code{4}–\code{6}
+is typical) fetches up to that many independent child sitemaps at once.
+Concurrency changes only \emph{when} a child's bytes arrive, never the row
+order or budget-truncation point — the result is byte-identical to
+sequential mode.}
 }
 \value{
 A tibble with one row per evaluated sitemap (and per expanded index
