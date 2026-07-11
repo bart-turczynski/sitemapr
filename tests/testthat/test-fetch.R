@@ -476,6 +476,130 @@ test_that("guard runs before prepare, and prepare before perform", {
   expect_identical(order$events, character(0))
 })
 
+# ---- request policy: typed customization fields ------------------------------
+
+# Capture the built request handed to req_perform() for one fetch.
+capture_request <- function(policy) {
+  state <- new.env(parent = emptyenv())
+  state$captured <- NULL
+  httr2::local_mocked_responses(function(req) {
+    state$captured <- req
+    mock_ok()
+  })
+  fetch_source("https://example.com/sitemap.xml", policy = policy)
+  state$captured
+}
+
+test_that("a typed header field reaches the request", {
+  req <- capture_request(
+    request_policy(headers = list("X-Env" = "staging"))
+  )
+  expect_identical(req$headers[["X-Env"]], "staging")
+})
+
+test_that("basic auth reaches the request as an Authorization header", {
+  req <- capture_request(
+    request_policy(auth = request_auth_basic("user", "secret"))
+  )
+  expect_false(is.null(req$headers[["Authorization"]]))
+})
+
+test_that("bearer auth reaches the request as an Authorization header", {
+  req <- capture_request(
+    request_policy(auth = request_auth_bearer("a-token"))
+  )
+  expect_false(is.null(req$headers[["Authorization"]]))
+})
+
+test_that("a proxy URL string reaches the request options", {
+  req <- capture_request(request_policy(proxy = "http://proxy.internal:3128"))
+  expect_identical(req$options$proxy, "http://proxy.internal:3128")
+})
+
+test_that("a request_proxy() object reaches the request options", {
+  req <- capture_request(
+    request_policy(proxy = request_proxy("proxy.internal", port = 3128L))
+  )
+  expect_identical(req$options$proxy, "proxy.internal")
+  expect_identical(as.integer(req$options$proxyport), 3128L)
+})
+
+test_that("tls options reach the request options", {
+  req <- capture_request(request_policy(tls = list(ssl_verifypeer = 0L)))
+  expect_identical(as.integer(req$options$ssl_verifypeer), 0L)
+})
+
+test_that("the default policy adds no headers, auth, proxy, or tls options", {
+  # Byte-identical baseline: a bare request_policy() touches only the fields
+  # sitemapr always sets (user-agent + its own transport controls).
+  req <- capture_request(request_policy())
+  expect_null(req$headers[["Authorization"]])
+  expect_null(req$options$proxy)
+  expect_null(req$options$ssl_verifypeer)
+})
+
+# ---- request policy: safety invariant (caller cannot override) ---------------
+
+test_that("tls options cannot override sitemapr's redirect controls", {
+  # A caller smuggling redirect curl options through `tls` is overwritten by
+  # sitemapr's controls, which are re-asserted last.
+  req <- capture_request(
+    request_policy(tls = list(followlocation = 1L, maxredirs = 99L))
+  )
+  expect_identical(req$options$followlocation, 0L)
+  expect_identical(req$options$maxredirs, 0L)
+})
+
+test_that("typed fields still run behind the per-hop SSRF guard", {
+  # The guard aborts before any request is built, so a header/proxy policy on a
+  # blocked host never reaches the network.
+  state <- new.env(parent = emptyenv())
+  state$called <- FALSE
+  httr2::local_mocked_responses(function(req) {
+    state$called <- TRUE
+    mock_ok()
+  })
+  policy <- request_policy(
+    headers = list("X-Env" = "staging"),
+    proxy = "http://proxy.internal:3128"
+  )
+  expect_error(
+    fetch_source("http://127.0.0.1/sitemap.xml", policy = policy),
+    class = "sitemapr_ssrf_blocked"
+  )
+  expect_false(state$called)
+})
+
+# ---- request policy: constructor validation ----------------------------------
+
+test_that("request_policy rejects an unnamed headers value", {
+  expect_error(
+    request_policy(headers = list("no-name-here")),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_policy rejects a non-auth object", {
+  expect_error(
+    request_policy(auth = list(scheme = "basic")),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_policy rejects a malformed proxy value", {
+  expect_error(
+    request_policy(proxy = 3128L),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_policy rejects an unnamed tls value", {
+  expect_error(
+    request_policy(tls = list(0L)),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
 # ---- https -> http fallback --------------------------------------------------
 
 test_that("scheme_inferred = TRUE falls back to http when https fails", {
