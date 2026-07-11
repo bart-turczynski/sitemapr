@@ -52,6 +52,14 @@ parse_dispatch <- function(bytes, source_sitemap) {
       children = NULL
     ))
   }
+  # An RSS 2.0 / Atom 0.3 / Atom 1.0 feed is a first-class sitemap substitute:
+  # parse it into the faithful row schema. An unrecognised feed dialect (e.g. a
+  # <feed> in a non-Atom namespace) raises `sitemapr_unsupported_feed`, which
+  # the index expander maps to UNSUPPORTED_FEED and a scalar read surfaces as a
+  # classified error.
+  if (identical(fmt, "feed")) {
+    return(parse_feed(bytes, source_sitemap = source_sitemap))
+  }
 
   rlang::abort(
     sprintf("Unsupported sitemap content (sniffed format: %s).", fmt),
@@ -187,7 +195,10 @@ sitemap_public_source_records <- function(x) {
 
 # Turn one batched read failure into the parse-layer `problems` attribute.
 read_source_failure_problem <- function(source, cnd) {
-  category <- if (inherits(cnd, "sitemapr_unsupported_format")) {
+  category <- if (
+    inherits(cnd, "sitemapr_unsupported_format") ||
+      inherits(cnd, "sitemapr_unsupported_feed")
+  ) {
     "classification"
   } else if (
     inherits(cnd, "sitemapr_decompression_error") ||
@@ -260,8 +271,10 @@ read_sitemap_batch <- function(
 #' into the tidy row tibble: one row per URL with `loc`, `lastmod`,
 #' `changefreq`, `priority`, the `images`/`video`/`news`/`alternates` extension
 #' list-columns, and `source_sitemap` provenance. Supported formats are XML
-#' `urlset` and `sitemapindex`, the plain-text format, transparent gzip
-#' (`.xml.gz`/`.txt.gz`), and — local files only — bounded `.tar.gz` archives.
+#' `urlset` and `sitemapindex`, RSS 2.0 and Atom 0.3/1.0 feeds, the plain-text
+#' format, transparent gzip (`.xml.gz`/`.txt.gz`), and — local files only —
+#' bounded `.tar.gz` archives. A feed is parsed into the same row schema, one
+#' row per item/entry.
 #'
 #' The result carries a `sources` attribute (the per-source fetch-metadata
 #' records) and a `problems` attribute (a tibble of non-fatal issues such as

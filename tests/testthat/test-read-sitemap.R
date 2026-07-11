@@ -69,6 +69,19 @@ test_that("a local text sitemap file yields rows", {
   expect_identical(read_sitemap(path)$loc, c("https://a/", "https://b/"))
 })
 
+test_that("a local RSS/Atom feed yields one row per item, with format", {
+  res <- read_sitemap(test_path("fixtures", "feed-rss2.xml"))
+  expect_identical(
+    res$loc,
+    c(
+      "https://example.com/posts/1",
+      "https://example.com/posts/2",
+      "https://example.com/posts/3"
+    )
+  )
+  expect_identical(attr(res, "sources")$format, "feed")
+})
+
 test_that("a local gzipped XML sitemap is decompressed transparently", {
   path <- write_tempfile(gz_of(urlset_xml("https://g/1")), ".xml.gz")
   res <- read_sitemap(path)

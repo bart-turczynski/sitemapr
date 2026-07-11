@@ -75,26 +75,21 @@ test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
   expect_true("PROTOCOL_TEXT_URL_TOO_LONG" %in% out$code)
 })
 
-test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
+# Serve an index whose single child <loc> is fetched offline and its body
+# supplied by the test; returns the mock function.
+vs_feed_index_mock <- function(child_body,
+                               child = "https://example.com/feed.xml") {
   root <- "https://example.com/sitemap.xml"
-  child <- "https://example.com/feed.xml"
   index_body <- paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-    "  <sitemap><loc>",
-    child,
-    "</loc></sitemap>\n",
+    "  <sitemap><loc>", child, "</loc></sitemap>\n",
     "</sitemapindex>\n"
-  )
-  rss_body <- paste0(
-    "<?xml version=\"1.0\"?>\n",
-    "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>\n"
   )
   map <- list()
   map[[root]] <- index_body
-  map[[child]] <- rss_body
-
-  httr2::local_mocked_responses(function(req) {
+  map[[child]] <- child_body
+  function(req) {
     body <- map[[req$url]]
     if (is.null(body)) {
       return(httr2::response(status_code = 404, url = req$url))
@@ -105,9 +100,38 @@ test_that("a sitemapindex feed child yields UNSUPPORTED_FEED (offline)", {
       headers = list("Content-Type" = "application/xml; charset=UTF-8"),
       body = charToRaw(body)
     )
-  })
+  }
+}
 
-  out <- validate_sitemap(root)
+test_that("a sitemapindex RSS 2.0 child parses into rows (offline)", {
+  # A supported feed dialect is no longer UNSUPPORTED_FEED: it parses into rows
+  # that reach the protocol layer. The item's non-absolute link surfaces a
+  # PROTOCOL_URL_NOT_ABSOLUTE finding attributed to the feed child, proving the
+  # rows flowed through.
+  rss_body <- paste0(
+    "<?xml version=\"1.0\"?>\n",
+    "<rss version=\"2.0\"><channel><title>Feed</title>",
+    "<item><link>not-an-absolute-url</link></item>",
+    "</channel></rss>\n"
+  )
+  httr2::local_mocked_responses(vs_feed_index_mock(rss_body))
+
+  out <- validate_sitemap("https://example.com/sitemap.xml")
+  expect_named(out, contract_cols)
+  expect_false("UNSUPPORTED_FEED" %in% out$code)
+  expect_true("PROTOCOL_URL_NOT_ABSOLUTE" %in% out$code)
+})
+
+test_that("a sitemapindex unsupported feed child yields UNSUPPORTED_FEED", {
+  # A <feed> in a non-Atom namespace sniffs as "feed" but parse_feed() rejects
+  # it: this is the only path that still emits UNSUPPORTED_FEED.
+  bad_feed <- paste0(
+    "<feed xmlns=\"http://example.com/not-atom\">",
+    "<entry><link href=\"https://example.com/x\"/></entry></feed>"
+  )
+  httr2::local_mocked_responses(vs_feed_index_mock(bad_feed))
+
+  out <- validate_sitemap("https://example.com/sitemap.xml")
   expect_named(out, contract_cols)
   expect_true("UNSUPPORTED_FEED" %in% out$code)
   row <- out[out$code == "UNSUPPORTED_FEED", ]
@@ -417,15 +441,28 @@ test_that("index_findings_from_problems is an empty tibble for no problems", {
   }
 })
 
-test_that("index_feed_children is an empty character vector for no sources", {
-  empty_sources <- tibble::tibble(
-    format = character(0),
-    final_url = character(0)
+test_that("index_feed_children is an empty character vector for no problems", {
+  empty_problems <- tibble::tibble(
+    category = character(0),
+    subject_ref = character(0)
   )
-  for (sources in list(NULL, empty_sources)) {
-    out <- sitemapr_test_call("index_feed_children", sources)
+  for (problems in list(NULL, empty_problems)) {
+    out <- sitemapr_test_call("index_feed_children", problems)
     expect_identical(out, character(0))
   }
+})
+
+test_that("index_feed_children returns only feed-category problem subjects", {
+  problems <- tibble::tibble(
+    category = c("fetch", "feed", "index-expansion"),
+    subject_ref = c(
+      "https://example.com/a.xml",
+      "https://example.com/feed.xml",
+      "https://example.com/b.xml"
+    )
+  )
+  out <- sitemapr_test_call("index_feed_children", problems)
+  expect_identical(out, "https://example.com/feed.xml")
 })
 
 test_that("validation_target handles a raw character target", {

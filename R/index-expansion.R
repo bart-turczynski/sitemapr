@@ -283,6 +283,31 @@ index_unparseable_child <- function(acc, final_url, child_depth, parent_url) {
   )
 }
 
+# A child sniffed as a feed but rejected by `parse_feed()` as an unsupported
+# dialect (a `<feed>` in a non-Atom namespace). Recorded under the distinct
+# `"feed"` problem category so Layer F maps it to UNSUPPORTED_FEED, separate
+# from a generic unparseable child; supported feeds parse into rows and never
+# reach here.
+index_unsupported_feed_child <- function(acc, final_url, child_depth, parent) {
+  add_index_problem(
+    acc,
+    "feed",
+    final_url,
+    sprintf(
+      "Child sitemap %s is an unsupported RSS/Atom feed dialect; skipped.",
+      final_url
+    )
+  )
+  add_tree_row(
+    acc,
+    child_depth,
+    parent,
+    final_url,
+    status = "rejected",
+    reason = "unsupported-feed"
+  )
+}
+
 # Fetch one child sitemap and parse it, recording its source metadata and any
 # fetch/HTTP/parse failure as a problem + rejected tree row. Returns
 # `list(crec, cparsed)` on success, or `NULL` when the child was skipped (the
@@ -324,8 +349,13 @@ fetch_and_parse_child <- function(
 
   cparsed <- tryCatch(
     parse_dispatch(attr(crec, "body"), source_sitemap = crec$final_url),
+    sitemapr_unsupported_feed = function(e) "unsupported-feed",
     error = function(e) NULL
   )
+  if (identical(cparsed, "unsupported-feed")) {
+    index_unsupported_feed_child(acc, crec$final_url, child_depth, parent_url)
+    return(NULL)
+  }
   if (is.null(cparsed)) {
     index_unparseable_child(acc, crec$final_url, child_depth, parent_url)
     return(NULL)

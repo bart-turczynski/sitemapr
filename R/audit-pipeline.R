@@ -398,7 +398,31 @@ audit_findings_document <- function(artifact) {
       artifact$base
     )))
   }
+  if (identical(fmt, "feed")) {
+    return(audit_validate_feed_parts(artifact))
+  }
   audit_validate_xml_parts(artifact)
+}
+
+# Mirror validate_feed_parts() off the shared artifact bytes: a supported feed
+# is parsed and protocol-validated; an unsupported dialect falls through to the
+# XML path (UNSUPPORTED_ROOT).
+audit_validate_feed_parts <- function(artifact) {
+  parsed <- tryCatch(
+    parse_feed(artifact$bytes, source_sitemap = artifact$final_url),
+    sitemapr_unsupported_feed = function(cnd) NULL
+  )
+  if (is.null(parsed)) {
+    return(audit_validate_xml_parts(artifact))
+  }
+  list(validate_protocol(
+    parsed$rows,
+    sitemap_url = artifact$final_url,
+    subject_ref = artifact$base,
+    byte_size = artifact$byte_size,
+    fetched_at = artifact$fetched_at,
+    source_meta = NULL
+  ))
 }
 
 # Mirror validate_xml_parts()/validate_index_parts() but read the shared bytes
@@ -445,7 +469,7 @@ audit_validate_xml_parts <- function(artifact) {
     schema,
     index_findings_from_problems(ex$problems, artifact$base)
   )
-  feeds <- index_feed_children(ex$sources)
+  feeds <- index_feed_children(ex$problems)
   if (length(feeds) > 0L) {
     parts[[length(parts) + 1L]] <- validate_classification(
       source_meta(feed_children = feeds),

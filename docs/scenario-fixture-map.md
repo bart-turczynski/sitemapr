@@ -162,7 +162,7 @@ tracer-bullet tickets add the package behavior and step definitions.
 | Text URL too long | `text-long-url.txt` | SITE-nsixzwux |
 | HTML masquerade | `html-masquerade.html` | SITE-nsixzwux |
 | Unsupported root | `unsupported-root.xml` | SITE-nsixzwux |
-| Sitemap index → RSS feed | `index-rss-child.xml` | SITE-nsixzwux |
+| Sitemap index → unsupported feed dialect | `index-rss-child.xml` | SITE-nsixzwux |
 
 ---
 
@@ -199,7 +199,7 @@ layer and explicitly excluded:
 | hreflang cross-URL reciprocity | SPEC §17 post-v1 clause |
 | Robots.txt discovery or Disallow rule application | Post-v1; ADR-002 |
 | DNS resolve-then-check in SSRF guard | Post-v1; ADR-003 |
-| RSS/Atom feed parsing within sitemap index | Out of scope for v1 (UNSUPPORTED_FEED finding instead) |
+| Unrecognised feed dialect within sitemap index | UNSUPPORTED_FEED finding (supported RSS 2.0 / Atom feeds are parsed into rows) |
 | IANA language tag snapshot validation | Cross-URL, post-v1 |
 
 ---

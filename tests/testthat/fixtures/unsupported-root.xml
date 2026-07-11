@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Not a sitemap</title>
-  </channel>
-</rss>
+<!-- Well-formed XML whose root is neither <urlset>/<sitemapindex> nor a feed
+     (<rss>/<feed>): a generic <catalog> root. Sniffs as generic "xml" and
+     yields UNSUPPORTED_ROOT. (Historically this fixture was an <rss> feed, which
+     was unsupported; feeds are now parsed, so a genuine non-feed root is used.) -->
+<catalog xmlns="http://example.com/catalog">
+  <product>
+    <name>Not a sitemap</name>
+  </product>
+</catalog>
