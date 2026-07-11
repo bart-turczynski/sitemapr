@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Well-formed XML but an unsupported feed dialect: RSS 1.0 / RDF, whose root
+     is <rdf:RDF> (not <rss> or <feed>). Variant classification must reject it
+     with the typed sitemapr_unsupported_feed condition rather than mis-parse
+     it as one of the three supported dialects. -->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns="http://purl.org/rss/1.0/">
+  <channel rdf:about="https://example.com/">
+    <title>RSS 1.0 feed</title>
+    <link>https://example.com/</link>
+  </channel>
+  <item rdf:about="https://example.com/posts/1">
+    <title>First</title>
+    <link>https://example.com/posts/1</link>
+  </item>
+</rdf:RDF>

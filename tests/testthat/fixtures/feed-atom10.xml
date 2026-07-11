@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Clean Atom 1.0 feed (2005 namespace). Each <entry> contributes a row: the
+     alternate <link> href is the loc, the ISO-8601 <updated> is the raw
+     lastmod. The feed-level self link and the entry-level rel="self" link carry
+     a non-alternate rel and must be ignored; a link with no rel defaults to
+     alternate and IS used. -->
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Atom 1.0 feed</title>
+  <link rel="self" href="https://example.com/atom.xml"/>
+  <updated>2026-01-01T00:00:00Z</updated>
+  <entry>
+    <title>First entry</title>
+    <link rel="self" href="https://example.com/entries/1/self"/>
+    <link rel="alternate" href="https://example.com/entries/1"/>
+    <updated>2026-01-02T03:04:05Z</updated>
+  </entry>
+  <entry>
+    <title>Second entry (default rel)</title>
+    <link href="https://example.com/entries/2"/>
+    <updated>2026-01-03T10:20:30+02:00</updated>
+  </entry>
+  <entry>
+    <title>Third entry (no date)</title>
+    <link rel="alternate" href="https://example.com/entries/3"/>
+  </entry>
+</feed>
