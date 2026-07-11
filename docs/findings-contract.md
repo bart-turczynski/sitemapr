@@ -205,6 +205,29 @@ hreflang-prefixed one (see `docs/sitemap-spec.md` §5.4).
   absent or ≠ `alternate`, `hreflang` or `href` absent)
 - `HREFLANG_HREF_RELATIVE` — `href` is relative; strict-only `warning`
 
+The three codes below are **whole-sitemap / cross-URL** checks
+(`subject_type = "document"`, `warning`). They read the alternate graph the
+sitemap *declares* (offline, from the sitemap bytes alone; the live per-page
+return-link check is the deferred Layer E `PAGE_HREFLANG_MISMATCH`). Each
+individual `<xhtml:link>` may be syntactically valid yet a search engine can
+still ignore an incomplete cluster.
+- `HREFLANG_MISSING_SELF_REFERENCE` — a URL declares alternate-language links
+  but none points back at its own URL. Every page in an hreflang set must
+  self-reference or the whole set may be disregarded.
+- `HREFLANG_NON_RECIPROCAL` — A links to B as an alternate but B does not link
+  back to A. Return links are mandatory; a one-way annotation is ignored.
+  **Corpus-boundary policy:** reciprocity is only judged when B is a URL the
+  sitemap also submits (an *internal* node). When B lies OUTSIDE the audited
+  corpus (an *external* alternate — another host or another sitemap), the
+  sitemap cannot state B's return links, so reciprocity is *unknown* and the
+  edge is EXCLUDED rather than flagged (no false positive). Self-reference and
+  language-consistency read only the corpus's own declarations, so they still
+  apply to external targets.
+- `HREFLANG_INCONSISTENT_LANGUAGE` — the same target URL is annotated with two
+  or more conflicting language tokens across the corpus. Comparison is
+  case-insensitive (BCP 47), so a pure casing difference is left to
+  `HREFLANG_NONSTANDARD_CASE`, not treated as a language conflict.
+
 ### Classification / unsupported input codes
 - `UNSUPPORTED_ROOT` — root element is neither `urlset` nor `sitemapindex`
 - `UNSUPPORTED_HTML_MASQUERADE` — document looks like HTML at the URL that
