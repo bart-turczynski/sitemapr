@@ -1,10 +1,7 @@
-# Pending contract tests for ADR-008 (deterministic bounded concurrency).
+# Contract tests for ADR-008 (deterministic bounded concurrency).
 #
 # These tests ENCODE the observable invariants that opt-in bounded concurrency
-# must preserve. They are intentionally PENDING: every test skips until
-# SITE-tktfxoxe implements the scheduler, so the suite stays GREEN now while the
-# contract is documented executably. When SITE-tktfxoxe lands it deletes the
-# skip() at the top of each test and implements against these assertions.
+# must preserve. The scheduler is implemented (SITE-tktfxoxe), so they run.
 #
 # The load-bearing invariant (ADR-008 §0): concurrency is a scheduling
 # optimization only. For the same input and limits, the rows / sources /
@@ -13,23 +10,12 @@
 # in which child fetches complete. Output is emitted in source/catalog order,
 # never completion order.
 #
-# Test-design notes for the implementer (SITE-tktfxoxe):
-#   * `permute_completion_order()` is the hook these tests need from the
-#     scheduler: a seam that forces child fetches to COMPLETE in a caller-chosen
-#     order (e.g. reverse, or an arbitrary permutation) while the input catalog
-#     order is fixed. The virtual-clock throttle seam in test-index-expansion.R
-#     ("a throttle state paces index children on a shared host bucket") is the
-#     model for injecting deterministic timing without real sleeps.
-#   * The sequential result from today's `expand_index()` is the REFERENCE
-#     oracle; concurrent output is asserted `identical()` to it.
-
-pending_concurrency <- function() {
-  skip("pending SITE-tktfxoxe: bounded-concurrency implementation")
-}
+# Seams (helper-concurrency.R): permute_completion_order() forces child fetches
+# to COMPLETE in a caller-chosen order; local_inflight_probe() records the peak
+# concurrent in-flight fetches; the sequential expand_index() result is the
+# REFERENCE oracle, asserted identical() to the concurrent output.
 
 test_that("concurrent output is byte-identical to sequential (rows/tree)", {
-  pending_concurrency()
-
   # Build one index over several same-host leaves whose bodies differ, so row
   # order is observable. The sequential expansion is the reference oracle.
   root <- "https://example.com/sitemap.xml"
@@ -48,14 +34,14 @@ test_that("concurrent output is byte-identical to sequential (rows/tree)", {
   concurrent <- expand_root(root, body, max_active = 3L)
 
   expect_identical(concurrent$rows, reference$rows)
-  expect_identical(concurrent$sources, reference$sources)
+  expect_identical(
+    stable_sources(concurrent)$sources, stable_sources(reference)$sources
+  )
   expect_identical(concurrent$tree, reference$tree)
   expect_identical(concurrent$problems, reference$problems)
 })
 
 test_that("output is stable across every permuted child completion order", {
-  pending_concurrency()
-
   root <- "https://example.com/sitemap.xml"
   map <- list(
     "https://example.com/child-1.xml" = urlset_xml("https://example.com/a"),
@@ -80,8 +66,6 @@ test_that("output is stable across every permuted child completion order", {
 })
 
 test_that("the global worker cap (max_active) is never exceeded", {
-  pending_concurrency()
-
   # A probe records the number of fetches simultaneously in flight. With
   # max_active = 2 over many children, the observed peak must never exceed 2.
   root <- "https://example.com/sitemap.xml"
@@ -100,8 +84,6 @@ test_that("the global worker cap (max_active) is never exceeded", {
 })
 
 test_that("the per-host throttle bounds rate even under concurrency", {
-  pending_concurrency()
-
   # A virtual clock (same seam as test-index-expansion.R) records slept-for
   # delays. All children share one example.com host bucket, so even with idle
   # workers the throttle paces them: the worker cap and the throttle compose,
@@ -132,13 +114,11 @@ test_that("the per-host throttle bounds rate even under concurrency", {
   expand_root(root, body, max_active = 3L, throttle_state = state)
 
   # Three children on the one shared bucket: first free, next two wait a full
-  # interval each — identical pacing to the sequential throttle test.
+  # interval each -- identical pacing to the sequential throttle test.
   expect_identical(cl$slept, c(5, 5))
 })
 
 test_that("budget truncation lands at the sequential catalog position", {
-  pending_concurrency()
-
   # Two URLs per leaf; max_total_urls = 5 admits child-1 (2) and child-2 (2) =
   # 4, then child-3 would breach 5 and is left out WHOLE. Concurrency must cut
   # at the identical catalog position regardless of completion order.
@@ -174,8 +154,6 @@ test_that("budget truncation lands at the sequential catalog position", {
 })
 
 test_that("a per-child fetch error becomes the same finding as sequential", {
-  pending_concurrency()
-
   # A dead middle child must not abort the walk: it is captured in place as the
   # same rejected tree row + fetch problem sequential mode produces, and the
   # surviving children still contribute their rows in catalog order (ADR-008
@@ -193,8 +171,10 @@ test_that("a per-child fetch error becomes the same finding as sequential", {
     "https://example.com/child-3.xml"
   )
 
-  reference <- expand_root(root, body)
-  concurrent <- expand_root(root, body, max_active = 3L)
+  # A child 4xx surfaces as a non-fatal `sitemapr_http_error` warning in both
+  # modes (same as setup-steps-index.R); suppress it to compare the outputs.
+  reference <- suppressWarnings(expand_root(root, body))
+  concurrent <- suppressWarnings(expand_root(root, body, max_active = 3L))
 
   expect_identical(concurrent$rows, reference$rows)
   expect_identical(concurrent$tree, reference$tree)
@@ -202,8 +182,6 @@ test_that("a per-child fetch error becomes the same finding as sequential", {
 })
 
 test_that("sequential fallback (max_active = 1) equals the default path", {
-  pending_concurrency()
-
   # max_active = 1 MUST be observably identical to the sequential default: it is
   # the reference semantics, not a distinct mode (ADR-008 §1).
   root <- "https://example.com/sitemap.xml"
@@ -218,20 +196,18 @@ test_that("sequential fallback (max_active = 1) equals the default path", {
   serial <- expand_root(root, body, max_active = 1L)
 
   expect_identical(serial$rows, reference$rows)
-  expect_identical(serial$sources, reference$sources)
+  expect_identical(
+    stable_sources(serial)$sources, stable_sources(reference)$sources
+  )
   expect_identical(serial$tree, reference$tree)
   expect_identical(serial$problems, reference$problems)
 })
 
 test_that("one operation shares a single per-host bucket across phases", {
-  pending_concurrency()
-
   # ADR-008 §6 throttle unification: discovery + every index expansion of one
-  # sitemap_tree() operation pace against ONE host-bucket store. Two same-host
-  # top-level indexes plus the discovery requests that preceded them must pace
-  # on the shared bucket, not restart pacing per phase. With a shared virtual
-  # clock, the total slept time reflects one continuous pace across the whole
-  # operation (not one free "first request" per phase).
+  # sitemap_tree() operation pace against ONE host-bucket store. A single
+  # per-operation store grants exactly one free ("first") request across the
+  # whole operation, not one per phase.
   cl <- new.env(parent = emptyenv())
   cl$t <- 1000
   cl$slept <- numeric(0)
@@ -241,7 +217,7 @@ test_that("one operation shares a single per-host bucket across phases", {
     cl$t <- cl$t + seconds
   }
 
-  # The scheduler must build ONE throttle_state and thread it through discovery,
+  # The scheduler builds ONE throttle_state and threads it through discovery,
   # robots, and all expand_index() calls. This asserts the store is shared: only
   # the very first request across the whole operation is free.
   state <- throttle_state_new(

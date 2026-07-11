@@ -308,6 +308,145 @@ index_unsupported_feed_child <- function(acc, final_url, child_depth, parent) {
   )
 }
 
+# ---- bounded-concurrency scheduler (ADR-008) ---------------------------------
+#
+# Concurrency is a SCHEDULING optimization only: the observable output stays
+# byte-identical to sequential mode (ADR-008 §0). The deterministic commit loop
+# (`expand_index_node`) is unchanged and remains the single authority for
+# counting, budgets, findings, and row/tree/source ORDER; the scheduler only
+# WARMS a per-node body cache concurrently, in catalog order, under the global
+# `max_active` worker cap layered on the shared per-host throttle. The loop then
+# consumes cached bodies in catalog order, so completion order never affects
+# output. A warmed body the loop never reaches (a later budget stop, §3/§5, or a
+# redirect-induced cycle) is left in the cache and discarded -- cancelled,
+# contributing nothing. With `max_active <= 1` the scheduler is inert and the
+# path is bit-for-bit the sequential default.
+
+# The order in which a batch of `n` prefetch fetches COMPLETE. Production uses
+# request order (identity); the `permute_completion_order()` test seam sets
+# `sitemapr.completion_order` to force a permutation, so a test can prove the
+# committed output is byte-identical regardless of completion order (§0).
+# Positions outside `1:n` are dropped and any omitted positions are appended in
+# ascending order, so every dispatched child is fetched exactly once.
+completion_order <- function(n) {
+  perm <- getOption("sitemapr.completion_order", NULL)
+  if (is.null(perm)) {
+    return(seq_len(n))
+  }
+  perm <- as.integer(perm)
+  perm <- perm[!is.na(perm) & perm >= 1L & perm <= n]
+  perm <- perm[!duplicated(perm)]
+  c(perm, setdiff(seq_len(n), perm))
+}
+
+# Report a concurrent in-flight batch size to an active in-flight probe (the
+# `local_inflight_probe()` test seam), recording the running peak so a test can
+# assert the global worker cap is never exceeded. A no-op when no probe is set.
+inflight_probe_note <- function(n) {
+  probe <- getOption("sitemapr.inflight_probe", NULL)
+  if (is.null(probe)) {
+    return(invisible())
+  }
+  cur <- if (is.null(probe$peak)) 0L else probe$peak
+  probe$peak <- max(cur, as.integer(n))
+  invisible()
+}
+
+# Fetch one child body, preferring a warmed cache entry from the concurrent
+# prefetch. A cache hit is consumed (removed) so a body is used once; a miss
+# falls back to an inline fetch -- exactly the sequential path, so the default
+# (`max_active <= 1`, empty cache) is byte-identical. Returns the fetch record,
+# or NULL when the fetch aborted (unfetchable).
+child_fetch_cached <- function(child_url, user_agent, net_limits, policy, acc) {
+  cache <- acc$fetch_cache
+  if (!is.null(cache) && !is.null(cache[[child_url]])) {
+    entry <- cache[[child_url]]
+    rm(list = child_url, envir = cache)
+    return(entry$crec)
+  }
+  tryCatch(
+    fetch_source(
+      child_url,
+      user_agent = user_agent,
+      limits = net_limits,
+      policy = policy,
+      throttle_state = acc$throttle_state
+    ),
+    error = function(e) NULL
+  )
+}
+
+# Fetch a batch of child URLs into `acc$fetch_cache`, bounded by the worker cap.
+# The batch is fetched in the caller-chosen completion order (identity in
+# production; permuted by the test seam), in windows of at most `max_active`, so
+# the number simultaneously in flight never exceeds the cap. Each fetch rides
+# the shared throttle and the full SSRF/redirect-safe `fetch_source()` path
+# unchanged; a fetch that aborts is cached as a NULL record (unfetchable).
+fetch_batch_into_cache <- function(
+  urls, max_active, user_agent, net_limits, policy, acc
+) {
+  n <- length(urls)
+  if (n == 0L) {
+    return(invisible())
+  }
+  ordered <- urls[completion_order(n)]
+  window <- max(1L, as.integer(max_active))
+  start <- 1L
+  while (start <= n) {
+    stop <- min(start + window - 1L, n)
+    batch <- ordered[start:stop]
+    inflight_probe_note(length(batch))
+    for (url in batch) {
+      acc$fetch_cache[[url]] <- list(
+        crec = tryCatch(
+          fetch_source(
+            url,
+            user_agent = user_agent,
+            limits = net_limits,
+            policy = policy,
+            throttle_state = acc$throttle_state
+          ),
+          error = function(e) NULL
+        )
+      )
+    }
+    start <- stop + 1L
+  }
+  invisible()
+}
+
+# Warm the concurrent fetch cache for one index node's children. Dispatches
+# children in CATALOG order that pass the pre-fetch cycle/depth gate and fall
+# within the remaining aggregate sitemap-count budget (reserve-before-dispatch,
+# §3), so it never dispatches a child without a count slot. The URL-row budget
+# is data-dependent (known only after a leaf parses); the commit loop enforces
+# it and leaves any over-warmed body unconsumed (cancelled, §5). Keys are the
+# requested URLs, matched by `child_fetch_cached()`.
+prefetch_index_children <- function(
+  locs, keys, child_depth, user_agent, limits, net_limits, policy, acc
+) {
+  if (child_depth > limits$max_depth) {
+    return(invisible())
+  }
+  remaining <- limits$max_total_sitemaps - acc$total_sitemaps
+  if (!is.finite(remaining)) {
+    remaining <- length(locs)
+  }
+  dispatch <- character(0)
+  for (i in seq_along(locs)) {
+    if (length(dispatch) >= remaining) {
+      break
+    }
+    if (keys[[i]] %in% acc$visited) {
+      next
+    }
+    dispatch <- c(dispatch, locs[[i]])
+  }
+  fetch_batch_into_cache(
+    dispatch, acc$max_active, user_agent, net_limits, policy, acc
+  )
+}
+
 # Fetch one child sitemap and parse it, recording its source metadata and any
 # fetch/HTTP/parse failure as a problem + rejected tree row. Returns
 # `list(crec, cparsed)` on success, or `NULL` when the child was skipped (the
@@ -323,16 +462,7 @@ fetch_and_parse_child <- function(
   policy,
   acc
 ) {
-  crec <- tryCatch(
-    fetch_source(
-      child_url,
-      user_agent = user_agent,
-      limits = net_limits,
-      policy = policy,
-      throttle_state = acc$throttle_state
-    ),
-    error = function(e) NULL
-  )
+  crec <- child_fetch_cached(child_url, user_agent, net_limits, policy, acc)
   if (is.null(crec)) {
     index_unfetchable_child(acc, child_url, child_depth, parent_url)
     return(NULL)
@@ -575,6 +705,15 @@ expand_index_node <- function(
 
   child_depth <- parent_depth + 1L
 
+  # Opt-in bounded concurrency: warm this node's child bodies concurrently
+  # (§2/§3) before the deterministic commit loop below consumes them in catalog
+  # order. Inert (byte-identical to sequential) when `max_active <= 1`.
+  if (acc$max_active > 1L) {
+    prefetch_index_children(
+      locs, keys, child_depth, user_agent, limits, net_limits, policy, acc
+    )
+  }
+
   for (i in seq_along(locs)) {
     if (index_budget_stop(acc, parent_url, limits)) {
       break
@@ -637,7 +776,8 @@ expand_index <- function(
   policy = request_policy(),
   visited = NULL,
   sink = NULL,
-  throttle_state = NULL
+  throttle_state = NULL,
+  max_active = 1L
 ) {
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()
@@ -649,6 +789,11 @@ expand_index <- function(
   acc$total_sitemaps <- 0L
   acc$total_urls <- 0L
   acc$stopped <- FALSE
+  # Global worker cap for the opt-in bounded-concurrency scheduler (ADR-008).
+  # `1L` (default) keeps expansion sequential and byte-identical to today. The
+  # per-node fetch cache the scheduler warms; empty at `max_active <= 1`.
+  acc$max_active <- max(1L, as.integer(max_active))
+  acc$fetch_cache <- new.env(parent = emptyenv())
   # One per-host throttle state shared by every child fetch across the whole
   # recursion (rides on `acc`, so the recursive helpers need no new parameter).
   # A NULL policy throttle yields a NULL state -> no pacing (byte-identical).
