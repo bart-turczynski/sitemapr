@@ -69,6 +69,9 @@ HREFLANG_XDEFAULT_MISSING,info,protocol,entry,FALSE,active,,
 HREFLANG_LINK_ATTR_INVALID,error,protocol,entry,FALSE,active,,HREFLANG_LINK_ATTR_INVALID
 HREFLANG_HREF_RELATIVE,warning,protocol,entry,TRUE,active,,
 HREFLANG_DUPLICATE,warning,protocol,entry,FALSE,active,,HREFLANG_DUPLICATE
+HREFLANG_MISSING_SELF_REFERENCE,warning,protocol,document,FALSE,active,,
+HREFLANG_NON_RECIPROCAL,warning,protocol,document,FALSE,active,,
+HREFLANG_INCONSISTENT_LANGUAGE,warning,protocol,document,FALSE,active,,
 PAGE_FETCH_FAILED,error,page,page-url,FALSE,deferred-v0.2,,PAGE_FETCH_FAILED
 PAGE_SSRF_BLOCKED,error,page,page-url,FALSE,deferred-v0.2,,PAGE_SSRF_BLOCKED
 PAGE_STATUS_ERROR,error,page,page-url,FALSE,deferred-v0.2,,PAGE_STATUS_ERROR
