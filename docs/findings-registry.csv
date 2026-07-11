@@ -57,8 +57,8 @@ INDEX_CYCLE_DETECTED,error,index-expansion,index-child,FALSE,active,,INDEX_CYCLE
 INDEX_DEPTH_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_DEPTH_EXCEEDED
 SITEMAP_INDEX_NESTED,warning,index-expansion,index-child,FALSE,active,,INDEX_NESTED_INDEX
 INDEX_CHILD_COUNT_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_CHILD_LIMIT
-INDEX_TOTAL_SITEMAPS_EXCEEDED,error,index-expansion,index-child,FALSE,active,open,INDEX_TOTAL_SITEMAP_LIMIT
-INDEX_TOTAL_URLS_EXCEEDED,error,index-expansion,index-child,FALSE,active,open,INDEX_TOTAL_URL_LIMIT
+INDEX_TOTAL_SITEMAPS_EXCEEDED,error,index-expansion,index-child,FALSE,active,done,INDEX_TOTAL_SITEMAP_LIMIT
+INDEX_TOTAL_URLS_EXCEEDED,error,index-expansion,index-child,FALSE,active,done,INDEX_TOTAL_URL_LIMIT
 INDEX_TOO_MANY_CHILDREN,warning,index-expansion,index-child,FALSE,validator-only,,INDEX_TOO_MANY_CHILDREN
 INDEX_TOO_MANY_INDEXES,warning,index-expansion,report,FALSE,validator-only,,INDEX_TOO_MANY_INDEXES
 HREFLANG_FORMAT_INVALID,error,protocol,entry,FALSE,active,,HREFLANG_FORMAT_INVALID
