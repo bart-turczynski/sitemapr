@@ -150,6 +150,13 @@ fetch_is_timeout <- function(cnd) {
 #' @param tls Optional named list of curl/TLS options (e.g.
 #'   `list(ssl_verifypeer = 0L)`) passed through `httr2::req_options()`. Cannot
 #'   override sitemapr's redirect controls, which are re-asserted afterwards.
+#' @param throttle Optional [request_throttle()] object enabling host-aware
+#'   request pacing. `NULL` (the default) means no pacing, byte-identical to
+#'   the pre-throttle behavior. When set, requests are keyed by canonical
+#'   host:port, so different origins pace independently and a redirect onto
+#'   another host pays that host's pace, not the origin's. Pacing runs around
+#'   each request (after the per-hop SSRF guard and sitemapr's re-asserted
+#'   transport controls), so it never weakens those safety semantics.
 #' @param retry Optional [request_retry()] object enabling bounded retry with
 #'   exponential backoff. `NULL` (the default) means a single attempt per hop —
 #'   byte-identical to the pre-retry behavior. When set, only TRANSIENT failures
@@ -176,7 +183,8 @@ fetch_is_timeout <- function(cnd) {
 #' @keywords internal
 #' @noRd
 request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
-                           proxy = NULL, tls = NULL, retry = NULL) {
+                           proxy = NULL, tls = NULL, retry = NULL,
+                           throttle = NULL) {
   request_policy_check_prepare(prepare)
   request_policy_check_auth(auth)
   structure(
@@ -186,7 +194,8 @@ request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
       auth = auth,
       proxy = request_policy_check_proxy(proxy),
       tls = request_policy_check_tls(tls),
-      retry = request_policy_check_retry(retry)
+      retry = request_policy_check_retry(retry),
+      throttle = request_policy_check_throttle(throttle)
     ),
     class = "sitemapr_request_policy"
   )
@@ -273,6 +282,18 @@ request_policy_check_retry <- function(retry) {
     request_policy_reject("`retry` must be NULL or a request_retry() object.")
   }
   retry
+}
+
+request_policy_check_throttle <- function(throttle) {
+  if (is.null(throttle)) {
+    return(NULL)
+  }
+  if (!inherits(throttle, "sitemapr_request_throttle")) {
+    request_policy_reject(
+      "`throttle` must be NULL or a request_throttle() object."
+    )
+  }
+  throttle
 }
 
 #' Basic-authentication credentials for a request-policy
@@ -381,6 +402,63 @@ request_retry_check_statuses <- function(statuses) {
   invisible(statuses)
 }
 
+#' Host-aware request-throttle settings for a request-policy
+#'
+#' Configures per-host request pacing for a request-policy. Pass the result as
+#' `request_policy(throttle = )`. Requests are keyed by canonical host:port, so
+#' different origins pace independently and a redirect onto another host pays
+#' that host's pace, not the origin's. Supply EITHER a minimum interval between
+#' consecutive requests to one host (`min_interval`, seconds) OR a request
+#' budget per time window (`requests` per `window` seconds, evenly paced at
+#' `window / requests`). Pacing is shared across every hop of one logical
+#' operation (roots, redirects, robots, discovery candidates, and index
+#' children), so an index traversal's many children pace against one set of host
+#' buckets. `NULL` (the default policy field) means no pacing.
+#'
+#' @param min_interval Minimum seconds between consecutive requests to one host.
+#' @param requests,window A request budget: at most `requests` requests per
+#'   `window` seconds to one host, evenly paced (interval `window / requests`).
+#'   Both must be supplied together and take precedence over `min_interval`.
+#' @return A `sitemapr_request_throttle` for `request_policy(throttle = )`.
+#' @examples
+#' # At most one request per host every 2 seconds.
+#' request_throttle(min_interval = 2)
+#'
+#' # A budget of 10 requests per 60 seconds per host (evenly paced).
+#' request_throttle(requests = 10, window = 60)
+#' @keywords internal
+#' @noRd
+request_throttle <- function(min_interval = NULL, requests = NULL,
+                             window = NULL) {
+  interval <- request_throttle_interval(min_interval, requests, window)
+  structure(
+    list(min_interval = interval),
+    class = "sitemapr_request_throttle"
+  )
+}
+
+# Resolve the effective per-host minimum interval (seconds). A request budget
+# (`requests` per `window`) wins when supplied; else `min_interval` is used.
+# Exactly one form must be given, each value a single positive number.
+request_throttle_interval <- function(min_interval, requests, window) {
+  if (!is.null(requests) || !is.null(window)) {
+    req <- request_throttle_positive(requests, "requests")
+    win <- request_throttle_positive(window, "window")
+    return(win / req)
+  }
+  request_throttle_positive(min_interval, "min_interval")
+}
+
+request_throttle_positive <- function(value, name) {
+  ok <- is.numeric(value) && length(value) == 1L && isTRUE(value > 0)
+  if (!ok) {
+    request_policy_reject(
+      sprintf("`%s` must be a single positive number.", name)
+    )
+  }
+  as.numeric(value)
+}
+
 # Exponential backoff for retry attempt `i` (1-based), clamped to the policy's
 # [backoff_min, backoff_max] window so a runaway multiplier can never sleep past
 # the configured ceiling. Deterministic given `i`, so it is unit-testable.
@@ -402,6 +480,63 @@ retry_after_bounded <- function(resp, backoff_max) {
     return(NA_real_)
   }
   min(after, backoff_max)
+}
+
+# ---- host-aware request throttling -------------------------------------------
+
+# Build the mutable per-host throttle state for one logical operation, or NULL
+# when the policy configures no throttle (the byte-identical default). The state
+# is an environment holding the effective per-host `min_interval`, a
+# host:port -> next-allowed-epoch map, and the injectable clock (`now`) and
+# `sleep` seams. Production defaults are Sys.time / Sys.sleep; tests supply a
+# virtual clock so the suite paces deterministically and never sleeps on the
+# real wall clock (httr2::req_throttle is deliberately NOT used, since it does).
+throttle_state_new <- function(throttle, now = Sys.time, sleep = Sys.sleep) {
+  if (is.null(throttle)) {
+    return(NULL)
+  }
+  state <- new.env(parent = emptyenv())
+  state$min_interval <- throttle$min_interval
+  state$next_allowed <- list()
+  state$now <- now
+  state$sleep <- sleep
+  state
+}
+
+# The throttle bucket key for a URL: its canonical host with an explicit,
+# non-default port. Reuses the shared URL parse so the key matches the identity
+# key's host/port canonicalization; the scheme's default port (`:80`/`:443`)
+# collapses to no port, so `https://h:443/` and `https://h/` share one bucket.
+throttle_host_key <- function(url) {
+  parsed <- parse_url_adapter(url)
+  host <- tolower(as.character(parsed$host)[[1L]])
+  scheme <- as.character(parsed$scheme)[[1L]]
+  port <- parsed$port[[1L]]
+  defaults <- c(http = 80L, https = 443L)
+  if (is.na(port) || isTRUE(port == defaults[scheme])) {
+    return(host)
+  }
+  paste0(host, ":", port)
+}
+
+# Pace one request to `url`'s host bucket. If that host's next-allowed time is
+# ahead of now, sleep until then (via the injected `sleep`), then reserve the
+# slot `min_interval` seconds out. Buckets are independent per host, so distinct
+# origins never pace against each other and a redirect to another host waits on
+# its OWN bucket. A NULL state is a no-op (throttle unset -> byte-identical).
+throttle_before_request <- function(state, url) {
+  if (is.null(state)) {
+    return(invisible())
+  }
+  key <- throttle_host_key(url)
+  cur <- as.numeric(state$now())
+  earliest <- state$next_allowed[[key]]
+  if (!is.null(earliest) && earliest > cur) {
+    state$sleep(earliest - cur)
+    cur <- earliest
+  }
+  state$next_allowed[[key]] <- cur + state$min_interval
+  invisible()
 }
 
 # Apply a policy's TYPED fields (headers, auth, proxy, tls) to one hop's
@@ -503,7 +638,8 @@ request_policy_prepare <- function(policy, req, url) {
 # redirect ownership, and error policy are (re-)asserted AFTER the hook, so a
 # policy can add headers but cannot override those safety semantics.
 fetch_perform_one <- function(url, limits, user_agent,
-                              policy = request_policy()) {
+                              policy = request_policy(),
+                              throttle_state = NULL) {
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
   # Caller-supplied customization (after the SSRF guard, before our own
@@ -519,6 +655,9 @@ fetch_perform_one <- function(url, limits, user_agent,
   req <- httr2::req_options(req, followlocation = 0L, maxredirs = 0L)
   # Let the caller decide what a non-2xx status means; do not abort on it here.
   req <- httr2::req_error(req, is_error = function(resp) FALSE)
+  # Pace this hop against its host bucket (after the SSRF guard ran in the
+  # caller and after our transport controls above); a NULL state is a no-op.
+  throttle_before_request(throttle_state, url)
   httr2::req_perform(req)
 }
 
@@ -549,7 +688,8 @@ fetch_connection_failure <- function(
   limits,
   user_agent,
   ssrf_guard,
-  policy = request_policy()
+  policy = request_policy(),
+  throttle_state = NULL
 ) {
   if (isTRUE(scheme_inferred) && startsWith(tolower(url_str), "https://")) {
     http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
@@ -558,7 +698,8 @@ fetch_connection_failure <- function(
       limits = limits,
       user_agent = user_agent,
       ssrf_guard = ssrf_guard,
-      policy = policy
+      policy = policy,
+      throttle_state = throttle_state
     ))
   }
   if (fetch_is_timeout(cnd)) {
@@ -610,6 +751,12 @@ fetch_connection_failure <- function(
 #' @param policy A `request_policy()` object whose preparation hook is applied
 #'   to every hop's request, after the SSRF guard and before sitemapr's own
 #'   transport controls. Defaults to the no-op policy.
+#' @param throttle_state Internal per-host throttle state (an environment from
+#'   `throttle_state_new()`) shared across the requests of one operation.
+#'   `NULL` (the default) builds a fresh state from `policy$throttle`, so a
+#'   single fetch and its redirect hops share one set of host buckets. Callers
+#'   pacing many fetches together (index traversal, discovery) build the state
+#'   once and pass it in so every fetch shares it.
 #' @return A one-row data.frame from `source_metadata()`. The raw response body
 #'   is attached as a `"body"` attribute (a raw vector; off the 13-column
 #'   contract) so the parse entry point can dispatch on it without re-fetching.
@@ -621,12 +768,19 @@ fetch_source <- function(
   limits = fetch_limits(),
   user_agent = default_user_agent(),
   ssrf_guard = TRUE,
-  policy = request_policy()
+  policy = request_policy(),
+  throttle_state = NULL
 ) {
   input <- fetch_source_input(url, scheme_inferred)
   url_str <- input$url
   scheme_inferred <- input$scheme_inferred
   requested_url <- url_str
+  # A fresh state (from policy$throttle) when none is threaded in, so a single
+  # fetch and its redirect hops share one set of host buckets. NULL throttle
+  # yields a NULL state, so the default path paces nothing (byte-identical).
+  if (is.null(throttle_state)) {
+    throttle_state <- throttle_state_new(policy$throttle)
+  }
 
   result <- tryCatch(
     fetch_follow(
@@ -634,11 +788,13 @@ fetch_source <- function(
       limits = limits,
       user_agent = user_agent,
       ssrf_guard = ssrf_guard,
-      policy = policy
+      policy = policy,
+      throttle_state = throttle_state
     ),
     httr2_failure = function(cnd) {
       fetch_connection_failure(
-        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard, policy
+        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard, policy,
+        throttle_state
       )
     }
   )
@@ -743,7 +899,8 @@ fetch_follow <- function(
   limits,
   user_agent,
   ssrf_guard,
-  policy = request_policy()
+  policy = request_policy(),
+  throttle_state = NULL
 ) {
   start <- Sys.time()
   current_url <- url
@@ -756,7 +913,9 @@ fetch_follow <- function(
 
     # 2. Perform one request (no auto-redirect); the policy hook prepares it
     #    AFTER the guard above and BEFORE req_perform() inside the helper.
-    resp <- fetch_perform_one(current_url, limits, user_agent, policy)
+    resp <- fetch_perform_one(
+      current_url, limits, user_agent, policy, throttle_state
+    )
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.
     next_url <- fetch_redirect_target(resp, current_url)
