@@ -114,31 +114,233 @@ fetch_is_timeout <- function(cnd) {
 
 # ---- request policy (fetch-boundary extension seam) --------------------------
 
-# Construct and validate a request-policy: a small object carrying an optional
-# request-preparation hook applied to each hop's httr2 request. This is the one
-# safe extension seam at the fetch boundary (headers/auth/proxies later); the
-# DEFAULT is a no-op (identity) policy, so existing callers behave identically.
-#
-# `prepare`, when supplied, is a `function(req, ctx)` that receives the built
-# httr2 request plus a hop-context list (currently the resolved hop `url`) and
-# returns the possibly-modified request. It runs AFTER the per-hop SSRF guard
-# and BEFORE sitemapr's own transport controls (timeout, redirect ownership,
-# error policy) are asserted, so it can add headers but cannot weaken those
-# safety semantics.
-#
-# Raises `sitemapr_invalid_request_policy` (abort) when `prepare` is neither
-# NULL nor a function.
-#
-# @keywords internal
-# @noRd
-request_policy <- function(prepare = NULL) {
+#' Construct a request-policy for the fetch boundary
+#'
+#' A request-policy is the single, constrained extension seam for customizing
+#' the httr2 requests sitemapr issues for every hop (root, redirect, discovery,
+#' robots, and index-child requests). It carries typed fields for custom HTTP
+#' headers, authentication, a proxy, and TLS/curl options, plus a generic
+#' `prepare` hook for anything not covered by the typed fields. Every field
+#' defaults to `NULL`, so the default policy is a byte-identical no-op and
+#' existing callers behave exactly as before.
+#'
+#' **What callers may set.** `headers`, `auth`, `proxy`, `tls`, and `prepare`
+#' are all applied to each hop's request AFTER the per-hop SSRF guard and
+#' BEFORE sitemapr asserts its own transport controls.
+#'
+#' **What sitemapr always owns (callers cannot override).** Redirect control
+#' (`followlocation = 0`, `maxredirs = 0`) and the non-2xx error policy are
+#' re-applied by [fetch_perform_one()] *after* all caller customization, and the
+#' structural SSRF guard re-runs on every redirect hop before any network call.
+#' A policy therefore cannot re-enable automatic redirect following, defeat the
+#' per-hop SSRF re-check, or turn a non-2xx status into a transport error — even
+#' via `tls`/`prepare` — because sitemapr's controls win last.
+#'
+#' @param prepare Optional `function(req, ctx)` receiving the built httr2
+#'   request plus a hop-context list (currently the resolved hop `url`) and
+#'   returning the possibly-modified request. Applied last of the caller-facing
+#'   steps, so it composes on top of the typed fields.
+#' @param headers Optional named list or named character vector of HTTP headers
+#'   to add via `httr2::req_headers()`.
+#' @param auth Optional authentication object from [request_auth_basic()] or
+#'   [request_auth_bearer()], applied via `httr2::req_auth_basic()` /
+#'   `httr2::req_auth_bearer_token()`.
+#' @param proxy Optional proxy: either a proxy URL string or a
+#'   [request_proxy()] object, applied via `httr2::req_proxy()`.
+#' @param tls Optional named list of curl/TLS options (e.g.
+#'   `list(ssl_verifypeer = 0L)`) passed through `httr2::req_options()`. Cannot
+#'   override sitemapr's redirect controls, which are re-asserted afterwards.
+#' @return An object of class `sitemapr_request_policy`.
+#' @examples
+#' # (1) A custom header (e.g. to satisfy a staging gateway).
+#' request_policy(headers = list("X-Env" = "staging"))
+#'
+#' # (2) Basic and bearer authentication.
+#' request_policy(auth = request_auth_basic("user", "secret"))
+#' request_policy(auth = request_auth_bearer("a-token"))
+#'
+#' # (3) A corporate proxy.
+#' request_policy(proxy = "http://proxy.internal:3128")
+#' request_policy(proxy = request_proxy("proxy.internal", port = 3128))
+#' @keywords internal
+#' @noRd
+request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
+                           proxy = NULL, tls = NULL) {
+  request_policy_check_prepare(prepare)
+  request_policy_check_auth(auth)
+  structure(
+    list(
+      prepare = prepare,
+      headers = request_policy_check_headers(headers),
+      auth = auth,
+      proxy = request_policy_check_proxy(proxy),
+      tls = request_policy_check_tls(tls)
+    ),
+    class = "sitemapr_request_policy"
+  )
+}
+
+# Raise the shared invalid-policy abort. Factored out so each field validator
+# stays a single small guarded block (keeps the constructor's complexity low).
+request_policy_reject <- function(message) {
+  rlang::abort(message, class = "sitemapr_invalid_request_policy")
+}
+
+request_policy_check_prepare <- function(prepare) {
   if (!is.null(prepare) && !is.function(prepare)) {
-    rlang::abort(
-      "`prepare` must be NULL or a function(req, ctx) returning a request.",
-      class = "sitemapr_invalid_request_policy"
+    request_policy_reject(
+      "`prepare` must be NULL or a function(req, ctx) returning a request."
     )
   }
-  structure(list(prepare = prepare), class = "sitemapr_request_policy")
+  invisible(prepare)
+}
+
+request_policy_check_headers <- function(headers) {
+  if (is.null(headers)) {
+    return(NULL)
+  }
+  headers <- as.list(headers)
+  if (length(headers) == 0L) {
+    return(NULL)
+  }
+  nms <- names(headers)
+  if (is.null(nms) || any(!nzchar(nms))) {
+    request_policy_reject(
+      "`headers` must be a named list or character vector of header values."
+    )
+  }
+  headers
+}
+
+request_policy_check_auth <- function(auth) {
+  if (!is.null(auth) && !inherits(auth, "sitemapr_request_auth")) {
+    request_policy_reject(
+      "`auth` must be NULL, request_auth_basic(), or request_auth_bearer()."
+    )
+  }
+  invisible(auth)
+}
+
+request_policy_check_proxy <- function(proxy) {
+  if (is.null(proxy)) {
+    return(NULL)
+  }
+  if (is.character(proxy) && length(proxy) == 1L) {
+    return(request_proxy(url = proxy))
+  }
+  if (!inherits(proxy, "sitemapr_request_proxy")) {
+    request_policy_reject(
+      "`proxy` must be NULL, a proxy URL string, or request_proxy()."
+    )
+  }
+  proxy
+}
+
+request_policy_check_tls <- function(tls) {
+  if (is.null(tls)) {
+    return(NULL)
+  }
+  tls <- as.list(tls)
+  if (length(tls) == 0L) {
+    return(NULL)
+  }
+  nms <- names(tls)
+  if (is.null(nms) || any(!nzchar(nms))) {
+    request_policy_reject(
+      "`tls` must be a named list of curl/TLS options for req_options()."
+    )
+  }
+  tls
+}
+
+#' Basic-authentication credentials for a request-policy
+#'
+#' @param username,password Credential strings, applied via
+#'   `httr2::req_auth_basic()`.
+#' @return A `sitemapr_request_auth` object for `request_policy(auth = )`.
+#' @keywords internal
+#' @noRd
+request_auth_basic <- function(username, password) {
+  structure(
+    list(scheme = "basic", username = username, password = password),
+    class = "sitemapr_request_auth"
+  )
+}
+
+#' Bearer-token authentication for a request-policy
+#'
+#' @param token Bearer token string, applied via
+#'   `httr2::req_auth_bearer_token()`.
+#' @return A `sitemapr_request_auth` object for `request_policy(auth = )`.
+#' @keywords internal
+#' @noRd
+request_auth_bearer <- function(token) {
+  structure(
+    list(scheme = "bearer", token = token),
+    class = "sitemapr_request_auth"
+  )
+}
+
+#' Proxy settings for a request-policy
+#'
+#' @param url Proxy host or URL.
+#' @param port Optional proxy port.
+#' @param username,password Optional proxy credentials.
+#' @param auth Proxy authentication scheme (`httr2::req_proxy()` default
+#'   `"basic"`).
+#' @return A `sitemapr_request_proxy` object for `request_policy(proxy = )`.
+#' @keywords internal
+#' @noRd
+request_proxy <- function(url, port = NULL, username = NULL,
+                          password = NULL, auth = "basic") {
+  structure(
+    list(
+      url = url,
+      port = port,
+      username = username,
+      password = password,
+      auth = auth
+    ),
+    class = "sitemapr_request_proxy"
+  )
+}
+
+# Apply a policy's TYPED fields (headers, auth, proxy, tls) to one hop's
+# request. Runs before the generic `prepare` hook and before sitemapr's own
+# transport controls, so callers shape the request without weakening safety.
+# A field left NULL is a no-op, so the default policy touches nothing.
+request_policy_apply <- function(policy, req) {
+  if (!is.null(policy$headers)) {
+    req <- do.call(httr2::req_headers, c(list(req), policy$headers))
+  }
+  if (!is.null(policy$auth)) {
+    req <- request_apply_auth(req, policy$auth)
+  }
+  if (!is.null(policy$proxy)) {
+    req <- request_apply_proxy(req, policy$proxy)
+  }
+  if (!is.null(policy$tls)) {
+    req <- do.call(httr2::req_options, c(list(req), policy$tls))
+  }
+  req
+}
+
+request_apply_auth <- function(req, auth) {
+  if (identical(auth$scheme, "bearer")) {
+    return(httr2::req_auth_bearer_token(req, auth$token))
+  }
+  httr2::req_auth_basic(req, auth$username, auth$password)
+}
+
+request_apply_proxy <- function(req, proxy) {
+  httr2::req_proxy(
+    req,
+    url = proxy$url,
+    port = proxy$port,
+    username = proxy$username,
+    password = proxy$password,
+    auth = proxy$auth
+  )
 }
 
 # Apply a request-policy's preparation hook to one hop's request. A NULL hook is
@@ -182,11 +384,16 @@ fetch_perform_one <- function(url, limits, user_agent,
                               policy = request_policy()) {
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
-  # Caller-supplied preparation hook (after the SSRF guard, before our own
-  # transport controls). A no-op for the default policy.
+  # Caller-supplied customization (after the SSRF guard, before our own
+  # transport controls): typed fields first, then the generic prepare hook.
+  # No-ops for the default policy.
+  req <- request_policy_apply(policy, req)
   req <- request_policy_prepare(policy, req, url)
   req <- httr2::req_timeout(req, limits$timeout)
-  # Disable httr2's own redirect following: we follow manually, per hop.
+  # sitemapr always owns redirect control: re-assert AFTER all caller
+  # customization so headers/auth/proxy/tls/prepare cannot re-enable httr2's
+  # own redirect following. We follow manually, per hop, re-running the SSRF
+  # guard on each Location.
   req <- httr2::req_options(req, followlocation = 0L, maxredirs = 0L)
   # Let the caller decide what a non-2xx status means; do not abort on it here.
   req <- httr2::req_error(req, is_error = function(resp) FALSE)
