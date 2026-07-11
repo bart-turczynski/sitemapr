@@ -600,6 +600,143 @@ test_that("request_policy rejects an unnamed tls value", {
   )
 })
 
+# ---- request policy: retry and exponential backoff ---------------------------
+
+# A response with a specific status (retryable-status fixtures).
+mock_status <- function(status, url = "https://example.com/sitemap.xml",
+                        headers = list()) {
+  httr2::response(status_code = status, url = url, headers = headers)
+}
+
+test_that("the default policy attaches no retry (single attempt preserved)", {
+  req <- capture_request(request_policy())
+  expect_null(req$policies$retry_max_tries)
+})
+
+test_that("a retry policy reaches the request with its max_tries budget", {
+  req <- capture_request(request_policy(retry = request_retry(max_tries = 4L)))
+  expect_identical(req$policies$retry_max_tries, 4L)
+  expect_false(is.null(req$policies$retry_is_transient))
+})
+
+test_that("is_transient marks the retryable status set as transient", {
+  req <- capture_request(request_policy(retry = request_retry()))
+  is_transient <- req$policies$retry_is_transient
+  # The default transient set recovers (drives retry) within budget.
+  for (status in c(429L, 500L, 502L, 503L, 504L)) {
+    expect_true(is_transient(mock_status(status)))
+  }
+})
+
+test_that("is_transient does NOT retry success or deterministic 4xx", {
+  req <- capture_request(request_policy(retry = request_retry()))
+  is_transient <- req$policies$retry_is_transient
+  # A 200 is terminal; a 404 (missing) and 400 (bad request) are deterministic
+  # HTTP failures and must keep their existing condition/finding behavior.
+  expect_false(is_transient(mock_status(200L)))
+  expect_false(is_transient(mock_status(404L)))
+  expect_false(is_transient(mock_status(400L)))
+})
+
+test_that("a custom retryable status set overrides the default", {
+  req <- capture_request(
+    request_policy(retry = request_retry(statuses = c(503L, 429L)))
+  )
+  is_transient <- req$policies$retry_is_transient
+  expect_true(is_transient(mock_status(503L)))
+  expect_false(is_transient(mock_status(500L)))
+})
+
+test_that("Retry-After is honored but bounded by the configured max backoff", {
+  retry <- request_retry(backoff_max = 30)
+  # A giant Retry-After collapses to the ceiling (no unbounded sleep).
+  huge <- mock_status(503L, headers = list("Retry-After" = "9999"))
+  expect_identical(retry_after_bounded(huge, retry$backoff_max), 30)
+  # A small Retry-After is honored verbatim.
+  small <- mock_status(503L, headers = list("Retry-After" = "5"))
+  expect_identical(retry_after_bounded(small, retry$backoff_max), 5)
+  # Absent / non-numeric header => NA, so httr2 falls back to bounded backoff.
+  none <- mock_status(503L)
+  expect_true(is.na(retry_after_bounded(none, retry$backoff_max)))
+  date <- mock_status(503L, headers = list("Retry-After" = "Wed, 21 Oct 2099"))
+  expect_true(is.na(retry_after_bounded(date, retry$backoff_max)))
+})
+
+test_that("exponential backoff grows then clamps to the max", {
+  # Deterministic and instant: never sleeps.
+  expect_identical(retry_backoff_seconds(1L, 1, 30), 1)
+  expect_identical(retry_backoff_seconds(2L, 1, 30), 2)
+  expect_identical(retry_backoff_seconds(3L, 1, 30), 4)
+  # Runaway multiplier is clamped to backoff_max.
+  expect_identical(retry_backoff_seconds(10L, 1, 30), 30)
+})
+
+test_that("both root and index-child requests carry the retry policy", {
+  # Children are fetched through the same fetch_source path with the shared
+  # policy, so retry reaches every hop. Capture two distinct fetches.
+  policy <- request_policy(retry = request_retry(max_tries = 3L))
+  root <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(function(req) {
+    root$captured <- req
+    mock_ok(url = req$url)
+  })
+  fetch_source("https://example.com/sitemap_index.xml", policy = policy)
+  expect_identical(root$captured$policies$retry_max_tries, 3L)
+
+  child <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(function(req) {
+    child$captured <- req
+    mock_ok(url = req$url)
+  })
+  fetch_source("https://example.com/child-1.xml", policy = policy)
+  expect_identical(child$captured$policies$retry_max_tries, 3L)
+})
+
+test_that("retry runs behind the per-hop SSRF guard (never retries SSRF)", {
+  # The SSRF guard aborts before the request is built, so retry cannot re-run a
+  # blocked host: no request reaches req_perform() at all.
+  state <- new.env(parent = emptyenv())
+  state$called <- FALSE
+  httr2::local_mocked_responses(function(req) {
+    state$called <- TRUE
+    mock_ok()
+  })
+  policy <- request_policy(retry = request_retry())
+  expect_error(
+    fetch_source("http://127.0.0.1/sitemap.xml", policy = policy),
+    class = "sitemapr_ssrf_blocked"
+  )
+  expect_false(state$called)
+})
+
+test_that("retry leaves sitemapr's redirect controls intact", {
+  req <- capture_request(request_policy(retry = request_retry()))
+  # Retry lives in its own policy slot; sitemapr's transport controls remain.
+  expect_identical(req$options$followlocation, 0L)
+  expect_identical(req$options$maxredirs, 0L)
+})
+
+test_that("request_retry rejects an invalid max_tries", {
+  expect_error(
+    request_retry(max_tries = 0L),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_retry rejects an empty status set", {
+  expect_error(
+    request_retry(statuses = integer(0)),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_policy rejects a non-retry object", {
+  expect_error(
+    request_policy(retry = list(max_tries = 3L)),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
 # ---- https -> http fallback --------------------------------------------------
 
 test_that("scheme_inferred = TRUE falls back to http when https fails", {
