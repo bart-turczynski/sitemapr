@@ -1884,6 +1884,7 @@ validate_protocol <- function(
         validate_field_values(rows, subject_ref),
         validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
         validate_hreflang(rows, subject_ref),
+        validate_hreflang_graph(rows, subject_ref),
         validate_extensions(rows, subject_ref, limits)
       )
     )
