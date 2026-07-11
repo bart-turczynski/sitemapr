@@ -570,6 +570,28 @@ test_that("typed fields still run behind the per-hop SSRF guard", {
   expect_false(state$called)
 })
 
+# ---- request policy: public surface ------------------------------------------
+
+test_that("the request-policy constructor family is exported (SITE-qtllryuw)", {
+  # The documented `policy` param on read_sitemap()/validate_sitemap()/etc. is
+  # only real if a user can construct a policy without `:::`. Assert the whole
+  # family is on the public surface and each returns its classed object.
+  exports <- getNamespaceExports("sitemapr")
+  family <- c(
+    "request_policy", "request_auth_basic", "request_auth_bearer",
+    "request_proxy", "request_retry", "request_throttle"
+  )
+  expect_true(all(family %in% exports))
+  expect_s3_class(request_policy(), "sitemapr_request_policy")
+  expect_s3_class(request_auth_basic("u", "p"), "sitemapr_request_auth")
+  expect_s3_class(request_auth_bearer("t"), "sitemapr_request_auth")
+  expect_s3_class(request_proxy("proxy.internal"), "sitemapr_request_proxy")
+  expect_s3_class(request_retry(), "sitemapr_request_retry")
+  expect_s3_class(
+    request_throttle(min_interval = 1), "sitemapr_request_throttle"
+  )
+})
+
 # ---- request policy: constructor validation ----------------------------------
 
 test_that("request_policy rejects an unnamed headers value", {

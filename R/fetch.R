@@ -130,7 +130,7 @@ fetch_is_timeout <- function(cnd) {
 #'
 #' **What sitemapr always owns (callers cannot override).** Redirect control
 #' (`followlocation = 0`, `maxredirs = 0`) and the non-2xx error policy are
-#' re-applied by [fetch_perform_one()] *after* all caller customization, and the
+#' re-applied *after* all caller customization, and the
 #' structural SSRF guard re-runs on every redirect hop before any network call.
 #' A policy therefore cannot re-enable automatic redirect following, defeat the
 #' per-hop SSRF re-check, or turn a non-2xx status into a transport error — even
@@ -189,8 +189,11 @@ fetch_is_timeout <- function(cnd) {
 #' # (3) A corporate proxy.
 #' request_policy(proxy = "http://proxy.internal:3128")
 #' request_policy(proxy = request_proxy("proxy.internal", port = 3128))
-#' @keywords internal
-#' @noRd
+#'
+#' # (4) Bounded-concurrency index expansion (opt-in; sequential by default).
+#' request_policy(max_active = 6)
+#' @family request-policy
+#' @export
 request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
                            proxy = NULL, tls = NULL, retry = NULL,
                            throttle = NULL, max_active = NULL) {
@@ -355,8 +358,10 @@ policy_set_max_active <- function(policy, max_active) {
 #' @param username,password Credential strings, applied via
 #'   `httr2::req_auth_basic()`.
 #' @return A `sitemapr_request_auth` object for `request_policy(auth = )`.
-#' @keywords internal
-#' @noRd
+#' @family request-policy
+#' @export
+#' @examples
+#' request_policy(auth = request_auth_basic("user", "secret"))
 request_auth_basic <- function(username, password) {
   structure(
     list(scheme = "basic", username = username, password = password),
@@ -369,8 +374,10 @@ request_auth_basic <- function(username, password) {
 #' @param token Bearer token string, applied via
 #'   `httr2::req_auth_bearer_token()`.
 #' @return A `sitemapr_request_auth` object for `request_policy(auth = )`.
-#' @keywords internal
-#' @noRd
+#' @family request-policy
+#' @export
+#' @examples
+#' request_policy(auth = request_auth_bearer("a-token"))
 request_auth_bearer <- function(token) {
   structure(
     list(scheme = "bearer", token = token),
@@ -386,8 +393,10 @@ request_auth_bearer <- function(token) {
 #' @param auth Proxy authentication scheme (`httr2::req_proxy()` default
 #'   `"basic"`).
 #' @return A `sitemapr_request_proxy` object for `request_policy(proxy = )`.
-#' @keywords internal
-#' @noRd
+#' @family request-policy
+#' @export
+#' @examples
+#' request_policy(proxy = request_proxy("proxy.internal", port = 3128))
 request_proxy <- function(url, port = NULL, username = NULL,
                           password = NULL, auth = "basic") {
   structure(
@@ -421,8 +430,11 @@ request_proxy <- function(url, port = NULL, username = NULL,
 #' @param retry_on_failure When `TRUE`, transient transport errors (curl
 #'   failures) are also retried. Defaults to `FALSE` (status-driven retry only).
 #' @return A `sitemapr_request_retry` object for `request_policy(retry = )`.
-#' @keywords internal
-#' @noRd
+#' @family request-policy
+#' @export
+#' @examples
+#' # Up to 4 attempts per hop, retrying the transient status set.
+#' request_policy(retry = request_retry(max_tries = 4L))
 request_retry <- function(max_tries = 3L,
                           statuses = c(429L, 500L, 502L, 503L, 504L),
                           backoff_min = 1, backoff_max = 30,
@@ -480,8 +492,8 @@ request_retry_check_statuses <- function(statuses) {
 #'
 #' # A budget of 10 requests per 60 seconds per host (evenly paced).
 #' request_throttle(requests = 10, window = 60)
-#' @keywords internal
-#' @noRd
+#' @family request-policy
+#' @export
 request_throttle <- function(min_interval = NULL, requests = NULL,
                              window = NULL) {
   interval <- request_throttle_interval(min_interval, requests, window)
