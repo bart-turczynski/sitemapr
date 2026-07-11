@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Malformed feed: not well-formed XML (the <entry> element is never closed
+     and the document is truncated mid-element). Parsing must raise the typed
+     sitemapr_xml_parse_error condition, not return partial rows. -->
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Broken feed
+  <entry>
+    <link rel="alternate" href="https://example.com/x"

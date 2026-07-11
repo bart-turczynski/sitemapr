@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Clean Atom 0.3 feed (purl.org/atom/ns# namespace, version="0.3"). Each
+     <entry> contributes a row: the alternate <link> href is the loc, the
+     ISO-8601 <modified> element (0.3's date, not <updated>) is the raw lastmod.
+     The rel="service.edit" link is ignored; only the alternate link is used. -->
+<feed version="0.3" xmlns="http://purl.org/atom/ns#">
+  <title>Example Atom 0.3 feed</title>
+  <modified>2026-02-01T00:00:00Z</modified>
+  <entry>
+    <title>First entry</title>
+    <link rel="service.edit" type="application/atom+xml"
+          href="https://example.com/edit/1"/>
+    <link rel="alternate" type="text/html"
+          href="https://example.com/legacy/1"/>
+    <modified>2026-02-02T03:04:05Z</modified>
+  </entry>
+  <entry>
+    <title>Second entry (no date)</title>
+    <link rel="alternate" type="text/html"
+          href="https://example.com/legacy/2"/>
+  </entry>
+</feed>

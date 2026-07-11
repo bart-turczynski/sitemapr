@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Clean RSS 2.0 feed used as a sitemap substitute. Each <item> contributes a
+     row: the namespace-less <link> is the loc, the RFC-822 <pubDate> is the raw
+     lastmod. The <atom:link rel="self"> on the channel and the atom:link inside
+     the second item must be ignored (they carry @href); only the plain <link>
+     text is the item URL. -->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example feed</title>
+    <link>https://example.com/</link>
+    <atom:link rel="self" href="https://example.com/feed.xml"/>
+    <item>
+      <title>First post</title>
+      <link>https://example.com/posts/1</link>
+      <pubDate>Mon, 06 Sep 2010 16:45:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Second post</title>
+      <atom:link rel="self" href="https://example.com/posts/2/self"/>
+      <link>https://example.com/posts/2</link>
+      <pubDate>Tue, 07 Sep 2010 08:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Third post (no date)</title>
+      <link>https://example.com/posts/3</link>
+    </item>
+  </channel>
+</rss>
