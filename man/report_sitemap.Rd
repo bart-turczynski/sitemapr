@@ -10,6 +10,7 @@ report_sitemap(
   mode = c("strict", "non-strict"),
   urls = NULL,
   findings = NULL,
+  audit = NULL,
   title = NULL,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
@@ -34,6 +35,12 @@ otherwise the HTML is returned as an \link[htmltools:HTML]{htmltools::HTML} stri
 
 \item{findings}{Optional precomputed \code{\link[=validate_sitemap]{validate_sitemap()}} findings tibble.
 When \code{NULL} (the default) it is computed from \code{x}.}
+
+\item{audit}{Optional \code{\link[=audit_sitemap]{audit_sitemap()}} result supplying both the URL rows
+and the findings from a single pass (so a URL source is fetched once, not
+twice). It fills whichever of \code{urls}/\code{findings} you leave \code{NULL}; an
+explicit \code{urls} or \code{findings} still wins. \code{x} is then used only as the
+source label.}
 
 \item{title}{The HTML document \verb{<title>}. Defaults to a title derived from
 \code{x}.}

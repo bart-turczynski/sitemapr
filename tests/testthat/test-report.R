@@ -391,3 +391,35 @@ test_that("a non-scalar or empty input raises sitemapr_bad_input", {
   expect_error(report_sitemap(NA_character_), class = "sitemapr_bad_input")
   expect_error(report_sitemap(""), class = "sitemapr_bad_input")
 })
+
+# ---- accepts a sitemap_audit object ------------------------------------------
+
+test_that("report_sitemap() accepts a sitemap_audit matching two-call path", {
+  f <- core_fixture()
+  audit <- audit_sitemap(f)
+
+  from_audit <- render_string(f, audit = audit)
+  two_call <- render_string(
+    f,
+    urls = read_sitemap(f),
+    findings = validate_sitemap(f)
+  )
+
+  expect_identical(from_audit, two_call)
+})
+
+test_that("an explicit urls/findings still wins over a supplied audit", {
+  f <- findings_fixture()
+  audit <- audit_sitemap(f)
+  # A distinct urls override must be honored over the audit's own rows.
+  override <- read_sitemap(core_fixture())
+
+  html <- render_string(f, audit = audit, urls = override)
+  # The override's URLs (from the core fixture) appear; the audit rows do not
+  # replace them.
+  expect_match(html, "smr-url-table", fixed = TRUE)
+  expect_identical(
+    html,
+    render_string(f, urls = override, findings = audit_findings(audit))
+  )
+})
