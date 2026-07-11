@@ -10,7 +10,9 @@ audit_sitemap(
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  collect = TRUE,
+  on_urls = NULL
 )
 }
 \arguments{
@@ -31,12 +33,32 @@ per-index child-count cap), as from \code{index_limits()}. Defaults to
 
 \item{policy}{A request policy applied to every HTTP hop (root, robots.txt,
 discovery, redirects, and index children). Defaults to the no-op policy.}
+
+\item{collect}{When \code{TRUE} (the default) the tidy URL rows from every source
+are collected into the returned \code{urls} component, exactly as before. When
+\code{FALSE} the audit runs in STREAMING mode: each completed leaf sitemap's
+rows are handed to \code{on_urls} (if supplied) and then discarded, so peak
+retained-row memory is bounded to a single leaf rather than the whole
+hierarchy. This lets a valid protocol-scale sitemap index be processed
+without materializing one combined in-memory table.}
+
+\item{on_urls}{Optional streaming callback \verb{function(rows, source)} invoked
+ONCE per completed leaf sitemap with that leaf's tidy rows and its
+per-source fetch-metadata record. Supplying it activates streaming mode
+(as if \code{collect = FALSE}). An error thrown by the callback aborts the audit
+cleanly with a classed \code{sitemapr_stream_callback_error} condition naming
+the leaf; the accumulator is not left half-updated.}
 }
 \value{
 A \code{\link[=sitemap_audit]{sitemap_audit()}} object: a classed list with the components
 \code{urls}, \code{findings}, \code{sources}, \code{problems}, and \code{tree}. Access them with
 \code{\link[=audit_urls]{audit_urls()}}, \code{\link[=audit_findings]{audit_findings()}}, \code{\link[=audit_sources]{audit_sources()}}, \code{\link[=audit_problems]{audit_problems()}},
-and \code{\link[=audit_tree]{audit_tree()}}.
+and \code{\link[=audit_tree]{audit_tree()}}. In streaming mode (\code{collect = FALSE} or a supplied
+\code{on_urls}) the \code{urls} component is the empty row schema — the rows were
+streamed out per leaf — and carries the total number of streamed rows as
+its \code{"streamed_row_count"} attribute; \code{findings}, \code{sources}, \code{problems},
+and \code{tree} are UNCHANGED from a collected audit, so index-protocol findings
+stay complete because they are derived incrementally per leaf.
 }
 \description{
 Resolves each sitemap source — a sitemap URL or a local sitemap file — just
@@ -71,6 +93,17 @@ writeLines(xml, path)
 audit <- audit_sitemap(path)
 audit_urls(audit)
 audit_findings(audit)
+
+# Streaming: consume each leaf's rows via a callback instead of collecting
+# them. `urls` comes back empty, with the streamed row count as an attribute.
+seen <- 0L
+streamed <- audit_sitemap(
+  path,
+  collect = FALSE,
+  on_urls = function(rows, source) seen <<- seen + nrow(rows)
+)
+seen
+attr(audit_urls(streamed), "streamed_row_count")
 }
 \seealso{
 \code{\link[=read_sitemap]{read_sitemap()}} and \code{\link[=validate_sitemap]{validate_sitemap()}} for the equivalent

@@ -35,7 +35,8 @@ audit_resolve_source <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  strm = NULL
 ) {
   is_local <- isTRUE(source$is_local_file[[1L]])
   target <- source$normalized_url[[1L]]
@@ -74,7 +75,8 @@ audit_resolve_source <- function(
     user_agent = user_agent,
     limits = limits,
     index_limits = index_limits,
-    policy = policy
+    policy = policy,
+    strm = strm
   )
 }
 
@@ -174,7 +176,8 @@ audit_artifact_document <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  strm = NULL
 ) {
   art <- list(
     kind = "document",
@@ -190,7 +193,8 @@ audit_artifact_document <- function(
     byte_size = as.numeric(length(doc_bytes)),
     fetched_at = NA,
     root = NA_character_,
-    ex = NULL
+    ex = NULL,
+    stream = NULL
   )
 
   if (!(doc_fmt %in% c("xml-urlset", "xml-sitemapindex", "xml"))) {
@@ -205,6 +209,14 @@ audit_artifact_document <- function(
   # validate returns schema only), so expansion is skipped.
   if (identical(art$root, "sitemapindex") && !is.na(final_url)) {
     children <- parse_sitemapindex(xml2::xml_root(doc))
+    # Streaming: install a per-source sink so leaf rows are consumed as they
+    # land (never accumulated into one combined tibble) while still deriving
+    # each leaf's protocol findings incrementally.
+    sink <- NULL
+    if (!is.null(strm)) {
+      art$stream <- audit_index_sink(strm)
+      sink <- art$stream$sink
+    }
     art$ex <- expand_index(
       final_url,
       children,
@@ -212,10 +224,41 @@ audit_artifact_document <- function(
       user_agent = user_agent,
       limits = index_limits,
       net_limits = limits,
-      policy = policy
+      policy = policy,
+      sink = sink
     )
   }
   art
+}
+
+# Streaming state shared across every source of one audit: the user callback (or
+# NULL) and the running count of rows streamed out (reported on the empty `urls`
+# component as the `streamed_row_count` attribute).
+audit_stream_context <- function(on_urls) {
+  strm <- new.env(parent = emptyenv())
+  strm$on_urls <- on_urls
+  strm$n_rows <- 0
+  strm
+}
+
+# Build a per-source index row sink. On each completed leaf it (1) streams the
+# rows to the user callback, (2) counts them, and (3) derives that leaf's
+# `validate_protocol` finding parts INCREMENTALLY. Because index protocol
+# findings are already per-child-sitemap groups and the assembler sorts
+# deterministically, the streamed parts reassemble to the SAME findings the
+# whole-`ex$rows` derivation produces — streaming loses no findings.
+audit_index_sink <- function(strm) {
+  sst <- new.env(parent = emptyenv())
+  sst$parts <- list()
+  sst$sink <- function(rows, source) {
+    if (!is.null(strm$on_urls)) {
+      stream_emit_leaf(strm$on_urls, rows, source)
+    }
+    strm$n_rows <- strm$n_rows + nrow(rows)
+    base <- sitemap_subject_ref(stream_leaf_ref(source))
+    sst$parts <- c(sst$parts, index_protocol_parts(rows, source, base))
+  }
+  sst
 }
 
 # ---- read-side projection (read_sitemap() semantics) -------------------------
@@ -224,14 +267,36 @@ audit_artifact_document <- function(
 # yet typed), the per-source metadata, the non-fatal problems, and the discovery
 # tree. Mirrors read_sitemap_source()/read_sitemap_url()/read_sitemap_local(),
 # reusing the shared bytes and the single expand_index() result.
-audit_read_projection <- function(artifact) {
-  switch(
+audit_read_projection <- function(artifact, strm = NULL) {
+  res <- switch(
     artifact$kind,
     "malformed-gzip" = audit_read_failed(artifact),
     "archive" = audit_read_archive(artifact),
     "document" = audit_read_document(artifact),
     audit_read_failed(artifact)
   )
+  if (is.null(strm)) {
+    return(res)
+  }
+  audit_stream_read(res, artifact, strm)
+}
+
+# Apply streaming to a source's read projection: return the empty row schema so
+# the combined `urls` tibble never retains rows. Index leaves were already
+# streamed to the callback during expansion (the artifact carries a `stream`
+# sink), so only their rows are dropped here. A non-index single-document leaf
+# has no expansion sink, so it is streamed here: its one row batch is handed to
+# the callback and counted before being dropped.
+audit_stream_read <- function(res, artifact, strm) {
+  already_streamed <- !is.null(artifact$stream)
+  if (!already_streamed && nrow(res$rows) > 0L) {
+    if (!is.null(strm$on_urls)) {
+      stream_emit_leaf(strm$on_urls, res$rows, res$sources)
+    }
+    strm$n_rows <- strm$n_rows + nrow(res$rows)
+  }
+  res$rows <- empty_sitemap_rows()
+  res
 }
 
 audit_read_empty <- function(problems = empty_problems()) {
@@ -387,7 +452,12 @@ audit_validate_xml_parts <- function(artifact) {
       artifact$base
     )
   }
-  if (nrow(ex$rows) > 0L) {
+  # Streaming derived each leaf's protocol parts incrementally (rows were not
+  # retained); the default path derives them from the full `ex$rows`. Both yield
+  # the same assembled findings.
+  if (!is.null(artifact$stream)) {
+    parts <- c(parts, artifact$stream$parts)
+  } else if (nrow(ex$rows) > 0L) {
     parts <- c(parts, index_protocol_parts(ex$rows, ex$sources, artifact$base))
   }
   parts
@@ -409,17 +479,27 @@ audit_one_source <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  strm = NULL
 ) {
+  # A streaming-callback failure is a caller error, not a source failure: let it
+  # abort cleanly (with its source context) rather than being demoted to a
+  # per-source problem/finding by the projection catches below.
   artifact <- tryCatch(
     audit_resolve_source(
       source,
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      strm = strm
     ),
-    error = function(cnd) list(kind = "resolve-error", cnd = cnd)
+    error = function(cnd) {
+      if (inherits(cnd, "sitemapr_stream_callback_error")) {
+        stop(cnd)
+      }
+      list(kind = "resolve-error", cnd = cnd)
+    }
   )
 
   if (identical(artifact$kind, "resolve-error")) {
@@ -436,8 +516,11 @@ audit_one_source <- function(
   }
 
   read <- tryCatch(
-    audit_read_projection(artifact),
+    audit_read_projection(artifact, strm),
     error = function(cnd) {
+      if (inherits(cnd, "sitemapr_stream_callback_error")) {
+        stop(cnd)
+      }
       audit_read_empty(read_source_failure_problem(source, cnd))
     }
   )
@@ -486,11 +569,29 @@ audit_combine_trees <- function(parts) {
 #'
 #' @param mode `"strict"` (the default) or `"non-strict"`, passed through to the
 #'   findings projection exactly as [validate_sitemap()] uses it.
+#' @param collect When `TRUE` (the default) the tidy URL rows from every source
+#'   are collected into the returned `urls` component, exactly as before. When
+#'   `FALSE` the audit runs in STREAMING mode: each completed leaf sitemap's
+#'   rows are handed to `on_urls` (if supplied) and then discarded, so peak
+#'   retained-row memory is bounded to a single leaf rather than the whole
+#'   hierarchy. This lets a valid protocol-scale sitemap index be processed
+#'   without materializing one combined in-memory table.
+#' @param on_urls Optional streaming callback `function(rows, source)` invoked
+#'   ONCE per completed leaf sitemap with that leaf's tidy rows and its
+#'   per-source fetch-metadata record. Supplying it activates streaming mode
+#'   (as if `collect = FALSE`). An error thrown by the callback aborts the audit
+#'   cleanly with a classed `sitemapr_stream_callback_error` condition naming
+#'   the leaf; the accumulator is not left half-updated.
 #' @inheritParams read_sitemap
 #' @return A [sitemap_audit()] object: a classed list with the components
 #'   `urls`, `findings`, `sources`, `problems`, and `tree`. Access them with
 #'   [audit_urls()], [audit_findings()], [audit_sources()], [audit_problems()],
-#'   and [audit_tree()].
+#'   and [audit_tree()]. In streaming mode (`collect = FALSE` or a supplied
+#'   `on_urls`) the `urls` component is the empty row schema — the rows were
+#'   streamed out per leaf — and carries the total number of streamed rows as
+#'   its `"streamed_row_count"` attribute; `findings`, `sources`, `problems`,
+#'   and `tree` are UNCHANGED from a collected audit, so index-protocol findings
+#'   stay complete because they are derived incrementally per leaf.
 #' @seealso [read_sitemap()] and [validate_sitemap()] for the equivalent
 #'   two-call path, and [report_sitemap()], which accepts the returned object.
 #' @export
@@ -509,18 +610,44 @@ audit_combine_trees <- function(parts) {
 #' audit <- audit_sitemap(path)
 #' audit_urls(audit)
 #' audit_findings(audit)
+#'
+#' # Streaming: consume each leaf's rows via a callback instead of collecting
+#' # them. `urls` comes back empty, with the streamed row count as an attribute.
+#' seen <- 0L
+#' streamed <- audit_sitemap(
+#'   path,
+#'   collect = FALSE,
+#'   on_urls = function(rows, source) seen <<- seen + nrow(rows)
+#' )
+#' seen
+#' attr(audit_urls(streamed), "streamed_row_count")
 audit_sitemap <- function(
   x,
   mode = c("strict", "non-strict"),
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  collect = TRUE,
+  on_urls = NULL
 ) {
   mode <- match.arg(mode)
+  if (!is.null(on_urls) && !is.function(on_urls)) {
+    rlang::abort(
+      "`on_urls` must be a function of (rows, source) or NULL.",
+      class = "sitemapr_bad_input"
+    )
+  }
   sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
+  }
+  # Streaming mode: bound retained row memory to a single leaf. Active when the
+  # caller opts out of collection or supplies a per-leaf callback.
+  strm <- if (!isTRUE(collect) || !is.null(on_urls)) {
+    audit_stream_context(on_urls)
+  } else {
+    NULL
   }
 
   # Mirror read_sitemap()/validate_sitemap(): a scalar source is projected
@@ -533,7 +660,8 @@ audit_sitemap <- function(
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      strm = strm
     )
     list(
       rows = out$rows,
@@ -549,12 +677,20 @@ audit_sitemap <- function(
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      strm = strm
     )
   }
 
+  # In streaming mode the rows were consumed per leaf, so `urls` is the empty
+  # schema; the count of rows streamed out is recorded as an attribute.
+  urls <- project_typed_rows(combined$rows)
+  if (!is.null(strm)) {
+    attr(urls, "streamed_row_count") <- strm$n_rows
+  }
+
   sitemap_audit(
-    urls = project_typed_rows(combined$rows),
+    urls = urls,
     findings = combined$findings,
     sources = combined$sources,
     problems = combined$problems,
@@ -570,7 +706,8 @@ audit_sitemap_batch <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  strm = NULL
 ) {
   row_parts <- list()
   source_parts <- list()
@@ -585,7 +722,8 @@ audit_sitemap_batch <- function(
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      strm = strm
     ))
     row_parts[[length(row_parts) + 1L]] <- out$rows
     source_parts[[length(source_parts) + 1L]] <- out$sources
