@@ -58,14 +58,23 @@
 #'   `getOption("sitemapr.max_total_urls")`, then the default of `Inf` (no
 #'   aggregate bound). Kept numeric so `Inf` is representable.
 #' @return A named list of limits with coerced types.
-#' @keywords internal
-#' @noRd
+#' @seealso [fetch_limits()] and [discovery_limits()] for the other bound
+#'   constructors, and [read_sitemap()] which accepts `index_limits`.
+#' @export
+#' @examples
+#' index_limits()
+#' index_limits(max_depth = 2, max_children = 1000)
+#' index_limits(max_total_sitemaps = 500, max_total_urls = 1e6)
 index_limits <- function(
   max_depth = getOption("sitemapr.max_index_depth", 3L),
   max_children = getOption("sitemapr.max_index_children", 50000L),
   max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", Inf),
   max_total_urls = getOption("sitemapr.max_total_urls", Inf)
 ) {
+  check_limit(max_depth, "max_depth")
+  check_limit(max_children, "max_children")
+  check_limit(max_total_sitemaps, "max_total_sitemaps", allow_inf = TRUE)
+  check_limit(max_total_urls, "max_total_urls", allow_inf = TRUE)
   list(
     max_depth = as.integer(max_depth),
     max_children = as.integer(max_children),

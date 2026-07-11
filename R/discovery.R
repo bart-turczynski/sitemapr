@@ -25,11 +25,16 @@
 #'   Resolves from the argument, then `getOption("sitemapr.max_candidates")`,
 #'   then the default of 50.
 #' @return A named list of limits with coerced types.
-#' @keywords internal
-#' @noRd
+#' @seealso [fetch_limits()] and [index_limits()] for the other bound
+#'   constructors, and [sitemap_tree()] which accepts discovery limits.
+#' @export
+#' @examples
+#' discovery_limits()
+#' discovery_limits(max_candidates = 10)
 discovery_limits <- function(
   max_candidates = getOption("sitemapr.max_candidates", 50L)
 ) {
+  check_limit(max_candidates, "max_candidates")
   list(max_candidates = as.integer(max_candidates))
 }
 

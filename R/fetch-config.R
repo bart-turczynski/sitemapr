@@ -1,3 +1,34 @@
+# Shared limit-constructor input validation (fetch_limits / index_limits /
+# discovery_limits). One classed condition covers all three so a caller can
+# catch a single class.
+
+# Raise the shared invalid-limits abort, mirroring request_policy_reject(). One
+# classed condition (`sitemapr_invalid_limits`) covers every limit constructor.
+# `allow_inf` tailors the message for the aggregate budgets that accept a
+# positive-infinite ceiling.
+limits_reject <- function(name, allow_inf) {
+  suffix <- if (isTRUE(allow_inf)) " (or Inf)" else ""
+  rlang::abort(
+    sprintf("`%s` must be a single non-negative number%s.", name, suffix),
+    class = "sitemapr_invalid_limits"
+  )
+}
+
+# Validate one numeric limit and return it unchanged. A limit is a single
+# non-negative number, finite unless `allow_inf` permits a positive-infinite
+# budget (the traversal-wide index budgets). Factored to one flat guarded helper
+# so each constructor's complexity stays low (mirrors request_retry_check_*).
+check_limit <- function(value, name, allow_inf = FALSE) {
+  if (!is.numeric(value) || length(value) != 1L) {
+    limits_reject(name, allow_inf)
+  }
+  finite_ok <- isTRUE(allow_inf) || is.finite(value)
+  if (is.na(value) || value < 0 || !finite_ok) {
+    limits_reject(name, allow_inf)
+  }
+  invisible(value)
+}
+
 #' Default limits for a bounded HTTP fetch
 #'
 #' Returns the configurable network limits the fetch engine applies per
@@ -17,8 +48,12 @@
 #'   on the body read into memory. Exceeding it discards the body and raises a
 #'   `sitemapr_body_ceiling` condition. Default 500 MB.
 #' @return A named list of limits with coerced types.
-#' @keywords internal
-#' @noRd
+#' @seealso [index_limits()] and [discovery_limits()] for the other bound
+#'   constructors, and [read_sitemap()] which accepts `limits`.
+#' @export
+#' @examples
+#' fetch_limits()
+#' fetch_limits(timeout = 10, max_redirects = 3, max_bytes = 1024^2)
 fetch_limits <- function(
   timeout = getOption("sitemapr.timeout", 30),
   max_redirects = getOption(
@@ -30,6 +65,9 @@ fetch_limits <- function(
     500L * 1024L^2
   )
 ) {
+  check_limit(timeout, "timeout")
+  check_limit(max_redirects, "max_redirects")
+  check_limit(max_bytes, "max_bytes")
   list(
     timeout = as.numeric(timeout),
     max_redirects = as.integer(max_redirects),

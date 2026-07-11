@@ -303,6 +303,88 @@ audit_tree <- function(x) {
   x$tree
 }
 
+#' Access the sources and problems companions of a sitemap result
+#'
+#' `sources()` and `problems()` return the two companion tables the package
+#' produces alongside its tidy URL rows: the per-source fetch-metadata records
+#' and the non-fatal parse `problems` table. They dispatch on the object type,
+#' so the same call works on a [read_sitemap()] result and on a
+#' [sitemap_audit()] object:
+#'
+#' * On a [read_sitemap()] result, they read the `sources` / `problems`
+#'   attributes the entry point attaches to the tidy tibble, so callers need not
+#'   reach for `attr()`.
+#' * On a [sitemap_audit()] object, they return the first-class `sources` /
+#'   `problems` components, delegating to [audit_sources()] / [audit_problems()]
+#'   for identical behavior.
+#'
+#' The default methods return the requested attribute (or `NULL` when the object
+#' carries none), so they are safe to call on any object.
+#'
+#' @param x A [read_sitemap()] result (a tidy tibble carrying the
+#'   `sources`/`problems` attributes) or a [sitemap_audit()] object.
+#' @param ... Ignored; reserved for future methods.
+#' @return For `sources()`, the per-source fetch-metadata records; for
+#'   `problems()`, the non-fatal parse `problems` table. A [sitemap_audit()]
+#'   object always yields the documented (possibly zero-row) component; a
+#'   [read_sitemap()] result yields its attached companion table.
+#' @seealso [audit_sources()] and [audit_problems()] for the `sitemap_audit`
+#'   component accessors.
+#' @name sitemap_companions
+#' @examples
+#' xml <- paste0(
+#'   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+#'   '<url><loc>https://example.com/</loc></url></urlset>'
+#' )
+#' path <- tempfile(fileext = ".xml")
+#' writeLines(xml, path)
+#' urls <- read_sitemap(path)
+#'
+#' sources(urls)
+#' problems(urls)
+#'
+#' # The same accessors work on a sitemap_audit object.
+#' audit <- sitemap_audit(urls = urls)
+#' sources(audit)
+#' problems(audit)
+NULL
+
+#' @rdname sitemap_companions
+#' @export
+sources <- function(x, ...) {
+  UseMethod("sources")
+}
+
+#' @rdname sitemap_companions
+#' @export
+sources.default <- function(x, ...) {
+  attr(x, "sources")
+}
+
+#' @rdname sitemap_companions
+#' @export
+sources.sitemap_audit <- function(x, ...) {
+  audit_sources(x)
+}
+
+#' @rdname sitemap_companions
+#' @export
+problems <- function(x, ...) {
+  UseMethod("problems")
+}
+
+#' @rdname sitemap_companions
+#' @export
+problems.default <- function(x, ...) {
+  attr(x, "problems")
+}
+
+#' @rdname sitemap_companions
+#' @export
+problems.sitemap_audit <- function(x, ...) {
+  audit_problems(x)
+}
+
 #' @export
 print.sitemap_audit <- function(x, ...) {
   sev <- audit_severity_counts(x$findings)
