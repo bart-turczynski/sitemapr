@@ -82,7 +82,7 @@ wrapper taxonomy):
 | `final_url` | URL after redirects (ADR-003 revalidates each hop) |
 | `status_code` | HTTP status of the final response |
 | `content_type` | `Content-Type` header as received |
-| `detected_type` | classification derived from `sniff_format()`: `sitemap` (`xml-urlset`), `sitemap_index` (`xml-sitemapindex`), `feed`, `robots_txt`, `html`, `xml_other` (`xml`), plus the fetch/parse error states below |
+| `detected_type` | classification derived from `sniff_format()`: `sitemap` (`xml-urlset`, or a plain-text URL list — sniff `text` that is not robots.txt — consistent with `read_sitemap()`'s text-sitemap support), `sitemap_index` (`xml-sitemapindex`), `feed`, `robots_txt`, `html`, `xml_other` (`xml`), plus the fetch/parse error states below |
 | `xml_root` | first XML element name, when the body is XML |
 | `is_compressed` | whether the body was gzip/archive-wrapped |
 | `child_count` | number of direct children for an index (counted, **not** followed) |
