@@ -986,8 +986,20 @@ report_source_input <- function(x) {
   )
 }
 
+# Reattach the `sources`/`problems` companion attributes an audit stores as
+# first-class components onto its `urls` tibble, so the object populates the
+# report exactly like a `read_sitemap()` result (the per-source table reads
+# `attr(urls, "sources")`).
+report_urls_from_audit <- function(audit) {
+  urls <- audit_urls(audit)
+  attr(urls, "sources") <- audit_sources(audit)
+  attr(urls, "problems") <- audit_problems(audit)
+  urls
+}
+
 report_urls_input <- function(
   urls,
+  audit,
   x,
   user_agent,
   limits,
@@ -996,6 +1008,9 @@ report_urls_input <- function(
 ) {
   if (!is.null(urls)) {
     return(urls)
+  }
+  if (!is.null(audit)) {
+    return(report_urls_from_audit(audit))
   }
   read_sitemap(
     x,
@@ -1008,6 +1023,7 @@ report_urls_input <- function(
 
 report_findings_input <- function(
   findings,
+  audit,
   x,
   mode,
   user_agent,
@@ -1017,6 +1033,9 @@ report_findings_input <- function(
 ) {
   if (!is.null(findings)) {
     return(findings)
+  }
+  if (!is.null(audit)) {
+    return(audit_findings(audit))
   }
   validate_sitemap(
     x,
@@ -1085,6 +1104,11 @@ report_return <- function(html, output) {
 #'   `sources` attribute). When `NULL` (the default) it is computed from `x`.
 #' @param findings Optional precomputed [validate_sitemap()] findings tibble.
 #'   When `NULL` (the default) it is computed from `x`.
+#' @param audit Optional [audit_sitemap()] result supplying both the URL rows
+#'   and the findings from a single pass (so a URL source is fetched once, not
+#'   twice). It fills whichever of `urls`/`findings` you leave `NULL`; an
+#'   explicit `urls` or `findings` still wins. `x` is then used only as the
+#'   source label.
 #' @param title The HTML document `<title>`. Defaults to a title derived from
 #'   `x`.
 #' @inheritParams read_sitemap
@@ -1121,6 +1145,7 @@ report_sitemap <- function(
   mode = c("strict", "non-strict"),
   urls = NULL,
   findings = NULL,
+  audit = NULL,
   title = NULL,
   user_agent = default_user_agent(),
   limits = fetch_limits(),
@@ -1130,9 +1155,18 @@ report_sitemap <- function(
   mode <- match.arg(mode)
   x <- report_source_input(x)
   index_limits <- resolve_index_limits(index_limits)
-  urls <- report_urls_input(urls, x, user_agent, limits, index_limits, policy)
+  urls <- report_urls_input(
+    urls,
+    audit,
+    x,
+    user_agent,
+    limits,
+    index_limits,
+    policy
+  )
   findings <- report_findings_input(
     findings,
+    audit,
     x,
     mode,
     user_agent,
