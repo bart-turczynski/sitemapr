@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Example RSS Feed</title>
-    <link>https://example.com</link>
-    <description>This is an RSS feed, not a sitemap</description>
-    <item>
-      <title>First Post</title>
-      <link>https://example.com/post/1</link>
-    </item>
-  </channel>
-</rss>
+<!-- A generic XML document whose root (<catalog>) is neither a sitemap root
+     (<urlset>/<sitemapindex>) nor a feed (<rss>/<feed>), so it sniffs as generic
+     "xml" and yields UNSUPPORTED_ROOT. (This fixture was previously an <rss>
+     feed; feeds are now parsed into rows, so a genuine non-feed root is used to
+     keep exercising the UNSUPPORTED_ROOT path.) -->
+<catalog xmlns="http://example.com/catalog">
+  <product>
+    <name>This is a product catalog, not a sitemap</name>
+    <link>https://example.com/product/1</link>
+  </product>
+</catalog>

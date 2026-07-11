@@ -173,12 +173,14 @@ Feature: Layer D — protocol and semantic validation
     When I call validate_sitemap on the fixture
     Then a finding with code UNSUPPORTED_ROOT is produced
 
-  Scenario: Sitemap index child pointing at an RSS feed produces UNSUPPORTED_FEED
-    Given fixture "index-rss-child.xml" whose child loc is an RSS feed
+  Scenario: Sitemap index child pointing at an unsupported feed dialect produces UNSUPPORTED_FEED
+    Given fixture "index-rss-child.xml" whose child loc is an unsupported feed
     When I call validate_sitemap on the mocked source
     Then a finding with code UNSUPPORTED_FEED is produced
     And the finding severity is "info" or "warning"
-    # Reconciled (F.4): expansion only runs for a URL source, so this drives the
-    # index URL with an offline httr2 mock serving the index and its RSS child.
+    # Supported feed dialects (RSS 2.0 / Atom) now parse into rows; only an
+    # unsupported dialect (a <feed> in a non-Atom namespace) still yields
+    # UNSUPPORTED_FEED. Expansion only runs for a URL source, so this drives the
+    # index URL with an offline httr2 mock serving the index and its feed child.
     # The producer emits UNSUPPORTED_FEED at "error" severity, which the "info or
     # warning" tolerance accepts (the scenario only forbids a fatal).

@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A sitemapindex whose only child <loc> is fetched (offline mock) and sniffed
-     as an RSS feed -> UNSUPPORTED_FEED. The child body is served as <rss> by
-     the cucumber step's httr2 mock; expansion only runs for a URL source, so the
-     step drives validate_sitemap() on the index URL, not this local file. -->
+     as a feed. Supported dialects (RSS 2.0 / Atom) now parse into rows; the
+     cucumber step serves an UNSUPPORTED dialect (a <feed> in a non-Atom
+     namespace) so the child still yields UNSUPPORTED_FEED. Expansion only runs
+     for a URL source, so the step drives validate_sitemap() on the index URL,
+     not this local file. -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap><loc>https://example.com/feed.xml</loc></sitemap>
 </sitemapindex>

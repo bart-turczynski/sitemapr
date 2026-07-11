@@ -44,9 +44,11 @@ domain rules they assume.
 | local `.tar.gz` archive | Bounded extraction (`architecture.md` §9); members classified individually |
 
 **RSS 2.0 / Atom** are accepted *formats* at the sitemaps.org and Bing level
-(Bing accepts XML, RSS 2.0, Atom 0.3 and 1.0, Text). For **v1 they are out of
-scope** as parse targets: a sitemap-index child that points at an RSS/Atom feed
-is recorded as `UNSUPPORTED_FEED`, not parsed. (Revisit post-v1.)
+(Bing accepts XML, RSS 2.0, Atom 0.3 and 1.0, Text). They ARE parsed: a feed
+(RSS 2.0 / Atom 0.3 / Atom 1.0) is read into the faithful row schema, one row
+per item/entry, both as a top-level source and as a sitemap-index child. Only an
+UNRECOGNISED feed dialect (a `<feed>` in a non-Atom namespace) is recorded as
+`UNSUPPORTED_FEED`, not parsed.
 
 Classification is by **bytes + structure, never by filename or `Content-Type`
 alone** (§7.2, SPEC §11.4). Unsupported inputs yield **typed findings**, never

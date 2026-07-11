@@ -209,8 +209,9 @@ hreflang-prefixed one (see `docs/sitemap-spec.md` §5.4).
 - `UNSUPPORTED_ROOT` — root element is neither `urlset` nor `sitemapindex`
 - `UNSUPPORTED_HTML_MASQUERADE` — document looks like HTML at the URL that
   was expected to serve a sitemap
-- `UNSUPPORTED_FEED` — sitemap index child points at an RSS/Atom feed URL
-  (out of scope for v1)
+- `UNSUPPORTED_FEED` — sitemap index child points at a feed in an unrecognised
+  dialect (a `<feed>` in a non-Atom namespace); supported feeds (RSS 2.0 /
+  Atom 0.3/1.0) are parsed into rows instead
 
 ### Decompression codes
 Emitted under `layer = "decompression"` by `validate_sitemap()` when it inflates

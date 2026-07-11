@@ -47,8 +47,10 @@ Parses one or more sitemap sources — sitemap URLs or local sitemap files —
 into the tidy row tibble: one row per URL with \code{loc}, \code{lastmod},
 \code{changefreq}, \code{priority}, the \code{images}/\code{video}/\code{news}/\code{alternates} extension
 list-columns, and \code{source_sitemap} provenance. Supported formats are XML
-\code{urlset} and \code{sitemapindex}, the plain-text format, transparent gzip
-(\code{.xml.gz}/\code{.txt.gz}), and — local files only — bounded \code{.tar.gz} archives.
+\code{urlset} and \code{sitemapindex}, RSS 2.0 and Atom 0.3/1.0 feeds, the plain-text
+format, transparent gzip (\code{.xml.gz}/\code{.txt.gz}), and — local files only —
+bounded \code{.tar.gz} archives. A feed is parsed into the same row schema, one
+row per item/entry.
 }
 \details{
 The result carries a \code{sources} attribute (the per-source fetch-metadata

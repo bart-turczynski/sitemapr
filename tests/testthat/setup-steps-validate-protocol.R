@@ -163,12 +163,15 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   )
 
   # Feed-child scenario: a sitemapindex whose child <loc> is fetched offline and
-  # sniffed as an RSS feed -> UNSUPPORTED_FEED. Expansion only runs for a URL
-  # source, so this drives the index URL (not the local fixture) and serves both
-  # the index and the RSS child via the mock. The committed index-rss-child.xml
-  # fixture documents the shape; its child <loc> matches the mocked child URL.
+  # sniffed as a feed. Supported dialects (RSS 2.0 / Atom) now parse into rows;
+  # only an UNSUPPORTED dialect (a <feed> in a non-Atom namespace) still yields
+  # UNSUPPORTED_FEED, which is what this child body serves. Expansion only runs
+  # for a URL source, so this drives the index URL (not the local fixture) and
+  # serves both the index and the feed child via the mock. The committed
+  # index-rss-child.xml fixture documents the shape; its child <loc> matches the
+  # mocked child URL.
   given(
-    "fixture {string} whose child loc is an RSS feed",
+    "fixture {string} whose child loc is an unsupported feed",
     function(name, context) {
       index_url <- "https://example.com/sitemap.xml"
       child_url <- "https://example.com/feed.xml"
@@ -176,13 +179,13 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
         readLines(test_path("fixtures", name), warn = FALSE),
         collapse = "\n"
       )
-      rss_body <- paste0(
-        "<?xml version=\"1.0\"?>\n",
-        "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>\n"
+      feed_body <- paste0(
+        "<feed xmlns=\"http://example.com/not-atom\">",
+        "<entry><link href=\"https://example.com/x\"/></entry></feed>\n"
       )
       map <- list()
       map[[index_url]] <- index_body
-      map[[child_url]] <- rss_body
+      map[[child_url]] <- feed_body
       context$source <- index_url
       context$mock <- vp_mock_by_url(map)
     }

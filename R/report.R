@@ -63,6 +63,7 @@ report_format_label <- function(format) {
     "xml-urlset" = "XML",
     "xml" = "XML",
     "text" = "Text",
+    "feed" = "RSS/Atom",
     "gzip" = "gzip",
     as.character(format)
   )
@@ -89,7 +90,7 @@ report_source_counts <- function(urls, sources) {
     return(list(
       index = sum(sources$format == "xml-sitemapindex", na.rm = TRUE),
       sitemap = sum(
-        sources$format %in% c("xml-urlset", "xml", "text"),
+        sources$format %in% c("xml-urlset", "xml", "text", "feed"),
         na.rm = TRUE
       )
     ))

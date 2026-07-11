@@ -62,8 +62,9 @@ layer), and assembles the results into the stable findings contract.
 \details{
 The source is read once and branched on its sniffed format: an HTML document
 served where a sitemap was expected yields an \code{UNSUPPORTED_HTML_MASQUERADE}
-classification finding; a plain-text sitemap is checked line-by-line; an XML
-document is dispatched on its root element. An XML root that is neither
+classification finding; a plain-text sitemap is checked line-by-line; an
+RSS 2.0 or Atom 0.3/1.0 feed is parsed into rows and protocol-validated; an
+XML document is dispatched on its root element. An XML root that is neither
 \code{urlset} nor \code{sitemapindex} yields an \code{UNSUPPORTED_ROOT} finding rather than
 an error. A \code{urlset} is schema- and protocol-validated; a \code{sitemapindex} is
 schema-validated and recursively expanded (cycle-, depth-, and count-capped),

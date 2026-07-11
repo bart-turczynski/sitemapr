@@ -21,8 +21,10 @@
 #
 # Errors-vs-findings (architecture.md §3). Conditions the parse API would RAISE
 # become FINDINGS here where the contract says so: an unsupported XML root, a
-# non-XML/non-text source (HTML masquerade), and RSS/Atom feed children of an
-# index are classification findings, not thrown errors. A genuine transport /
+# non-XML/non-text source (HTML masquerade), and UNSUPPORTED (non-Atom-dialect)
+# RSS/Atom feed children of an index are classification findings, not thrown
+# errors. Supported feeds (RSS 2.0 / Atom 0.3/1.0) parse into rows and are
+# protocol-validated like a urlset. A genuine transport /
 # SSRF / timeout / non-2xx failure still propagates as the existing classed
 # condition from `fetch_source()` (v1 minimal; no activated feature requires
 # otherwise).
@@ -319,6 +321,29 @@ empty_index_findings <- function() {
   index_findings()
 }
 
+# Build the producer `parts` list for a top-level RSS/Atom feed source. A
+# supported dialect (rss2.0 / atom0.3 / atom1.0) is parsed into the faithful row
+# schema and protocol-validated exactly like a `urlset`; an unsupported dialect
+# (`parse_feed()` raising `sitemapr_unsupported_feed`) falls through to the XML
+# branch, which yields UNSUPPORTED_ROOT for its `<feed>`/`<rss>` root.
+validate_feed_parts <- function(src, user_agent, limits, index_limits, policy) {
+  parsed <- tryCatch(
+    parse_feed(src$bytes, source_sitemap = src$final_url),
+    sitemapr_unsupported_feed = function(cnd) NULL
+  )
+  if (is.null(parsed)) {
+    return(validate_xml_parts(src, user_agent, limits, index_limits, policy))
+  }
+  list(validate_protocol(
+    parsed$rows,
+    sitemap_url = src$final_url,
+    subject_ref = src$base,
+    byte_size = src$byte_size,
+    fetched_at = src$fetched_at,
+    source_meta = NULL
+  ))
+}
+
 # Build the producer `parts` list for an XML source, branching on the root
 # local-name. `src` is a resolved source; `index_limits` bounds the expansion.
 validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
@@ -351,8 +376,9 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
   }
 
   # sitemapindex: schema + bounded expansion. The expansion problems become
-  # INDEX_* findings; RSS/Atom feed children become UNSUPPORTED_FEED; the rows
-  # gathered from leaf children feed the protocol layer.
+  # INDEX_* findings; unsupported-dialect feed children become UNSUPPORTED_FEED
+  # (supported feeds parse into rows); the rows gathered from leaf children
+  # (urlset/text/feed) feed the protocol layer.
   validate_index_parts(
     src,
     schema,
@@ -394,11 +420,11 @@ validate_index_parts <- function(
   parts[[length(parts) + 1L]] <-
     index_findings_from_problems(ex$problems, src$base)
 
-  # A child the expander fetched and sniffed as an RSS/Atom feed -> one
-  # UNSUPPORTED_FEED per child via the existing source_meta/classification path.
-  # (A TOP-LEVEL feed source — src$format == "feed" at the entrypoint, no index
-  # — is OUT OF SCOPE for v1: the XML branch yields UNSUPPORTED_ROOT for it.)
-  feeds <- index_feed_children(ex$sources)
+  # A child sniffed as a feed but rejected by parse_feed() (unsupported dialect)
+  # -> one UNSUPPORTED_FEED per child via the source_meta/classification path.
+  # Supported feed children are parsed into rows above and validated like any
+  # leaf. (A TOP-LEVEL feed source is handled by validate_feed_parts().)
+  feeds <- index_feed_children(ex$problems)
   if (length(feeds) > 0L) {
     parts[[length(parts) + 1L]] <- validate_classification(
       source_meta(feed_children = feeds),
@@ -412,14 +438,16 @@ validate_index_parts <- function(
   parts
 }
 
-# Final URLs of the expansion `sources` records the byte-sniffer classified as
-# an RSS/Atom feed ("feed"). These drive one UNSUPPORTED_FEED finding each.
-index_feed_children <- function(sources) {
-  if (is.null(sources) || nrow(sources) == 0L) {
+# Child URLs the expander sniffed as a feed but `parse_feed()` rejected as an
+# unsupported dialect (recorded as a `"feed"`-category expansion problem). These
+# drive one UNSUPPORTED_FEED finding each. A SUPPORTED feed child is parsed into
+# rows like any leaf and never appears here.
+index_feed_children <- function(problems) {
+  if (is.null(problems) || nrow(problems) == 0L) {
     return(character(0))
   }
-  is_feed <- as.character(sources$format) == "feed"
-  as.character(sources$final_url[is_feed])
+  is_feed <- as.character(problems$category) == "feed"
+  as.character(problems$subject_ref[is_feed])
 }
 
 index_source_row <- function(sources, sitemap_url) {
@@ -544,6 +572,8 @@ validate_sitemap_source <- function(
     list(validate_classification(source_meta(html_masquerade = TRUE), src$base))
   } else if (identical(src$format, "text")) {
     list(validate_text_protocol(rawToChar(src$bytes), src$base))
+  } else if (identical(src$format, "feed")) {
+    validate_feed_parts(src, user_agent, limits, index_limits, policy)
   } else {
     validate_xml_parts(src, user_agent, limits, index_limits, policy)
   }
@@ -611,8 +641,9 @@ validate_sitemap_batch <- function(
 #'
 #' The source is read once and branched on its sniffed format: an HTML document
 #' served where a sitemap was expected yields an `UNSUPPORTED_HTML_MASQUERADE`
-#' classification finding; a plain-text sitemap is checked line-by-line; an XML
-#' document is dispatched on its root element. An XML root that is neither
+#' classification finding; a plain-text sitemap is checked line-by-line; an
+#' RSS 2.0 or Atom 0.3/1.0 feed is parsed into rows and protocol-validated; an
+#' XML document is dispatched on its root element. An XML root that is neither
 #' `urlset` nor `sitemapindex` yields an `UNSUPPORTED_ROOT` finding rather than
 #' an error. A `urlset` is schema- and protocol-validated; a `sitemapindex` is
 #' schema-validated and recursively expanded (cycle-, depth-, and count-capped),
