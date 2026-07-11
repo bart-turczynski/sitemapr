@@ -82,7 +82,8 @@ discover_robots_sitemaps <- function(
   origin,
   user_agent = default_user_agent(),
   net_limits = fetch_limits(),
-  policy = request_policy()
+  policy = request_policy(),
+  throttle_state = NULL
 ) {
   url <- robots_txt_url(origin)
   rec <- tryCatch(
@@ -91,7 +92,8 @@ discover_robots_sitemaps <- function(
         url,
         user_agent = user_agent,
         limits = net_limits,
-        policy = policy
+        policy = policy,
+        throttle_state = throttle_state
       ),
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),

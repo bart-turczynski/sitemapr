@@ -294,7 +294,8 @@ fetch_and_parse_child <- function(
       child_url,
       user_agent = user_agent,
       limits = net_limits,
-      policy = policy
+      policy = policy,
+      throttle_state = acc$throttle_state
     ),
     error = function(e) NULL
   )
@@ -596,7 +597,8 @@ expand_index <- function(
   net_limits = fetch_limits(),
   policy = request_policy(),
   visited = NULL,
-  sink = NULL
+  sink = NULL,
+  throttle_state = NULL
 ) {
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()
@@ -608,6 +610,14 @@ expand_index <- function(
   acc$total_sitemaps <- 0L
   acc$total_urls <- 0L
   acc$stopped <- FALSE
+  # One per-host throttle state shared by every child fetch across the whole
+  # recursion (rides on `acc`, so the recursive helpers need no new parameter).
+  # A NULL policy throttle yields a NULL state -> no pacing (byte-identical).
+  acc$throttle_state <- if (is.null(throttle_state)) {
+    throttle_state_new(policy$throttle)
+  } else {
+    throttle_state
+  }
   # `sink` receives each completed leaf's rows; NULL selects the in-memory
   # collector, keeping the default return byte-identical to the historical one.
   acc$sink <- if (is.null(sink)) default_row_sink(acc) else sink

@@ -136,6 +136,42 @@ test_that("a two-child index expands both children with depth-1 provenance", {
   expect_identical(nrow(res$problems), 0L)
 })
 
+test_that("a throttle state paces index children on a shared host bucket", {
+  # A virtual clock: records slept-for delays and advances, so the suite paces
+  # the traversal deterministically without any real wall-clock sleep.
+  cl <- new.env(parent = emptyenv())
+  cl$t <- 1000
+  cl$slept <- numeric(0)
+  cl$now <- function() cl$t
+  cl$sleep <- function(seconds) {
+    cl$slept <- c(cl$slept, seconds)
+    cl$t <- cl$t + seconds
+  }
+
+  root <- "https://example.com/sitemap.xml"
+  map <- list(
+    "https://example.com/child-1.xml" = urlset_xml("https://example.com/a"),
+    "https://example.com/child-2.xml" = urlset_xml("https://example.com/b"),
+    "https://example.com/child-3.xml" = urlset_xml("https://example.com/c")
+  )
+  local_index_server(map)
+
+  state <- throttle_state_new(
+    request_throttle(min_interval = 5),
+    now = cl$now,
+    sleep = cl$sleep
+  )
+  expand_root(
+    root,
+    index_xml(names(map)[[1]], names(map)[[2]], names(map)[[3]]),
+    throttle_state = state
+  )
+
+  # All three children share the one example.com bucket: the first fetch is
+  # free, each of the next two waits a full interval on the shared bucket.
+  expect_identical(cl$slept, c(5, 5))
+})
+
 test_that("a duplicate child URL is fetched and expanded exactly once", {
   root <- "https://example.com/sitemap.xml"
   child <- "https://example.com/child.xml"

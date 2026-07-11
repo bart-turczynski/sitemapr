@@ -141,7 +141,8 @@ fetch_candidate <- function(
   user_agent,
   limits,
   policy = request_policy(),
-  provenance = "guessed-path"
+  provenance = "guessed-path",
+  throttle_state = NULL
 ) {
   rec <- tryCatch(
     withCallingHandlers(
@@ -149,7 +150,8 @@ fetch_candidate <- function(
         candidate_url,
         user_agent = user_agent,
         limits = limits,
-        policy = policy
+        policy = policy,
+        throttle_state = throttle_state
       ),
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),
@@ -184,12 +186,14 @@ fetch_candidate <- function(
 # Build the robots.txt `Sitemap:` candidate frame for a normalized origin, in
 # the same column shape as `discovery_candidates()` plus a `provenance` column.
 # Returns a 0-row frame when robots discovery is off or yields no directives.
-robots_candidates <- function(origin, user_agent, net_limits, policy) {
+robots_candidates <- function(origin, user_agent, net_limits, policy,
+                              throttle_state = NULL) {
   urls <- discover_robots_sitemaps(
     origin,
     user_agent = user_agent,
     net_limits = net_limits,
-    policy = policy
+    policy = policy,
+    throttle_state = throttle_state
   )
   if (length(urls) == 0L) {
     return(NULL)
@@ -250,7 +254,8 @@ assemble_candidates <- function(
   net_limits,
   policy,
   use_known_paths,
-  use_robots
+  use_robots,
+  throttle_state = NULL
 ) {
   parts <- list()
 
@@ -260,7 +265,8 @@ assemble_candidates <- function(
       origin,
       user_agent,
       net_limits,
-      policy
+      policy,
+      throttle_state
     )
   }
 
@@ -323,8 +329,15 @@ discover_candidates <- function(
   net_limits = fetch_limits(),
   policy = request_policy(),
   use_known_paths = TRUE,
-  use_robots = TRUE
+  use_robots = TRUE,
+  throttle_state = NULL
 ) {
+  # One per-host throttle state shared across robots + every candidate fetch of
+  # this discovery pass. A NULL policy throttle yields a NULL state (no pacing).
+  if (is.null(throttle_state)) {
+    throttle_state <- throttle_state_new(policy$throttle)
+  }
+
   cand <- assemble_candidates(
     root,
     catalog = catalog,
@@ -333,7 +346,8 @@ discover_candidates <- function(
     net_limits = net_limits,
     policy = policy,
     use_known_paths = use_known_paths,
-    use_robots = use_robots
+    use_robots = use_robots,
+    throttle_state = throttle_state
   )
 
   outcomes <- lapply(seq_len(nrow(cand)), function(i) {
@@ -344,7 +358,8 @@ discover_candidates <- function(
       user_agent = user_agent,
       limits = net_limits,
       policy = policy,
-      provenance = cand$provenance[[i]]
+      provenance = cand$provenance[[i]],
+      throttle_state = throttle_state
     )
   })
 

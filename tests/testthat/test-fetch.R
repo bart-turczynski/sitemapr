@@ -737,6 +737,129 @@ test_that("request_policy rejects a non-retry object", {
   )
 })
 
+# ---- request policy: host-aware throttling -----------------------------------
+
+# A virtual clock for deterministic pacing: `now()` reads the current virtual
+# time; `sleep(seconds)` records the delay and advances the clock. The suite
+# therefore NEVER sleeps on the real wall clock (the deterministic-test bar).
+fake_clock <- function(start = 1000) {
+  cl <- new.env(parent = emptyenv())
+  cl$t <- start
+  cl$slept <- numeric(0)
+  cl$now <- function() cl$t
+  cl$sleep <- function(seconds) {
+    cl$slept <- c(cl$slept, seconds)
+    cl$t <- cl$t + seconds
+  }
+  cl
+}
+
+test_that("request_throttle derives the interval from a request budget", {
+  # requests-per-window: 10 requests / 60 s -> one every 6 s, evenly paced.
+  expect_identical(request_throttle(requests = 10, window = 60)$min_interval, 6)
+  # A direct minimum interval is kept verbatim.
+  expect_identical(request_throttle(min_interval = 2.5)$min_interval, 2.5)
+})
+
+test_that("request_throttle rejects a non-positive or incomplete config", {
+  expect_error(
+    request_throttle(min_interval = 0),
+    class = "sitemapr_invalid_request_policy"
+  )
+  expect_error(
+    request_throttle(min_interval = -1),
+    class = "sitemapr_invalid_request_policy"
+  )
+  # A budget needs BOTH requests and window.
+  expect_error(
+    request_throttle(requests = 10),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("request_policy rejects a non-throttle object", {
+  expect_error(
+    request_policy(throttle = list(min_interval = 1)),
+    class = "sitemapr_invalid_request_policy"
+  )
+})
+
+test_that("the default (throttle = NULL) policy paces nothing", {
+  # No throttle configured -> a NULL state -> throttle_before_request no-ops.
+  expect_null(request_policy()$throttle)
+  expect_null(throttle_state_new(request_policy()$throttle))
+  # And a default-policy fetch still completes normally (nothing to pace).
+  httr2::local_mocked_responses(list(mock_ok()))
+  meta <- fetch_source("https://example.com/sitemap.xml")
+  expect_identical(meta$status, 200L)
+})
+
+test_that("a policy throttle config builds a live per-host state", {
+  policy <- request_policy(throttle = request_throttle(min_interval = 2))
+  state <- throttle_state_new(policy$throttle)
+  expect_true(is.environment(state))
+  expect_identical(state$min_interval, 2)
+})
+
+test_that("two requests to the same host are paced by the interval", {
+  cl <- fake_clock()
+  state <- throttle_state_new(
+    request_throttle(min_interval = 10),
+    now = cl$now,
+    sleep = cl$sleep
+  )
+  httr2::local_mocked_responses(function(req) mock_ok(url = req$url))
+
+  fetch_source("https://example.com/a.xml", throttle_state = state)
+  # First request is free; the second waits one full interval on the same host.
+  expect_identical(cl$slept, numeric(0))
+  fetch_source("https://example.com/b.xml", throttle_state = state)
+  expect_identical(cl$slept, 10)
+})
+
+test_that("two different hosts are not paced against each other", {
+  cl <- fake_clock()
+  state <- throttle_state_new(
+    request_throttle(min_interval = 10),
+    now = cl$now,
+    sleep = cl$sleep
+  )
+  httr2::local_mocked_responses(function(req) mock_ok(url = req$url))
+
+  fetch_source("https://a.example.com/s.xml", throttle_state = state)
+  fetch_source("https://b.example.com/s.xml", throttle_state = state)
+  # Independent buckets: distinct origins never wait on each other.
+  expect_identical(cl$slept, numeric(0))
+})
+
+test_that("a redirect to another host waits on that host's own bucket", {
+  cl <- fake_clock()
+  state <- throttle_state_new(
+    request_throttle(min_interval = 10),
+    now = cl$now,
+    sleep = cl$sleep
+  )
+
+  # Prime ONLY the redirect-target host's bucket with an earlier request.
+  httr2::local_mocked_responses(list(
+    mock_ok(url = "https://target.example.com/x")
+  ))
+  fetch_source("https://target.example.com/x", throttle_state = state)
+  expect_identical(cl$slept, numeric(0))
+
+  # A fetch on a different origin that redirects onto the target: the origin hop
+  # is free (its bucket is empty) but the redirect hop pays the target's pace.
+  httr2::local_mocked_responses(list(
+    mock_redirect(
+      "https://origin.example.com/0",
+      "https://target.example.com/1"
+    ),
+    mock_ok(url = "https://target.example.com/1")
+  ))
+  fetch_source("https://origin.example.com/0", throttle_state = state)
+  expect_identical(cl$slept, 10)
+})
+
 # ---- https -> http fallback --------------------------------------------------
 
 test_that("scheme_inferred = TRUE falls back to http when https fails", {
