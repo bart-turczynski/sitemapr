@@ -208,6 +208,18 @@ test_that("one operation shares a single per-host bucket across phases", {
   # sitemap_tree() operation pace against ONE host-bucket store. A single
   # per-operation store grants exactly one free ("first") request across the
   # whole operation, not one per phase.
+  state <- throttle_state_new(request_throttle(min_interval = 5))
+  expect_identical(operation_free_requests(state), 1L)
+})
+
+test_that("sitemap_tree paces all phases against one shared bucket", {
+  # End-to-end proof of ADR-008 §6: discovery (guessed-path catalog) AND the
+  # index expansion of one walk share a SINGLE per-host throttle store. All
+  # requests target one host, so a shared bucket grants exactly ONE free (the
+  # very first) request across the whole walk and paces every later one. If each
+  # phase built its own store, discovery and expansion would each get a free
+  # request and the sleep count would be lower. A virtual clock keeps it offline
+  # and instant.
   cl <- new.env(parent = emptyenv())
   cl$t <- 1000
   cl$slept <- numeric(0)
@@ -216,14 +228,84 @@ test_that("one operation shares a single per-host bucket across phases", {
     cl$slept <- c(cl$slept, seconds)
     cl$t <- cl$t + seconds
   }
-
-  # The scheduler builds ONE throttle_state and threads it through discovery,
-  # robots, and all expand_index() calls. This asserts the store is shared: only
-  # the very first request across the whole operation is free.
   state <- throttle_state_new(
     request_throttle(min_interval = 5),
     now = cl$now,
     sleep = cl$sleep
   )
-  expect_identical(operation_free_requests(state), 1L)
+
+  # One accepted index at a guessed path plus two children, all on one host.
+  # Every other guessed path 404s but is still fetched (and paced).
+  map <- list(
+    "https://example.com/sitemap_index.xml" = index_xml(
+      "https://example.com/child-1.xml",
+      "https://example.com/child-2.xml"
+    ),
+    "https://example.com/child-1.xml" = urlset_xml("https://example.com/a"),
+    "https://example.com/child-2.xml" = urlset_xml("https://example.com/b")
+  )
+  tracker <- local_index_server(map)
+
+  tree <- sitemap_tree_from_root(
+    "https://example.com",
+    use_robots = FALSE,
+    use_known_paths = TRUE,
+    user_agent = default_user_agent(),
+    limits = discovery_limits(),
+    net_limits = fetch_limits(),
+    index_limits = index_limits(),
+    policy = request_policy(),
+    throttle_state = state
+  )
+
+  # Both children were reached (the walk actually expanded the index).
+  expanded <- c(
+    "https://example.com/child-1.xml",
+    "https://example.com/child-2.xml"
+  )
+  expect_true(all(expanded %in% tracker$urls))
+  # Every fetch hit the one host, so one shared bucket => exactly one free
+  # request across discovery + expansion; each of the rest slept once.
+  n_requests <- length(tracker$urls)
+  expect_gt(n_requests, 1L)
+  expect_identical(length(cl$slept), n_requests - 1L)
+})
+
+# ---- public surface: top-level max_active argument (SITE-gxqpebtb) -----------
+
+test_that("read_sitemap(max_active=) engages the scheduler, output unchanged", {
+  # The user-facing knob (ADR-008 §1): read_sitemap()'s top-level max_active is
+  # folded into the policy and reaches expand_index()'s scheduler. Proven two
+  # ways: the in-flight probe records >1 concurrent fetch, and the URL rows are
+  # byte-identical to the sequential default (max_active omitted).
+  root <- "https://example.com/sitemap.xml"
+  children <- list(
+    "https://example.com/child-1.xml" = urlset_xml("https://example.com/a"),
+    "https://example.com/child-2.xml" = urlset_xml("https://example.com/b"),
+    "https://example.com/child-3.xml" = urlset_xml("https://example.com/c")
+  )
+  # read_sitemap() fetches the root URL, so the index body is in the map too.
+  map <- c(
+    list(root = index_xml(
+      "https://example.com/child-1.xml",
+      "https://example.com/child-2.xml",
+      "https://example.com/child-3.xml"
+    )),
+    children
+  )
+  names(map)[[1]] <- root
+  local_index_server(map)
+
+  strip_meta <- function(t) {
+    attr(t, "sources") <- NULL
+    attr(t, "problems") <- NULL
+    t
+  }
+  sequential <- read_sitemap(root)
+
+  probe <- local_inflight_probe()
+  concurrent <- read_sitemap(root, max_active = 3L)
+
+  expect_gt(probe$peak_inflight(), 1L)
+  expect_identical(strip_meta(concurrent), strip_meta(sequential))
 })

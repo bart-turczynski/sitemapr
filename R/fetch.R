@@ -168,6 +168,15 @@ fetch_is_timeout <- function(cnd) {
 #'   input (classified downstream), and resource-ceiling aborts (raised after
 #'   the response is buffered) all sit outside the retried code path. Any
 #'   `Retry-After` header is honored but BOUNDED by the configured max backoff.
+#' @param max_active Optional worker cap enabling opt-in bounded-concurrency
+#'   expansion of a sitemap index (ADR-008). `NULL` (the default) keeps child
+#'   fetches sequential — byte-identical to the pre-concurrency path — and
+#'   `max_active = 1` is observably identical to that default. A larger value
+#'   (a small, polite bound such as `4`–`6` is typical) fetches up to that many
+#'   independent child sitemaps at once while the per-host `throttle` still
+#'   paces each origin. Concurrency changes only *when* a child's bytes arrive,
+#'   never the row/finding/tree order or the budget-truncation point: the output
+#'   is byte-identical to sequential mode.
 #' @return An object of class `sitemapr_request_policy`.
 #' @examples
 #' # (1) A custom header (e.g. to satisfy a staging gateway).
@@ -184,7 +193,7 @@ fetch_is_timeout <- function(cnd) {
 #' @noRd
 request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
                            proxy = NULL, tls = NULL, retry = NULL,
-                           throttle = NULL) {
+                           throttle = NULL, max_active = NULL) {
   request_policy_check_prepare(prepare)
   request_policy_check_auth(auth)
   structure(
@@ -195,7 +204,8 @@ request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
       proxy = request_policy_check_proxy(proxy),
       tls = request_policy_check_tls(tls),
       retry = request_policy_check_retry(retry),
-      throttle = request_policy_check_throttle(throttle)
+      throttle = request_policy_check_throttle(throttle),
+      max_active = policy_check_max_active(max_active)
     ),
     class = "sitemapr_request_policy"
   )
@@ -294,6 +304,50 @@ request_policy_check_throttle <- function(throttle) {
     )
   }
   throttle
+}
+
+# `max_active` is the ADR-008 global worker cap for opt-in bounded-concurrency
+# child fetches. NULL (default) means sequential expansion, byte-identical to
+# the pre-concurrency path. When set it must be a single positive whole number;
+# it is normalized to an integer so `expand_index()` gets a clean worker cap.
+policy_check_max_active <- function(max_active) {
+  if (is.null(max_active)) {
+    return(NULL)
+  }
+  ok <- is.numeric(max_active) &&
+    length(max_active) == 1L &&
+    is.finite(max_active) &&
+    max_active >= 1 &&
+    max_active == as.integer(max_active)
+  if (!ok) {
+    request_policy_reject(
+      "`max_active` must be NULL or a single positive whole number."
+    )
+  }
+  as.integer(max_active)
+}
+
+# Resolve a policy's worker cap to the integer `expand_index()` expects. An
+# unset (NULL) cap means sequential expansion (`1L`), so the concurrency surface
+# is the single funnel through which `policy$max_active` reaches the scheduler
+# and every public entry point carrying a policy threads it free (ADR-008 §1).
+policy_max_active <- function(policy) {
+  m <- policy$max_active
+  if (is.null(m)) 1L else m
+}
+
+# Fold a public function's top-level `max_active` argument into the policy it
+# passes down. A `NULL` argument (the default) leaves the policy untouched, so
+# the concurrency surface stays a single field on the policy while callers who
+# have no exported policy constructor can still opt in via the top-level arg. A
+# supplied value is validated and overrides any value the policy already
+# carries (explicit caller intent wins).
+policy_set_max_active <- function(policy, max_active) {
+  if (is.null(max_active)) {
+    return(policy)
+  }
+  policy$max_active <- policy_check_max_active(max_active)
+  policy
 }
 
 #' Basic-authentication credentials for a request-policy
