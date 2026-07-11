@@ -503,6 +503,20 @@ throttle_state_new <- function(throttle, now = Sys.time, sleep = Sys.sleep) {
   state
 }
 
+# The number of un-paced ("free") requests a single per-operation throttle
+# store grants before pacing engages: exactly one -- the operation's very first
+# request to a host. ADR-008 §6 unifies the per-host throttle into ONE store
+# threaded through discovery and every index expansion of one operation, so an
+# operation gets ONE free request, not one per phase. Surfaces that store-level
+# invariant for the bounded-concurrency contract. A NULL (throttle-off) state
+# grants none.
+operation_free_requests <- function(state) {
+  if (is.null(state)) {
+    return(0L)
+  }
+  1L
+}
+
 # The throttle bucket key for a URL: its canonical host with an explicit,
 # non-default port. Reuses the shared URL parse so the key matches the identity
 # key's host/port canonicalization; the scheme's default port (`:80`/`:443`)
