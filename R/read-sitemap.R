@@ -300,8 +300,10 @@ read_sitemap_batch <- function(
 #' @param index_limits Sitemapindex-expansion bounds (recursion depth and
 #'   per-index child-count cap), as from `index_limits()`. Defaults to
 #'   `index_limits()`.
-#' @param policy A request policy applied to every HTTP hop (root, robots.txt,
-#'   discovery, redirects, and index children). Defaults to the no-op policy.
+#' @param policy A [request_policy()] applied to every HTTP hop (root,
+#'   robots.txt, discovery, redirects, and index children) — configure custom
+#'   headers, authentication, a proxy, TLS options, retry/backoff, and per-host
+#'   throttling there. Defaults to the no-op policy.
 #' @param max_active Optional worker cap for opt-in bounded-concurrency
 #'   expansion of a sitemap index (ADR-008). `NULL` (the default) keeps child
 #'   fetches sequential; a larger value (a small, polite bound such as `4`–`6`

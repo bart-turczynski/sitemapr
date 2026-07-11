@@ -57,3 +57,16 @@ related W3C and RFC standards.
 * SSRF guard blocks requests to private, loopback, link-local, and
   cloud-metadata addresses, including decoding of NAT64, IPv4-translated, and
   IPv4-compatible IPv6 embeddings.
+
+## Request customization
+
+* `request_policy()` configures the HTTP requests sitemapr issues on every hop
+  and is accepted by every reading, validation, and discovery entry point via
+  the `policy` argument. Configure custom headers, authentication
+  (`request_auth_basic()` / `request_auth_bearer()`), a proxy (`request_proxy()`),
+  TLS options, bounded retry with backoff (`request_retry()`), and host-aware
+  throttling (`request_throttle()`).
+* Safety controls are never overridable: the per-hop SSRF guard, redirect
+  control, and non-2xx error policy are re-asserted after all caller
+  customization, so a policy can add headers or auth but cannot re-enable
+  redirect following or defeat the SSRF re-check.

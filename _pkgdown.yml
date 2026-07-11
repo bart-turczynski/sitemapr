@@ -53,6 +53,20 @@ reference:
     contents:
       - report_sitemap
 
+  - title: "Request customization"
+    desc: >
+      Configure the HTTP requests sitemapr issues — custom headers,
+      authentication, a proxy, TLS options, retry/backoff, per-host throttling,
+      and opt-in bounded-concurrency expansion — via a request-policy passed to
+      any reading, validation, or discovery entry point.
+    contents:
+      - request_policy
+      - request_auth_basic
+      - request_auth_bearer
+      - request_proxy
+      - request_retry
+      - request_throttle
+
 footer:
   structure:
     left: developed_by

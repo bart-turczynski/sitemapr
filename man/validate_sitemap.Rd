@@ -41,8 +41,10 @@ package User-Agent.}
 per-index child-count cap), as from \code{index_limits()}. Defaults to
 \code{index_limits()}.}
 
-\item{policy}{A request policy applied to every HTTP hop (root, robots.txt,
-discovery, redirects, and index children). Defaults to the no-op policy.}
+\item{policy}{A \code{\link[=request_policy]{request_policy()}} applied to every HTTP hop (root,
+robots.txt, discovery, redirects, and index children) — configure custom
+headers, authentication, a proxy, TLS options, retry/backoff, and per-host
+throttling there. Defaults to the no-op policy.}
 }
 \value{
 The findings tibble described in \code{docs/findings-contract.md}: the
