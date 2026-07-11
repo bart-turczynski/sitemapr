@@ -150,6 +150,17 @@ fetch_is_timeout <- function(cnd) {
 #' @param tls Optional named list of curl/TLS options (e.g.
 #'   `list(ssl_verifypeer = 0L)`) passed through `httr2::req_options()`. Cannot
 #'   override sitemapr's redirect controls, which are re-asserted afterwards.
+#' @param retry Optional [request_retry()] object enabling bounded retry with
+#'   exponential backoff. `NULL` (the default) means a single attempt per hop —
+#'   byte-identical to the pre-retry behavior. When set, only TRANSIENT failures
+#'   retry: the retryable HTTP status set (default `429, 500, 502, 503, 504`)
+#'   and, when `retry_on_failure = TRUE`, transient transport errors. Retries
+#'   happen inside a single hop's `req_perform()`, so they never inflate the
+#'   redirect/hop count or consume the redirect budget. Deterministic failures
+#'   are NEVER retried: SSRF rejections (raised before the request), malformed
+#'   input (classified downstream), and resource-ceiling aborts (raised after
+#'   the response is buffered) all sit outside the retried code path. Any
+#'   `Retry-After` header is honored but BOUNDED by the configured max backoff.
 #' @return An object of class `sitemapr_request_policy`.
 #' @examples
 #' # (1) A custom header (e.g. to satisfy a staging gateway).
@@ -165,7 +176,7 @@ fetch_is_timeout <- function(cnd) {
 #' @keywords internal
 #' @noRd
 request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
-                           proxy = NULL, tls = NULL) {
+                           proxy = NULL, tls = NULL, retry = NULL) {
   request_policy_check_prepare(prepare)
   request_policy_check_auth(auth)
   structure(
@@ -174,7 +185,8 @@ request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
       headers = request_policy_check_headers(headers),
       auth = auth,
       proxy = request_policy_check_proxy(proxy),
-      tls = request_policy_check_tls(tls)
+      tls = request_policy_check_tls(tls),
+      retry = request_policy_check_retry(retry)
     ),
     class = "sitemapr_request_policy"
   )
@@ -253,6 +265,16 @@ request_policy_check_tls <- function(tls) {
   tls
 }
 
+request_policy_check_retry <- function(retry) {
+  if (is.null(retry)) {
+    return(NULL)
+  }
+  if (!inherits(retry, "sitemapr_request_retry")) {
+    request_policy_reject("`retry` must be NULL or a request_retry() object.")
+  }
+  retry
+}
+
 #' Basic-authentication credentials for a request-policy
 #'
 #' @param username,password Credential strings, applied via
@@ -305,6 +327,83 @@ request_proxy <- function(url, port = NULL, username = NULL,
   )
 }
 
+#' Retry-and-backoff settings for a request-policy
+#'
+#' Configures bounded retry with exponential backoff for a request-policy. Pass
+#' the result as `request_policy(retry = )`. Only TRANSIENT failures retry: the
+#' retryable HTTP `statuses` set, plus transient transport errors when
+#' `retry_on_failure = TRUE`. Deterministic failures (SSRF, malformed input,
+#' resource-ceiling aborts) are never retried because they surface outside the
+#' single-hop `req_perform()` that retry wraps.
+#'
+#' @param max_tries Total attempts per hop (>= 1). `1` means no retry.
+#' @param statuses Integer vector of retryable HTTP statuses. Defaults to the
+#'   transient set `429, 500, 502, 503, 504`.
+#' @param backoff_min,backoff_max Lower/upper bounds (seconds) for the
+#'   exponential backoff between attempts. The delay for attempt `i` is
+#'   `backoff_min * 2^(i - 1)`, clamped to `backoff_max`. A `Retry-After` header
+#'   is honored but likewise bounded by `backoff_max`, so no unbounded sleep.
+#' @param retry_on_failure When `TRUE`, transient transport errors (curl
+#'   failures) are also retried. Defaults to `FALSE` (status-driven retry only).
+#' @return A `sitemapr_request_retry` object for `request_policy(retry = )`.
+#' @keywords internal
+#' @noRd
+request_retry <- function(max_tries = 3L,
+                          statuses = c(429L, 500L, 502L, 503L, 504L),
+                          backoff_min = 1, backoff_max = 30,
+                          retry_on_failure = FALSE) {
+  request_retry_check_tries(max_tries)
+  request_retry_check_statuses(statuses)
+  structure(
+    list(
+      max_tries = as.integer(max_tries)[[1L]],
+      statuses = as.integer(statuses),
+      backoff_min = max(0, as.numeric(backoff_min)[[1L]]),
+      backoff_max = max(0, as.numeric(backoff_max)[[1L]]),
+      retry_on_failure = isTRUE(retry_on_failure)
+    ),
+    class = "sitemapr_request_retry"
+  )
+}
+
+request_retry_check_tries <- function(max_tries) {
+  ok <- is.numeric(max_tries) && length(max_tries) == 1L && max_tries >= 1
+  if (!ok) {
+    request_policy_reject("`max_tries` must be a single number >= 1.")
+  }
+  invisible(max_tries)
+}
+
+request_retry_check_statuses <- function(statuses) {
+  if (!is.numeric(statuses) || length(statuses) == 0L) {
+    request_policy_reject("`statuses` must be a non-empty integer status set.")
+  }
+  invisible(statuses)
+}
+
+# Exponential backoff for retry attempt `i` (1-based), clamped to the policy's
+# [backoff_min, backoff_max] window so a runaway multiplier can never sleep past
+# the configured ceiling. Deterministic given `i`, so it is unit-testable.
+retry_backoff_seconds <- function(i, backoff_min, backoff_max) {
+  base <- backoff_min * 2^max(0L, as.integer(i) - 1L)
+  min(backoff_max, max(backoff_min, base))
+}
+
+# Honor a response's `Retry-After`, but BOUND it by `backoff_max` so a hostile
+# or misconfigured server cannot force an unbounded sleep. Returns `NA_real_`
+# when the header is absent or non-numeric (e.g. an HTTP-date form), which tells
+# httr2 to fall back to `retry_backoff_seconds()` — itself bounded.
+retry_after_bounded <- function(resp, backoff_max) {
+  if (!httr2::resp_header_exists(resp, "Retry-After")) {
+    return(NA_real_)
+  }
+  after <- suppressWarnings(as.numeric(httr2::resp_header(resp, "Retry-After")))
+  if (is.na(after)) {
+    return(NA_real_)
+  }
+  min(after, backoff_max)
+}
+
 # Apply a policy's TYPED fields (headers, auth, proxy, tls) to one hop's
 # request. Runs before the generic `prepare` hook and before sitemapr's own
 # transport controls, so callers shape the request without weakening safety.
@@ -322,7 +421,30 @@ request_policy_apply <- function(policy, req) {
   if (!is.null(policy$tls)) {
     req <- do.call(httr2::req_options, c(list(req), policy$tls))
   }
+  if (!is.null(policy$retry)) {
+    req <- request_apply_retry(req, policy$retry)
+  }
   req
+}
+
+# Attach the retry-and-backoff policy to one hop's request via httr2::req_retry.
+# `is_transient` inspects the RESPONSE STATUS, which works even though the
+# fetcher sets req_error(is_error = FALSE): httr2's retry loop evaluates
+# is_transient on the raw response before the error policy runs, so a retryable
+# non-2xx status still drives a retry. Retries live inside this single hop's
+# req_perform(), so they never touch fetch_follow()'s redirect/hop accounting.
+request_apply_retry <- function(req, retry) {
+  statuses <- retry$statuses
+  backoff_min <- retry$backoff_min
+  backoff_max <- retry$backoff_max
+  httr2::req_retry(
+    req,
+    max_tries = retry$max_tries,
+    retry_on_failure = retry$retry_on_failure,
+    is_transient = function(resp) httr2::resp_status(resp) %in% statuses,
+    backoff = function(i) retry_backoff_seconds(i, backoff_min, backoff_max),
+    after = function(resp) retry_after_bounded(resp, backoff_max)
+  )
 }
 
 request_apply_auth <- function(req, auth) {
