@@ -30,6 +30,9 @@ related W3C and RFC standards.
   equivalence and RFC-3986/3987 encoding conformance, count and field-value
   rules, hreflang token policy, extension field rules, per-line text-sitemap
   rules, and unsupported-input/encoding diagnostics.
+* Whole-sitemap hreflang cluster findings surface across the corpus: a missing
+  self-referencing alternate, a non-reciprocal return link, and inconsistent
+  language annotations for the same target URL.
 * `mode = "non-strict"` downgrades schema violations to warnings and drops
   strict-only findings.
 * RSS/Atom feeds are detected and reported as an unsupported-feed finding rather
