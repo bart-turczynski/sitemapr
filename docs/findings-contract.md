@@ -52,8 +52,10 @@ The `layer` column is constrained to this fixed set:
 | `"robots"` | robots.txt allow/disallow testing (v0.2) |
 | `"report"` | Finding assembly, dedup, cross-source aggregation |
 
-`"page"` and `"robots"` are reserved for the v0.2 per-URL inspection epic and
-are not emitted by the v1 pipeline. Encoding findings (`ENCODING_*`) are
+`"robots"` is emitted by the opt-in robots allow/disallow check (Layer E check
+#7; `validate_sitemap(check_robots = TRUE)`); it stays empty on a default call.
+`"page"` remains reserved for the rest of the v0.2 per-URL inspection epic (the
+`PAGE_*` codes) and is not yet emitted. Encoding findings (`ENCODING_*`) are
 emitted under `"classification"`, not a separate encoding layer.
 
 ---
@@ -75,9 +77,13 @@ Fragments (present when the finding is scoped below document level):
 | `#index-child:<url>` | A child `<loc>` in a `sitemapindex` |
 | `#archive-member:<path>` | A file path within a `.tar.gz` archive |
 | `#line:<n>` | A specific line in a text sitemap |
+| `#page-url:<url>` | An advertised page URL being tested (the `page-url` subject) |
 
-The v0.2 `page`/`robots` layers introduce a `page-url` subject scoped to an
-individual crawled page; its `subject_ref` form is defined when Layer E lands.
+The `page`/`robots` layers use the `page-url` subject to scope a finding to one
+advertised page URL. Its `subject_ref` anchors to the sitemap that advertised
+the URL and names the page in the fragment:
+`sitemap://<sitemap-url>#page-url:<url>`. The `robots` layer emits it today; the
+`page` layer will reuse it when the rest of Layer E lands.
 
 ---
 
@@ -264,6 +270,27 @@ Emitted under `layer = "classification"`.
 - `INDEX_DEPTH_EXCEEDED` — recursion depth exceeded the configured limit (3)
 - `INDEX_CHILD_COUNT_EXCEEDED` — child count cap reached
 
+### Robots codes (`ROBOTS_*`)
+Emitted under `layer = "robots"` (`subject_type = "page-url"`) by the opt-in
+robots allow/disallow check (`validate_sitemap(check_robots = TRUE)`). The check
+tests every absolute http(s) `<loc>` a sitemap advertises against its governing
+robots.txt, using the sibling `robotstxtr` package (its faithful Google matcher
+and HTTP-status→policy semantics). Each distinct origin's robots.txt is fetched
+once under the SSRF-guarded fetch policy; matching is offline, so all advertised
+URLs are checked with no sampling. An allowed URL produces no row.
+- `ROBOTS_DISALLOWED` — a sitemap-listed URL is disallowed by robots.txt
+  (`warning`). Evidence carries the matched rule: `type: value` in `excerpt`
+  (e.g. `disallow: /private`) and the one-based robots.txt line in `line`.
+  Advertising a URL that robots.txt blocks is a well-known SEO defect.
+- `ROBOTS_INDETERMINATE` — robots.txt could not be fetched or evaluated (a
+  5xx/timeout/network/TLS failure or an SSRF block), so the decision is
+  undetermined (`info`). A 404/410 robots.txt is allow-all and produces no row.
+
+`robotstxtr` is an optional dependency (`Suggests`); when it is not installed
+and `check_robots = TRUE`, `validate_sitemap()` signals a classed warning
+(`sitemapr_robots_unavailable`) naming the install command rather than emitting
+a finding — the findings table describes the sitemap, not the user's setup.
+
 ---
 
 ## Cross-implementation alignment
@@ -292,11 +319,12 @@ alignment is mechanical.
   `archive-entry` → `archive-member`.
 
 ### Row status semantics (`status` column)
-- `active` — emitted by the sitemapr v1 pipeline today (47 codes).
+- `active` — emitted by the sitemapr pipeline today (57 codes). Two of them —
+  the `ROBOTS_*` codes — fire only on an opt-in `check_robots = TRUE` call.
 - `reserved` — canonical and documented, but surfaced as a condition rather than
   a findings row in v1 (the two `FETCH_*` codes).
-- `deferred-v0.2` — belongs to the `page`/`robots` Layer E inspection epic;
-  defined so the two catalogs stay aligned, not emitted in v1.
+- `deferred-v0.2` — belongs to the `page` Layer E inspection epic (the `PAGE_*`
+  codes); defined so the two catalogs stay aligned, not yet emitted.
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
   yet; carried so the contract is complete and to guide future adoption.
 
@@ -304,9 +332,15 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-No rows carry `reconcile = open`. Every finding-code reconciliation with the
-sibling `sitemap-validator` implementation has been settled (see the resolved
-list below).
+- **`ROBOTS_INDETERMINATE`** ↔ validator `ROBOTS_FETCH_FAILED` (best-match).
+  sitemapr collapses the two "cannot decide" outcomes into ONE `info` code:
+  robots.txt would not fetch (a 5xx/timeout/network/TLS failure or an SSRF
+  block). The sibling validator currently splits this across two codes,
+  `ROBOTS_FETCH_FAILED` (fetch failed) and `ROBOTS_NOT_TESTABLE`, both carried
+  here as `validator-only` rows. Per the "sitemapr names canonical" rule the
+  validator adopts `ROBOTS_INDETERMINATE`, collapsing its two codes; until it
+  does, this row stays `reconcile = open`. `ROBOTS_DISALLOWED` reconciles
+  cleanly (both ports share the name).
 
 ### Resolved reconciliations
 

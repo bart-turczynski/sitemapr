@@ -219,6 +219,12 @@ validate_archive_parts <- function(src) {
       fetched_at = src$fetched_at,
       source_meta = NULL
     )
+    parts <- append_robots_part(
+      parts,
+      res$rows$loc,
+      src$robots_ua,
+      src$base
+    )
   }
   parts
 }
@@ -334,14 +340,19 @@ validate_feed_parts <- function(src, user_agent, limits, index_limits, policy) {
   if (is.null(parsed)) {
     return(validate_xml_parts(src, user_agent, limits, index_limits, policy))
   }
-  list(validate_protocol(
-    parsed$rows,
-    sitemap_url = src$final_url,
-    subject_ref = src$base,
-    byte_size = src$byte_size,
-    fetched_at = src$fetched_at,
-    source_meta = NULL
-  ))
+  append_robots_part(
+    list(validate_protocol(
+      parsed$rows,
+      sitemap_url = src$final_url,
+      subject_ref = src$base,
+      byte_size = src$byte_size,
+      fetched_at = src$fetched_at,
+      source_meta = NULL
+    )),
+    parsed$rows$loc,
+    src$robots_ua,
+    src$base
+  )
 }
 
 # Build the producer `parts` list for an XML source, branching on the root
@@ -362,16 +373,21 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
 
   if (identical(root, "urlset")) {
     rows <- parse_sitemap_xml(src$bytes, source_sitemap = src$final_url)$rows
-    return(list(
-      schema,
-      validate_protocol(
-        rows,
-        sitemap_url = src$final_url,
-        subject_ref = src$base,
-        byte_size = src$byte_size,
-        fetched_at = src$fetched_at,
-        source_meta = NULL
-      )
+    return(append_robots_part(
+      list(
+        schema,
+        validate_protocol(
+          rows,
+          sitemap_url = src$final_url,
+          subject_ref = src$base,
+          byte_size = src$byte_size,
+          fetched_at = src$fetched_at,
+          source_meta = NULL
+        )
+      ),
+      rows$loc,
+      src$robots_ua,
+      src$base
     ))
   }
 
@@ -433,7 +449,10 @@ validate_index_parts <- function(
   }
 
   if (nrow(ex$rows) > 0L) {
-    parts <- c(parts, index_protocol_parts(ex$rows, ex$sources, src$base))
+    parts <- c(
+      parts,
+      index_protocol_parts(ex$rows, ex$sources, src$base, src$robots_ua)
+    )
   }
   parts
 }
@@ -473,7 +492,12 @@ index_source_byte_size <- function(source) {
   as.numeric(source$bytes[[1L]])
 }
 
-index_protocol_parts <- function(rows, sources, fallback_base) {
+index_protocol_parts <- function(
+  rows,
+  sources,
+  fallback_base,
+  robots_ua = NULL
+) {
   if (is.null(rows) || nrow(rows) == 0L) {
     return(list())
   }
@@ -481,29 +505,37 @@ index_protocol_parts <- function(rows, sources, fallback_base) {
   sitemap_url <- as.character(rows$source_sitemap)
   known <- !is.na(sitemap_url) & nzchar(sitemap_url)
   if (!any(known)) {
-    return(list(validate_protocol(
-      rows,
-      sitemap_url = NA_character_,
-      subject_ref = fallback_base,
-      byte_size = NA_real_,
-      fetched_at = NA,
-      source_meta = NULL
-    )))
+    return(append_robots_part(
+      list(validate_protocol(
+        rows,
+        sitemap_url = NA_character_,
+        subject_ref = fallback_base,
+        byte_size = NA_real_,
+        fetched_at = NA,
+        source_meta = NULL
+      )),
+      rows$loc,
+      robots_ua,
+      fallback_base
+    ))
   }
 
   groups <- split(which(known), sitemap_url[known], drop = TRUE)
-  parts <- vector("list", length(groups))
+  parts <- list()
   for (i in seq_along(groups)) {
     child_url <- names(groups)[[i]]
+    child_base <- sitemap_subject_ref(child_url)
     child_source <- index_source_row(sources, child_url)
-    parts[[i]] <- validate_protocol(
-      rows[groups[[i]], , drop = FALSE],
+    child_rows <- rows[groups[[i]], , drop = FALSE]
+    parts[[length(parts) + 1L]] <- validate_protocol(
+      child_rows,
       sitemap_url = child_url,
-      subject_ref = sitemap_subject_ref(child_url),
+      subject_ref = child_base,
       byte_size = index_source_byte_size(child_source),
       fetched_at = NA,
       source_meta = NULL
     )
+    parts <- append_robots_part(parts, child_rows$loc, robots_ua, child_base)
   }
   parts
 }
@@ -535,6 +567,44 @@ validate_failure_finding <- function(source, cnd) {
   )
 }
 
+# Resolve the robots matcher user-agent for a call, or NULL when the robots
+# allow/disallow check is not active. Returns NULL when `check_robots` is FALSE.
+# When `check_robots` is TRUE but the optional `robotstxtr` engine is not
+# installed, this signals a classed warning naming the install command (the
+# absence is a setup fact about the user's machine, NOT a finding about the
+# sitemap) and returns NULL so validation proceeds with every other layer
+# unaffected. Otherwise it returns the matcher user-agent to test against.
+resolve_robots_ua <- function(check_robots, robots_user_agent) {
+  if (!isTRUE(check_robots)) {
+    return(NULL)
+  }
+  if (!robotstxtr_available()) {
+    rlang::warn(
+      sprintf(
+        paste0(
+          "robots allow/disallow check skipped: the optional 'robotstxtr' ",
+          "package is not installed. Install it with %s."
+        ),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robots_unavailable"
+    )
+    return(NULL)
+  }
+  robots_user_agent
+}
+
+# Append a robots-layer producer part for the advertised `locs` to `parts` when
+# the robots check is active (`robots_ua` non-NULL). A no-op otherwise, so the
+# rows-bearing branches can call it unconditionally.
+append_robots_part <- function(parts, locs, robots_ua, base) {
+  if (is.null(robots_ua)) {
+    return(parts)
+  }
+  parts[[length(parts) + 1L]] <- validate_robots(locs, robots_ua, base)
+  parts
+}
+
 # Validate one normalized source record. This is the former scalar
 # validate_sitemap() body, factored so batched calls can continue per source.
 validate_sitemap_source <- function(
@@ -543,7 +613,8 @@ validate_sitemap_source <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  robots_ua = NULL
 ) {
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
@@ -559,6 +630,10 @@ validate_sitemap_source <- function(
       )
     }
   )
+  # The robots allow/disallow check rides on the resolved source so each
+  # rows-bearing branch can feed the advertised `<loc>`s to validate_robots()
+  # without a threaded argument (NULL = check inactive).
+  src$robots_ua <- robots_ua
 
   parts <- if (identical(src$kind, "malformed-gzip")) {
     list(decompression_source_finding(
@@ -571,7 +646,13 @@ validate_sitemap_source <- function(
   } else if (identical(src$format, "html")) {
     list(validate_classification(source_meta(html_masquerade = TRUE), src$base))
   } else if (identical(src$format, "text")) {
-    list(validate_text_protocol(rawToChar(src$bytes), src$base))
+    text <- rawToChar(src$bytes)
+    append_robots_part(
+      list(validate_text_protocol(text, src$base)),
+      strsplit(text, "\r\n|\r|\n", perl = TRUE)[[1L]],
+      src$robots_ua,
+      src$base
+    )
   } else if (identical(src$format, "feed")) {
     validate_feed_parts(src, user_agent, limits, index_limits, policy)
   } else {
@@ -603,7 +684,8 @@ validate_sitemap_batch <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  robots_ua = NULL
 ) {
   parts <- list()
   for (i in seq_len(nrow(sources))) {
@@ -616,7 +698,8 @@ validate_sitemap_batch <- function(
           user_agent,
           limits,
           index_limits,
-          policy
+          policy,
+          robots_ua
         )
       ),
       error = function(cnd) {
@@ -655,9 +738,25 @@ validate_sitemap_batch <- function(
 #' their findings. Scalar calls keep the stricter historical behavior: genuine
 #' transport, SSRF, or HTTP failures raise classed conditions.
 #'
+#' When `check_robots = TRUE`, each sitemap-advertised URL is additionally
+#' tested against its governing robots.txt (via the optional `robotstxtr`
+#' engine), emitting `robots`-layer findings for URLs that are disallowed
+#' (`ROBOTS_DISALLOWED`, `warning`) or that cannot be decided because robots.txt
+#' would not fetch (`ROBOTS_INDETERMINATE`, `info`). Each distinct origin's
+#' robots.txt is fetched once under the SSRF-guarded fetch policy; matching is
+#' offline, so every advertised URL is checked with no sampling. When
+#' `robotstxtr` is not installed, a classed warning naming the install command
+#' is signalled and the check is skipped; every other layer is unaffected.
+#'
 #' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
 #'   strict-only findings are dropped and schema violations are downgraded to
 #'   `warning`; in `strict`, the documented info-to-warning codes are elevated.
+#' @param check_robots Logical; when `TRUE`, run the robots.txt allow/disallow
+#'   check over the advertised URLs (requires the optional `robotstxtr`
+#'   package). Defaults to `FALSE`.
+#' @param robots_user_agent The robots.txt group to match against when
+#'   `check_robots = TRUE`, e.g. `"*"` (the catch-all group, the default) or a
+#'   specific crawler token such as `"Googlebot"`.
 #' @inheritParams read_sitemap
 #' @return The findings tibble described in `docs/findings-contract.md`: the
 #'   columns `code`, `severity`, `layer`, `subject_type`, `subject_ref`,
@@ -685,13 +784,16 @@ validate_sitemap <- function(
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  check_robots = FALSE,
+  robots_user_agent = "*"
 ) {
   mode <- match.arg(mode)
   sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
+  robots_ua <- resolve_robots_ua(check_robots, robots_user_agent)
 
   if (length(x) == 1L) {
     validate_sitemap_source(
@@ -700,7 +802,8 @@ validate_sitemap <- function(
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      robots_ua = robots_ua
     )
   } else {
     validate_sitemap_batch(
@@ -709,7 +812,8 @@ validate_sitemap <- function(
       user_agent = user_agent,
       limits = limits,
       index_limits = index_limits,
-      policy = policy
+      policy = policy,
+      robots_ua = robots_ua
     )
   }
 }
@@ -722,7 +826,9 @@ validate_sitemaps <- function(
   user_agent = default_user_agent(),
   limits = fetch_limits(),
   index_limits = NULL,
-  policy = request_policy()
+  policy = request_policy(),
+  check_robots = FALSE,
+  robots_user_agent = "*"
 ) {
   validate_sitemap(
     x,
@@ -730,6 +836,8 @@ validate_sitemaps <- function(
     user_agent = user_agent,
     limits = limits,
     index_limits = index_limits,
-    policy = policy
+    policy = policy,
+    check_robots = check_robots,
+    robots_user_agent = robots_user_agent
   )
 }

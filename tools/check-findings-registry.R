@@ -103,11 +103,12 @@ if (!all(reg$is_strict_only %in% c("TRUE", "FALSE"))) {
     )
   )
 }
-if (!all(is.na(reg$reconcile) | reg$reconcile == "open")) {
+reconcile_values <- c("open", "done")
+if (!all(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)) {
   add(
-    "reconcile must be blank or 'open'; offenders: %s",
+    "reconcile must be blank, 'open', or 'done'; offenders: %s",
     paste(
-      reg$code[!(is.na(reg$reconcile) | reg$reconcile == "open")],
+      reg$code[!(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)],
       collapse = ", "
     )
   )
@@ -118,7 +119,7 @@ if (!all(is.na(reg$reconcile) | reg$reconcile == "open")) {
 # R/ source. Keep this prefix set in sync when a new code family is introduced.
 code_pattern <- paste0(
   '"(SCHEMA_|PROTOCOL_|HREFLANG_|INDEX_|SITEMAP_INDEX|',
-  'UNSUPPORTED_|ENCODING_|FETCH_|DECOMPRESS_)[A-Z0-9_]+"'
+  'UNSUPPORTED_|ENCODING_|FETCH_|DECOMPRESS_|ROBOTS_)[A-Z0-9_]+"'
 )
 src <- unlist(lapply(
   list.files("R", pattern = "[.]R$", full.names = TRUE),
