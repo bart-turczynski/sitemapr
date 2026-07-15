@@ -23,6 +23,8 @@ findings_layer_order <- c(
   "schema",
   "protocol",
   "index-expansion",
+  "page",
+  "robots",
   "report"
 )
 

@@ -82,9 +82,10 @@ PAGE_CANONICAL_MISSING,info,page,page-url,FALSE,deferred-v0.2,,PAGE_CANONICAL_MI
 PAGE_META_ROBOTS_NOINDEX,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_META_ROBOTS_NOINDEX
 PAGE_XROBOTSTAG_NOINDEX,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_XROBOTSTAG_NOINDEX
 PAGE_HREFLANG_MISMATCH,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_HREFLANG_MISMATCH
-ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,deferred-v0.2,,ROBOTS_DISALLOWED
-ROBOTS_NOT_TESTABLE,info,robots,page-url,FALSE,deferred-v0.2,,ROBOTS_NOT_TESTABLE
-ROBOTS_FETCH_FAILED,info,robots,page-url,FALSE,deferred-v0.2,,ROBOTS_FETCH_FAILED
+ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,active,,ROBOTS_DISALLOWED
+ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,open,ROBOTS_FETCH_FAILED
+ROBOTS_NOT_TESTABLE,info,robots,page-url,FALSE,validator-only,,ROBOTS_NOT_TESTABLE
+ROBOTS_FETCH_FAILED,info,robots,page-url,FALSE,validator-only,,ROBOTS_FETCH_FAILED
 REPORT_TRUNCATED,info,report,report,FALSE,validator-only,,REPORT_TRUNCATED
 INSPECTION_FULL_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_FULL_CAP_HIT
 INSPECTION_SAMPLE_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_SAMPLE_CAP_HIT
