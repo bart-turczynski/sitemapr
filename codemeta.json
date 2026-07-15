@@ -83,6 +83,12 @@
     },
     {
       "@type": "SoftwareApplication",
+      "identifier": "robotstxtr",
+      "name": "robotstxtr",
+      "version": ">= 0.1.0"
+    },
+    {
+      "@type": "SoftwareApplication",
       "identifier": "rosv",
       "name": "rosv",
       "provider": {
@@ -206,7 +212,7 @@
     },
     "SystemRequirements": null
   },
-  "fileSize": "866.363KB",
+  "fileSize": "1187.123KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
