@@ -7,8 +7,8 @@ a new code value is a documented addition. Removing or renaming any of the
 above is a documented breaking change.
 
 The **machine-readable catalog of every finding code** — its canonical name,
-default severity, layer, subject type, strict-only flag, and the
-`sitemap-validator` alias it reconciles with — lives in
+default severity, layer, subject type, strict-only flag, ruleset applicability,
+and the `sitemap-validator` alias it reconciles with — lives in
 [`findings-registry.csv`](findings-registry.csv). That CSV is the single
 source of truth shared with the sibling TypeScript implementation
 (`sitemap-validator`); this document is the prose contract that explains it.
@@ -31,6 +31,13 @@ for structure and semantics.
 | `mode` | `character` | The mode under which the finding was produced: `"strict"` or `"non-strict"`. |
 | `is_strict_only` | `logical` | `TRUE` if the rule only fires in `strict` mode and is suppressed in `non-strict`. |
 | `remediation_hint` | `character` | Optional. A short actionable suggestion. `NA` when not applicable. |
+
+These ten columns are the **stable, legacy-compatible contract** (schema v1). A
+default or baseline (`sitemap_ruleset = "sitemaps.org"`) `validate_sitemap()` call
+returns exactly this shape, unchanged. The opt-in per-engine ruleset surface adds
+**additive** fields (`ruleset`, `ruleset_revision`, `context`, `provenance`) under
+a versioned, engine-aware entry point — never by silently widening this pinned
+table. See [Per-engine ruleset extension (ADR-009)](#per-engine-ruleset-extension-adr-009).
 
 ---
 
@@ -177,6 +184,21 @@ finding and continue with other submitted sources; batched `read_sitemap()` /
 - `PROTOCOL_URL_NO_HOST` — `loc` has no host component
 - `PROTOCOL_URL_TOO_LONG` — `loc` exceeds 2 048 characters (XML; the
   text-sitemap variant is `PROTOCOL_TEXT_URL_TOO_LONG`)
+- `PROTOCOL_URL_DECODED_TOO_LONG` — **per-engine ruleset code**
+  (`ruleset = yandex`, `status = deferred-ruleset`, not yet emitted). A `loc`
+  whose **percent-decoded whole-URL** length exceeds ~1 024 chars under the
+  `yandex` ruleset (`error`). Distinct from `PROTOCOL_URL_TOO_LONG`: different
+  threshold (~1 024 vs 2 048), a different measurement basis (decoded whole URL
+  vs raw length), and a hard reject vs a `warning`. Runtime `provenance =
+  application_choice` (the error-dictionary "1 024" is the `documented` basis it
+  rests on). See `docs/sitemap-spec.md` §12.5.
+- `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` — **per-engine ruleset code**
+  (`ruleset = yandex`, `status = deferred-ruleset`, not yet emitted). Yandex's
+  per-tag byte guard ("Data limit exceeded in tag X"): over-long raw tag content
+  (~100 B for `lastmod`/`changefreq`/`priority`; ~1 200–1 500 B for `<loc>`),
+  surfaced as a `warning`. Distinct from `PROTOCOL_SIZE_EXCEEDED` (a whole-file
+  50 MB document limit): this is a per-tag content guard. Runtime `provenance =
+  advisory` (tool-observed), so it never drives a hard failure. See §12.5/§12.7.
 - `PROTOCOL_URL_OUT_OF_SCOPE` — `loc` does not share scheme+host+port+path
   prefix with its parent sitemap file
 - `PROTOCOL_URL_FRAGMENT` — `loc` contains a fragment (`info`)
@@ -293,6 +315,103 @@ a finding — the findings table describes the sitemap, not the user's setup.
 
 ---
 
+## Per-engine ruleset extension (ADR-009)
+
+Governed by `docs/decisions/ADR-009-per-engine-validation-profiles.md` and
+`docs/sitemap-spec.md` §12. Per-engine sitemap validation (baseline
+`sitemaps.org` plus opt-in `google` / `bing` / `yandex` overlays) is exposed
+**additively**: the ten-column result above is schema v1 and never changes; the
+per-engine context rides a versioned, engine-aware surface (ADR-009 §5/§6). This
+section is the contract for that additive surface. No implementation emits these
+fields yet — this slice fixes the schema and codes ahead of the implementation
+slices.
+
+### Additive output-tibble fields (schema v2, engine-aware)
+
+A baseline call (`sitemap_ruleset = "sitemaps.org"`, no engine context) returns
+exactly the pinned ten columns. When an explicit engine `sitemap_ruleset` is
+selected through the versioned engine-aware entry point, the result carries these
+additional columns:
+
+| Column | Type | Description |
+|---|---|---|
+| `ruleset` | `character` | The `sitemap_ruleset` the finding was produced under: `"sitemaps.org"` / `"google"` / `"bing"` / `"yandex"`. Value set owned by `docs/sitemap-spec.md` §12.0; extensible. |
+| `ruleset_revision` | `character` | The published revision string of that ruleset (ADR-009 §1/§7), so cross-repo consumers can pin a compatible version. |
+| `context` | `list` | Named list of the **independent** context axes active for the finding (ADR-009 §1; there is deliberately no single `profile` scalar): `submission_channel`, `discovery_provenance`, `property_scope`, and the **structured** `authority_evidence` (never a boolean — see §12.1). Per-source: a sitemap-index child inherits nothing implicitly. |
+| `provenance` | `character` | Exactly **one** of the seven ADR-009 §0 tags for the rule that produced this finding (see below). One fact, one tag. |
+
+`ruleset` is promoted to a top-level column (the most-filtered axis); the
+remaining axes live inside the `context` list-column to keep the top-level shape
+narrow. These fields are additive: legacy/baseline callers never see them, so the
+schema-v1 contract holds byte-for-byte.
+
+### Provenance vocabulary
+
+`provenance` records how a rule's authority was established, and — critically —
+**whether the finding may be a hard verdict**. Executable classes may drive an
+engine-specific validity failure; diagnostic classes only soften/annotate and
+**never** produce a hard failure under their ruleset (ADR-009 §0; §12.0):
+
+- **Executable** — `documented` (quoted from the engine's current primary
+  source), `inherited_protocol` (explicitly inherited from the sitemaps.org
+  baseline), `application_choice` (a named sitemapr product decision).
+- **Diagnostic only** — `inferred`, `documentation_gap`,
+  `documentation_conflict`, `advisory`.
+
+Provenance is a **per-finding** field, not per-code metadata, because the *same*
+shared code can carry *different* provenance under different rulesets (e.g. a
+size limit is `documented` under the baseline but `inherited_protocol` under an
+overlay that repeats it). That is why `provenance` is not a `findings-registry.csv`
+column — the CSV records per-code catalog facts only.
+
+There is **no** `documented (tester)` tag: empirical tester behavior (e.g. the
+Yandex file-analysis tool) enters as `application_choice` (executable) or
+`advisory` (diagnostic), never as `documented` (§12.0).
+
+### Registry `ruleset` column and `deferred-ruleset` status
+
+`findings-registry.csv` gains one additive per-code column, `ruleset`:
+
+- `baseline` — a shared code that applies under **every** ruleset (by
+  inheritance). All pre-ADR-009 codes are `baseline`; for the sibling validator
+  this is a semantic no-op.
+- an engine name (`google` / `bing` / `yandex`) — a **genuinely engine-specific**
+  code (ADR-009 §6). Only mint one where semantics differ from an existing code;
+  otherwise reuse the existing code and let the runtime `ruleset`/`provenance`
+  fields carry the engine context.
+
+The two engine-specific codes minted by this slice —
+`PROTOCOL_URL_DECODED_TOO_LONG` and `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (both
+`ruleset = yandex`; see the Protocol codes above) — carry a new
+`status = deferred-ruleset`: canonical and documented, belonging to the
+per-engine ruleset epic, **not yet emitted** by any R/ code. The drift guard
+(`tools/check-findings-registry.R`, active-only) therefore skips them until an
+implementation slice wires an emitter, exactly as `deferred-v0.2` works for the
+`PAGE_*` codes.
+
+### Migration note
+
+Backwards compatibility is preserved **by construction** (ADR-009 §5):
+
+- **No change to legacy output.** The default `sitemap_ruleset` stays
+  `sitemaps.org`; a default/baseline `validate_sitemap()` returns the pinned
+  ten-column schema v1, unchanged. The additive fields appear only when an engine
+  ruleset is explicitly selected via the versioned engine-aware surface.
+- **No silent default switch.** Selecting an engine is always explicit; there is
+  no implicit fall-through to `google` or any overlay. Any change of the *default*
+  ruleset rides an explicit, documented **major-version** migration.
+- **Additive registry.** The `ruleset` column defaults to `baseline` for every
+  existing code (a no-op for current consumers); engine-specific codes are the
+  only non-`baseline` rows and are `deferred-ruleset` (unemitted). Adding the
+  column and these rows is a documented addition, not a breaking change.
+- **Cross-repo cadence.** sitemapr's registry stays canonical; the sibling
+  `sitemap-validator` adopts the additive `ruleset` column and any engine codes on
+  its own version cadence, within the published supported-sibling-version ranges
+  (ADR-009 §7). A shared-artifact shape change (the new CSV column) is coordinated,
+  not silent.
+
+---
+
 ## Cross-implementation alignment
 
 sitemapr and its TypeScript sibling `sitemap-validator` are two implementations
@@ -325,6 +444,10 @@ alignment is mechanical.
   a findings row in v1 (the two `FETCH_*` codes).
 - `deferred-v0.2` — belongs to the `page` Layer E inspection epic (the `PAGE_*`
   codes); defined so the two catalogs stay aligned, not yet emitted.
+- `deferred-ruleset` — belongs to the per-engine ruleset epic (ADR-009 /
+  `sitemap-spec.md` §12); a genuinely engine-specific code, documented and
+  registered ahead of its implementation slice, not yet emitted. See
+  [Per-engine ruleset extension (ADR-009)](#per-engine-ruleset-extension-adr-009).
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
   yet; carried so the contract is complete and to guide future adoption.
 
