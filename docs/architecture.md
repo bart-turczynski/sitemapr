@@ -28,6 +28,12 @@ service) stays out of scope.
 WHATWG URL behavior may guide parser edge cases where web reality diverges, but
 any conflict with the sitemap.org/RFC baseline is an explicit product decision.
 
+Beyond this baseline and Google's extension semantics, **per-engine sitemap
+validation** (opt-in `sitemaps.org` / `google` / `bing` / `yandex` rulesets) is
+governed by `docs/decisions/ADR-009-per-engine-validation-profiles.md` and
+`docs/sitemap-spec.md` §12. Those rules are additive and opt-in; the baseline in
+this table is what a default validation applies.
+
 ---
 
 ## 3. Layer model (A–F)
@@ -169,9 +175,22 @@ candidate), `robots` (a `Sitemap:` directive from robots.txt; ADR-006), `seed`
 (a `from = "sitemap"` exact-URL root or a `sitemap_tree_from_bytes()` root), and
 `child-of-index` (a node reached by recursive sitemapindex expansion).
 
+Both provenance vocabularies above — `read_sitemap()`'s `source_sitemap` and this
+`sitemap_tree()` `provenance` column — map onto ADR-009's independent
+**`discovery_provenance`** axis; the explicit crosswalk lives in
+`docs/sitemap-spec.md` §12.1. No code consumes the ADR-009 axis yet, so the two
+vocabularies stand as-is with §12.1 as the mapping of record. Reconciling them
+into a single documented vocabulary (or an explicit bijection) is deferred until
+an implementation slice first threads `discovery_provenance` / `authority_evidence`
+through the code (SITE-yckaspdp).
+
 ### `validate_sitemap()` → findings tibble
 
-See `docs/findings-contract.md` for the full column contract.
+See `docs/findings-contract.md` for the full column contract. A default call
+returns the stable ten-column schema; an opt-in per-engine ruleset call adds
+versioned, additive `ruleset` / `ruleset_revision` / `context` / `provenance`
+fields through a separate engine-aware surface, never by widening the pinned
+table (ADR-009 §5/§6).
 
 ---
 
