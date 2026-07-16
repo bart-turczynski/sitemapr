@@ -13,6 +13,12 @@ It distills three sources, reconciled (see `docs/references.md` for URLs):
 3. The sibling **`sitemap-validator` SPEC.md** — domain logic, stripped of its
    web-service scope.
 
+This framing describes the **§1–§11 baseline**. **§12** extends it under
+`docs/decisions/ADR-009-per-engine-validation-profiles.md` with opt-in per-engine
+rulesets (adding **Yandex**, plus per-cell provenance) that, under an explicitly
+selected `sitemap_ruleset`, may carry engine-specific *validity* rules — not only
+warnings/info.
+
 **Relationship to sibling SPEC numbering.** Section references like *(SPEC §19)*
 point at the sibling `sitemap-validator/SPEC.md` so a reader can trace a rule to
 its origin. They are citations, not a dependency — this file is now the
@@ -465,3 +471,360 @@ These are reflected in **ADR-003** (Axis 1 replaces the single "Max on-wire body
 50 MB" row + the `sitemapr_truncated` paragraph) and **`findings-contract.md`**
 (the §10 codes). The remaining open item is purely upstream: the CMS catalog (e)
 is unsettled in the sibling project, not in `sitemapr`.
+
+---
+
+## 12. Per-engine sitemap rulesets (ADR-009 extension)
+
+> **Status: extension — 2026-07-16, governed by
+> `docs/decisions/ADR-009-per-engine-validation-profiles.md`.** §1–§11 (accepted
+> 2026-06-28) are the baseline of record and are **unchanged**. This section is
+> **additive**: it layers per-engine rules on top of them in ADR-009's
+> vocabulary and does not restate baseline mechanics. Primary-source URLs are
+> cited inline. Most durable `docs/references.md` rows already exist (Google
+> build-sitemap / large-sitemaps; Bing Jul-2025 post); the rows still to be added
+> in the follow-up references slice are the **Yandex** Webmaster sitemap +
+> error-dictionary + download pages, the **Bing 2016** size announcement, the
+> **GSC sitemap report** page, and the anonymous-ping deprecation notes (Google
+> 2023, Bing 2022). Finding-registry changes land in the follow-up findings
+> slice, not here.
+
+### 12.0 Scope, vocabulary, and provenance
+
+Validation context is a set of **independent axes** (ADR-009 §1), not one
+`profile` scalar — and `profile` stays reserved for the XSD schema-profile sense
+(§3, §5, §6). The engine axis is **`sitemap_ruleset`**: baseline `sitemaps.org`
+plus the overlays `google`, `bing`, `yandex`. `sitemapr` owns this value set; it
+is extensible.
+
+Every rule cell below carries exactly **one** provenance tag (ADR-009 §0):
+
+- **Executable** — may drive a per-engine verdict: `documented` (quoted from the
+  engine's current primary source), `inherited_protocol` (explicitly inherited
+  from the sitemaps.org baseline in §1–§8), `application_choice` (a named
+  `sitemapr` product decision).
+- **Diagnostic only** — softens/annotates, **never** a verdict: `inferred`,
+  `documentation_gap`, `documentation_conflict`, `advisory`.
+
+A diagnostic-tagged cell MUST NOT produce a hard validity failure under its
+ruleset; at most it yields a softened finding. The baseline protocol checks
+(§1–§8) are the executable substrate: an overlay either inherits a rule
+(`inherited_protocol`), overrides it with the engine's own current rule
+(`documented`), or applies a named product decision (`application_choice`).
+
+**Atomicity (one fact, one tag).** Each provenance cell carries **exactly one**
+tag for **one atomic fact**. A rule that decomposes into several facts (e.g. a
+*documented* fetch-error category plus an *absent* per-status table) is split so
+each fact is stated separately with its own single tag; the enforced/executable
+fact is the cell's tag, and any accompanying gap/deprecation is stated as prose
+context or in the post-table notes, never as a second provenance tag competing in
+the same cell.
+
+**Tester provenance is not `documented`.** ADR-009's source-precedence rule says
+*current* guidance supersedes *historical* guidance; it does **not** say empirical
+tester behavior supersedes current documentation or counts as `documented`
+(`documented` = quoted from primary documentation, and **there is no eighth
+`documented (tester)` tag**). Where the Yandex file-analysis tool is the evidence,
+the atomic claims are tagged thus:
+
+- an officially stated Yandex fact → `documented`;
+- a baseline behavior the tester merely confirms (BOM, raw IRI/IDN, date-only
+  `lastmod`) → `inherited_protocol`;
+- a chosen executable interpretation the probe resolved but the docs do not state
+  atomically (decoded length, whole-URL vs path, treating ~1,024 as operative over
+  the requirements-page 2,048) → **`application_choice`** (the ADR-legal way to make
+  tester-grounded evidence executable);
+- a purely tool-observed, non-normative behavior (the soft raw-byte guard, the
+  ~100 B optional-element guard) → `advisory` (diagnostic, never a hard verdict).
+
+**Source precedence** (ADR-009 §0): current guidance supersedes historical;
+historical values (Bing 2008 10 MB, 2009 XML-only) support only historical
+claims, never a current cell. **`mode`** (strict/non-strict) affects
+presentation, severity, and filtering only — never facts, validity, ruleset
+selection, or scope verdicts (ADR-009 §1).
+
+**Empirical-provenance caveat.** Some Yandex cells are informed by the Yandex
+sitemap file-analysis tool (`https://webmaster.yandex.com/tools/sitemap/`). It is
+an authoritative Yandex surface but **not** guaranteed identical to the production
+crawler, and — per the tester-provenance rule above — it does **not** make a cell
+`documented`. Tool evidence enters the tables only as an `application_choice`
+(executable) or `advisory` (diagnostic), never as a verdict quoted from docs; such
+cells are marked *(tester-grounded)*, and a production-verification backlog exists
+(`SITE-jufaqaql`). Fetch/crawl-time behavior (§12.4, crawl-order effects in §12.7)
+is production-only and is never asserted from the tester. The tool UI needs a login
+and preserves no stable, quotable transcript, so the durable citation is the
+reproducible probe corpus + observations to be recorded in the follow-up references
+slice, not the tool URL alone.
+
+### 12.1 Per-source context and authority
+
+ADR-009 §1 owns these four **per-source** axes; `sitemapr` owns their (extensible)
+value sets:
+
+- **`submission_channel`** — how the artifact was submitted:
+  `search_console_api` | `webmaster_tools` | `user` | `import` | `absent` (a child
+  that inherits no submission facts — see the per-source invariant below).
+  **`discovered` is not a submission value.**
+- **`discovery_provenance`** — how it was found: `organic` |
+  `robots_txt_reference` | `supplied` | `guessed_path` | `index_child` |
+  `archive_derived`. A robots.txt reference *used as cross-site trust* is distinct
+  from robots.txt *discovery*. This set reconciles with the existing source
+  vocabularies in `architecture.md` — `source_sitemap` (`submitted-directly`,
+  `submitted-list`, `guessed-path`, `child-of-index`, `extracted-archive`) and the
+  `sitemap_tree()` `provenance` column (`guessed-path`, `robots`, `seed`,
+  `child-of-index`): `supplied`≈`seed`/`submitted-*`, `robots_txt_reference`≈`robots`,
+  `guessed_path`≈`guessed-path`, `index_child`≈`child-of-index`,
+  `archive_derived`≈`extracted-archive`.
+- **`property_scope`** — the verified property/site a submission is bound to; it
+  does not by itself grant authority beyond that property.
+- **`authority_evidence`** — **structured, never boolean**:
+  `verified_property_set` | `target_host_robots_reference` | `same_location_default`
+  | `absent` | `conflicting`.
+
+**Per-source invariant (ADR-009 §1): a sitemap-index child inherits nothing
+implicitly.** Explicit rules:
+
+- *Scope* — a child's own `<loc>` host+path establishes its scope (§12.2); it is
+  not inherited from the parent index.
+- *Authority* — a child's authority is established **only by that child's own
+  evidence**: its own verified property (`verified_property_set`), its own
+  target-host robots.txt reference (`target_host_robots_reference`), or a
+  same-location default (`same_location_default` — the child's own `<loc>`
+  co-located with the robots.txt that references it). A submitted/verified parent
+  index confers no authority on a child hosted elsewhere.
+- *Conflict* — when a child's evidence is missing or disagrees with the parent's
+  (e.g. different host, no own evidence), that child's `authority_evidence` is
+  `absent` or `conflicting`; report per child via `subject_ref` (§8;
+  `findings-contract.md`), never a single index-wide authority result.
+
+Sources: Google "Submit your sitemap" / "How to cross-submit" / GSC report
+(`https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap`,
+`https://support.google.com/webmasters/answer/7451001`); Bing sitemaps help;
+Yandex "Download the Sitemap".
+
+### 12.2 Three independent scope relations
+
+Three **separate** evaluators and findings — never collapsed into one validity
+result or one "downgrade":
+
+**(a) sitemap → listed page** (`<loc>` scope; baseline
+`PROTOCOL_URL_OUT_OF_SCOPE`, §4/§7):
+
+| ruleset | rule | provenance |
+|---|---|---|
+| `sitemaps.org` | same scheme+host+port, same-or-lower directory (protocol scope; note `sitemapr`'s §4/§7 baseline *mechanics* currently enforce the host + directory dimensions) | `documented` |
+| `google` | same rule, **but** the page-directory restriction is waived when `submission_channel = search_console_api`, **and** the same-host restriction is likewise relaxed for a cross-site page whose host is covered by verified cross-submission (established by (c)) — context-dependent validity rules, not severity downgrades | `documented` |
+| `bing` | inherits the baseline same-host + same-or-lower-directory scope; no modern Bing directory exception is documented (the absence is itself a `documentation_gap`, noted after the table — the *enforced* rule is the inherited one) | `inherited_protocol` |
+| `yandex` | same-domain, exact host match **including scheme and `www`**, descendant-directory page scope; **no ownership exception** | `documented` |
+
+**(b) sitemap index → child sitemap** (index-child scope; index nesting
+forbidden by sitemaps.org, §8):
+
+| ruleset | rule | provenance |
+|---|---|---|
+| `sitemaps.org` | children must be on the **same site** as the index ("can only specify Sitemaps that are found on the same site"). The protocol states **no** directory restriction on the child *files* — the same-or-lower-directory rule applies to URLs *within* a sitemap, not to index children | `documented` |
+| `google` | same-site retained **and** children must be in the **same-or-lower directory** as the index (Google-specific, from large-sitemaps — not baseline); a cross-site child is allowed only when configured cross-submission establishes it | `documented` |
+| `bing` | inherits the baseline same-site rule; modern cross-site child behavior is not documented (a `documentation_gap`, noted after the table — the *enforced* rule is the inherited same-site one) | `inherited_protocol` |
+| `yandex` | same-site children; no ownership exception documented | `documented` |
+
+**(c) authority evidence → represented site** (cross-site authority; structured
+`authority_evidence` from §12.1):
+
+| ruleset | rule | provenance |
+|---|---|---|
+| `sitemaps.org` | cross-submit trust: a sitemap may be hosted on a different host when the **target host's robots.txt** references it (`target_host_robots_reference`) — the protocol's "prove you own the host by pointing `robots.txt` at the Sitemap" mechanism; otherwise a same-location default (`same_location_default`) | `documented` |
+| `google` | verified property (`search_console_api`) **or** an exact target-host robots.txt reference | `documented` |
+| `bing` | submission is for a verified site; the 2008 robots.txt cross-domain trust workflow is **not restated** in current docs — do **not** invent a current exception | `documentation_gap` |
+| `yandex` | submission is bound to the selected verified site; no cross-site ownership exception documented | `documented` |
+
+Page scope (a) and index-child scope (b) can yield **different** verdicts for the
+same file; they stay independent.
+
+**Combining (a) and (c).** The evaluators stay independent in *what they report*,
+but a hard page-scope failure from (a) (`PROTOCOL_URL_OUT_OF_SCOPE`) MUST be
+suppressed to an engine-accepted result when (c) establishes authority for that
+page's host (Google verified cross-submission; an exact target-host robots.txt
+reference; the baseline cross-submit mechanism). Absent authority evidence, (a)'s
+out-of-scope finding stands. This keeps the relations independent while preventing
+a legitimate cross-site GSC (or robots.txt-cross-submitted) sitemap from emitting a
+false hard failure — the authority result governs, it does not merely downgrade
+severity. Sources: sitemaps.org "Sitemap file location";
+Google build-sitemap + large-sitemaps
+(`.../sitemaps/large-sitemaps`); Yandex error-dictionary "Incorrect URL
+(doesn't match the Sitemap file location)".
+
+### 12.3 Supported formats by ruleset
+
+Parse capability is **orthogonal** to engine acceptance (§1): `sitemapr` may
+parse a format an engine does not accept and emit a ruleset finding. States:
+`supported` / `unsupported` / `not_documented`.
+
+| format | `sitemaps.org` | `google` | `bing` | `yandex` |
+|---|---|---|---|---|
+| XML `urlset` / index | supported | supported | supported | supported |
+| Text | supported | supported | supported | **supported** *(tester: clean)* |
+| RSS 2.0 | supported | supported | supported | **unsupported** *(tester: recognised as "Sitemap RSS-file", item links extracted, but standard channel children error — parse-then-reject)* |
+| Atom 1.0 | supported | supported | supported | **unsupported** *(tester: root `<feed>` rejected, 0 links)* |
+| Atom 0.3 | supported | `not_documented` | supported | unsupported |
+| mRSS | — | supported (video) | — | unsupported |
+
+`—` is **not** one of the three states: it means *not applicable* (the format is
+not part of that engine's format list and has no baseline row — e.g. mRSS predates
+neither the sitemaps.org nor the Bing list). **Per-cell provenance:** every
+`supported`/`unsupported` cell is `documented` from the engine's current format
+list, except that the sitemaps.org column and every overlay cell that merely
+repeats it are `inherited_protocol`, and Google **Atom
+0.3 = `not_documented`** (absent from Google's current format list — recorded as
+absent, not asserted unsupported; a one-shot live-submit check is deferred to
+`SITE-jufaqaql`). The Yandex cells are `documented` from its "Formats supported"
+page (XML + TXT supported; RSS/Atom not); the tester only **corroborates** them and
+adds the RSS *parse-then-reject* mechanism detail (`advisory`, tool-observed). Sources: sitemaps.org "Other Sitemap formats"; Google
+build-sitemap; Bing Webmaster sitemaps help; Yandex "Formats supported by
+Yandex" + tester (§12.0 caveat). Bing's 2009 XML-only statement is historical
+(§12.6), not normative.
+
+### 12.4 Sitemap-fetch handling
+
+Sitemap-fetch status is its **own** sparse table — kept separate from the
+robots.txt status policy (robotstxtr / ADR-009) and from ordinary-page status.
+Never reuse either matrix here.
+
+| ruleset | rule | provenance |
+|---|---|---|
+| `yandex` | the sitemap request must return **exactly `200 OK`**; a non-200 is not processed; a redirect is surfaced as a condition to remove (fetch enforcement is production — see `SITE-jufaqaql`) | `documented` |
+| `google` | the sitemap must be fetchable by Googlebot, with documented 4xx / HTTP fetch-error categories | `documented` |
+| `bing` | no published sitemap-specific HTTP-status map | `documentation_gap` |
+| `sitemaps.org` | the protocol page's "HTTP 200" refers to the legacy **ping** acknowledgement, **not** sitemap-file retrieval | `documented` |
+
+Separate atomic facts (not competing tags in the cells above): Google publishes
+**no** exhaustive per-status acceptance table (`documentation_gap` — so do **not**
+synthesise per-code verdicts); and the sitemaps.org anonymous ping is **deprecated**
+(`advisory` — Google 2023, Bing 2022). Do **not** synthesise a per-status
+acceptance table for Google/Bing, and do not
+promote general HTTP/page-indexing status rules into sitemap-fetch behavior.
+Sources: Yandex "File requirements" / "Sitemap isn't processed"; Google GSC
+sitemap fetch errors (`.../answer/7451001`); sitemaps.org "Submitting your
+Sitemap via an HTTP request".
+
+### 12.5 Encoding and URL requirements
+
+Baseline (`inherited_protocol`, §2/§4/§7): UTF-8 file; entity-escape
+`& ' " < >`; URLs URL-escaped, RFC-3986 (URI) / RFC-3987 (IRI); `<loc>` < 2,048
+chars. `google`: UTF-8 + fully-qualified absolute URLs, crawled as listed
+(`documented`). `bing`: full protocol support, no documented encoding/URL
+deviation (`inherited_protocol`; Bing 2025 post).
+
+**Yandex** *(tester-grounded; §12.0 caveat)*:
+
+| aspect | behavior | provenance |
+|---|---|---|
+| URL length (hard) | the error-dictionary documents a hard limit ("URL length exceeds the limit (1024 characters)"); `sitemapr` enforces it as: a `<loc>` whose **percent-decoded** length exceeds ~1,024 chars is rejected. Length is measured on the **decoded whole URL** (a `%`-encoded value that decodes short is accepted; the query string counts; **not** per path-segment) — this decoded/whole-URL reading, and treating 1,024 as operative over the requirements-page 2,048, is the executable interpretation | `application_choice` (resolves the doc conflict; error-dict 1,024 is the `documented` basis) |
+| URL length (soft) | a separate per-tag byte guard, "Data limit exceeded in tag `<loc>`", fires for long **raw** `<loc>` content — the observed WARNING boundary is **~1,200–1,500 raw bytes** (probe: raw 1,500 already warns), i.e. *below* the requirements page's 2,048; surfaced as a warning | `advisory` (tool-observed) |
+| BOM | **optional**: a missing BOM is clean, a UTF-8 BOM is tolerated, and only a **non-UTF-8** leading BOM errors ("Invalid byte sequence in BOM") — agrees with the baseline (§3), no per-engine override | `inherited_protocol` |
+| raw non-ASCII / IRI | raw Cyrillic (path + query), percent-encoded forms, and a **raw IDN host** are all accepted — the baseline RFC-3987 (IRI) allowance, tester-confirmed | `inherited_protocol` |
+
+Notes: the requirements-page "2,048 total = 1,024 domain + 1,024 path" framing is
+**superseded for the hard cap** — the operative hard limit is ~1,024 on the
+**decoded** URL (the error-dictionary figure). The requirements-page 2,048 is *not*
+a clean observed boundary: the soft raw-byte data-guard already warns at
+~1,200–1,500 bytes, so nothing is accepted cleanly up to 2,048. The
+`documentation_conflict` is thereby **resolved empirically**. With a short host the
+whole-URL-vs-path-component distinction is **not separable** in the probe (the two
+predictions coincide), so modelling the hard cap as ~1,024 on the **decoded whole
+URL** is an `application_choice` (the error-dictionary "1,024" is the `documented`
+basis it rests on); it is **not** itself a documented Yandex statement. The **BOM** result **agrees with
+the baseline** and requires **no change to §3**; robots.txt byte behavior is
+**not** imported (ADR-009 non-goal). The **raw-IRI** result is compatible with the
+baseline RFC-3987 allowance and with `sitemapr`'s existing `info`
+`PROTOCOL_URL_NOT_ESCAPED` (§7 item 5, ADR-005) — under the `yandex` ruleset that
+`info` may be relabelled *engine-accepted* rather than flagged. Not constructable
+(note only): a host > 1,024 chars is impossible (DNS caps a hostname at 253), so
+the "1024 domain" bucket cannot be exercised. Sources: Yandex "File
+requirements" + error-dictionary + tester; sitemaps.org "Entity escaping" / "XML
+tag definitions"; Google build-sitemap.
+
+### 12.6 Limits: document-format vs submission/property
+
+**Document-format limits** (file conformance; §2 already carries these):
+
+| bound | value | rulesets | provenance |
+|---|---|---|---|
+| URLs per sitemap | 50,000 | baseline / google / bing / yandex | `documented` / `inherited_protocol` |
+| child sitemaps per index | 50,000 | baseline / google / bing / yandex | `documented` / `inherited_protocol` |
+| uncompressed size | **50 MB** — baseline / Google / Bing state **52,428,800 bytes** (50 MiB); **Yandex** documents "50 MB" without a byte figure | baseline / google / bing / yandex | `documented` |
+| `<loc>` length | baseline < 2,048; **yandex ~1,024 decoded** (§12.5) | — | see §12.5 |
+
+**Submission / property limits** (operational, not file conformance):
+
+| bound | value | ruleset | provenance |
+|---|---|---|---|
+| sitemap-index files per Search Console site | 500 | `google` | `documented` (a **submission** cap, not a file rule) |
+
+**Historical / obsolete** (labeled, non-normative): Bing **2008 10 MB** and
+**2009 XML-only** are superseded by the 2016 announcement + current Bing help;
+they must **not** enter the `bing` ruleset. Parity: 50 MB is **52,428,800 bytes**
+(binary MiB), *not* the round 50,000,000 — `sitemapr` is correct
+(`R/protocol-validate.R:250`); the sitemap-validator fix is tracked under
+`SMV-idhjmljf`. Sources: sitemaps.org (verbatim "50MB (52,428,800 bytes)");
+Google build-sitemap + large-sitemaps; Bing Nov-2016 size announcement + current
+help + Jul-2025 post; Yandex "File requirements".
+
+### 12.7 Metadata semantics by ruleset
+
+Syntax validation stays **separate** from engine use (§4); advisory metadata is
+**never** turned into a validity failure. Per-field states:
+`validated_and_used` | `accepted_advisory` | `accepted_but_ignored` |
+`behavior_undocumented`.
+
+| field | `sitemaps.org` | `google` | `bing` | `yandex` |
+|---|---|---|---|---|
+| `lastmod` | optional | used **only if** consistently accurate | key recrawl signal | accepted; date & datetime; **date-only accepted** (baseline §4; tester-corroborated) |
+| `changefreq` | hint | ignored | ignored | accepted; effect `behavior_undocumented` |
+| `priority` | intra-site hint | ignored | ignored | accepted; **documented to affect crawl load order** (effect production-only) |
+
+Provenance (each cell maps to one of the four states):
+`sitemaps.org` `lastmod`/`changefreq`/`priority` = `accepted_advisory`
+(`inherited_protocol`); Google `changefreq`/`priority` = `accepted_but_ignored`
+(`documented`), `lastmod` conditional-use ≈ `validated_and_used` when accurate
+(`documented`); Bing `changefreq`/`priority` = `accepted_but_ignored`
+(`documented`, 2025 supersedes 2023 "largely disregards"), `lastmod` =
+`validated_and_used` (`documented`); Yandex `lastmod` = `accepted_advisory`
+(accepted date & datetime, `documented`; date-only acceptance is baseline,
+`inherited_protocol`), `priority` crawl-order = `documented` (docs) but
+**production-unverified** (`SITE-jufaqaql`), `changefreq` = `behavior_undocumented`.
+
+**Yandex** (error-dictionary "Warnings"; tester-corroborated): invalid `lastmod` /
+`changefreq` / `priority` (bad format, enum, range, or non-numeric) are **warnings
+and the URL stays a valid link** (`accepted_advisory`, `documented`) — never a hard
+failure; unknown/unexpected tags are ignored with a warning ("Unknown tag X",
+`documented` accept-but-ignore). A generic per-tag byte guard also fires on
+over-long optional elements ("Data limit exceeded in tag X", **~100 bytes** for
+`lastmod`/`changefreq`/`priority`; **~1,200–1,500 raw bytes** for `<loc>`, §12.5),
+surfaced as a warning (`advisory`, tool-observed). Index `lastmod` refers to the child sitemap
+**file**, not its pages (baseline; §4/§8; `inherited_protocol`). Sources: sitemaps.org
+"XML tag definitions"; Google "Additional notes about XML sitemaps"; Bing 2025
+post; Yandex "Formats supported" + "Warnings" + tester.
+
+### 12.8 Findings encoding (model) and non-goals
+
+Per ADR-009 §6, per-engine findings **extend** the shared contract, they do not
+fork it: shared codes for shared semantics, plus **additive** versioned
+`ruleset` / revision / context / provenance fields; new engine-specific codes
+only where a rule is genuinely engine-specific. The existing ten-column result
+(§10; `findings-contract.md`) stays a stable, legacy-compatible contract; the
+per-engine context is additive, never a silent widening of the pinned table.
+
+This section **does not mint new code strings.** Where a per-engine rule implies
+a new code (e.g. a Yandex decoded-length rule distinct from
+`PROTOCOL_URL_TOO_LONG`, or the Yandex per-tag data-guard distinct from
+`PROTOCOL_SIZE_EXCEEDED`), it is described here and the literal code is
+**registered in the findings-registry slice**, not invented in the spec.
+Existing codes (`PROTOCOL_URL_OUT_OF_SCOPE`, `PROTOCOL_URL_TOO_LONG`,
+`PROTOCOL_URL_NOT_ESCAPED`, `PROTOCOL_SIZE_EXCEEDED`, the `PROTOCOL_LASTMOD_*`
+set, `INDEX_CHILD_COUNT_EXCEEDED`, …) are reused where semantics match.
+
+**Non-goals** (ADR-009 §8, restated for the sitemap side): no content/grammar
+validation of robots.txt; no crawler-lifecycle emulation; **Bing** sitemap
+status/cross-site behavior is **not invented** — undocumented Bing cells stay
+`documentation_gap`; general HTTP / page-indexing guidance is **not** promoted
+into sitemap-specific behavior; historical values are labeled, never normative.
