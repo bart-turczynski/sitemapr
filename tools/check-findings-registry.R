@@ -6,14 +6,19 @@
 # finding-code contract, shared with the sibling TypeScript implementation
 # (sitemap-validator). This guard keeps it honest in two ways:
 #
-#   1. WELL-FORMED: unique canonical codes; severity/layer/subject_type/status
-#      drawn from the fixed vocabularies; is_strict_only a logical; reconcile
-#      either blank or "open".
+#   1. WELL-FORMED: unique canonical codes; severity/layer/subject_type/status/
+#      ruleset drawn from the fixed vocabularies; is_strict_only a logical;
+#      reconcile blank/"open"/"done".
 #   2. NO DRIFT: the set of finding-code string literals emitted by R/ must
 #      equal the set of codes marked status == "active" in the registry. A new
 #      code emitted without a registry row (or a row marked active with no
 #      emitter) fails the build. This is the code-enforcement the scattered
-#      string literals otherwise lack.
+#      string literals otherwise lack. Codes belonging to the per-engine ruleset
+#      epic (ADR-009 / sitemap-spec.md §12) are carried status ==
+#      "deferred-ruleset" and are intentionally NOT yet emitted, so the drift
+#      check (active-only) skips them. The additive "ruleset" column marks each
+#      code's applicability: "baseline" (shared, applies under every ruleset by
+#      inheritance) or an engine name for a genuinely engine-specific rule.
 #
 # Run from the package root (as the verify gate and lint.yaml do).
 
@@ -35,7 +40,8 @@ expected_cols <- c(
   "is_strict_only",
   "status",
   "reconcile",
-  "validator_code"
+  "validator_code",
+  "ruleset"
 )
 if (!identical(names(reg), expected_cols)) {
   stop(
@@ -73,7 +79,14 @@ vocab <- list(
     "report",
     "page-url"
   ),
-  status = c("active", "reserved", "deferred-v0.2", "validator-only")
+  status = c(
+    "active",
+    "reserved",
+    "deferred-v0.2",
+    "deferred-ruleset",
+    "validator-only"
+  ),
+  ruleset = c("baseline", "google", "bing", "yandex")
 )
 
 problems <- character(0)
