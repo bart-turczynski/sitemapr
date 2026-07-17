@@ -614,7 +614,8 @@ validate_sitemap_source <- function(
   limits,
   index_limits,
   policy,
-  robots_ua = NULL
+  robots_ua = NULL,
+  ruleset = NULL
 ) {
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
@@ -659,19 +660,25 @@ validate_sitemap_source <- function(
     validate_xml_parts(src, user_agent, limits, index_limits, policy)
   }
 
-  assemble_findings(parts, mode)
+  assemble_findings(parts, mode, ruleset)
 }
 
-# Row-bind already assembled findings contracts from per-source validation.
-combine_findings_contracts <- function(parts) {
+# Row-bind already assembled findings contracts from per-source validation. The
+# per-source contracts are already stamped with the additive columns when an
+# engine `ruleset` is active, so the column set widens to match; the baseline
+# (`ruleset = NULL`) path keeps the pinned ten columns unchanged.
+combine_findings_contracts <- function(parts, ruleset = NULL) {
   parts <- parts[vapply(parts, nrow, integer(1L)) > 0L]
   if (length(parts) == 0L) {
-    return(empty_findings_contract())
+    return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
   }
   findings <- do.call(rbind, parts)
   findings <- findings_dedup(findings)
   findings <- findings_sort(findings)
   cols <- names(empty_findings_contract())
+  if (!is.null(ruleset)) {
+    cols <- c(cols, findings_additive_cols())
+  }
   findings <- findings[, cols, drop = FALSE]
   tibble::new_tibble(findings, nrow = nrow(findings))
 }
@@ -685,7 +692,8 @@ validate_sitemap_batch <- function(
   limits,
   index_limits,
   policy,
-  robots_ua = NULL
+  robots_ua = NULL,
+  ruleset = NULL
 ) {
   parts <- list()
   for (i in seq_len(nrow(sources))) {
@@ -699,18 +707,37 @@ validate_sitemap_batch <- function(
           limits,
           index_limits,
           policy,
-          robots_ua
+          robots_ua,
+          ruleset
         )
       ),
       error = function(cnd) {
         assemble_findings(
           list(validate_failure_finding(source, cnd)),
-          mode
+          mode,
+          ruleset
         )
       }
     )
   }
-  combine_findings_contracts(parts)
+  combine_findings_contracts(parts, ruleset)
+}
+
+# Build the engine-aware ruleset spec threaded through the pipeline to the
+# findings assembler, or NULL for the baseline path. The baseline
+# `"sitemaps.org"` returns NULL so the schema-v1 ten-column contract is emitted
+# unchanged (no additive columns, ADR-009 §5/§6); an engine overlay returns the
+# selected ruleset, its published revision, and the per-source context, stamped
+# by the assembler as the four additive columns.
+findings_ruleset_spec <- function(sitemap_ruleset, context) {
+  if (identical(sitemap_ruleset, "sitemaps.org")) {
+    return(NULL)
+  }
+  list(
+    ruleset = sitemap_ruleset,
+    ruleset_revision = ruleset_revision(sitemap_ruleset),
+    context = context
+  )
 }
 
 #' Validate a sitemap source against the schema, protocol, and classification
@@ -832,6 +859,135 @@ validate_sitemaps <- function(
 ) {
   validate_sitemap(
     x,
+    mode = mode,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits,
+    policy = policy,
+    check_robots = check_robots,
+    robots_user_agent = robots_user_agent
+  )
+}
+
+#' Validate a sitemap under an engine-aware ruleset (ADR-009)
+#'
+#' The versioned, engine-aware entry point parallel to [validate_sitemap()]. It
+#' runs the identical validation pipeline (the XSD schema, protocol/semantic,
+#' byte-level classification, and bounded index-expansion layers), then, when an
+#' engine overlay is selected, augments the findings tibble with the additive
+#' schema-v2 columns (`docs/decisions/ADR-009-per-engine-validation-profiles.md`
+#' §5/§6, `docs/findings-contract.md` "Per-engine ruleset extension").
+#'
+#' Backwards compatibility is preserved by construction (ADR-009 §5): a baseline
+#' call (`sitemap_ruleset = "sitemaps.org"`, the default) returns exactly the
+#' pinned ten-column schema-v1 result, byte-identical to [validate_sitemap()].
+#' The four additive columns appear **only** for an explicit engine overlay
+#' (`"google"` / `"bing"` / `"yandex"`); there is deliberately no `profile=`
+#' argument on [validate_sitemap()] and no silent default switch to an engine.
+#'
+#' This slice fixes the engine-aware carrier and the additive schema; no
+#' per-engine evaluators exist yet, so every finding produced under an overlay
+#' is a reused baseline code and carries `provenance = "inherited_protocol"` (an
+#' ADR-009 §0 executable class). Later slices override the provenance per code.
+#'
+#' @param sitemap_ruleset The engine ruleset to validate under; one of
+#'   [sitemap_rulesets()] (baseline `"sitemaps.org"` first, the default). The
+#'   baseline emits the schema-v1 result; an engine overlay adds the additive
+#'   columns.
+#' @param context A per-source validation context from [ruleset_context()] (the
+#'   four independent ADR-009 §1 axes). Carried into the `context` list-column
+#'   of the additive result. Ignored on the baseline path (which emits no
+#'   additive columns).
+#' @inheritParams validate_sitemap
+#' @return The findings tibble of [validate_sitemap()]. Under the baseline
+#'   `sitemap_ruleset` it is exactly the pinned ten columns; under an engine
+#'   overlay it additionally carries `ruleset` (character), `ruleset_revision`
+#'   (character), `context` (a list-column of the context object as a named
+#'   list), and `provenance` (character, per finding), appended in that order
+#'   after the ten pinned columns. The same source, mode, ruleset, and context
+#'   yield a row-for-row identical tibble across calls.
+#' @seealso [validate_sitemap()] for the baseline entry point,
+#'   [sitemap_rulesets()] for the ruleset value set, and [ruleset_context()] for
+#'   the per-source context axes.
+#' @export
+#' @examples
+#' xml <- paste0(
+#'   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+#'   '<url><loc>https://example.com/</loc></url>',
+#'   '</urlset>'
+#' )
+#' path <- tempfile(fileext = ".xml")
+#' writeLines(xml, path)
+#'
+#' # Baseline: identical to validate_sitemap().
+#' validate_sitemap_ruleset(path, "sitemaps.org")
+#'
+#' # Engine overlay: adds the additive schema-v2 columns.
+#' validate_sitemap_ruleset(path, "google")
+validate_sitemap_ruleset <- function(
+  x,
+  sitemap_ruleset = sitemap_rulesets(),
+  context = ruleset_context(),
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL,
+  policy = request_policy(),
+  check_robots = FALSE,
+  robots_user_agent = "*"
+) {
+  sitemap_ruleset <- match.arg(sitemap_ruleset, sitemap_rulesets())
+  mode <- match.arg(mode)
+  sources <- sitemap_public_source_records(x)
+  if (is.null(index_limits)) {
+    index_limits <- index_limits()
+  }
+  robots_ua <- resolve_robots_ua(check_robots, robots_user_agent)
+  ruleset <- findings_ruleset_spec(sitemap_ruleset, context)
+
+  if (length(x) == 1L) {
+    validate_sitemap_source(
+      sources[1L, , drop = FALSE],
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      robots_ua = robots_ua,
+      ruleset = ruleset
+    )
+  } else {
+    validate_sitemap_batch(
+      sources,
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      robots_ua = robots_ua,
+      ruleset = ruleset
+    )
+  }
+}
+
+#' @rdname validate_sitemap_ruleset
+#' @export
+validate_sitemaps_ruleset <- function(
+  x,
+  sitemap_ruleset = sitemap_rulesets(),
+  context = ruleset_context(),
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL,
+  policy = request_policy(),
+  check_robots = FALSE,
+  robots_user_agent = "*"
+) {
+  validate_sitemap_ruleset(
+    x,
+    sitemap_ruleset = sitemap_ruleset,
+    context = context,
     mode = mode,
     user_agent = user_agent,
     limits = limits,
