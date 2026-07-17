@@ -53,7 +53,7 @@ check_sitemap_ruleset <- function(ruleset) {
 # Published revision string per ruleset (ADR-009 §1/§7) for cross-repo pinning.
 # One documented constant map is the single source of truth. All four rulesets
 # were published together by ADR-009 / sitemap-spec §12 (2026-07-16); they
-# share that date-stamped revision until an overlay's rules change independently.
+# share that date-stamped revision until an overlay's own rules change.
 ruleset_revisions <- function() {
   c(
     "sitemaps.org" = "2026-07-16",
