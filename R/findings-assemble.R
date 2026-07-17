@@ -137,26 +137,80 @@ findings_default_provenance <- function() {
 # (tool-observed) verdict yandex alone emits. §12.3 yandex sitemap-format
 # acceptance (`ENGINE_UNSUPPORTED_SITEMAP_FORMAT`): a `documented` verdict
 # yandex alone emits (its rejected-format list is documented; the
-# parse-then-reject mechanism is a message detail, not the provenance). Later
-# slices extend this map.
+# parse-then-reject mechanism is a message detail, not the provenance). §12.6
+# inherited file-limit rules (`PROTOCOL_URL_COUNT_EXCEEDED`,
+# `INDEX_CHILD_COUNT_EXCEEDED`, `PROTOCOL_SIZE_EXCEEDED`): all three engines
+# independently document the 50,000-URL / 50 MB caps, so `documented` under
+# each. §12.5 yandex raw-IRI acceptance (`PROTOCOL_URL_NOT_ESCAPED`): an
+# explicit `inherited_protocol` record (equals the default, changes nothing)
+# that a raw-IRI `<loc>` is engine-accepted under the RFC-3987 baseline. §12.7
+# yandex metadata-acceptance rules (`PROTOCOL_LASTMOD_INVALID`,
+# `PROTOCOL_CHANGEFREQ_INVALID`, `PROTOCOL_PRIORITY_OUT_OF_RANGE`): `documented`
+# (Yandex's error dictionary lists these accepted_advisory cases as Warnings).
+# Later slices extend this map.
 findings_provenance_overrides <- function() {
   list(
     google = c(
       PROTOCOL_URL_OUT_OF_SCOPE = "documented",
-      INDEX_CHILD_OUT_OF_SCOPE = "documented"
+      INDEX_CHILD_OUT_OF_SCOPE = "documented",
+      PROTOCOL_URL_COUNT_EXCEEDED = "documented",
+      INDEX_CHILD_COUNT_EXCEEDED = "documented",
+      PROTOCOL_SIZE_EXCEEDED = "documented"
     ),
     bing = c(
       PROTOCOL_URL_OUT_OF_SCOPE = "inherited_protocol",
-      INDEX_CHILD_OUT_OF_SCOPE = "inherited_protocol"
+      INDEX_CHILD_OUT_OF_SCOPE = "inherited_protocol",
+      PROTOCOL_URL_COUNT_EXCEEDED = "documented",
+      INDEX_CHILD_COUNT_EXCEEDED = "documented",
+      PROTOCOL_SIZE_EXCEEDED = "documented"
     ),
     yandex = c(
       PROTOCOL_URL_OUT_OF_SCOPE = "documented",
       INDEX_CHILD_OUT_OF_SCOPE = "documented",
       PROTOCOL_URL_DECODED_TOO_LONG = "application_choice",
       PROTOCOL_TAG_DATA_LIMIT_EXCEEDED = "advisory",
-      ENGINE_UNSUPPORTED_SITEMAP_FORMAT = "documented"
+      ENGINE_UNSUPPORTED_SITEMAP_FORMAT = "documented",
+      PROTOCOL_URL_COUNT_EXCEEDED = "documented",
+      INDEX_CHILD_COUNT_EXCEEDED = "documented",
+      PROTOCOL_SIZE_EXCEEDED = "documented",
+      # spec 12.5: a raw-IRI <loc> is engine-accepted under the RFC-3987
+      # baseline; this explicit inherited_protocol entry equals the default
+      # and is an auditable record only -- it changes no behavior.
+      PROTOCOL_URL_NOT_ESCAPED = "inherited_protocol",
+      PROTOCOL_LASTMOD_INVALID = "documented",
+      PROTOCOL_CHANGEFREQ_INVALID = "documented",
+      PROTOCOL_PRIORITY_OUT_OF_RANGE = "documented"
     )
   )
+}
+
+# Per-(ruleset, code) severity relabels for the spec-12.7 metadata-acceptance
+# rules. A finding keeps its emitted severity unless an entry here overrides it
+# under the given ruleset. Under yandex an invalid lastmod / changefreq /
+# priority is surfaced as a warning with the URL still valid (accepted_advisory,
+# spec 12.7) rather than the baseline error -- never a hard failure. Later
+# slices may extend this map.
+findings_severity_overrides <- function() {
+  list(
+    yandex = c(
+      PROTOCOL_LASTMOD_INVALID = "warning",
+      PROTOCOL_CHANGEFREQ_INVALID = "warning",
+      PROTOCOL_PRIORITY_OUT_OF_RANGE = "warning"
+    )
+  )
+}
+
+# Resolve the per-finding severity vector for a code vector under a ruleset,
+# applying findings_severity_overrides() over each finding's emitted severity.
+findings_severity_for <- function(code, ruleset, severity) {
+  ov <- findings_severity_overrides()[[ruleset]]
+  if (is.null(ov)) {
+    return(severity)
+  }
+  hit <- match(code, names(ov))
+  matched <- !is.na(hit)
+  severity[matched] <- unname(ov[hit[matched]])
+  severity
 }
 
 # Resolve the per-finding provenance vector for a code vector under a ruleset,
@@ -189,6 +243,12 @@ findings_stamp_ruleset <- function(findings, ruleset) {
   findings$ruleset_revision <- rep(ruleset$ruleset_revision, n)
   findings$context <- rep(list(unclass(ruleset$context)), n)
   findings$provenance <- findings_provenance_for(findings$code, ruleset$ruleset)
+  findings$severity <- findings_severity_for(
+    findings$code,
+    ruleset$ruleset,
+    findings$severity
+  )
+  findings <- findings_sort(findings)
   tibble::new_tibble(findings, nrow = n)
 }
 
