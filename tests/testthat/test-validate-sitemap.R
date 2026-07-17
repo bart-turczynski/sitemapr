@@ -77,13 +77,17 @@ test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
 
 # Serve an index whose single child <loc> is fetched offline and its body
 # supplied by the test; returns the mock function.
-vs_feed_index_mock <- function(child_body,
-                               child = "https://example.com/feed.xml") {
+vs_feed_index_mock <- function(
+  child_body,
+  child = "https://example.com/feed.xml"
+) {
   root <- "https://example.com/sitemap.xml"
   index_body <- paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-    "  <sitemap><loc>", child, "</loc></sitemap>\n",
+    "  <sitemap><loc>",
+    child,
+    "</loc></sitemap>\n",
     "</sitemapindex>\n"
   )
   map <- list()
@@ -719,4 +723,89 @@ test_that("validate_sitemap threads the policy to root and index children", {
 
   expect_true(root %in% sink$urls)
   expect_true(child %in% sink$urls)
+})
+
+# ---- engine-aware entry point (ADR-009 §5/§6) --------------------------------
+
+# The four additive schema-v2 columns, in order, appended after contract_cols.
+ruleset_additive_cols <- c(
+  "ruleset",
+  "ruleset_revision",
+  "context",
+  "provenance"
+)
+
+test_that("the baseline ruleset returns the exact 10-column schema v1", {
+  out <- validate_sitemap_ruleset(
+    fixture("urlset-duplicate-loc.xml"),
+    "sitemaps.org"
+  )
+  expect_named(out, contract_cols)
+})
+
+test_that("the baseline ruleset matches validate_sitemap() byte-for-byte", {
+  base <- validate_sitemap(fixture("urlset-duplicate-loc.xml"))
+  ruleset <- validate_sitemap_ruleset(
+    fixture("urlset-duplicate-loc.xml"),
+    "sitemaps.org"
+  )
+  expect_identical(ruleset, base)
+})
+
+test_that("an engine ruleset appends the four additive columns", {
+  out <- validate_sitemap_ruleset(
+    fixture("urlset-duplicate-loc.xml"),
+    "google"
+  )
+  expect_named(out, c(contract_cols, ruleset_additive_cols))
+  expect_gt(nrow(out), 0L)
+  expect_true(all(out$ruleset == "google"))
+  expect_true(all(out$ruleset_revision == ruleset_revision("google")))
+  expect_true(all(out$provenance == "inherited_protocol"))
+})
+
+test_that("the additive context column is a named-list list-column", {
+  out <- validate_sitemap_ruleset(
+    fixture("urlset-duplicate-loc.xml"),
+    "google",
+    context = ruleset_context(submission_channel = "search_console_api")
+  )
+  expect_type(out$context, "list")
+  ctx <- out$context[[1L]]
+  expect_identical(
+    names(ctx),
+    c(
+      "submission_channel",
+      "discovery_provenance",
+      "property_scope",
+      "authority_evidence"
+    )
+  )
+  expect_identical(ctx$submission_channel, "search_console_api")
+})
+
+test_that("an engine ruleset with no findings keeps the 14-column schema", {
+  out <- validate_sitemap_ruleset(fixture("valid-minimal.xml"), "bing")
+  expect_named(out, c(contract_cols, ruleset_additive_cols))
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("validation is deterministic on the engine path", {
+  a <- validate_sitemap_ruleset(fixture("urlset-duplicate-loc.xml"), "yandex")
+  b <- validate_sitemap_ruleset(fixture("urlset-duplicate-loc.xml"), "yandex")
+  expect_identical(a, b)
+})
+
+test_that("the batch ruleset wrapper stamps the additive columns", {
+  out <- validate_sitemaps_ruleset(
+    c(
+      fixture("urlset-duplicate-loc.xml"),
+      fixture("priority-out-of-range.xml")
+    ),
+    "google"
+  )
+  expect_named(out, c(contract_cols, ruleset_additive_cols))
+  expect_true(all(out$ruleset == "google"))
+  expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
+  expect_true("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% out$code)
 })

@@ -105,6 +105,45 @@ findings_dedup <- function(findings) {
   findings[!duplicated(key), , drop = FALSE]
 }
 
+# The four additive schema-v2 columns (findings-contract.md "Additive
+# output-tibble fields (schema v2)"), appended AFTER the ten pinned columns in
+# this order. They appear ONLY under an engine overlay; the baseline path never
+# sees them, so the schema-v1 ten-column contract holds byte-for-byte.
+findings_additive_cols <- function() {
+  c("ruleset", "ruleset_revision", "context", "provenance")
+}
+
+# The single default provenance for a finding produced under an engine overlay
+# in this slice. No per-engine evaluators exist yet, so every finding is a
+# reused baseline code explicitly inherited from the sitemaps.org baseline (an
+# ADR-009 §0 executable class; findings-contract.md "Provenance vocabulary").
+# Later slices override this per code where an engine evaluator produces a
+# genuinely engine-specific verdict; keeping it a single named default is the
+# hook they extend.
+findings_default_provenance <- function() {
+  "inherited_protocol"
+}
+
+# Stamp the additive engine-aware columns onto an assembled findings tibble.
+# `ruleset` is a ruleset spec (a list of `ruleset`, `ruleset_revision`,
+# `context`) or NULL for the baseline path. When NULL the tibble is returned
+# UNCHANGED so the schema-v1 contract is byte-identical. When non-NULL the four
+# columns are appended per row: the `ruleset` / `ruleset_revision` scalars, a
+# `context` list-column carrying the context object as a plain named list, and
+# the per-finding `provenance` default. The context list keeps the constructor's
+# fixed axis order, so the list-column is built deterministically.
+findings_stamp_ruleset <- function(findings, ruleset) {
+  if (is.null(ruleset)) {
+    return(findings)
+  }
+  n <- nrow(findings)
+  findings$ruleset <- rep(ruleset$ruleset, n)
+  findings$ruleset_revision <- rep(ruleset$ruleset_revision, n)
+  findings$context <- rep(list(unclass(ruleset$context)), n)
+  findings$provenance <- rep(findings_default_provenance(), n)
+  tibble::new_tibble(findings, nrow = n)
+}
+
 # Sort into the contract's stable order: layer (per the layer vocabulary, not
 # alphabetical), then severity descending (fatal first), then subject_ref
 # lexicographically, then code. Layer and severity ranks are fixed factor
@@ -137,16 +176,21 @@ findings_sort <- function(findings) {
 #'   `is_strict_only == TRUE` are dropped and schema violations are downgraded
 #'   to `warning`; in `strict`, the two documented info->warning codes are
 #'   elevated.
+#' @param ruleset A ruleset spec (a list of `ruleset`, `ruleset_revision`,
+#'   `context`) for the engine-aware surface, or `NULL` (the default, baseline
+#'   path). When `NULL` the ten-column contract is emitted UNCHANGED; when
+#'   non-`NULL` the four additive schema-v2 columns are appended (ADR-009 §6).
 #' @return The 10-column contract tibble (`code, severity, layer, subject_type,
 #'   subject_ref, message, evidence, mode, is_strict_only, remediation_hint`),
-#'   in the contract's stable order. Same `parts` + `mode` yields a row-for-row
-#'   identical tibble across calls.
+#'   in the contract's stable order — plus the four additive columns when
+#'   `ruleset` is non-`NULL`. Same `parts` + `mode` (+ `ruleset`) yields a
+#'   row-for-row identical tibble across calls.
 #' @keywords internal
 #' @noRd
-assemble_findings <- function(parts, mode) {
+assemble_findings <- function(parts, mode, ruleset = NULL) {
   parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
   if (length(parts) == 0L) {
-    return(empty_findings_contract())
+    return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
   }
 
   findings <- do.call(rbind, parts)
@@ -155,7 +199,7 @@ assemble_findings <- function(parts, mode) {
   findings$remediation_hint <- rep(NA_character_, nrow(findings))
 
   if (nrow(findings) == 0L) {
-    return(empty_findings_contract())
+    return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
   }
 
   findings <- findings_dedup(findings)
@@ -163,5 +207,8 @@ assemble_findings <- function(parts, mode) {
 
   cols <- names(empty_findings_contract())
   findings <- findings[, cols, drop = FALSE]
-  tibble::new_tibble(findings, nrow = nrow(findings))
+  findings_stamp_ruleset(
+    tibble::new_tibble(findings, nrow = nrow(findings)),
+    ruleset
+  )
 }
