@@ -156,3 +156,52 @@ test_that("ruleset_context_for_child() is built only from its own evidence", {
   # through it.
   expect_false("parent" %in% names(formals(ruleset_context_for_child)))
 })
+
+test_that("gsc_submission() yields the exact GSC-submission bundle", {
+  ctx <- gsc_submission("https://example.com/")
+
+  # Strongest check: the preset yields exactly the context S5 verified drives
+  # cross-host acceptance.
+  expect_identical(
+    ctx,
+    ruleset_context(
+      submission_channel = "search_console_api",
+      authority_evidence = "verified_property_set",
+      property_scope = "https://example.com/"
+    )
+  )
+  expect_s3_class(ctx, "sitemapr_ruleset_context")
+  expect_identical(ctx$submission_channel, "search_console_api")
+  expect_identical(ctx$discovery_provenance, "organic")
+  expect_identical(ctx$property_scope, "https://example.com/")
+  expect_identical(ctx$authority_evidence, "verified_property_set")
+})
+
+test_that("robots_cross_submission() sets both authority and discovery", {
+  ctx <- robots_cross_submission()
+
+  expect_identical(
+    ctx,
+    ruleset_context(
+      authority_evidence = "target_host_robots_reference",
+      discovery_provenance = "robots_txt_reference"
+    )
+  )
+  expect_identical(ctx$authority_evidence, "target_host_robots_reference")
+  expect_identical(ctx$discovery_provenance, "robots_txt_reference")
+  # robots.txt reference authority is blanket, not property-bound (S5).
+  expect_true(is.na(ctx$property_scope))
+})
+
+test_that("preset axes stay independently overridable via ruleset_context()", {
+  # The preset is not the only way to reach these axes; a caller can still set
+  # them directly, and a partial context differs from the full bundle.
+  expect_false(identical(
+    ruleset_context(submission_channel = "search_console_api"),
+    gsc_submission("https://example.com/")
+  ))
+})
+
+test_that("gsc_submission() requires the property argument", {
+  expect_error(gsc_submission())
+})

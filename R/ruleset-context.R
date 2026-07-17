@@ -245,3 +245,54 @@ ruleset_context_for_child <- function(
     authority_evidence = authority_evidence
   )
 }
+
+#' Search Console submission context preset (ADR-009 spec 12.1)
+#'
+#' A construction-time preset for a Google Search Console submission. It bundles
+#' the three per-source axes a GSC submission implies into one coherent context
+#' so a caller need not hand-set each one: `submission_channel =
+#' "search_console_api"`, `authority_evidence = "verified_property_set"`, and
+#' the verified `property_scope` the submission is bound to. It is a thin
+#' wrapper over [ruleset_context()]; every axis stays independently overridable
+#' by calling [ruleset_context()] directly.
+#'
+#' @param property The verified property/site URL the submission is bound to.
+#'   Required: it is the irreducible input and cannot be inferred. Its shape is
+#'   validated by [ruleset_context()].
+#' @return An object of class `sitemapr_ruleset_context`, the same shape
+#'   [ruleset_context()] returns.
+#' @seealso [ruleset_context()] for the general constructor and its axes.
+#' @export
+#' @examples
+#' gsc_submission("https://example.com/")
+gsc_submission <- function(property) {
+  ruleset_context(
+    submission_channel = "search_console_api",
+    authority_evidence = "verified_property_set",
+    property_scope = property
+  )
+}
+
+#' Cross-host robots.txt submission context preset (ADR-009 spec 12.1)
+#'
+#' A construction-time preset for a sitemap found via, and trusted via, a target
+#' host's `robots.txt`. It bundles both senses into one coherent context: the
+#' trust (authority) sense on `authority_evidence =
+#' "target_host_robots_reference"` and the discovery sense on
+#' `discovery_provenance = "robots_txt_reference"`, keeping the two distinct. No
+#' `property_scope` is set: robots.txt reference authority is blanket, not
+#' property-bound. It is a thin wrapper over [ruleset_context()]; every axis
+#' stays independently overridable by calling [ruleset_context()] directly.
+#'
+#' @return An object of class `sitemapr_ruleset_context`, the same shape
+#'   [ruleset_context()] returns.
+#' @seealso [ruleset_context()] for the general constructor and its axes.
+#' @export
+#' @examples
+#' robots_cross_submission()
+robots_cross_submission <- function() {
+  ruleset_context(
+    authority_evidence = "target_host_robots_reference",
+    discovery_provenance = "robots_txt_reference"
+  )
+}
