@@ -134,7 +134,11 @@ findings_default_provenance <- function() {
 # (`PROTOCOL_URL_DECODED_TOO_LONG`): an `application_choice` verdict yandex
 # alone emits (google/bing do not, so no entry there). §12.5/§12.7 yandex
 # per-tag data-limit guard (`PROTOCOL_TAG_DATA_LIMIT_EXCEEDED`): an `advisory`
-# (tool-observed) verdict yandex alone emits. Later slices extend this map.
+# (tool-observed) verdict yandex alone emits. §12.3 yandex sitemap-format
+# acceptance (`ENGINE_UNSUPPORTED_SITEMAP_FORMAT`): a `documented` verdict
+# yandex alone emits (its rejected-format list is documented; the
+# parse-then-reject mechanism is a message detail, not the provenance). Later
+# slices extend this map.
 findings_provenance_overrides <- function() {
   list(
     google = c(
@@ -149,7 +153,8 @@ findings_provenance_overrides <- function() {
       PROTOCOL_URL_OUT_OF_SCOPE = "documented",
       INDEX_CHILD_OUT_OF_SCOPE = "documented",
       PROTOCOL_URL_DECODED_TOO_LONG = "application_choice",
-      PROTOCOL_TAG_DATA_LIMIT_EXCEEDED = "advisory"
+      PROTOCOL_TAG_DATA_LIMIT_EXCEEDED = "advisory",
+      ENGINE_UNSUPPORTED_SITEMAP_FORMAT = "documented"
     )
   )
 }

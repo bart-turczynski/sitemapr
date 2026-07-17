@@ -356,15 +356,18 @@ validate_feed_parts <- function(
     ))
   }
   append_robots_part(
-    list(validate_protocol(
-      parsed$rows,
-      sitemap_url = src$final_url,
-      subject_ref = src$base,
-      byte_size = src$byte_size,
-      fetched_at = src$fetched_at,
-      source_meta = NULL,
-      ruleset = ruleset
-    )),
+    list(
+      validate_engine_format(parsed$variant, src$base, ruleset),
+      validate_protocol(
+        parsed$rows,
+        sitemap_url = src$final_url,
+        subject_ref = src$base,
+        byte_size = src$byte_size,
+        fetched_at = src$fetched_at,
+        source_meta = NULL,
+        ruleset = ruleset
+      )
+    ),
     parsed$rows$loc,
     src$robots_ua,
     src$base

@@ -209,6 +209,67 @@ classification_feed_findings <- function(meta, base) {
   do.call(rbind, rows)
 }
 
+# Whether the selected engine ruleset accepts a parsed feed dialect as a
+# sitemap. Parse capability is orthogonal to engine acceptance: sitemapr can
+# parse RSS 2.0 / Atom 1.0 / Atom 0.3, but a given engine may reject some of
+# them (spec 12.3). `variant` is the parsed dialect
+# ("rss2.0"/"atom1.0"/"atom0.3"); `ruleset` is the ruleset spec (engine name in
+# `ruleset$ruleset`) or NULL. Returns "supported", "unsupported", or
+# "not_documented". The baseline (NULL or "sitemaps.org") and any unknown
+# engine default to "supported", so we never invent a rejection. The per-engine
+# lookups are small named vectors to keep the control flow flat and
+# lint-friendly (no long boolean chains).
+engine_format_support <- function(variant, ruleset) {
+  engine <- if (is.null(ruleset)) "sitemaps.org" else ruleset$ruleset
+  yandex <- c(
+    rss2.0 = "unsupported",
+    atom1.0 = "unsupported",
+    atom0.3 = "unsupported"
+  )
+  google <- c(
+    rss2.0 = "supported",
+    atom1.0 = "supported",
+    atom0.3 = "not_documented"
+  )
+  lookup <- function(tbl, default) {
+    hit <- unname(tbl[variant])
+    if (is.na(hit)) default else hit
+  }
+  switch(
+    engine,
+    yandex = lookup(yandex, "unsupported"),
+    google = lookup(google, "supported"),
+    bing = "supported",
+    "supported"
+  )
+}
+
+# Producer for the engine-format-acceptance diagnostic (spec 12.3). When the
+# top-level source was parsed as a feed dialect the selected engine does not
+# accept, emit one source-level `ENGINE_UNSUPPORTED_SITEMAP_FORMAT`. A NULL /
+# baseline ruleset, a "supported" dialect, and a "not_documented" one all yield
+# nothing, so the baseline path stays byte-identical. Returns a (possibly
+# empty) classification-findings tibble.
+validate_engine_format <- function(variant, base, ruleset) {
+  support <- engine_format_support(variant, ruleset)
+  if (!identical(support, "unsupported")) {
+    return(empty_classification_findings())
+  }
+  classification_source_finding(
+    "ENGINE_UNSUPPORTED_SITEMAP_FORMAT",
+    base,
+    sprintf(
+      paste0(
+        "Sitemap format '%s' is parsed by sitemapr but not accepted by the ",
+        "%s ruleset (spec 12.3)."
+      ),
+      variant,
+      ruleset$ruleset
+    ),
+    excerpt = variant
+  )
+}
+
 # Unsupported-input diagnostics from `source_meta`: HTML masquerade, an
 # unsupported root element, and RSS/Atom feed children of a sitemap index.
 # `NULL` meta (or all-default fields) yields no findings. Returns a (possibly

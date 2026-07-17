@@ -293,6 +293,13 @@ test_that("yandex per-tag data limit is an advisory", {
   )
 })
 
+test_that("yandex sitemap-format acceptance is documented", {
+  expect_identical(
+    findings_provenance_for("ENGINE_UNSUPPORTED_SITEMAP_FORMAT", "yandex"),
+    "documented"
+  )
+})
+
 test_that("findings_provenance_for defaults unknown codes to inherited", {
   expect_identical(
     findings_provenance_for("PROTOCOL_URL_FRAGMENT", "google"),
