@@ -143,6 +143,48 @@ test_that("scope is not checked when the sitemap URL is unknown", {
   expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% cc)
 })
 
+test_that("google + search_console_api waives the directory restriction", {
+  out <- validate_protocol(
+    rows_for("https://example.com/page"),
+    sitemap_url = "https://example.com/deep/sitemap.xml",
+    ruleset = findings_ruleset_spec(
+      "google",
+      ruleset_context(submission_channel = "search_console_api")
+    )
+  )
+  expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("google + search_console_api keeps the same-host restriction", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "google",
+      ruleset_context(submission_channel = "search_console_api")
+    )
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("google without the API channel does not waive the directory", {
+  out <- validate_protocol(
+    rows_for("https://example.com/page"),
+    sitemap_url = "https://example.com/deep/sitemap.xml",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("yandex keeps the baseline same-or-lower directory mechanics", {
+  out <- validate_protocol(
+    rows_for("https://example.com/page"),
+    sitemap_url = "https://example.com/deep/sitemap.xml",
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
 # --- Duplicate / equivalent detection (ADR-005 two-tier) -------------------
 
 test_that("two byte-identical locs produce a warning PROTOCOL_DUPLICATE_LOC", {
@@ -797,14 +839,17 @@ test_that("hreflang evidence preserves the original off-case value", {
   expect_identical(case$evidence[[1]]$excerpt, "en-us")
 })
 
-test_that(paste0(
-  "off-case hreflang is only info (BCP 47: tags are ",
-  "case-insensitive)"
-), {
-  out <- validate_hreflang(rows_with_alts(list(alt("en-us"))), base)
-  case <- out[out$code == "HREFLANG_NONSTANDARD_CASE", ]
-  expect_identical(case$severity, "info")
-})
+test_that(
+  paste0(
+    "off-case hreflang is only info (BCP 47: tags are ",
+    "case-insensitive)"
+  ),
+  {
+    out <- validate_hreflang(rows_with_alts(list(alt("en-us"))), base)
+    case <- out[out$code == "HREFLANG_NONSTANDARD_CASE", ]
+    expect_identical(case$severity, "info")
+  }
+)
 
 test_that("rows without alternates produce no hreflang findings", {
   out <- validate_hreflang(
