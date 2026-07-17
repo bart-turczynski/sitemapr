@@ -1571,24 +1571,75 @@ loc_scope_engine <- function(ruleset) {
   if (is.null(ruleset)) "sitemaps.org" else ruleset$ruleset
 }
 
-# Per-ruleset (a) sitemap -> listed-page scope evaluator (sitemap-spec §12.2a).
-# Marks each in-range absolute <loc> that is out of the sitemap's page scope.
-# Baseline / bing / yandex enforce the same mechanics: same authority
-# (scheme+host+port) AND same-or-lower directory. google waives the directory
-# dimension when the source was submitted via the Search Console API; the
-# same-host restriction is kept here (the cross-host relaxation from verified
-# cross-submission is scope relation (c), a later slice).
+# (c) authority-evidence evaluator (sitemap-spec §12.2c): does the source's
+# structured authority_evidence establish cross-site page authority under this
+# ruleset? Per-source. google accepts a Search-Console-verified property or an
+# exact target-host robots.txt reference; bing NEVER establishes a current
+# cross-site exception (the 2008 robots.txt cross-domain workflow is a
+# documentation_gap - not restated, so not invented); yandex documents none.
+# The sitemaps.org cross-submit branch is documented but dormant: the baseline
+# entry point resolves to a NULL spec that threads no context.
+loc_authority_established <- function(ruleset) {
+  if (is.null(ruleset)) {
+    return(FALSE)
+  }
+  ev <- ruleset$context$authority_evidence
+  switch(
+    ruleset$ruleset,
+    google = (identical(
+      ruleset$context$submission_channel,
+      "search_console_api"
+    ) &&
+      identical(ev, "verified_property_set")) ||
+      identical(ev, "target_host_robots_reference"),
+    sitemaps.org = ev %in%
+      c("target_host_robots_reference", "same_location_default"),
+    FALSE
+  )
+}
+
+# Does established (c) authority cover each page's host (the §12.2c combining
+# rule)? verified_property_set covers only pages whose authority equals the
+# bound property's authority (context$property_scope); a target-host robots.txt
+# reference / the baseline cross-submit mechanism cover the cross-submitted
+# host. Returns a per-page logical vector aligned with `page_authority`.
+loc_authority_covers <- function(ruleset, page_authority) {
+  n <- length(page_authority)
+  if (!loc_authority_established(ruleset)) {
+    return(rep(FALSE, n))
+  }
+  ev <- ruleset$context$authority_evidence
+  if (identical(ev, "verified_property_set")) {
+    scope <- ruleset$context$property_scope
+    if (is.na(scope)) {
+      return(rep(FALSE, n))
+    }
+    return(page_authority == loc_authority(parse_url_adapter(scope)))
+  }
+  rep(TRUE, n)
+}
+
+# Per-ruleset (a) sitemap -> listed-page scope evaluator (sitemap-spec §12.2a)
+# with the (a)+(c) combining rule (§12.2c). Baseline / bing / yandex enforce the
+# same mechanics: same authority (scheme+host+port) AND same-or-lower directory.
+# google waives the directory dimension under the Search Console API. The (c)
+# authority result then GOVERNS: a hard out-of-scope is suppressed to
+# engine-accepted for any page whose host is covered by established authority
+# (verified cross-submission or an exact target-host robots.txt reference);
+# absent authority evidence, the out-of-scope finding stands.
 loc_out_of_scope <- function(parsed, path, applies, self, ruleset) {
   out <- rep(FALSE, length(path))
   if (is.na(self$authority)) {
     return(out)
   }
-  host_ok <- loc_authority(parsed) == self$authority
+  auth <- loc_authority(parsed)
+  host_ok <- auth == self$authority
   dir_ok <- startsWith(path, self$directory)
   waive_dir <- identical(loc_scope_engine(ruleset), "google") &&
     identical(ruleset$context$submission_channel, "search_console_api")
   in_scope <- if (waive_dir) host_ok else host_ok & dir_ok
-  applies & !(!is.na(in_scope) & in_scope)
+  oos <- applies & !(!is.na(in_scope) & in_scope)
+  oos & !loc_authority_covers(ruleset, auth)
 }
 
 loc_rule_flags <- function(loc, absolute, parsed, sitemap_url, ruleset = NULL) {
