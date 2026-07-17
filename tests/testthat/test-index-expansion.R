@@ -466,3 +466,66 @@ test_that("stream_emit_leaf wraps a callback error with leaf context", {
   expect_identical(cnd$leaf, "https://example.com/leaf.xml")
   expect_identical(conditionMessage(cnd$parent), "kaboom")
 })
+
+# --- (b) index-child scope (§12.2b) ---
+#
+# The (b) index-child scope axis (§12.2b) is a SEPARATE scope relation from the
+# (a) page-scope axis. Pure evaluators, tested directly (no network): baseline /
+# bing / yandex require the child on the same site as the index; google adds the
+# same-or-lower-directory dimension. Emitted only under an engine overlay.
+
+idx_deep <- "https://example.com/deep/sitemap-index.xml"
+idx_base <- "sitemap://example.com/deep/sitemap-index.xml"
+
+test_that("index_child_out_of_scope flags a cross-site child (google)", {
+  google_spec <- findings_ruleset_spec("google", ruleset_context())
+  oos <- index_child_out_of_scope(
+    idx_deep,
+    c("https://example.com/deep/child.xml", "https://other.com/child.xml"),
+    google_spec
+  )
+  # Same-site, same-directory child is in scope; cross-site child is not.
+  expect_identical(oos, c(FALSE, TRUE))
+})
+
+test_that("only google adds the same-or-lower-directory dimension", {
+  google_spec <- findings_ruleset_spec("google", ruleset_context())
+  yandex_spec <- findings_ruleset_spec("yandex", ruleset_context())
+  bing_spec <- findings_ruleset_spec("bing", ruleset_context())
+  # Same-site child ABOVE the index directory (index at /deep/).
+  above <- "https://example.com/child.xml"
+  expect_true(index_child_out_of_scope(idx_deep, above, google_spec))
+  expect_false(index_child_out_of_scope(idx_deep, above, yandex_spec))
+  expect_false(index_child_out_of_scope(idx_deep, above, bing_spec))
+})
+
+test_that("index_child_scope_findings is dormant on the baseline path", {
+  out <- index_child_scope_findings(
+    idx_deep,
+    c("https://other.com/child.xml"),
+    idx_base,
+    NULL
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("index_child_scope_findings emits one row per out-of-scope child", {
+  google_spec <- findings_ruleset_spec("google", ruleset_context())
+  out <- index_child_scope_findings(
+    idx_deep,
+    c("https://other.com/child.xml"),
+    idx_base,
+    google_spec
+  )
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "INDEX_CHILD_OUT_OF_SCOPE")
+  expect_identical(out$severity, "warning")
+  expect_true(grepl("#index-child:", out$subject_ref, fixed = TRUE))
+})
+
+test_that("bing inherits the same-site rule (cross-site child out of scope)", {
+  bing_spec <- findings_ruleset_spec("bing", ruleset_context())
+  expect_true(
+    index_child_out_of_scope(idx_deep, "https://other.com/child.xml", bing_spec)
+  )
+})

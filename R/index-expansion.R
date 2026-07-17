@@ -98,6 +98,68 @@ index_loc_key <- function(url) {
   build_loc_key(parse_url_adapter(url))
 }
 
+# (b) sitemap-index -> child scope predicate (sitemap-spec §12.2b): which
+# advertised child sitemaps fall outside the index's child scope? baseline /
+# bing / yandex require the child on the SAME SITE (same authority) as the
+# index, no directory restriction; google additionally requires the child in
+# the same-or-lower directory as the index. Non-absolute / host-less child locs
+# are not evaluable and are treated as in-scope here. Returns a per-child
+# logical vector aligned with `child_locs`.
+index_child_out_of_scope <- function(index_url, child_locs, ruleset) {
+  self <- parse_url_adapter(index_url)
+  self_auth <- loc_authority(self)
+  self_dir <- loc_directory_prefix(self$path)
+  parsed <- parse_url_adapter(child_locs)
+  host <- as.character(parsed$host)
+  path <- as.character(parsed$path)
+  applies <- !is.na(host) & nzchar(host)
+  same_site <- loc_authority(parsed) == self_auth
+  in_scope <- if (identical(ruleset$ruleset, "google")) {
+    same_site & startsWith(path, self_dir)
+  } else {
+    same_site
+  }
+  applies & !(!is.na(in_scope) & in_scope)
+}
+
+# (b) index-child scope finding producer (sitemap-spec §12.2b), the SEPARATE
+# index-child scope axis - never collapsed with the (a) page-scope axis (§12.2).
+# Per-source: a child inherits nothing implicitly and a submitted/verified
+# parent index confers no authority on a cross-site child (§12.1), so there is
+# NO (c) authority suppression. Emitted ONLY under an engine overlay: with
+# `ruleset = NULL` (baseline) it returns empty, keeping the baseline path
+# byte-identical. One INDEX_CHILD_OUT_OF_SCOPE per out-of-scope child.
+index_child_scope_findings <- function(index_url, child_locs, base, ruleset) {
+  if (is.null(ruleset) || is.na(index_url) || length(child_locs) == 0L) {
+    return(empty_index_findings())
+  }
+  oos <- index_child_out_of_scope(index_url, child_locs, ruleset)
+  hits <- which(oos)
+  if (length(hits) == 0L) {
+    return(empty_index_findings())
+  }
+  urls <- child_locs[hits]
+  same_dir <- identical(ruleset$ruleset, "google")
+  scope <- if (same_dir) "same site + same-or-lower directory" else "same site"
+  index_findings(
+    code = rep("INDEX_CHILD_OUT_OF_SCOPE", length(hits)),
+    severity = rep("warning", length(hits)),
+    subject_type = rep("index-child", length(hits)),
+    subject_ref = vapply(
+      urls,
+      function(u) protocol_ref_fragment(base, paste0("#index-child:", u)),
+      character(1)
+    ),
+    message = sprintf(
+      "Child sitemap %s is outside the index's child scope (%s; spec 12.2b).",
+      urls,
+      scope
+    ),
+    evidence = lapply(urls, function(u) finding_evidence(excerpt = u)),
+    is_strict_only = rep(FALSE, length(hits))
+  )
+}
+
 # Record one index-expansion tree row into the accumulator. `provenance` is
 # "child-of-index" for every node reached by expansion (the parent is the index
 # that listed it); `page_count`/`gzip` are NA for nodes never fetched.
@@ -383,7 +445,12 @@ child_fetch_cached <- function(child_url, user_agent, net_limits, policy, acc) {
 # the shared throttle and the full SSRF/redirect-safe `fetch_source()` path
 # unchanged; a fetch that aborts is cached as a NULL record (unfetchable).
 fetch_batch_into_cache <- function(
-  urls, max_active, user_agent, net_limits, policy, acc
+  urls,
+  max_active,
+  user_agent,
+  net_limits,
+  policy,
+  acc
 ) {
   n <- length(urls)
   if (n == 0L) {
@@ -423,7 +490,14 @@ fetch_batch_into_cache <- function(
 # it and leaves any over-warmed body unconsumed (cancelled, §5). Keys are the
 # requested URLs, matched by `child_fetch_cached()`.
 prefetch_index_children <- function(
-  locs, keys, child_depth, user_agent, limits, net_limits, policy, acc
+  locs,
+  keys,
+  child_depth,
+  user_agent,
+  limits,
+  net_limits,
+  policy,
+  acc
 ) {
   if (child_depth > limits$max_depth) {
     return(invisible())
@@ -443,7 +517,12 @@ prefetch_index_children <- function(
     dispatch <- c(dispatch, locs[[i]])
   }
   fetch_batch_into_cache(
-    dispatch, acc$max_active, user_agent, net_limits, policy, acc
+    dispatch,
+    acc$max_active,
+    user_agent,
+    net_limits,
+    policy,
+    acc
   )
 }
 
@@ -672,14 +751,28 @@ expand_index_child <- function(
 
   if (identical(cparsed$kind, "sitemapindex")) {
     add_nested_index_child(
-      crec, cparsed, child_depth, parent_url, user_agent, limits, net_limits,
-      policy, acc, gzip
+      crec,
+      cparsed,
+      child_depth,
+      parent_url,
+      user_agent,
+      limits,
+      net_limits,
+      policy,
+      acc,
+      gzip
     )
     return(invisible(NULL))
   }
 
   add_leaf_index_child(
-    crec, cparsed, child_depth, parent_url, limits, acc, gzip
+    crec,
+    cparsed,
+    child_depth,
+    parent_url,
+    limits,
+    acc,
+    gzip
   )
   invisible(NULL)
 }
@@ -710,7 +803,14 @@ expand_index_node <- function(
   # order. Inert (byte-identical to sequential) when `max_active <= 1`.
   if (acc$max_active > 1L) {
     prefetch_index_children(
-      locs, keys, child_depth, user_agent, limits, net_limits, policy, acc
+      locs,
+      keys,
+      child_depth,
+      user_agent,
+      limits,
+      net_limits,
+      policy,
+      acc
     )
   }
 

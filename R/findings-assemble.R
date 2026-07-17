@@ -128,13 +128,23 @@ findings_default_provenance <- function() {
 # finding's provenance defaults to `findings_default_provenance()`
 # (`inherited_protocol`); an entry here overrides it where §12 assigns a
 # different §0 tag to a specific code under an engine. §12.2a page-scope
-# (`PROTOCOL_URL_OUT_OF_SCOPE`): google/yandex `documented`, bing the inherited
+# (`PROTOCOL_URL_OUT_OF_SCOPE`) and §12.2b index-child scope
+# (`INDEX_CHILD_OUT_OF_SCOPE`): google/yandex `documented`, bing the inherited
 # baseline. Later slices extend this map.
 findings_provenance_overrides <- function() {
   list(
-    google = c(PROTOCOL_URL_OUT_OF_SCOPE = "documented"),
-    bing = c(PROTOCOL_URL_OUT_OF_SCOPE = "inherited_protocol"),
-    yandex = c(PROTOCOL_URL_OUT_OF_SCOPE = "documented")
+    google = c(
+      PROTOCOL_URL_OUT_OF_SCOPE = "documented",
+      INDEX_CHILD_OUT_OF_SCOPE = "documented"
+    ),
+    bing = c(
+      PROTOCOL_URL_OUT_OF_SCOPE = "inherited_protocol",
+      INDEX_CHILD_OUT_OF_SCOPE = "inherited_protocol"
+    ),
+    yandex = c(
+      PROTOCOL_URL_OUT_OF_SCOPE = "documented",
+      INDEX_CHILD_OUT_OF_SCOPE = "documented"
+    )
   )
 }
 

@@ -462,6 +462,13 @@ validate_index_parts <- function(
   parts[[length(parts) + 1L]] <-
     index_findings_from_problems(ex$problems, src$base)
 
+  parts[[length(parts) + 1L]] <- index_child_scope_findings(
+    src$final_url,
+    children$loc,
+    src$base,
+    ruleset
+  )
+
   # A child sniffed as a feed but rejected by parse_feed() (unsupported dialect)
   # -> one UNSUPPORTED_FEED per child via the source_meta/classification path.
   # Supported feed children are parsed into rows above and validated like any
