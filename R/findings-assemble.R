@@ -130,7 +130,10 @@ findings_default_provenance <- function() {
 # different §0 tag to a specific code under an engine. §12.2a page-scope
 # (`PROTOCOL_URL_OUT_OF_SCOPE`) and §12.2b index-child scope
 # (`INDEX_CHILD_OUT_OF_SCOPE`): google/yandex `documented`, bing the inherited
-# baseline. Later slices extend this map.
+# baseline. §12.5 yandex decoded-URL-length rule
+# (`PROTOCOL_URL_DECODED_TOO_LONG`): an `application_choice` verdict yandex
+# alone emits (google/bing do not, so no entry there). Later slices extend this
+# map.
 findings_provenance_overrides <- function() {
   list(
     google = c(
@@ -143,7 +146,8 @@ findings_provenance_overrides <- function() {
     ),
     yandex = c(
       PROTOCOL_URL_OUT_OF_SCOPE = "documented",
-      INDEX_CHILD_OUT_OF_SCOPE = "documented"
+      INDEX_CHILD_OUT_OF_SCOPE = "documented",
+      PROTOCOL_URL_DECODED_TOO_LONG = "application_choice"
     )
   )
 }

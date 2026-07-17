@@ -1360,6 +1360,27 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
     )
   }
 
+  if (f$decoded_too_long) {
+    out <- c(
+      out,
+      list(protocol_url_finding(
+        "PROTOCOL_URL_DECODED_TOO_LONG",
+        "error",
+        "entry",
+        base,
+        j,
+        l,
+        sprintf(
+          paste0(
+            "<loc> decodes to %d characters; Yandex rejects a decoded URL ",
+            "longer than 1024."
+          ),
+          loc_decoded_length(l)
+        )
+      ))
+    )
+  }
+
   c(
     out,
     loc_escape_findings(l, j, f, base, canonical),
@@ -1642,6 +1663,32 @@ loc_out_of_scope <- function(parsed, path, applies, self, ruleset) {
   oos & !loc_authority_covers(ruleset, auth)
 }
 
+# Percent-decoded character length of each URL. utils::URLdecode is per-string
+# and can error on a malformed escape, so decode defensively and fall back to
+# the raw string (the invalid-escape rule reports malformed escapes separately).
+loc_decoded_length <- function(l) {
+  vapply(
+    l,
+    function(x) {
+      nchar(tryCatch(utils::URLdecode(x), error = function(e) x))
+    },
+    integer(1),
+    USE.NAMES = FALSE
+  )
+}
+
+# Yandex hard-rejects a <loc> whose percent-DECODED whole-URL length exceeds
+# ~1,024 chars (sitemap-spec §12.5) - distinct from PROTOCOL_URL_TOO_LONG (raw,
+# 2,048, warning). Measured on the decoded whole URL (query counts; not
+# per-segment); a value that decodes short is accepted. yandex ruleset only, so
+# the baseline / google / bing paths are unaffected.
+loc_decoded_over_limit <- function(l, ruleset) {
+  if (!identical(loc_scope_engine(ruleset), "yandex")) {
+    return(rep(FALSE, length(l)))
+  }
+  loc_decoded_length(l) > 1024L
+}
+
 loc_rule_flags <- function(loc, absolute, parsed, sitemap_url, ruleset = NULL) {
   l <- loc[absolute]
   host <- as.character(parsed$host)
@@ -1657,6 +1704,7 @@ loc_rule_flags <- function(loc, absolute, parsed, sitemap_url, ruleset = NULL) {
   list(
     no_host = no_host,
     too_long = applies & nchar(l) >= 2048L,
+    decoded_too_long = applies & loc_decoded_over_limit(l, ruleset),
     invalid_escape = applies & has_invalid_escape(l),
     not_escaped_warn = not_escaped_warn,
     not_escaped_info = applies & !not_escaped_warn & has_non_ascii(l),
