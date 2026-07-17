@@ -15,8 +15,9 @@ ruleset_context(
 \item{submission_channel}{One of \code{search_console_api}, \code{webmaster_tools},
 \code{user}, \code{import}, or \code{absent} (default). \code{"discovered"} is rejected.}
 
-\item{discovery_provenance}{One of \code{organic} (default), \code{robots_txt_reference},
-\code{supplied}, \code{guessed_path}, \code{index_child}, or \code{archive_derived}.}
+\item{discovery_provenance}{One of \code{organic} (default),
+\code{robots_txt_reference}, \code{supplied}, \code{guessed_path}, \code{index_child}, or
+\code{archive_derived}.}
 
 \item{property_scope}{The verified property/site string (a URL) or \code{NA}
 (default).}

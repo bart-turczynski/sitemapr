@@ -52,7 +52,7 @@ check_sitemap_ruleset <- function(ruleset) {
 
 # Published revision string per ruleset (ADR-009 §1/§7) for cross-repo pinning.
 # One documented constant map is the single source of truth. All four rulesets
-# were published together by ADR-009 / sitemap-spec §12 (2026-07-16), so they
+# were published together by ADR-009 / sitemap-spec §12 (2026-07-16); they
 # share that date-stamped revision until an overlay's rules change independently.
 ruleset_revisions <- function() {
   c(
@@ -157,8 +157,9 @@ check_property_scope <- function(property_scope) {
 #'
 #' @param submission_channel One of `search_console_api`, `webmaster_tools`,
 #'   `user`, `import`, or `absent` (default). `"discovered"` is rejected.
-#' @param discovery_provenance One of `organic` (default), `robots_txt_reference`,
-#'   `supplied`, `guessed_path`, `index_child`, or `archive_derived`.
+#' @param discovery_provenance One of `organic` (default),
+#'   `robots_txt_reference`, `supplied`, `guessed_path`, `index_child`, or
+#'   `archive_derived`.
 #' @param property_scope The verified property/site string (a URL) or `NA`
 #'   (default).
 #' @param authority_evidence One of `absent` (default), `verified_property_set`,
