@@ -185,6 +185,89 @@ test_that("yandex keeps the baseline same-or-lower directory mechanics", {
   expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
 })
 
+# --- Authority combining (a)+(c) (§12.2c) ---
+
+test_that("google verified cross-submission suppresses out-of-scope", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "google",
+      ruleset_context(
+        submission_channel = "search_console_api",
+        property_scope = "https://other.com/",
+        authority_evidence = "verified_property_set"
+      )
+    )
+  )
+  expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("a verified property covers only its bound host", {
+  out <- validate_protocol(
+    rows_for("https://evil.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "google",
+      ruleset_context(
+        submission_channel = "search_console_api",
+        property_scope = "https://other.com/",
+        authority_evidence = "verified_property_set"
+      )
+    )
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("google target-host robots.txt reference suppresses out-of-scope", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "google",
+      ruleset_context(authority_evidence = "target_host_robots_reference")
+    )
+  )
+  expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("yandex never suppresses a cross-site out-of-scope", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "yandex",
+      ruleset_context(
+        submission_channel = "search_console_api",
+        property_scope = "https://other.com/",
+        authority_evidence = "verified_property_set"
+      )
+    )
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("bing never suppresses a cross-site out-of-scope", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec(
+      "bing",
+      ruleset_context(authority_evidence = "target_host_robots_reference")
+    )
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("absent authority under google keeps the out-of-scope finding", {
+  out <- validate_protocol(
+    rows_for("https://other.com/a"),
+    sitemap_url = sm_url,
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
 # --- Duplicate / equivalent detection (ADR-005 two-tier) -------------------
 
 test_that("two byte-identical locs produce a warning PROTOCOL_DUPLICATE_LOC", {

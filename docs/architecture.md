@@ -175,14 +175,28 @@ candidate), `robots` (a `Sitemap:` directive from robots.txt; ADR-006), `seed`
 (a `from = "sitemap"` exact-URL root or a `sitemap_tree_from_bytes()` root), and
 `child-of-index` (a node reached by recursive sitemapindex expansion).
 
-Both provenance vocabularies above — `read_sitemap()`'s `source_sitemap` and this
-`sitemap_tree()` `provenance` column — map onto ADR-009's independent
-**`discovery_provenance`** axis; the explicit crosswalk lives in
-`docs/sitemap-spec.md` §12.1. No code consumes the ADR-009 axis yet, so the two
-vocabularies stand as-is with §12.1 as the mapping of record. Reconciling them
-into a single documented vocabulary (or an explicit bijection) is deferred until
-an implementation slice first threads `discovery_provenance` / `authority_evidence`
-through the code (SITE-yckaspdp).
+Both provenance vocabularies above — `read_sitemap()`'s `source_sitemap` and
+this `sitemap_tree()` `provenance` column — are reconciled with ADR-009's
+independent **`discovery_provenance`** axis as one explicit crosswalk (the
+mapping of record is `docs/sitemap-spec.md` §12.1):
+
+| `discovery_provenance` | `source_sitemap` (`read_sitemap()`) | `sitemap_tree()` `provenance` |
+|---|---|---|
+| `supplied` | `submitted-directly` / `submitted-list` | `seed` |
+| `robots_txt_reference` | — | `robots` |
+| `guessed_path` | `guessed-path` | `guessed-path` |
+| `index_child` | `child-of-index` | `child-of-index` |
+| `archive_derived` | `extracted-archive` | — |
+| `organic` | — | — |
+
+The ruleset-aware `validate_sitemap()` surface now threads this axis, together
+with the structured `authority_evidence`, through the per-source validation
+context (`ruleset_context()`); the per-source invariant — a sitemap-index child
+inherits nothing implicitly — is carried in code by `ruleset_context_for_child()`,
+which takes no parent context (ADR-009 §1; §12.1). A robots.txt reference used
+as cross-site *trust* (`authority_evidence = target_host_robots_reference`) is
+distinct from robots.txt *discovery* (`discovery_provenance = robots_txt_reference`
+≈ the `robots` provenance value).
 
 ### `validate_sitemap()` → findings tibble
 
