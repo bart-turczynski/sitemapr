@@ -338,3 +338,116 @@ test_that("assemble_findings stamps per-code provenance under an engine", {
   expect_identical(scope, "documented")
   expect_identical(other, "inherited_protocol")
 })
+
+# --- Inherited file-limit provenance (§12.6) -------------------------------
+
+test_that("§12.6 file-limit caps are documented under every engine", {
+  for (engine in c("google", "bing", "yandex")) {
+    expect_identical(
+      findings_provenance_for("PROTOCOL_URL_COUNT_EXCEEDED", engine),
+      "documented"
+    )
+  }
+  expect_identical(
+    findings_provenance_for("INDEX_CHILD_COUNT_EXCEEDED", "yandex"),
+    "documented"
+  )
+  expect_identical(
+    findings_provenance_for("PROTOCOL_SIZE_EXCEEDED", "yandex"),
+    "documented"
+  )
+})
+
+# --- Yandex raw-IRI acceptance (§12.5) -------------------------------------
+
+test_that("yandex raw-IRI <loc> is an inherited_protocol record", {
+  expect_identical(
+    findings_provenance_for("PROTOCOL_URL_NOT_ESCAPED", "yandex"),
+    "inherited_protocol"
+  )
+})
+
+# --- Yandex metadata-acceptance relabels (§12.7) ---------------------------
+
+test_that("§12.7 yandex metadata severities relabel error->warning", {
+  codes <- c(
+    "PROTOCOL_LASTMOD_INVALID",
+    "PROTOCOL_CHANGEFREQ_INVALID",
+    "PROTOCOL_PRIORITY_OUT_OF_RANGE"
+  )
+  expect_identical(
+    findings_severity_for(codes, "yandex", rep("error", 3)),
+    rep("warning", 3)
+  )
+  expect_identical(
+    findings_provenance_for(codes, "yandex"),
+    rep("documented", 3)
+  )
+})
+
+test_that("§12.7 metadata severities stay error where no override applies", {
+  expect_identical(
+    findings_severity_for("PROTOCOL_LASTMOD_INVALID", "google", "error"),
+    "error"
+  )
+  expect_identical(
+    findings_severity_for("PROTOCOL_LASTMOD_INVALID", "bing", "error"),
+    "error"
+  )
+})
+
+# --- NULL-ruleset byte-identical guard --------------------------------------
+
+test_that("NULL ruleset leaves the baseline path byte-identical", {
+  parts <- list(
+    protocol_findings(
+      code = "PROTOCOL_LASTMOD_INVALID",
+      severity = "error",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      message = "bad lastmod",
+      evidence = list(finding_evidence()),
+      is_strict_only = FALSE
+    )
+  )
+  out <- assemble_findings(parts, "strict", ruleset = NULL)
+  expect_identical(out$severity, "error")
+  expect_named(out, contract_cols)
+  expect_false("provenance" %in% names(out))
+  expect_false("ruleset" %in% names(out))
+})
+
+test_that("findings_stamp_ruleset returns input unchanged for NULL", {
+  small <- protocol_findings(
+    code = "PROTOCOL_LASTMOD_INVALID",
+    severity = "error",
+    subject_type = "entry",
+    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    message = "bad lastmod",
+    evidence = list(finding_evidence()),
+    is_strict_only = FALSE
+  )
+  expect_identical(findings_stamp_ruleset(small, NULL), small)
+})
+
+test_that("yandex overlay relabels metadata error to warning end-to-end", {
+  parts <- list(
+    protocol_findings(
+      code = "PROTOCOL_LASTMOD_INVALID",
+      severity = "error",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      message = "bad lastmod",
+      evidence = list(finding_evidence()),
+      is_strict_only = FALSE
+    )
+  )
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  row <- out[out$code == "PROTOCOL_LASTMOD_INVALID", , drop = FALSE]
+  expect_identical(row$severity, "warning")
+  expect_identical(row$provenance, "documented")
+})
