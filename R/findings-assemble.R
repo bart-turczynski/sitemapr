@@ -132,8 +132,9 @@ findings_default_provenance <- function() {
 # (`INDEX_CHILD_OUT_OF_SCOPE`): google/yandex `documented`, bing the inherited
 # baseline. §12.5 yandex decoded-URL-length rule
 # (`PROTOCOL_URL_DECODED_TOO_LONG`): an `application_choice` verdict yandex
-# alone emits (google/bing do not, so no entry there). Later slices extend this
-# map.
+# alone emits (google/bing do not, so no entry there). §12.5/§12.7 yandex
+# per-tag data-limit guard (`PROTOCOL_TAG_DATA_LIMIT_EXCEEDED`): an `advisory`
+# (tool-observed) verdict yandex alone emits. Later slices extend this map.
 findings_provenance_overrides <- function() {
   list(
     google = c(
@@ -147,7 +148,8 @@ findings_provenance_overrides <- function() {
     yandex = c(
       PROTOCOL_URL_OUT_OF_SCOPE = "documented",
       INDEX_CHILD_OUT_OF_SCOPE = "documented",
-      PROTOCOL_URL_DECODED_TOO_LONG = "application_choice"
+      PROTOCOL_URL_DECODED_TOO_LONG = "application_choice",
+      PROTOCOL_TAG_DATA_LIMIT_EXCEEDED = "advisory"
     )
   )
 }

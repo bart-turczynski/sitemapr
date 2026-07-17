@@ -411,6 +411,51 @@ validate_lastmod_values <- function(rows, base) {
   out
 }
 
+# Per-tag raw-byte ceilings for the Yandex data-limit guard (sitemap-spec
+# §12.5/§12.7): ~1,500 raw bytes for <loc>, ~100 for the optional metadata tags.
+protocol_tag_byte_limits <- function() {
+  c(loc = 1500L, lastmod = 100L, changefreq = 100L, priority = 100L)
+}
+
+# Yandex per-tag byte guard (sitemap-spec §12.5/§12.7): "Data limit exceeded in
+# tag X" fires on over-long RAW tag content - distinct from
+# PROTOCOL_SIZE_EXCEEDED (whole-file 50 MB). yandex ruleset only; warning;
+# provenance advisory (never a hard failure). Baseline / google / bing emit
+# nothing (byte-identical). Measures raw byte length; the !is.na guard keeps
+# absent (NA) tags from being counted.
+validate_tag_data_limits <- function(rows, base, ruleset = NULL) {
+  if (!identical(loc_scope_engine(ruleset), "yandex")) {
+    return(empty_protocol_findings())
+  }
+  limits <- protocol_tag_byte_limits()
+  out <- list()
+  for (tag in names(limits)) {
+    vals <- as.character(rows[[tag]])
+    bytes <- nchar(vals, type = "bytes")
+    over <- which(!is.na(vals) & bytes >= limits[[tag]])
+    for (j in over) {
+      out[[length(out) + 1L]] <- protocol_url_finding(
+        "PROTOCOL_TAG_DATA_LIMIT_EXCEEDED",
+        "warning",
+        "entry",
+        base,
+        j,
+        vals[j],
+        sprintf(
+          "Data limit exceeded in tag <%s>: %d raw bytes (limit %d).",
+          tag,
+          bytes[j],
+          limits[[tag]]
+        )
+      )
+    }
+  }
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
 # Per-entry field-value rules: priority range, changefreq enum, and lastmod
 # format. Reads the FAITHFUL row tibble (ADR-004): `lastmod` and `priority` are
 # the raw `<lastmod>`/`<priority>` strings. Returns a (possibly empty)
@@ -2021,6 +2066,7 @@ validate_protocol <- function(
           limits$max_uncompressed_bytes
         ),
         validate_field_values(rows, subject_ref),
+        validate_tag_data_limits(rows, subject_ref, ruleset),
         validate_lastmod_corpus(rows, subject_ref, fetched_at, limits),
         validate_hreflang(rows, subject_ref),
         validate_hreflang_graph(rows, subject_ref),
