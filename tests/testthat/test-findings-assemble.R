@@ -260,3 +260,60 @@ test_that("assembling the same parts twice is row-for-row identical", {
     assemble_findings(parts, "strict")
   )
 })
+
+# --- Per-engine provenance (§12.2a) ----------------------------------------
+
+test_that("findings_provenance_for maps §12.2a page-scope per engine", {
+  codes <- c("PROTOCOL_URL_OUT_OF_SCOPE", "PROTOCOL_DUPLICATE_LOC")
+  expect_identical(
+    findings_provenance_for(codes, "google"),
+    c("documented", "inherited_protocol")
+  )
+  expect_identical(
+    findings_provenance_for(codes, "yandex"),
+    c("documented", "inherited_protocol")
+  )
+  expect_identical(
+    findings_provenance_for(codes, "bing"),
+    c("inherited_protocol", "inherited_protocol")
+  )
+})
+
+test_that("findings_provenance_for defaults unknown codes to inherited", {
+  expect_identical(
+    findings_provenance_for("PROTOCOL_URL_FRAGMENT", "google"),
+    "inherited_protocol"
+  )
+})
+
+test_that("assemble_findings stamps per-code provenance under an engine", {
+  parts <- list(
+    protocol_findings(
+      code = "PROTOCOL_URL_OUT_OF_SCOPE",
+      severity = "warning",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      message = "out of scope",
+      evidence = list(finding_evidence()),
+      is_strict_only = FALSE
+    ),
+    protocol_findings(
+      code = "PROTOCOL_DUPLICATE_LOC",
+      severity = "warning",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      message = "dup",
+      evidence = list(finding_evidence()),
+      is_strict_only = FALSE
+    )
+  )
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  scope <- out$provenance[out$code == "PROTOCOL_URL_OUT_OF_SCOPE"]
+  other <- out$provenance[out$code == "PROTOCOL_DUPLICATE_LOC"]
+  expect_identical(scope, "documented")
+  expect_identical(other, "inherited_protocol")
+})

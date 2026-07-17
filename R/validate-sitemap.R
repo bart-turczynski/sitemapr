@@ -190,7 +190,7 @@ archive_limit_part <- function(cnd, src) {
 # archive-byte limits (the 200 MB decompressed / 50 MB on-disk guards) are NOT
 # in this mapping and re-propagate as the existing condition, preserving the
 # guard behavior.
-validate_archive_parts <- function(src) {
+validate_archive_parts <- function(src, ruleset = NULL) {
   result <- tryCatch(
     list(ok = parse_sitemap_archive(src$path, source_ref = src$base)),
     sitemapr_decompression_error = function(cnd) {
@@ -217,7 +217,8 @@ validate_archive_parts <- function(src) {
       subject_ref = src$base,
       byte_size = src$byte_size,
       fetched_at = src$fetched_at,
-      source_meta = NULL
+      source_meta = NULL,
+      ruleset = ruleset
     )
     parts <- append_robots_part(
       parts,
@@ -332,13 +333,27 @@ empty_index_findings <- function() {
 # schema and protocol-validated exactly like a `urlset`; an unsupported dialect
 # (`parse_feed()` raising `sitemapr_unsupported_feed`) falls through to the XML
 # branch, which yields UNSUPPORTED_ROOT for its `<feed>`/`<rss>` root.
-validate_feed_parts <- function(src, user_agent, limits, index_limits, policy) {
+validate_feed_parts <- function(
+  src,
+  user_agent,
+  limits,
+  index_limits,
+  policy,
+  ruleset = NULL
+) {
   parsed <- tryCatch(
     parse_feed(src$bytes, source_sitemap = src$final_url),
     sitemapr_unsupported_feed = function(cnd) NULL
   )
   if (is.null(parsed)) {
-    return(validate_xml_parts(src, user_agent, limits, index_limits, policy))
+    return(validate_xml_parts(
+      src,
+      user_agent,
+      limits,
+      index_limits,
+      policy,
+      ruleset
+    ))
   }
   append_robots_part(
     list(validate_protocol(
@@ -347,7 +362,8 @@ validate_feed_parts <- function(src, user_agent, limits, index_limits, policy) {
       subject_ref = src$base,
       byte_size = src$byte_size,
       fetched_at = src$fetched_at,
-      source_meta = NULL
+      source_meta = NULL,
+      ruleset = ruleset
     )),
     parsed$rows$loc,
     src$robots_ua,
@@ -357,7 +373,14 @@ validate_feed_parts <- function(src, user_agent, limits, index_limits, policy) {
 
 # Build the producer `parts` list for an XML source, branching on the root
 # local-name. `src` is a resolved source; `index_limits` bounds the expansion.
-validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
+validate_xml_parts <- function(
+  src,
+  user_agent,
+  limits,
+  index_limits,
+  policy,
+  ruleset = NULL
+) {
   doc <- read_sitemap_xml(src$bytes)
   root <- xml2::xml_name(xml2::xml_root(doc))
 
@@ -382,7 +405,8 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
           subject_ref = src$base,
           byte_size = src$byte_size,
           fetched_at = src$fetched_at,
-          source_meta = NULL
+          source_meta = NULL,
+          ruleset = ruleset
         )
       ),
       rows$loc,
@@ -402,7 +426,8 @@ validate_xml_parts <- function(src, user_agent, limits, index_limits, policy) {
     user_agent,
     limits,
     index_limits,
-    policy
+    policy,
+    ruleset
   )
 }
 
@@ -415,7 +440,8 @@ validate_index_parts <- function(
   user_agent,
   limits,
   index_limits,
-  policy
+  policy,
+  ruleset = NULL
 ) {
   parts <- list(schema)
   if (is.na(src$final_url)) {
@@ -451,7 +477,13 @@ validate_index_parts <- function(
   if (nrow(ex$rows) > 0L) {
     parts <- c(
       parts,
-      index_protocol_parts(ex$rows, ex$sources, src$base, src$robots_ua)
+      index_protocol_parts(
+        ex$rows,
+        ex$sources,
+        src$base,
+        src$robots_ua,
+        ruleset
+      )
     )
   }
   parts
@@ -496,7 +528,8 @@ index_protocol_parts <- function(
   rows,
   sources,
   fallback_base,
-  robots_ua = NULL
+  robots_ua = NULL,
+  ruleset = NULL
 ) {
   if (is.null(rows) || nrow(rows) == 0L) {
     return(list())
@@ -512,7 +545,8 @@ index_protocol_parts <- function(
         subject_ref = fallback_base,
         byte_size = NA_real_,
         fetched_at = NA,
-        source_meta = NULL
+        source_meta = NULL,
+        ruleset = ruleset
       )),
       rows$loc,
       robots_ua,
@@ -533,7 +567,8 @@ index_protocol_parts <- function(
       subject_ref = child_base,
       byte_size = index_source_byte_size(child_source),
       fetched_at = NA,
-      source_meta = NULL
+      source_meta = NULL,
+      ruleset = ruleset
     )
     parts <- append_robots_part(parts, child_rows$loc, robots_ua, child_base)
   }
@@ -643,7 +678,7 @@ validate_sitemap_source <- function(
       conditionMessage(src$cnd)
     ))
   } else if (identical(src$kind, "archive")) {
-    validate_archive_parts(src)
+    validate_archive_parts(src, ruleset)
   } else if (identical(src$format, "html")) {
     list(validate_classification(source_meta(html_masquerade = TRUE), src$base))
   } else if (identical(src$format, "text")) {
@@ -655,9 +690,9 @@ validate_sitemap_source <- function(
       src$base
     )
   } else if (identical(src$format, "feed")) {
-    validate_feed_parts(src, user_agent, limits, index_limits, policy)
+    validate_feed_parts(src, user_agent, limits, index_limits, policy, ruleset)
   } else {
-    validate_xml_parts(src, user_agent, limits, index_limits, policy)
+    validate_xml_parts(src, user_agent, limits, index_limits, policy, ruleset)
   }
 
   assemble_findings(parts, mode, ruleset)

@@ -487,10 +487,13 @@ validate_lastmod_corpus <- function(rows, base, fetched_at, limits) {
   }
 
   counts <- table(as.numeric(dated))
-  out <- Filter(Negate(is.null), list(
-    lastmod_identical_finding(counts, dated, base, limits),
-    lastmod_generated_finding(dated, base, fetched_at, limits)
-  ))
+  out <- Filter(
+    Negate(is.null),
+    list(
+      lastmod_identical_finding(counts, dated, base, limits),
+      lastmod_generated_finding(dated, base, fetched_at, limits)
+    )
+  )
 
   if (length(out) == 0L) {
     return(empty_protocol_findings())
@@ -1340,18 +1343,21 @@ loc_single_url_findings <- function(l, j, f, sitemap_url, base, canonical) {
   out <- list()
 
   if (f$too_long) {
-    out <- c(out, list(protocol_url_finding(
-      "PROTOCOL_URL_TOO_LONG",
-      "warning",
-      "entry",
-      base,
-      j,
-      l,
-      sprintf(
-        "<loc> is %d characters; sitemap URLs must be under 2048.",
-        nchar(l)
-      )
-    )))
+    out <- c(
+      out,
+      list(protocol_url_finding(
+        "PROTOCOL_URL_TOO_LONG",
+        "warning",
+        "entry",
+        base,
+        j,
+        l,
+        sprintf(
+          "<loc> is %d characters; sitemap URLs must be under 2048.",
+          nchar(l)
+        )
+      ))
+    )
   }
 
   c(
@@ -1393,34 +1399,40 @@ loc_escape_findings <- function(l, j, f, base, canonical) {
   }
 
   if (f$not_escaped_warn) {
-    out <- c(out, list(loc_not_escaped_finding(
-      l,
-      j,
-      base,
-      "warning",
-      sprintf(
-        paste0(
-          "<loc> '%s' contains a character illegal unescaped in both a URI ",
-          "and an IRI; sitemap URLs must be RFC-3986 percent-escaped."
-        ),
-        l
-      )
-    )))
-  } else if (f$not_escaped_info) {
-    out <- c(out, list(loc_not_escaped_finding(
-      l,
-      j,
-      base,
-      "info",
-      sprintf(
-        paste0(
-          "<loc> '%s' is a valid IRI written unescaped; crawlers fetch its ",
-          "percent-encoded URI form: '%s'."
-        ),
+    out <- c(
+      out,
+      list(loc_not_escaped_finding(
         l,
-        canonical
-      )
-    )))
+        j,
+        base,
+        "warning",
+        sprintf(
+          paste0(
+            "<loc> '%s' contains a character illegal unescaped in both a URI ",
+            "and an IRI; sitemap URLs must be RFC-3986 percent-escaped."
+          ),
+          l
+        )
+      ))
+    )
+  } else if (f$not_escaped_info) {
+    out <- c(
+      out,
+      list(loc_not_escaped_finding(
+        l,
+        j,
+        base,
+        "info",
+        sprintf(
+          paste0(
+            "<loc> '%s' is a valid IRI written unescaped; crawlers fetch its ",
+            "percent-encoded URI form: '%s'."
+          ),
+          l,
+          canonical
+        )
+      ))
+    )
   }
 
   out
@@ -1462,22 +1474,25 @@ loc_url_component_findings <- function(l, j, f, sitemap_url, base) {
   }
 
   if (f$out_of_scope) {
-    out <- c(out, list(protocol_url_finding(
-      "PROTOCOL_URL_OUT_OF_SCOPE",
-      "warning",
-      "entry",
-      base,
-      j,
-      l,
-      sprintf(
-        paste0(
-          "<loc> '%s' is outside the sitemap's scope (same host and ",
-          "same-or-lower path as %s)."
-        ),
+    out <- c(
+      out,
+      list(protocol_url_finding(
+        "PROTOCOL_URL_OUT_OF_SCOPE",
+        "warning",
+        "entry",
+        base,
+        j,
         l,
-        sitemap_url
-      )
-    )))
+        sprintf(
+          paste0(
+            "<loc> '%s' is outside the sitemap's scope (same host and ",
+            "same-or-lower path as %s)."
+          ),
+          l,
+          sitemap_url
+        )
+      ))
+    )
   }
 
   out
@@ -1550,7 +1565,33 @@ loc_scope_self <- function(sitemap_url) {
   )
 }
 
-loc_rule_flags <- function(loc, absolute, parsed, sitemap_url) {
+# The active engine name for the (a) page-scope evaluator: the baseline
+# `sitemaps.org` when no engine overlay is active (`ruleset` NULL).
+loc_scope_engine <- function(ruleset) {
+  if (is.null(ruleset)) "sitemaps.org" else ruleset$ruleset
+}
+
+# Per-ruleset (a) sitemap -> listed-page scope evaluator (sitemap-spec §12.2a).
+# Marks each in-range absolute <loc> that is out of the sitemap's page scope.
+# Baseline / bing / yandex enforce the same mechanics: same authority
+# (scheme+host+port) AND same-or-lower directory. google waives the directory
+# dimension when the source was submitted via the Search Console API; the
+# same-host restriction is kept here (the cross-host relaxation from verified
+# cross-submission is scope relation (c), a later slice).
+loc_out_of_scope <- function(parsed, path, applies, self, ruleset) {
+  out <- rep(FALSE, length(path))
+  if (is.na(self$authority)) {
+    return(out)
+  }
+  host_ok <- loc_authority(parsed) == self$authority
+  dir_ok <- startsWith(path, self$directory)
+  waive_dir <- identical(loc_scope_engine(ruleset), "google") &&
+    identical(ruleset$context$submission_channel, "search_console_api")
+  in_scope <- if (waive_dir) host_ok else host_ok & dir_ok
+  applies & !(!is.na(in_scope) & in_scope)
+}
+
+loc_rule_flags <- function(loc, absolute, parsed, sitemap_url, ruleset = NULL) {
   l <- loc[absolute]
   host <- as.character(parsed$host)
   user <- as.character(parsed$user)
@@ -1560,12 +1601,7 @@ loc_rule_flags <- function(loc, absolute, parsed, sitemap_url) {
   no_host <- is.na(host) | !nzchar(host)
   applies <- !no_host
   not_escaped_warn <- applies & has_uri_illegal_char(l)
-  out_of_scope <- rep(FALSE, length(l))
-  if (!is.na(self$authority)) {
-    in_scope <- loc_authority(parsed) == self$authority &
-      startsWith(path, self$directory)
-    out_of_scope <- applies & !(!is.na(in_scope) & in_scope)
-  }
+  out_of_scope <- loc_out_of_scope(parsed, path, applies, self, ruleset)
 
   list(
     no_host = no_host,
@@ -1606,7 +1642,7 @@ loc_rule_findings <- function(loc, absolute, flags, sitemap_url, base, keys) {
   out
 }
 
-validate_loc_urls <- function(rows, sitemap_url, base) {
+validate_loc_urls <- function(rows, sitemap_url, base, ruleset = NULL) {
   loc <- rows$loc
   keep <- !is.na(loc) & nzchar(loc)
   idx <- which(keep)
@@ -1631,7 +1667,7 @@ validate_loc_urls <- function(rows, sitemap_url, base) {
   parsed <- parse_url_adapter(loc[absolute])
   keys <- build_loc_key(parsed)
 
-  flags <- loc_rule_flags(loc, absolute, parsed, sitemap_url)
+  flags <- loc_rule_flags(loc, absolute, parsed, sitemap_url, ruleset)
   out <- c(
     out,
     loc_rule_findings(loc, absolute, flags, sitemap_url, base, keys)
@@ -1850,6 +1886,9 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
 #'   `UNSUPPORTED_ROOT` document yields no rows). Acting as the interim
 #'   cross-layer assembler, this function surfaces them alongside the protocol
 #'   findings until Layer F owns assembly.
+#' @param ruleset The engine ruleset spec (`list(ruleset, ruleset_revision,
+#'   context)`) or `NULL` for the baseline, used only by the per-engine
+#'   page-scope evaluator (sitemap-spec §12.2a).
 #' @param limits Layer D limit thresholds; see `protocol_limits()`.
 #' @return A findings tibble (zero rows when the document conforms and no
 #'   diagnostics apply). Protocol rows carry `layer = "protocol"`; the D.6
@@ -1863,6 +1902,7 @@ validate_protocol <- function(
   byte_size = NA_real_,
   fetched_at = NA,
   source_meta = NULL,
+  ruleset = NULL,
   limits = protocol_limits()
 ) {
   parts <- list(
@@ -1874,7 +1914,7 @@ validate_protocol <- function(
     parts <- c(
       parts,
       list(
-        validate_loc_urls(rows, sitemap_url, subject_ref),
+        validate_loc_urls(rows, sitemap_url, subject_ref, ruleset),
         validate_url_count(rows, subject_ref, limits$max_url_count),
         validate_doc_size(
           byte_size,

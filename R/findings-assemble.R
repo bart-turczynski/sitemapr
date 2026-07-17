@@ -124,6 +124,33 @@ findings_default_provenance <- function() {
   "inherited_protocol"
 }
 
+# Per-(ruleset, code) provenance overrides for the §12 provenance tables. A
+# finding's provenance defaults to `findings_default_provenance()`
+# (`inherited_protocol`); an entry here overrides it where §12 assigns a
+# different §0 tag to a specific code under an engine. §12.2a page-scope
+# (`PROTOCOL_URL_OUT_OF_SCOPE`): google/yandex `documented`, bing the inherited
+# baseline. Later slices extend this map.
+findings_provenance_overrides <- function() {
+  list(
+    google = c(PROTOCOL_URL_OUT_OF_SCOPE = "documented"),
+    bing = c(PROTOCOL_URL_OUT_OF_SCOPE = "inherited_protocol"),
+    yandex = c(PROTOCOL_URL_OUT_OF_SCOPE = "documented")
+  )
+}
+
+# Resolve the per-finding provenance vector for a code vector under a ruleset,
+# applying findings_provenance_overrides() over the inherited-protocol default.
+findings_provenance_for <- function(code, ruleset) {
+  prov <- rep(findings_default_provenance(), length(code))
+  ov <- findings_provenance_overrides()[[ruleset]]
+  if (!is.null(ov)) {
+    hit <- match(code, names(ov))
+    matched <- !is.na(hit)
+    prov[matched] <- unname(ov[hit[matched]])
+  }
+  prov
+}
+
 # Stamp the additive engine-aware columns onto an assembled findings tibble.
 # `ruleset` is a ruleset spec (a list of `ruleset`, `ruleset_revision`,
 # `context`) or NULL for the baseline path. When NULL the tibble is returned
@@ -140,7 +167,7 @@ findings_stamp_ruleset <- function(findings, ruleset) {
   findings$ruleset <- rep(ruleset$ruleset, n)
   findings$ruleset_revision <- rep(ruleset$ruleset_revision, n)
   findings$context <- rep(list(unclass(ruleset$context)), n)
-  findings$provenance <- rep(findings_default_provenance(), n)
+  findings$provenance <- findings_provenance_for(findings$code, ruleset$ruleset)
   tibble::new_tibble(findings, nrow = n)
 }
 
