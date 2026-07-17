@@ -268,6 +268,44 @@ test_that("absent authority under google keeps the out-of-scope finding", {
   expect_true("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
 })
 
+# --- Yandex decoded URL length (§12.5) ---
+
+test_that("yandex rejects a loc that decodes to over 1024 chars", {
+  long <- paste0("https://example.com/", strrep("a", 1100))
+  out <- validate_protocol(
+    rows_for(long),
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  d <- out[out$code == "PROTOCOL_URL_DECODED_TOO_LONG", ]
+  expect_identical(nrow(d), 1L)
+  expect_identical(d$severity, "error")
+})
+
+test_that("yandex measures the decoded length, not the raw length", {
+  short <- paste0("https://example.com/", strrep("%20", 400))
+  out <- validate_protocol(
+    rows_for(short),
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  expect_false("PROTOCOL_URL_DECODED_TOO_LONG" %in% out$code)
+  expect_false("PROTOCOL_URL_TOO_LONG" %in% out$code)
+})
+
+test_that("the decoded-length rule is yandex-only (not baseline / google)", {
+  long <- paste0("https://example.com/", strrep("a", 1100))
+  expect_false(
+    "PROTOCOL_URL_DECODED_TOO_LONG" %in%
+      validate_protocol(rows_for(long))$code
+  )
+  expect_false(
+    "PROTOCOL_URL_DECODED_TOO_LONG" %in%
+      validate_protocol(
+        rows_for(long),
+        ruleset = findings_ruleset_spec("google", ruleset_context())
+      )$code
+  )
+})
+
 # --- Duplicate / equivalent detection (ADR-005 two-tier) -------------------
 
 test_that("two byte-identical locs produce a warning PROTOCOL_DUPLICATE_LOC", {
