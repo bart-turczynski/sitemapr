@@ -91,4 +91,4 @@ REPORT_TRUNCATED,info,report,report,FALSE,validator-only,,REPORT_TRUNCATED,basel
 INSPECTION_FULL_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_FULL_CAP_HIT,baseline
 INSPECTION_SAMPLE_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_SAMPLE_CAP_HIT,baseline
 PROTOCOL_URL_DECODED_TOO_LONG,error,protocol,entry,FALSE,active,,,yandex
-PROTOCOL_TAG_DATA_LIMIT_EXCEEDED,warning,protocol,entry,FALSE,deferred-ruleset,,,yandex
+PROTOCOL_TAG_DATA_LIMIT_EXCEEDED,warning,protocol,entry,FALSE,active,,,yandex

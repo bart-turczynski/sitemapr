@@ -306,6 +306,54 @@ test_that("the decoded-length rule is yandex-only (not baseline / google)", {
   )
 })
 
+# --- Yandex per-tag data limit (§12.5/§12.7) ---
+
+test_that("an over-long lastmod warns under yandex", {
+  out <- validate_protocol(
+    sitemap_rows(loc = "https://example.com/a", lastmod = strrep("x", 200)),
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  d <- out[out$code == "PROTOCOL_TAG_DATA_LIMIT_EXCEEDED", ]
+  expect_identical(nrow(d), 1L)
+  expect_identical(d$severity, "warning")
+})
+
+test_that("an over-long loc warns without tripping PROTOCOL_URL_TOO_LONG", {
+  long <- paste0("https://example.com/", strrep("%20", 600))
+  out <- validate_protocol(
+    sitemap_rows(loc = long),
+    sitemap_url = NA_character_,
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  expect_true("PROTOCOL_TAG_DATA_LIMIT_EXCEEDED" %in% out$code)
+  expect_false("PROTOCOL_URL_TOO_LONG" %in% out$code)
+})
+
+test_that("a normal lastmod does not warn under yandex", {
+  out <- validate_protocol(
+    sitemap_rows(loc = "https://example.com/a", lastmod = "2026-07-17"),
+    ruleset = findings_ruleset_spec("yandex", ruleset_context())
+  )
+  expect_false("PROTOCOL_TAG_DATA_LIMIT_EXCEEDED" %in% out$code)
+})
+
+test_that("the per-tag data-limit rule is yandex-only", {
+  over <- sitemap_rows(
+    loc = "https://example.com/a",
+    lastmod = strrep("x", 200)
+  )
+  expect_false(
+    "PROTOCOL_TAG_DATA_LIMIT_EXCEEDED" %in% validate_protocol(over)$code
+  )
+  expect_false(
+    "PROTOCOL_TAG_DATA_LIMIT_EXCEEDED" %in%
+      validate_protocol(
+        over,
+        ruleset = findings_ruleset_spec("google", ruleset_context())
+      )$code
+  )
+})
+
 # --- Duplicate / equivalent detection (ADR-005 two-tier) -------------------
 
 test_that("two byte-identical locs produce a warning PROTOCOL_DUPLICATE_LOC", {

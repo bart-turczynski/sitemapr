@@ -286,6 +286,13 @@ test_that("yandex decoded-URL-length is an application_choice", {
   )
 })
 
+test_that("yandex per-tag data limit is an advisory", {
+  expect_identical(
+    findings_provenance_for("PROTOCOL_TAG_DATA_LIMIT_EXCEEDED", "yandex"),
+    "advisory"
+  )
+})
+
 test_that("findings_provenance_for defaults unknown codes to inherited", {
   expect_identical(
     findings_provenance_for("PROTOCOL_URL_FRAGMENT", "google"),
