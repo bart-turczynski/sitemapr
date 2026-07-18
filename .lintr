@@ -85,10 +85,4 @@ linters: linters_with_defaults(
     expect_true_false_linter = lintr::expect_true_false_linter(),
     expect_type_linter = lintr::expect_type_linter()
   )
-# Per-repo deviation from the boilerplate default (SITE-wiklhyec): data-raw/
-# holds developer-only reproducibility scaffolding (schema build + parity
-# oracle), not shipped package source. Those scripts legitimately carry long
-# canonical URLs and provenance prose; hold them to functional correctness,
-# not package style. They are never built into the package (.Rbuildignore).
-exclusions: list("data-raw")
 encoding: "UTF-8"
