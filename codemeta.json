@@ -20,7 +20,8 @@
       "@type": "Person",
       "givenName": "Bart",
       "familyName": "Turczynski",
-      "email": "bartek@turczynski.pl"
+      "email": "bartek@turczynski.pl",
+      "@id": "https://orcid.org/0000-0002-8788-7980"
     }
   ],
   "maintainer": [
@@ -28,7 +29,8 @@
       "@type": "Person",
       "givenName": "Bart",
       "familyName": "Turczynski",
-      "email": "bartek@turczynski.pl"
+      "email": "bartek@turczynski.pl",
+      "@id": "https://orcid.org/0000-0002-8788-7980"
     }
   ],
   "softwareSuggestions": [
@@ -212,7 +214,7 @@
     },
     "SystemRequirements": null
   },
-  "fileSize": "1187.123KB",
+  "fileSize": "1267.687KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
