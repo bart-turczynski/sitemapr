@@ -43,8 +43,10 @@ hreflang_graph_key <- function(urls) {
   parsed <- parse_url_adapter(urls[keep])
   canon <- build_loc_key(parsed)
   absolute <- parsed$parse_status == "ok" &
-    !is.na(parsed$scheme) & nzchar(parsed$scheme) &
-    !is.na(parsed$host) & nzchar(parsed$host)
+    !is.na(parsed$scheme) &
+    nzchar(parsed$scheme) &
+    !is.na(parsed$host) &
+    nzchar(parsed$host)
   absolute[is.na(absolute)] <- FALSE
   canon[!absolute] <- trimws(urls[keep])[!absolute]
   keys[keep] <- canon
@@ -155,7 +157,7 @@ hreflang_edge_gkey <- function(occ) {
     "",
     paste0("", occ$hreflang)
   )
-  paste(occ$source_key, occ$target_key, hl, sep = "")
+  paste0(occ$source_key, "\001", occ$target_key, "\001", hl)
 }
 
 # Retained evidence for one collapsed edge: every raw occurrence, in a
@@ -222,7 +224,6 @@ hreflang_graph_components <- function(keys, edges) {
   parent <- seq_along(keys)
   root <- function(x) {
     while (parent[x] != x) {
-      parent[x] <<- parent[parent[x]]
       x <- parent[x]
     }
     x

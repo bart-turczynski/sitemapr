@@ -566,7 +566,7 @@ audit_one_source <- function(
 
 # Combine already-assembled discovery trees, preserving the empty schema.
 audit_combine_trees <- function(parts) {
-  parts <- parts[vapply(parts, function(p) nrow(p) > 0L, logical(1L))]
+  parts <- parts[vapply(parts, nrow, integer(1L)) > 0L]
   if (length(parts) == 0L) {
     return(empty_sitemap_tree())
   }

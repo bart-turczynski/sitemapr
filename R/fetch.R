@@ -194,9 +194,16 @@ fetch_is_timeout <- function(cnd) {
 #' request_policy(max_active = 6)
 #' @family request-policy
 #' @export
-request_policy <- function(prepare = NULL, headers = NULL, auth = NULL,
-                           proxy = NULL, tls = NULL, retry = NULL,
-                           throttle = NULL, max_active = NULL) {
+request_policy <- function(
+  prepare = NULL,
+  headers = NULL,
+  auth = NULL,
+  proxy = NULL,
+  tls = NULL,
+  retry = NULL,
+  throttle = NULL,
+  max_active = NULL
+) {
   request_policy_check_prepare(prepare)
   request_policy_check_auth(auth)
   structure(
@@ -238,7 +245,7 @@ request_policy_check_headers <- function(headers) {
     return(NULL)
   }
   nms <- names(headers)
-  if (is.null(nms) || any(!nzchar(nms))) {
+  if (is.null(nms) || !all(nzchar(nms))) {
     request_policy_reject(
       "`headers` must be a named list or character vector of header values."
     )
@@ -279,7 +286,7 @@ request_policy_check_tls <- function(tls) {
     return(NULL)
   }
   nms <- names(tls)
-  if (is.null(nms) || any(!nzchar(nms))) {
+  if (is.null(nms) || !all(nzchar(nms))) {
     request_policy_reject(
       "`tls` must be a named list of curl/TLS options for req_options()."
     )
@@ -397,8 +404,13 @@ request_auth_bearer <- function(token) {
 #' @export
 #' @examples
 #' request_policy(proxy = request_proxy("proxy.internal", port = 3128))
-request_proxy <- function(url, port = NULL, username = NULL,
-                          password = NULL, auth = "basic") {
+request_proxy <- function(
+  url,
+  port = NULL,
+  username = NULL,
+  password = NULL,
+  auth = "basic"
+) {
   structure(
     list(
       url = url,
@@ -435,10 +447,13 @@ request_proxy <- function(url, port = NULL, username = NULL,
 #' @examples
 #' # Up to 4 attempts per hop, retrying the transient status set.
 #' request_policy(retry = request_retry(max_tries = 4L))
-request_retry <- function(max_tries = 3L,
-                          statuses = c(429L, 500L, 502L, 503L, 504L),
-                          backoff_min = 1, backoff_max = 30,
-                          retry_on_failure = FALSE) {
+request_retry <- function(
+  max_tries = 3L,
+  statuses = c(429L, 500L, 502L, 503L, 504L),
+  backoff_min = 1,
+  backoff_max = 30,
+  retry_on_failure = FALSE
+) {
   request_retry_check_tries(max_tries)
   request_retry_check_statuses(statuses)
   structure(
@@ -494,8 +509,11 @@ request_retry_check_statuses <- function(statuses) {
 #' request_throttle(requests = 10, window = 60)
 #' @family request-policy
 #' @export
-request_throttle <- function(min_interval = NULL, requests = NULL,
-                             window = NULL) {
+request_throttle <- function(
+  min_interval = NULL,
+  requests = NULL,
+  window = NULL
+) {
   interval <- request_throttle_interval(min_interval, requests, window)
   structure(
     list(min_interval = interval),
@@ -717,9 +735,13 @@ request_policy_prepare <- function(policy, req, url) {
 # between the base request and sitemapr's own transport controls: the timeout,
 # redirect ownership, and error policy are (re-)asserted AFTER the hook, so a
 # policy can add headers but cannot override those safety semantics.
-fetch_perform_one <- function(url, limits, user_agent,
-                              policy = request_policy(),
-                              throttle_state = NULL) {
+fetch_perform_one <- function(
+  url,
+  limits,
+  user_agent,
+  policy = request_policy(),
+  throttle_state = NULL
+) {
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
   # Caller-supplied customization (after the SSRF guard, before our own
@@ -873,7 +895,13 @@ fetch_source <- function(
     ),
     httr2_failure = function(cnd) {
       fetch_connection_failure(
-        cnd, url_str, scheme_inferred, limits, user_agent, ssrf_guard, policy,
+        cnd,
+        url_str,
+        scheme_inferred,
+        limits,
+        user_agent,
+        ssrf_guard,
+        policy,
         throttle_state
       )
     }
@@ -994,7 +1022,11 @@ fetch_follow <- function(
     # 2. Perform one request (no auto-redirect); the policy hook prepares it
     #    AFTER the guard above and BEFORE req_perform() inside the helper.
     resp <- fetch_perform_one(
-      current_url, limits, user_agent, policy, throttle_state
+      current_url,
+      limits,
+      user_agent,
+      policy,
+      throttle_state
     )
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.

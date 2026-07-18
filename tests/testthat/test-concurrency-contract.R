@@ -35,7 +35,8 @@ test_that("concurrent output is byte-identical to sequential (rows/tree)", {
 
   expect_identical(concurrent$rows, reference$rows)
   expect_identical(
-    stable_sources(concurrent)$sources, stable_sources(reference)$sources
+    stable_sources(concurrent)$sources,
+    stable_sources(reference)$sources
   )
   expect_identical(concurrent$tree, reference$tree)
   expect_identical(concurrent$problems, reference$problems)
@@ -125,13 +126,16 @@ test_that("budget truncation lands at the sequential catalog position", {
   root <- "https://example.com/sitemap.xml"
   map <- list(
     "https://example.com/child-1.xml" = urlset_xml(
-      "https://example.com/a1", "https://example.com/a2"
+      "https://example.com/a1",
+      "https://example.com/a2"
     ),
     "https://example.com/child-2.xml" = urlset_xml(
-      "https://example.com/b1", "https://example.com/b2"
+      "https://example.com/b1",
+      "https://example.com/b2"
     ),
     "https://example.com/child-3.xml" = urlset_xml(
-      "https://example.com/c1", "https://example.com/c2"
+      "https://example.com/c1",
+      "https://example.com/c2"
     )
   )
   local_index_server(map)
@@ -197,7 +201,8 @@ test_that("sequential fallback (max_active = 1) equals the default path", {
 
   expect_identical(serial$rows, reference$rows)
   expect_identical(
-    stable_sources(serial)$sources, stable_sources(reference)$sources
+    stable_sources(serial)$sources,
+    stable_sources(reference)$sources
   )
   expect_identical(serial$tree, reference$tree)
   expect_identical(serial$problems, reference$problems)
@@ -268,7 +273,7 @@ test_that("sitemap_tree paces all phases against one shared bucket", {
   # request across discovery + expansion; each of the rest slept once.
   n_requests <- length(tracker$urls)
   expect_gt(n_requests, 1L)
-  expect_identical(length(cl$slept), n_requests - 1L)
+  expect_length(cl$slept, n_requests - 1L)
 })
 
 # ---- public surface: top-level max_active argument (SITE-gxqpebtb) -----------
@@ -286,11 +291,13 @@ test_that("read_sitemap(max_active=) engages the scheduler, output unchanged", {
   )
   # read_sitemap() fetches the root URL, so the index body is in the map too.
   map <- c(
-    list(root = index_xml(
-      "https://example.com/child-1.xml",
-      "https://example.com/child-2.xml",
-      "https://example.com/child-3.xml"
-    )),
+    list(
+      root = index_xml(
+        "https://example.com/child-1.xml",
+        "https://example.com/child-2.xml",
+        "https://example.com/child-3.xml"
+      )
+    ),
     children
   )
   names(map)[[1]] <- root

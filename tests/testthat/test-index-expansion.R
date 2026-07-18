@@ -438,7 +438,7 @@ test_that("a caller row sink streams each leaf once, retaining no rows", {
   res <- expand_root(root, index_xml(c1, c2), sink = sink)
 
   # The sink saw each completed leaf exactly once, with its source provenance.
-  expect_identical(length(seen$rows), 2L)
+  expect_length(seen$rows, 2L)
   expect_setequal(seen$srcs, c(c1, c2))
   # The combined result retains NO rows (bounded retention), yet the tree and
   # per-source metadata are still recorded.
@@ -502,7 +502,7 @@ test_that("only google adds the same-or-lower-directory dimension", {
 test_that("index_child_scope_findings is dormant on the baseline path", {
   out <- index_child_scope_findings(
     idx_deep,
-    c("https://other.com/child.xml"),
+    "https://other.com/child.xml",
     idx_base,
     NULL
   )
@@ -513,7 +513,7 @@ test_that("index_child_scope_findings emits one row per out-of-scope child", {
   google_spec <- findings_ruleset_spec("google", ruleset_context())
   out <- index_child_scope_findings(
     idx_deep,
-    c("https://other.com/child.xml"),
+    "https://other.com/child.xml",
     idx_base,
     google_spec
   )

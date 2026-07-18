@@ -772,8 +772,8 @@ test_that("the additive context column is a named-list list-column", {
   )
   expect_type(out$context, "list")
   ctx <- out$context[[1L]]
-  expect_identical(
-    names(ctx),
+  expect_named(
+    ctx,
     c(
       "submission_channel",
       "discovery_provenance",

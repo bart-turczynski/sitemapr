@@ -43,7 +43,7 @@ check_sitemap_ruleset <- function(ruleset) {
     ruleset_context_reject(
       sprintf(
         "`ruleset` must be one of %s.",
-        paste(sitemap_rulesets(), collapse = ", ")
+        toString(sitemap_rulesets())
       )
     )
   }
