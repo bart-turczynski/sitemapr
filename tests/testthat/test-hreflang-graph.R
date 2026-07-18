@@ -49,7 +49,7 @@ test_that("a reciprocal pair is one cluster with both directed edges", {
   g <- build_hreflang_graph(rows)
   expect_identical(nrow(g$nodes), 2L)
   expect_true(all(g$nodes$node_kind == "internal"))
-  expect_identical(length(unique(g$nodes$cluster)), 1L)
+  expect_length(unique(g$nodes$cluster), 1L)
   # en->en, en->de, de->en, de->de : four directed edges.
   expect_identical(nrow(g$edges), 4L)
   expect_identical(g$clusters$size, 2L)
@@ -73,7 +73,7 @@ test_that("external targets are represented explicitly, not dropped", {
     c("https://other.com/de", "https://other.com/fr")
   )
   # Source and its external targets share one cluster.
-  expect_identical(length(unique(g$nodes$cluster)), 1L)
+  expect_length(unique(g$nodes$cluster), 1L)
   expect_identical(g$clusters$n_external, 2L)
   expect_identical(g$clusters$n_internal, 1L)
 })
@@ -121,7 +121,7 @@ test_that("an asymmetric link still clusters both URLs (undirected)", {
   expect_identical(g$edges$target_key, "https://a.com/b")
   # But both nodes are present and in the same cluster.
   expect_setequal(g$nodes$url_key, c("https://a.com/a", "https://a.com/b"))
-  expect_identical(length(unique(g$nodes$cluster)), 1L)
+  expect_length(unique(g$nodes$cluster), 1L)
 })
 
 test_that("disjoint alternate sets form separate, stably-ordered clusters", {

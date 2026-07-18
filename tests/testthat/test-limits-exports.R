@@ -30,7 +30,7 @@ test_that("fetch_limits() preserves its list shape and coerced types", {
 
   lim <- fetch_limits()
 
-  expect_identical(names(lim), c("timeout", "max_redirects", "max_bytes"))
+  expect_named(lim, c("timeout", "max_redirects", "max_bytes"))
   expect_identical(lim$timeout, 30)
   expect_identical(lim$max_redirects, 5L)
   expect_identical(lim$max_bytes, 524288000L)
@@ -46,8 +46,8 @@ test_that("index_limits() preserves its list shape, Inf budgets, and types", {
 
   lim <- index_limits()
 
-  expect_identical(
-    names(lim),
+  expect_named(
+    lim,
     c("max_depth", "max_children", "max_total_sitemaps", "max_total_urls")
   )
   expect_identical(lim$max_depth, 3L)
@@ -62,7 +62,7 @@ test_that("discovery_limits() preserves its list shape and coerced type", {
 
   lim <- discovery_limits()
 
-  expect_identical(names(lim), "max_candidates")
+  expect_named(lim, "max_candidates")
   expect_identical(lim$max_candidates, 50L)
 })
 

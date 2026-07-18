@@ -131,7 +131,9 @@ test_that("audit findings honor mode, matching validate_sitemap()", {
   f <- audit_fixture("schema-invalid-urlset.xml")
   for (m in c("strict", "non-strict")) {
     a <- audit_sitemap(f, mode = m)
-    expect_equal(audit_findings(a), validate_sitemap(f, mode = m),
+    expect_equal(
+      audit_findings(a),
+      validate_sitemap(f, mode = m),
       ignore_attr = TRUE
     )
   }
@@ -165,9 +167,9 @@ test_that("a URL index is fetched once and matches read + validate", {
   # One fetch per distinct URL (root + two children), none fetched twice.
   expect_setequal(unique(audit_urls_fetched), c(root, c1, c2))
   expect_true(all(table(audit_urls_fetched) == 1L))
-  expect_identical(length(audit_urls_fetched), 3L)
+  expect_length(audit_urls_fetched, 3L)
   # The two-call path fetches everything twice.
-  expect_identical(length(sink2$urls), 6L)
+  expect_length(sink2$urls, 6L)
 
   expect_equal(audit_urls(a), audit_strip_attrs(rs), ignore_attr = TRUE)
   expect_equal(audit_findings(a), vs, ignore_attr = TRUE)
@@ -207,7 +209,9 @@ test_that("a failed source yields a coherent audit with the failure recorded", {
   # The failure surfaces on both attributable surfaces.
   expect_true("FETCH_FAILED" %in% audit_findings(a)$code)
   expect_true(any(grepl(
-    "sitemapr-audit-missing", audit_problems(a)$subject_ref
+    "sitemapr-audit-missing",
+    audit_problems(a)$subject_ref,
+    fixed = TRUE
   )))
 })
 

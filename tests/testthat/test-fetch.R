@@ -578,8 +578,12 @@ test_that("the request-policy constructor family is exported (SITE-qtllryuw)", {
   # family is on the public surface and each returns its classed object.
   exports <- getNamespaceExports("sitemapr")
   family <- c(
-    "request_policy", "request_auth_basic", "request_auth_bearer",
-    "request_proxy", "request_retry", "request_throttle"
+    "request_policy",
+    "request_auth_basic",
+    "request_auth_bearer",
+    "request_proxy",
+    "request_retry",
+    "request_throttle"
   )
   expect_true(all(family %in% exports))
   expect_s3_class(request_policy(), "sitemapr_request_policy")
@@ -588,7 +592,8 @@ test_that("the request-policy constructor family is exported (SITE-qtllryuw)", {
   expect_s3_class(request_proxy("proxy.internal"), "sitemapr_request_proxy")
   expect_s3_class(request_retry(), "sitemapr_request_retry")
   expect_s3_class(
-    request_throttle(min_interval = 1), "sitemapr_request_throttle"
+    request_throttle(min_interval = 1),
+    "sitemapr_request_throttle"
   )
 })
 
@@ -662,8 +667,11 @@ test_that("policy_set_max_active injects a top-level cap, overriding policy", {
 # ---- request policy: retry and exponential backoff ---------------------------
 
 # A response with a specific status (retryable-status fixtures).
-mock_status <- function(status, url = "https://example.com/sitemap.xml",
-                        headers = list()) {
+mock_status <- function(
+  status,
+  url = "https://example.com/sitemap.xml",
+  headers = list()
+) {
   httr2::response(status_code = status, url = url, headers = headers)
 }
 
@@ -856,7 +864,7 @@ test_that("the default (throttle = NULL) policy paces nothing", {
 test_that("a policy throttle config builds a live per-host state", {
   policy <- request_policy(throttle = request_throttle(min_interval = 2))
   state <- throttle_state_new(policy$throttle)
-  expect_true(is.environment(state))
+  expect_type(state, "environment")
   expect_identical(state$min_interval, 2)
 })
 
