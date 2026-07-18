@@ -20,8 +20,8 @@
 # (MIT). They express the public Sitemap Protocol 0.9 and Google sitemap
 # extension element models -- protocol facts, not copied schema text -- so they
 # carry no third-party copyright. Behavioral equivalence with the canonical
-# upstream XSDs is checked by data-raw/schemas/check-parity.R (dev-only, network;
-# never run in CI and never shipped).
+# upstream XSDs is checked by data-raw/schemas/check-parity.R (dev-only,
+# network; never run in CI and never shipped).
 
 suppressPackageStartupMessages({
   library(xml2)
@@ -31,43 +31,60 @@ suppressPackageStartupMessages({
 # --- manifest -----------------------------------------------------------------
 # One row per bundled schema. Every schema is authored in data-raw/schemas/
 # authored/. `terms` documents the licensing basis for CRAN provenance.
-authored_terms <- "sitemapr-authored, clean-room; covered by the sitemapr package license (MIT)."
+authored_terms <- paste(
+  "sitemapr-authored, clean-room; covered by the sitemapr package",
+  "license (MIT)."
+)
 manifest <- list(
-  list(file = "sitemap.xsd",
-       namespace = "http://www.sitemaps.org/schemas/sitemap/0.9",
-       role = "core urlset (Sitemap Protocol 0.9)",
-       models = "https://www.sitemaps.org/protocol.html",
-       terms = authored_terms),
-  list(file = "siteindex.xsd",
-       namespace = "http://www.sitemaps.org/schemas/sitemap/0.9",
-       role = "sitemapindex (Sitemap Protocol 0.9)",
-       models = "https://www.sitemaps.org/protocol.html",
-       terms = authored_terms),
-  list(file = "sitemap-image.xsd",
-       namespace = "http://www.google.com/schemas/sitemap-image/1.1",
-       role = "image extension 1.1",
-       models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps",
-       terms = authored_terms),
-  list(file = "sitemap-video.xsd",
-       namespace = "http://www.google.com/schemas/sitemap-video/1.1",
-       role = "video extension 1.1",
-       models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/video-sitemaps",
-       terms = authored_terms),
-  list(file = "sitemap-news.xsd",
-       namespace = "http://www.google.com/schemas/sitemap-news/0.9",
-       role = "news extension 0.9",
-       models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/news-sitemap",
-       terms = authored_terms),
-  list(file = "sitemap-pagemap.xsd",
-       namespace = "http://www.google.com/schemas/sitemap-pagemap/1.0",
-       role = "PageMap extension 1.0",
-       models = "https://developers.google.com/custom-search/docs/structured_data",
-       terms = authored_terms),
-  list(file = "xhtml-hreflang.xsd",
-       namespace = "http://www.w3.org/1999/xhtml",
-       role = "minimal xhtml:link element for hreflang alternates",
-       models = "https://developers.google.com/search/docs/specialty/international/localized-versions",
-       terms = authored_terms)
+  list(
+    file = "sitemap.xsd",
+    namespace = "http://www.sitemaps.org/schemas/sitemap/0.9",
+    role = "core urlset (Sitemap Protocol 0.9)",
+    models = "https://www.sitemaps.org/protocol.html",
+    terms = authored_terms
+  ),
+  list(
+    file = "siteindex.xsd",
+    namespace = "http://www.sitemaps.org/schemas/sitemap/0.9",
+    role = "sitemapindex (Sitemap Protocol 0.9)",
+    models = "https://www.sitemaps.org/protocol.html",
+    terms = authored_terms
+  ),
+  list(
+    file = "sitemap-image.xsd",
+    namespace = "http://www.google.com/schemas/sitemap-image/1.1",
+    role = "image extension 1.1",
+    models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps", # nolint: line_length_linter.
+    terms = authored_terms
+  ),
+  list(
+    file = "sitemap-video.xsd",
+    namespace = "http://www.google.com/schemas/sitemap-video/1.1",
+    role = "video extension 1.1",
+    models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/video-sitemaps", # nolint: line_length_linter.
+    terms = authored_terms
+  ),
+  list(
+    file = "sitemap-news.xsd",
+    namespace = "http://www.google.com/schemas/sitemap-news/0.9",
+    role = "news extension 0.9",
+    models = "https://developers.google.com/search/docs/crawling-indexing/sitemaps/news-sitemap", # nolint: line_length_linter.
+    terms = authored_terms
+  ),
+  list(
+    file = "sitemap-pagemap.xsd",
+    namespace = "http://www.google.com/schemas/sitemap-pagemap/1.0",
+    role = "PageMap extension 1.0",
+    models = "https://developers.google.com/custom-search/docs/structured_data", # nolint: line_length_linter.
+    terms = authored_terms
+  ),
+  list(
+    file = "xhtml-hreflang.xsd",
+    namespace = "http://www.w3.org/1999/xhtml",
+    role = "minimal xhtml:link element for hreflang alternates",
+    models = "https://developers.google.com/search/docs/specialty/international/localized-versions", # nolint: line_length_linter.
+    terms = authored_terms
+  )
 )
 
 # --- paths --------------------------------------------------------------------
@@ -84,8 +101,8 @@ build_one <- function(entry) {
     stop(sprintf("authored schema missing: %s", src), call. = FALSE)
   }
   # Normalize line endings to LF so bundled bytes are identical across platforms
-  # and match what git stores (.gitattributes eol=lf). The recorded sha256 is the
-  # hash of the normalized artifact we actually ship.
+  # and match what git stores (.gitattributes eol=lf). The recorded sha256
+  # is the hash of the normalized artifact we actually ship.
   raw <- readBin(src, "raw", n = file.info(src)$size)
   txt <- gsub("\r", "", rawToChar(raw), fixed = TRUE)
   writeBin(charToRaw(txt), dest)
@@ -93,8 +110,10 @@ build_one <- function(entry) {
 
   # Integrity: must be well-formed XML and parse as a schema.
   tryCatch(xml2::read_xml(dest), error = function(e) {
-    stop(sprintf("not well-formed XML: %s (%s)", entry$file, conditionMessage(e)),
-         call. = FALSE)
+    stop(
+      sprintf("not well-formed XML: %s (%s)", entry$file, conditionMessage(e)),
+      call. = FALSE
+    )
   })
   entry$sha256 <- as.character(openssl::sha256(file(dest)))
   entry$bytes <- file.info(dest)$size
@@ -115,38 +134,50 @@ src_lines <- c(
   sprintf("Built: %s", built),
   "",
   "All bundled schemas are clean-room **sitemapr-authored** and ship under the",
-  "package license (MIT). Each expresses the element model of a public protocol",
-  "(Sitemap Protocol 0.9, or a Google sitemap extension) -- element names, types,",
-  "cardinalities, enumerations, and patterns are the protocol's functional facts,",
-  "not copied schema text -- so none carries third-party copyright. The `Models`",
+  "package license (MIT). Each expresses the element model of a public protocol", # nolint: line_length_linter.
+  "(Sitemap Protocol 0.9, or a Google sitemap extension) -- element names, types,", # nolint: line_length_linter.
+  "cardinalities, enumerations, and patterns are the protocol's functional facts,", # nolint: line_length_linter.
+  "not copied schema text -- so none carries third-party copyright. The `Models`", # nolint: line_length_linter.
   "column links the public spec each schema implements.",
   "",
   "| File | Namespace | Role | Models | sha256 |",
   "|---|---|---|---|---|"
 )
 for (r in records) {
-  src_lines <- c(src_lines, sprintf(
-    "| `%s` | `%s` | %s | %s | `%s` |",
-    r$file, r$namespace, r$role, r$models, r$sha256
-  ))
+  src_lines <- c(
+    src_lines,
+    sprintf(
+      "| `%s` | `%s` | %s | %s | `%s` |",
+      r$file,
+      r$namespace,
+      r$role,
+      r$models,
+      r$sha256
+    )
+  )
 }
 src_lines <- c(
-  src_lines, "",
+  src_lines,
+  "",
   "## Terms",
   "",
-  vapply(records, function(r) sprintf("- `%s` — %s", r$file, r$terms), character(1)),
+  vapply(
+    records,
+    function(r) sprintf("- `%s` — %s", r$file, r$terms),
+    character(1)
+  ),
   "",
   "## Notes",
   "",
   "- Behavioral equivalence with the canonical upstream XSDs (sitemaps.org,",
   "  Google) is verified by `data-raw/schemas/check-parity.R` — a dev-only,",
-  "  network-using oracle that is never run in CI and never shipped. The upstream",
-  "  XSDs are not redistributed: the Google schemas are `Copyright Google Inc.`",
-  "  (All Rights Reserved) and the sitemaps.org schemas are CC BY-SA 2.5; authoring",
+  "  network-using oracle that is never run in CI and never shipped. The upstream", # nolint: line_length_linter.
+  "  XSDs are not redistributed: the Google schemas are `Copyright Google Inc.`", # nolint: line_length_linter.
+  "  (All Rights Reserved) and the sitemaps.org schemas are CC BY-SA 2.5; authoring", # nolint: line_length_linter.
   "  our own avoids importing either license into this MIT package.",
   "- Google withdrew the mobile sitemap extension; `sitemap-mobile/1.0` is no",
   "  longer published upstream and is intentionally not modeled.",
-  "- All schemas are XSD 1.0 (libxml2 / `xml2::xml_validate`). XSD 1.1 is out of",
+  "- All schemas are XSD 1.0 (libxml2 / `xml2::xml_validate`). XSD 1.1 is out of", # nolint: line_length_linter.
   "  scope (ADR-001); rules beyond XSD 1.0 live in Layer D.",
   ""
 )
@@ -165,7 +196,7 @@ lic_lines <- c(
   "  * sitemap-video.xsd               — Google video sitemap extension 1.1",
   "  * sitemap-news.xsd                — Google news sitemap extension 0.9",
   "  * sitemap-pagemap.xsd             — Google PageMap sitemap extension 1.0",
-  "  * xhtml-hreflang.xsd              — minimal xhtml:link for hreflang alternates",
+  "  * xhtml-hreflang.xsd              — minimal xhtml:link for hreflang alternates", # nolint: line_length_linter.
   "",
   "Element names, types, cardinalities, enumerations, and patterns are the",
   "functional facts of those protocols, preserved for validation parity; the",
