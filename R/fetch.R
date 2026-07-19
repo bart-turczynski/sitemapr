@@ -1062,3 +1062,115 @@ fetch_follow <- function(
     return(fetch_terminal_record(resp, url, redirect_chain, body, elapsed))
   }
 }
+
+# ---- page-inspection capture loop (Layer E, Contract A) ----------------------
+#
+# ADDITIVE sibling of fetch_follow() for engine-neutral page inspection (E.1a).
+# fetch_source()/fetch_follow() are FROZEN; this path is never reached by any
+# existing caller, so their behavior stays byte-identical. It reuses the same
+# ADR-003 safety machinery (fetch_hop_ssrf_guard, fetch_perform_one,
+# fetch_redirect_target, read_capped_body) but, unlike fetch_follow(), it:
+#   * records EVERY hop (url + status + resolved Location) into `capture$hops`,
+#     so the redirect CHAIN survives (not just a counter);
+#   * keeps the terminal response's headers with REPEATED field values intact
+#     (multiple X-Robots-Tag / Link lines all survive);
+#   * TRUNCATES-AND-RETAINS the body at `page_body_cap` (a low, per-page bound)
+#     rather than discarding, so head-region facts remain usable;
+#   * classifies nothing itself — it returns raw terminal facts (or lets a
+#     classed abort propagate) and page-fetch.R maps them to an evidence_status.
+# `capture` is a caller-owned environment that ACCUMULATES hops as they happen,
+# so even when a hop aborts (SSRF / redirect budget) the hops performed so far
+# are still readable by the acquisition function's condition handlers.
+
+# One captured hop record: the requested url, the HTTP status, and the resolved
+# redirect Location (NA when the response is terminal, i.e. not a followed 3xx).
+page_hop_record <- function(url, status, location) {
+  list(
+    url = as.character(url)[[1L]],
+    status = as.integer(status)[[1L]],
+    location = as.character(location)[[1L]]
+  )
+}
+
+# Read the terminal response's body under the two distinct ADR-003 bounds and
+# return the raw terminal facts. The 500 MB per-resource ceiling
+# (`limits$max_bytes`) stays the OUTER discard backstop: read_capped_body()
+# aborts `sitemapr_body_ceiling` when it is exceeded (the acquisition fn maps
+# that to `incomplete`). The per-page cap (`page_body_cap`, single-MB range) is
+# the INNER truncate-and-retain bound: on reaching it the prefix is kept and
+# `truncated = TRUE` (the acquisition fn maps a truncated 2xx to `partial`).
+page_fetch_terminal <- function(resp, limits, page_body_cap) {
+  body <- if (httr2::resp_has_body(resp)) {
+    read_capped_body(httr2::resp_body_raw(resp), limits$max_bytes)
+  } else {
+    raw()
+  }
+  truncated <- FALSE
+  if (length(body) > page_body_cap) {
+    body <- body[seq_len(page_body_cap)]
+    truncated <- TRUE
+  }
+  list(
+    status = as.integer(httr2::resp_status(resp)),
+    final_url = httr2::resp_url(resp),
+    terminal_headers = httr2::resp_headers(resp),
+    body = body,
+    truncated = truncated
+  )
+}
+
+# Manual redirect loop for page inspection. Ordering is load-bearing (ADR-003):
+# guard -> perform -> record -> follow, on every hop. Reaching the redirect cap
+# aborts `sitemapr_redirect_limit` (mapped to `redirect_over_budget`); the SSRF
+# guard aborts `sitemapr_ssrf_blocked` (mapped to `safety_refused`); transport
+# failures propagate as `httr2_failure`/`sitemapr_timeout` (mapped to
+# `transport_fail`). On a terminal response it returns page_fetch_terminal().
+page_fetch_follow <- function(
+  url,
+  limits,
+  user_agent,
+  ssrf_guard,
+  page_body_cap,
+  capture,
+  policy = request_policy(),
+  throttle_state = NULL
+) {
+  current_url <- url
+  hops <- 0L
+
+  repeat {
+    fetch_hop_ssrf_guard(current_url, ssrf_guard)
+    resp <- fetch_perform_one(
+      current_url,
+      limits,
+      user_agent,
+      policy,
+      throttle_state
+    )
+    status <- httr2::resp_status(resp)
+    next_url <- fetch_redirect_target(resp, current_url)
+    capture$hops[[length(capture$hops) + 1L]] <- page_hop_record(
+      current_url,
+      status,
+      next_url
+    )
+    if (!is.na(next_url)) {
+      hops <- hops + 1L
+      if (hops > limits$max_redirects) {
+        rlang::abort(
+          sprintf(
+            "Exceeded the redirect limit of %d while fetching %s.",
+            limits$max_redirects,
+            url
+          ),
+          class = "sitemapr_redirect_limit",
+          url = url,
+          max_redirects = limits$max_redirects
+        )
+      }
+      current_url <- next_url
+      next
+    }
+    return(page_fetch_terminal(resp, limits, page_body_cap))
+  }
+}
