@@ -49,12 +49,22 @@ coordinated registry migration.
 There is **no new sitemapr axis and no ADR-009 amendment for the axis.**
 `robotstxtr` already owns the vocabulary as first-class parameters of
 `robots_evaluate_url_v1(url, robots_product_token, robots_policy_ruleset,
-matcher_backend, …)`, and encodes the capability boundary in
-`engine_backend_capability_v1()` (`token_policy`: Google `arbitrary_valid`;
-Bing/Yandex `bounded_profiles`; rfc9309 `rfc9309`), including the anti-laundering
-rule ("a Google decision on any token reflects Google parsing, never a prediction
-of the crawler the token names").
+matcher_backend, …)`, and publishes the capability boundary at the **public**
+accessor `robots_engine_contract_v1()$matcher_capability` (`token_policy`: Google
+`arbitrary_valid`; Bing/Yandex `bounded_profiles`; rfc9309 `rfc9309`), including
+the anti-laundering rule ("a Google decision on any token reflects Google parsing,
+never a prediction of the crawler the token names"). Consume the public accessor —
+`engine_backend_capability_v1()` is **internal** to `robotstxtr`.
 
+- **API carrier — not silent derivation.** The robots axes need an **explicit
+  carrier** on the public entry point. `validate_sitemap_ruleset()` /
+  `ruleset_context()` today expose only the four sitemap-source axes
+  (`submission_channel` / `discovery_provenance` / `property_scope` /
+  `authority_evidence`) — **neither `robots_policy_ruleset` nor `matcher_backend`**.
+  Deriving them silently from `sitemap_ruleset` violates ADR-009's axis
+  independence. Add explicit arguments (or a structured robots context) with
+  **documented presets whose expanded values are retained** (ADR-009 §1). The
+  naming bridge below is a *preset*, not an implicit derivation.
 - **Use vs. steal, by layer.** *Literally use* `robotstxtr` for the **access**
   decision (E.5, E.1b, and the §0.6 sitemap check). *Steal the ideas* for
   **interpretation** (E.3 crawler-applicability filter): reuse the product-token
@@ -69,12 +79,13 @@ of the crawler the token names").
 
 ### 0.4 `partial` requires an ADR-009 §2 amendment (supersedes §3.1/§10-D7)
 
-The new page-inspection ADR MUST **amend ADR-009 §2** to add `partial`
-(intentional prefix-acquisition window: truncated body, head-region facts usable)
-as distinct from `incomplete` (no usable body), *and* add an ADR-003 page-cap
-subsection. A cross-reference is insufficient — accepted ADR-009 currently maps a
-reached body ceiling to `incomplete`, which this contract overrides for the
-intentional page cap.
+`partial` is **already** in the ADR-009 §2 `evidence_status` enum (ADR-009:104) —
+so the ADR does **not** "add" it. It MUST instead **(a)** amend the **ADR-009 §3
+body-ceiling rule** (accepted ADR-009 resolves a reached body ceiling to
+`incomplete`; the intentional truncate-and-retain page cap resolves to `partial`,
+head-region facts usable), **(b)** define the page-cap `partial` semantics, and
+**(c)** add an **ADR-003** page-cap subsection. Name these as **direct edits to
+ADR-009 §3 and ADR-003**, not an enum addition and not a cross-reference.
 
 ### 0.5 Transport matrix conforms to the registry (supersedes §3.4)
 
@@ -119,6 +130,40 @@ through `robots_evaluate_url_v1()` and preserves E.5 output via
 `as_legacy_robots_decisions_v1()`. `SITE-wrylygzd` is **non-gating** (cross-repo
 tail of the done E.5). The live issue set in `fp` is authoritative for IDs and
 dependencies.
+
+### 0.9 `robotstxtr` contract pin — the concrete blocker
+
+E.1b names v1 engine-contract APIs (`robots_evaluate_url_v1`,
+`as_legacy_robots_decisions_v1`) that live in `robotstxtr` **0.2.0**, but
+sitemapr's `DESCRIPTION` still pins `robotstxtr (>= 0.1.0)` / `Remotes: …@v0.1.0`,
+and **no `v0.2.0` tag exists** in `robotstxtr` (HEAD carries the contract; the tag
+does not). The public capability accessor is
+`robots_engine_contract_v1()$matcher_capability`. Blocker steps: (1) tag/release
+`robotstxtr` v0.2.0 (cross-repo); (2) bump sitemapr `Suggests`/`Remotes` to
+`>= 0.2.0` / `@v0.2.0`; (3) gate on the engine-contract schema revision
+(`robots_engine_contract_v1()$contract_id`). **Gates E.1b.**
+
+### 0.10 Provenance carrier — code-level is insufficient (expands §0.7)
+
+The assembler derives `provenance` solely from `(code, ruleset)`
+(`R/findings-assemble.R:245`). E.3 can make **different** documented/inferred
+claims under the **same** code depending on the fold path (e.g. single-channel
+`noindex` = `documented`; the cross-channel meta↔header application = `inferred`,
+both under `PAGE_META_ROBOTS_NOINDEX`). So context + `remediation_hint` do not
+close the seam. Resolve one of: **(a)** allow a producer-supplied `provenance`
+with a documented collision rule against the `(code, ruleset)` default, or
+**(b)** constrain every emitted row/message so code-level provenance stays
+sufficient. Owned by the assembler issue (§0.7).
+
+### 0.11 Acceptance tightening
+
+- **Coverage shape:** pin whether `attr(x, "page_coverage")` is **batch-wide** or
+  **per-sitemap** for `validate_sitemaps*()`, and version the attribute.
+- **Transport-finding precedence:** "at most one transport finding" needs an
+  explicit order when outcomes overlap on one logical fetch —
+  **`safety_refused` > terminal `http_status` > redirect (resolved /
+  over-budget)**. A safety refusal or terminal error outranks any redirect
+  observation.
 
 ---
 
@@ -309,6 +354,11 @@ all caller-overridable with safe defaults:
 
 ### 3.4 E.1 transport emission matrix
 
+> **SUPERSEDED by §0.5.** The severities in the matrix below are wrong
+> (`PAGE_STATUS_REDIRECT`/`PAGE_REDIRECT_CHAIN` reversed) and the 500 MB mapping
+> is corrected there. Read §0.5 (+ §0.11 precedence); the matrix here is
+> historical.
+
 E.1 is "fleshed" only with the outcome→code mapping pinned. One logical fetch
 emits **at most one** transport finding; extraction (E.2–E.4) runs only on a
 `usable_body` / `partial` outcome.
@@ -374,6 +424,11 @@ Every engine cell below carries an ADR-009 provenance tag: **executable**
 `advisory`) may only soften a finding, never fabricate a verdict.
 
 ### 5.1 Effective indexability — meta robots + X-Robots-Tag (E.3)
+
+> **Axis handling SUPERSEDED by §0.3.** The fold semantics below stand, but the
+> per-engine axis is carried by `robotstxtr` engine-contract-v1 (no new ADR-009
+> axis; explicit API carrier, not silent derivation) and provenance is
+> producer-supplied where the fold path diverges (§0.10).
 
 **Decision (option a, chosen): keep the two committed channel codes
 (`PAGE_META_ROBOTS_NOINDEX`, `PAGE_XROBOTSTAG_NOINDEX`) that say *what/where*, and
@@ -686,6 +741,10 @@ agent-verified this session (2026-07-19); verify others before shipping.
 
 ## 10. Open decisions (to settle at issue-filing)
 
+> **RESOLVED — historical.** Every decision below is settled in §0 (D1/D8→§0.3,
+> D2/D3→E.3, D4→§0.2, D5+D7→§0.4/ADR, D6→§0.7/§0.10). Retained to show the
+> reasoning; §0 and the live `fp` tree are authoritative.
+
 1. **ADR-009 axis for page-directive interpretation** (§8) — documented fold
    table on an existing axis, vs. an ADR-009 amendment adding
    `page_directive_ruleset`. Axes are ADR-owned; must settle before E.3/E.4 file.
@@ -721,6 +780,10 @@ agent-verified this session (2026-07-19); verify others before shipping.
 ---
 
 ## 11. Decomposition preview (file after §10 settles)
+
+> **SUPERSEDED by §0.8.** E.1 is split into E.1a/E.1s/E.1f and the sitemap-blocked
+> check was added; the live `fp` tree is authoritative for the decomposition.
+> Historical.
 
 - **Parent SITE-ihycidfl** — re-scope: E.5 done; remaining = the engine-
   parameterized `page` layer (E.1–E.4) over registered `PAGE_*` codes + fetch
