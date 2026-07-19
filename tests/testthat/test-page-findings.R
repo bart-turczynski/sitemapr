@@ -313,7 +313,21 @@ test_that("inspect_pages = TRUE fetches, stamps coverage, emits page rows", {
 
 test_that("inspect_pages = TRUE with an all-clean page emits no page rows", {
   path <- pf_local_sitemap("https://example.com/a")
-  httr2::local_mocked_responses(list(pf_mock_ok("https://example.com/a")))
+  # A healthy 200 whose head carries a self-referential canonical: no transport
+  # finding AND no canonical finding (the page agrees with the advertised loc).
+  clean <- httr2::response(
+    status_code = 200L,
+    url = "https://example.com/a",
+    headers = list("Content-Type" = "text/html; charset=UTF-8"),
+    body = charToRaw(
+      paste0(
+        "<html><head>",
+        '<link rel="canonical" href="https://example.com/a">',
+        "</head></html>"
+      )
+    )
+  )
+  httr2::local_mocked_responses(list(clean))
 
   out <- validate_sitemap(path, inspect_pages = TRUE)
   expect_false("page" %in% out$layer)

@@ -331,11 +331,16 @@ page_inspection_finalize <- function(
     limits = limits,
     policy = policy
   )
-  part <- page_transport_findings(
-    run,
-    subjects = list(loc = sink$loc, base = sink$base)
+  subjects <- list(loc = sink$loc, base = sink$base)
+  # Sibling producers over the same run: transport (this file) on the failed /
+  # redirect outcomes, canonical (R/page-canonical.R) on the usable_body /
+  # partial outcomes. They join the same `parts` list so the assembler stamps
+  # one ruleset/mode over each page-layer finding (baseline ten / engine 14).
+  parts <- list(
+    page_transport_findings(run, subjects = subjects),
+    page_canonical_findings(run, subjects = subjects)
   )
-  page <- assemble_findings(list(part), mode, ruleset)
+  page <- assemble_findings(parts, mode, ruleset)
   result <- combine_findings_contracts(list(base, page), ruleset)
   attr(result, "page_coverage") <- page_coverage_attr(run$coverage)
   result
