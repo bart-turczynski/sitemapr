@@ -635,7 +635,10 @@ validate_failure_finding <- function(source, cnd) {
 # installed, this signals a classed warning naming the install command (the
 # absence is a setup fact about the user's machine, NOT a finding about the
 # sitemap) and returns NULL so validation proceeds with every other layer
-# unaffected. Otherwise it returns the matcher user-agent to test against.
+# unaffected. An engine that IS installed but reports an incompatible contract
+# aborts instead (robotstxtr_engine_contract()): wrong matcher semantics would
+# silently corrupt robots findings, which is worse than failing.
+# Otherwise it returns the matcher user-agent to test against.
 resolve_robots_ua <- function(check_robots, robots_user_agent) {
   if (!isTRUE(check_robots)) {
     return(NULL)
@@ -653,6 +656,7 @@ resolve_robots_ua <- function(check_robots, robots_user_agent) {
     )
     return(NULL)
   }
+  robotstxtr_engine_contract()
   robots_user_agent
 }
 

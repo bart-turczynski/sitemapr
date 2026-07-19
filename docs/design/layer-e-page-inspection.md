@@ -135,17 +135,36 @@ through `robots_evaluate_url_v1()` and preserves E.5 output via
 tail of the done E.5). The live issue set in `fp` is authoritative for IDs and
 dependencies.
 
-### 0.9 `robotstxtr` contract pin — the concrete blocker
+### 0.9 `robotstxtr` contract pin — RESOLVED (SITE-ykagmqdd)
 
 E.1b names v1 engine-contract APIs (`robots_evaluate_url_v1`,
-`as_legacy_robots_decisions_v1`) that live in `robotstxtr` **0.2.0**, but
-sitemapr's `DESCRIPTION` still pins `robotstxtr (>= 0.1.0)` / `Remotes: …@v0.1.0`,
-and **no `v0.2.0` tag exists** in `robotstxtr` (HEAD carries the contract; the tag
-does not). The public capability accessor is
-`robots_engine_contract_v1()$matcher_capability`. Blocker steps: (1) tag/release
-`robotstxtr` v0.2.0 (cross-repo); (2) bump sitemapr `Suggests`/`Remotes` to
-`>= 0.2.0` / `@v0.2.0`; (3) gate on the engine-contract schema revision
-(`robots_engine_contract_v1()$contract_id`). **Gates E.1b.**
+`as_legacy_robots_decisions_v1`) that live in `robotstxtr` **0.2.0**. All four
+blocker steps are now done, so **E.1b is unblocked**:
+
+1. `robotstxtr` **v0.2.0 is tagged** at `7012ed1` (engine-contract-v1, PRs
+   #43–45), verified `R CMD check --as-cran` clean at that commit.
+2. sitemapr's `DESCRIPTION` pins `robotstxtr (>= 0.2.0)` /
+   `Remotes: …@v0.2.0`.
+3. The seam (`resolve_robots_ua()`) gates through
+   `robotstxtr_engine_contract()` in `R/robots-validate.R`.
+4. Capability is read via the **public** accessor
+   `robots_engine_contract_v1()$matcher_capability`, wrapped as
+   `robotstxtr_matcher_capability()`. `engine_backend_capability_v1()` stays
+   internal to `robotstxtr` and is never reached into.
+
+**Gate design note — `contract_id` alone is insufficient.** A pre-#43
+`robotstxtr` advertises the *same* `robotstxtr.engine-aware/v1` contract id
+while carrying schema `2026-07-17.1` and **no `matcher_capability` field at
+all**. An id-only gate passes that build and then silently hands out a NULL
+capability. The gate therefore checks three things: the accessor exists, the
+`contract_id` matches, and `matcher_capability` is actually present. The
+known-good schema (`2026-07-18.2`) is recorded for the error message but is
+deliberately *not* an equality gate, since additive revisions stay compatible.
+
+Absence of `robotstxtr` remains a warning + graceful skip (a setup fact about
+the user's machine); a version that is present but **incompatible** aborts with
+a classed `sitemapr_robotstxtr_contract` error, because wrong matcher semantics
+would silently corrupt robots findings.
 
 ### 0.10 Provenance carrier — code-level is insufficient (expands §0.7)
 

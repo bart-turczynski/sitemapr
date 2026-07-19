@@ -68,6 +68,115 @@ robotstxtr_install_hint <- function() {
   "pak::pak('bart-turczynski/robotstxtr')"
 }
 
+# The `robotstxtr` engine-aware contract sitemapr is built against
+# (docs/design/layer-e-page-inspection.md §0.9; robotstxtr v0.2.0). Pinned as a
+# literal so a sibling that moved to an incompatible contract is caught at the
+# seam instead of silently producing robots findings under different matcher
+# semantics.
+robotstxtr_contract_id <- function() {
+  "robotstxtr.engine-aware/v1"
+}
+
+# The engine schema revision sitemapr was developed against. Reported in the
+# gate's error message for diagnosis; it is deliberately NOT an equality gate,
+# since robotstxtr may ship additive revisions that stay compatible.
+#
+# It is recorded because `contract_id` alone does NOT discriminate builds: a
+# pre-#43 robotstxtr reports the SAME `robotstxtr.engine-aware/v1` id while
+# carrying schema 2026-07-17.1 and no `matcher_capability` at all. The gate
+# below therefore checks for the capability field sitemapr consumes rather than
+# trusting the contract id by itself.
+robotstxtr_contract_schema <- function() {
+  "2026-07-18.2"
+}
+
+# The public v1 contract object of the INSTALLED `robotstxtr`, gated before it
+# is handed out. Only ever called once availability is established.
+#
+# Three failure shapes, all loud (a classed error, never a silent skip): an
+# install that does not expose the accessor at all, one whose `contract_id` has
+# moved on, and one carrying the right id but no `matcher_capability` (the
+# pre-#43 build). Absence of the package stays a warning + graceful skip in
+# resolve_robots_ua() — that is a setup fact about the user's machine — but a
+# version that is present and INCOMPATIBLE would otherwise yield wrong robots
+# findings, so it aborts instead.
+#
+# Only the exported accessor is touched: `engine_backend_capability_v1()` and
+# the other `*_v1()` helpers are robotstxtr internals and are deliberately not
+# reached into (SITE-ykagmqdd step 4).
+
+# The raw contract object straight from the sibling, with no gating. Split out
+# as a named binding so tests can stand in an older/foreign contract shape
+# without needing that build installed.
+robotstxtr_engine_contract_raw <- function() {
+  ns <- asNamespace("robotstxtr")
+  if (!exists("robots_engine_contract_v1", envir = ns, inherits = FALSE)) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "the installed 'robotstxtr' does not expose ",
+          "robots_engine_contract_v1(); sitemapr requires robotstxtr ",
+          "(>= 0.2.0) carrying engine contract '%s'. Update it with %s."
+        ),
+        robotstxtr_contract_id(),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  robotstxtr::robots_engine_contract_v1()
+}
+
+robotstxtr_engine_contract <- function() {
+  contract <- robotstxtr_engine_contract_raw()
+  if (!identical(contract$contract_id, robotstxtr_contract_id())) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "incompatible 'robotstxtr' engine contract: sitemapr is built ",
+          "against '%s' but the installed package reports '%s'. Update it ",
+          "with %s."
+        ),
+        robotstxtr_contract_id(),
+        as.character(contract$contract_id)[[1L]],
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  # The capability check that the contract id cannot make: a stale build
+  # advertises the same id but omits `matcher_capability`, so consuming it
+  # would silently yield NULL capability rather than failing.
+  if (is.null(contract$matcher_capability)) {
+    schema <- contract$schema_revision
+    if (is.null(schema)) {
+      schema <- "unknown"
+    }
+    rlang::abort(
+      sprintf(
+        paste0(
+          "the installed 'robotstxtr' reports engine contract '%s' but ",
+          "carries no matcher_capability (schema '%s'); sitemapr needs the ",
+          "capability-bearing schema '%s' or newer. Update it with %s."
+        ),
+        robotstxtr_contract_id(),
+        as.character(schema)[[1L]],
+        robotstxtr_contract_schema(),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  contract
+}
+
+# The matcher capability table, read through the PUBLIC contract accessor. The
+# consulted-robots refactor (E.1b) reads capability from here rather than from
+# robotstxtr's internal `engine_backend_capability_v1()`.
+robotstxtr_matcher_capability <- function() {
+  robotstxtr_engine_contract()$matcher_capability
+}
+
 # Only absolute http(s) URLs are robots-testable: a relative or non-http `<loc>`
 # is not something a crawler fetches, and feeding it to the matcher would only
 # echo the malformed-loc problems the protocol layer already reports. The
