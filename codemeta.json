@@ -87,7 +87,7 @@
       "@type": "SoftwareApplication",
       "identifier": "robotstxtr",
       "name": "robotstxtr",
-      "version": ">= 0.1.0"
+      "version": ">= 0.2.0"
     },
     {
       "@type": "SoftwareApplication",
@@ -214,7 +214,7 @@
     },
     "SystemRequirements": null
   },
-  "fileSize": "1267.687KB",
+  "fileSize": "1417.967KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
