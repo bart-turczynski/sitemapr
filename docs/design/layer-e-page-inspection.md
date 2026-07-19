@@ -660,21 +660,42 @@ in the coverage attribute only, so no legacy findings widen.
 
 ---
 
-## 7. E.5 refactor prerequisite — a consultable robots decision
+## 7. E.5 refactor prerequisite — a consultable robots decision — DONE (E.1b)
 
-The completed E.5 producer (`validate_robots`, `R/robots-validate.R`) returns
-**findings only**: allowed URLs produce no row and the internal `decisions`
-object is discarded. So "E.3/synthesis consults E.5's per-URL result" is **not
-implementable as-is**. Required enabling refactor (small, precedes §5.4):
+Delivered by SITE-kwkggijf. Robots evaluation now lives in `R/robots-facts.R`;
+`R/robots-validate.R` only derives findings from the already-evaluated object.
 
-- Extract robots evaluation into an internal **facts/decisions producer** that
-  returns a per-URL decision object (mapping onto ADR-009 §2 outcome fields), and
-  derive **both** the `ROBOTS_*` findings **and** the §5.4 synthesis from it.
-- Gate the synthesis on robots evaluation actually being **enabled and available**
-  (`check_robots = TRUE` and `robotstxtr` present); otherwise the noindex findings
-  stand alone with no synthesis.
-- This is a refactor of *done* code — it must preserve E.5's current findings
-  output exactly (ADR-009 §5 back-compat).
+- **The facts producer.** `robots_evaluate_facts(locs, context)` evaluates once
+  through `robotstxtr::robots_evaluate_url_v1()` and returns a
+  `sitemapr_robots_facts` object. **Both** the `ROBOTS_*` findings
+  (`robots_findings_from_facts()`) and the §5.4 synthesis read from it.
+- **Consulting.** `robots_decision_for(facts, url)` returns
+  `"allow"` / `"disallow"` / `"undetermined"` per URL, vectorized and
+  order-preserving. A URL that was never evaluated is `"undetermined"`.
+- **The §7 gate.** `robots_facts_consultable(facts)` is the enabled-AND-available
+  gate: `NULL` facts (`check_robots = FALSE`) and zero-row facts (nothing
+  testable, or robotstxtr absent) are both non-consultable, so the noindex
+  findings stand alone with no synthesis.
+- **Explicit axes (§0.3).** `robots_context(product_token, policy_ruleset,
+  matcher_backend)` carries the robots axes **explicitly**; nothing derives them
+  from `sitemap_ruleset` (ADR-009 axis independence). `robots_context_preset()`
+  supplies documented presets (google/bing/yandex/rfc9309) whose **expanded**
+  values are retained on the object. Axis values are validated against the
+  sibling's published sets read from the public contract.
+- **Back-compat.** E.5's findings are byte-identical across the refactor,
+  derived through the exported Google-bounded `as_legacy_robots_decisions_v1()`
+  shim. A non-Google context has no legacy view, so findings derivation aborts
+  (`sitemapr_robots_findings_unsupported`) rather than silently emitting zero
+  rows — while the **decision** stays consultable, which is the point of E.1b.
+
+**Trichotomy note — the v1 fields alone are not sufficient.** A 404/410
+robots.txt (a genuine policy allow-all) and a **403** (unknown) both surface as
+`matcher_status = "not_needed"`, `url_decision = "allow"`,
+`reason = "policy_allow_all"`. The only discriminator is the HTTP status, so
+`robots_decision_trichotomy()` mirrors the shim's status rule, pinned by a test
+asserting it agrees with the legacy `allowed` column. The trichotomy is
+deliberately **conservative**: `"disallow"` requires an evaluated matcher
+verdict, so it can only ever decline to claim a trap, never manufacture one.
 
 ---
 
