@@ -1083,6 +1083,15 @@ validate_sitemaps <- function(
 #' is a reused baseline code and carries `provenance = "inherited_protocol"` (an
 #' ADR-009 §0 executable class). Later slices override the provenance per code.
 #'
+#' Per-URL page inspection (`inspect_pages = TRUE`) works exactly as in
+#' [validate_sitemap()], except the transport / canonical / hreflang page
+#' findings are assembled under the selected `sitemap_ruleset` too: under an
+#' engine overlay they carry the same additive schema-v2 columns as the base
+#' findings, so the per-engine provenance / context (ADR-009 §5.2/§5.3) engages
+#' over the page layer rather than emitting as generic baseline diagnostics. As
+#' in [validate_sitemap()], `inspect_pages = FALSE` is byte-identical to a call
+#' without the argument.
+#'
 #' @param sitemap_ruleset The engine ruleset to validate under; one of
 #'   [sitemap_rulesets()] (baseline `"sitemaps.org"` first, the default). The
 #'   baseline emits the schema-v1 result; an engine overlay adds the additive
@@ -1127,18 +1136,28 @@ validate_sitemap_ruleset <- function(
   index_limits = NULL,
   policy = request_policy(),
   check_robots = FALSE,
-  robots_user_agent = "*"
+  robots_user_agent = "*",
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
 ) {
   sitemap_ruleset <- match.arg(sitemap_ruleset, sitemap_rulesets())
   mode <- match.arg(mode)
+  page_mode <- match.arg(page_mode)
   sources <- sitemap_public_source_records(x)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
   robots_ua <- resolve_robots_ua(check_robots, robots_user_agent)
   ruleset <- findings_ruleset_spec(sitemap_ruleset, context)
+  # As in validate_sitemap(): the sink exists only when inspect_pages is on, so
+  # the loc-gathering plumbing is a strict no-op and the baseline/engine result
+  # is byte-identical to a call without page inspection.
+  page_sink <- if (isTRUE(inspect_pages)) page_sink_new() else NULL
 
-  if (length(x) == 1L) {
+  base <- if (length(x) == 1L) {
     validate_sitemap_source(
       sources[1L, , drop = FALSE],
       mode = mode,
@@ -1147,7 +1166,8 @@ validate_sitemap_ruleset <- function(
       index_limits = index_limits,
       policy = policy,
       robots_ua = robots_ua,
-      ruleset = ruleset
+      ruleset = ruleset,
+      page_sink = page_sink
     )
   } else {
     validate_sitemap_batch(
@@ -1158,9 +1178,30 @@ validate_sitemap_ruleset <- function(
       index_limits = index_limits,
       policy = policy,
       robots_ua = robots_ua,
-      ruleset = ruleset
+      ruleset = ruleset,
+      page_sink = page_sink
     )
   }
+
+  if (!isTRUE(inspect_pages)) {
+    return(base)
+  }
+  # Unlike validate_sitemap() (ruleset = NULL), the page-layer findings are
+  # assembled + combined under the SAME engine `ruleset` as the base result, so
+  # the per-engine provenance / context columns (ADR-009 §5.2/§5.3) engage over
+  # the transport / canonical / hreflang page findings too.
+  page_inspection_finalize(
+    base = base,
+    sink = page_sink,
+    mode = mode,
+    ruleset = ruleset,
+    budget = page_budget,
+    sample_size = page_sample,
+    page_mode = page_mode,
+    user_agent = page_user_agent,
+    limits = limits,
+    policy = policy
+  )
 }
 
 #' @rdname validate_sitemap_ruleset
@@ -1175,7 +1216,12 @@ validate_sitemaps_ruleset <- function(
   index_limits = NULL,
   policy = request_policy(),
   check_robots = FALSE,
-  robots_user_agent = "*"
+  robots_user_agent = "*",
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
 ) {
   validate_sitemap_ruleset(
     x,
@@ -1187,6 +1233,11 @@ validate_sitemaps_ruleset <- function(
     index_limits = index_limits,
     policy = policy,
     check_robots = check_robots,
-    robots_user_agent = robots_user_agent
+    robots_user_agent = robots_user_agent,
+    inspect_pages = inspect_pages,
+    page_sample = page_sample,
+    page_mode = page_mode,
+    page_budget = page_budget,
+    page_user_agent = page_user_agent
   )
 }
