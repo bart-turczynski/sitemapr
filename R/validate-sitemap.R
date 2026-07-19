@@ -225,7 +225,8 @@ validate_archive_parts <- function(src, ruleset = NULL) {
       res$rows$loc,
       src$robots_ua,
       src$base,
-      src$page_sink
+      src$page_sink,
+      res$rows$alternates
     )
   }
   parts
@@ -372,7 +373,8 @@ validate_feed_parts <- function(
     parsed$rows$loc,
     src$robots_ua,
     src$base,
-    src$page_sink
+    src$page_sink,
+    parsed$rows$alternates
   )
 }
 
@@ -417,7 +419,8 @@ validate_xml_parts <- function(
       rows$loc,
       src$robots_ua,
       src$base,
-      src$page_sink
+      src$page_sink,
+      rows$alternates
     ))
   }
 
@@ -566,7 +569,8 @@ index_protocol_parts <- function(
       rows$loc,
       robots_ua,
       fallback_base,
-      page_sink
+      page_sink,
+      rows$alternates
     ))
   }
 
@@ -591,7 +595,8 @@ index_protocol_parts <- function(
       child_rows$loc,
       robots_ua,
       child_base,
-      page_sink
+      page_sink,
+      child_rows$alternates
     )
   }
   parts
@@ -660,6 +665,11 @@ page_sink_new <- function() {
   sink <- new.env(parent = emptyenv())
   sink$loc <- character(0)
   sink$base <- character(0)
+  # Parallel to loc/base: the sitemap-DECLARED hreflang alternates for that
+  # advertising occurrence (the row's `alternates` list-column entry, or NULL
+  # when the source declares none / carries no such column). Consumed by the
+  # E.4 page-hreflang reconciliation; ignored by transport / canonical.
+  sink$alt <- list()
   sink
 }
 
@@ -668,17 +678,27 @@ page_sink_new <- function() {
 # no-op when `sink` is NULL, so the byte-identical inspect_pages = FALSE path is
 # untouched. Blank/NA locs are dropped; page_inspection_dedup() drops any
 # remaining non-http(s)/unparseable ones from eligibility.
-page_sink_add <- function(sink, locs, base) {
+page_sink_add <- function(sink, locs, base, alternates = NULL) {
   if (is.null(sink)) {
     return(invisible(NULL))
   }
   locs <- as.character(locs)
-  locs <- locs[!is.na(locs) & nzchar(locs)]
+  keep <- !is.na(locs) & nzchar(locs)
+  locs <- locs[keep]
   if (length(locs) == 0L) {
     return(invisible(NULL))
   }
+  # The declared-alternates list runs parallel to the RAW loc vector (a row per
+  # advertised URL); subset it by the same keep mask so it stays aligned. A
+  # source without an `alternates` column (text sitemaps) contributes NULLs.
+  alts <- if (is.null(alternates)) {
+    vector("list", length(locs))
+  } else {
+    as.list(alternates)[keep]
+  }
   sink$loc <- c(sink$loc, locs)
   sink$base <- c(sink$base, rep(base, length(locs)))
+  sink$alt <- c(sink$alt, alts)
   invisible(NULL)
 }
 
@@ -688,8 +708,15 @@ page_sink_add <- function(sink, locs, base) {
 # regardless of the robots check (page inspection is independent of it); both
 # are no-ops when their gate is NULL, so the rows-bearing branches can call this
 # unconditionally and the inspect_pages = FALSE path stays byte-identical.
-append_robots_part <- function(parts, locs, robots_ua, base, sink = NULL) {
-  page_sink_add(sink, locs, base)
+append_robots_part <- function(
+  parts,
+  locs,
+  robots_ua,
+  base,
+  sink = NULL,
+  alternates = NULL
+) {
+  page_sink_add(sink, locs, base, alternates)
   if (is.null(robots_ua)) {
     return(parts)
   }
