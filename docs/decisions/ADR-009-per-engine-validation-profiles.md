@@ -1,9 +1,11 @@
 # ADR-009: Per-engine validation profiles (rulesets, outcomes, capability negotiation)
 
-- Status: Accepted
+- Status: Accepted (amended 2026-07-19 by ADR-010 — §3 body-ceiling rule split
+  by intent: intentional page-cap truncation → `partial`, no-usable-body → `incomplete`)
 - Date: 2026-07-16
 - Deciders: Bart Turczyński
-- Related: `docs/decisions/ADR-003-network-safety-policy.md` (safety precedence),
+- Related: `docs/decisions/ADR-010-page-inspection.md` (page-fetch body contract —
+  amends §3 below), `docs/decisions/ADR-003-network-safety-policy.md` (safety precedence),
   `docs/decisions/ADR-006-robots-sitemap-discovery.md`, `docs/findings-contract.md` +
   `docs/findings-registry.csv` (the cross-repo findings contract this mirrors),
   robotstxtr `design/PRD.md` (matcher scope / non-goals),
@@ -137,9 +139,18 @@ Local safety and resource controls **dominate** and are reported as their own ou
 reinterpreted as an engine allow/deny:
 
 - SSRF blocks, scheme restriction, and HTTPS→HTTP downgrade rejection → `evidence_status =
-  safety_refused` (ADR-003 governs the guard).
-- Fetch budget / deadline / body ceiling reached → `evidence_status = incomplete` (never `allow_all`
-  or `disallow_all`).
+  safety_refused` (ADR-003 governs the guard). This class is reserved for those three refusals; a
+  resource-ceiling discard is **not** `safety_refused` (ADR-010 §3).
+- Fetch budget / deadline / body ceiling reached → `evidence_status` splits **by intent** (amended
+  2026-07-19 by ADR-010 §2):
+  - an **intentional per-page truncate-and-retain cap** (ADR-010's page path) → `partial` — the body
+    was cut at the page cap but the **retained head-region prefix is usable**, so an absence read
+    from it is `unknown`, never `missing`;
+  - a **deadline / transport failure with no usable body**, and the **500 MB per-resource discard
+    backstop** (ADR-003 §3) → `incomplete` — no usable body.
+
+  Neither is ever `allow_all` / `disallow_all`; a `use_rules` result over a `partial`/unusable body
+  keeps `matcher_status = not_evaluated`, `url_decision` absent (§2 state table).
 
 The fetch layer accepts **caller acquisition + safety limits only**; per-engine parse limits and
 excess-content behavior belong to the interpretation layer, not the fetch layer.

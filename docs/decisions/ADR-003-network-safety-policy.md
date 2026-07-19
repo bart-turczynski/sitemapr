@@ -1,10 +1,12 @@
 # ADR-003: v1 network safety policy
 
-- Status: Accepted (amended 2026-06-28 — two-axis body-limit model, §3)
+- Status: Accepted (amended 2026-06-28 — two-axis body-limit model, §3;
+  amended 2026-07-19 by ADR-010 — per-page truncate-and-retain cap, §3)
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
-  `docs/sitemap-spec.md` (§2 three-axis limit model — authoritative)
+  `docs/sitemap-spec.md` (§2 three-axis limit model — authoritative);
+  `docs/decisions/ADR-010-page-inspection.md` (per-page body cap — amends §3 below)
 
 ---
 
@@ -136,6 +138,21 @@ effective bytes). Exceeding it discards the body and produces a partial result:
 `sitemapr_body_ceiling` condition. A wall-clock timeout (the 30 s request limit)
 remains a distinct `sitemapr_timeout` condition. The `sitemapr_truncated`
 condition tied to the old 50 MB on-wire abort is **retired**.
+
+**Per-page inspection cap (added 2026-07-19 by ADR-010 §2).** Opt-in Layer E page
+inspection introduces a second, **inner** body bound: a per-page cap (single-MB
+range, caller-overridable) that is **truncate-and-retain**, not discard. On
+reaching it the fetch stops, **keeps the body prefix**, and marks the page
+artifact `truncated`; the retained head-region prefix is usable for extraction
+and the fetch outcome is `partial` (ADR-009 §3, as amended), never `incomplete`.
+This sits **inside** the 500 MB per-resource safety ceiling above, which is
+unchanged and stays the outer **discard** backstop (memory-bomb defense). The two
+are distinct by design: the page cap keeps a small usable prefix; the 500 MB
+ceiling discards the whole body. At the page findings layer, the 500 MB discard is
+a **resource** failure → `PAGE_FETCH_FAILED`, kept distinct from an SSRF / scheme
+/ downgrade refusal → `PAGE_SSRF_BLOCKED` (ADR-010 §3). The page cap is part of
+the caller-overridable page-inspection budget and, like every limit in this §3,
+has **no non-overridable hard floor**.
 
 ### 4. URL-stack ownership
 

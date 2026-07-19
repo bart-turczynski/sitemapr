@@ -86,6 +86,10 @@ body-ceiling rule** (accepted ADR-009 resolves a reached body ceiling to
 head-region facts usable), **(b)** define the page-cap `partial` semantics, and
 **(c)** add an **ADR-003** page-cap subsection. Name these as **direct edits to
 ADR-009 §3 and ADR-003**, not an enum addition and not a cross-reference.
+**Resolved by `docs/decisions/ADR-010-page-inspection.md`** (§2) — which also
+carries the ADR-009 §3 and ADR-003 §3 direct edits; the opt-in network-expansion
+justification (§0 open-decision 5) and the transport safety/resource split (§0.5)
+land in ADR-010 §1/§3.
 
 ### 0.5 Transport matrix conforms to the registry (supersedes §3.4)
 
