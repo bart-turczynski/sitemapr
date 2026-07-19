@@ -451,3 +451,154 @@ test_that("yandex overlay relabels metadata error to warning end-to-end", {
   expect_identical(row$severity, "warning")
   expect_identical(row$provenance, "documented")
 })
+
+# --- Producer-supplied page-level metadata (SITE-qvdjvwwy) ------------------
+
+# A single-row protocol part carrying an optional producer column, used to
+# exercise the per-finding merge / override / pass-through seams.
+page_part <- function(code = "PROTOCOL_URL_OUT_OF_SCOPE", ...) {
+  p <- protocol_findings(
+    code = code,
+    severity = "warning",
+    subject_type = "entry",
+    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    message = "page finding",
+    evidence = list(finding_evidence()),
+    is_strict_only = FALSE
+  )
+  extra <- list(...)
+  for (nm in names(extra)) {
+    p[[nm]] <- extra[[nm]]
+  }
+  p
+}
+
+test_that("producer per-finding context merges over the uniform stamp", {
+  parts <- list(page_part(
+    context = list(list(
+      status_code = 404L,
+      submission_channel = "sitemap_ping"
+    ))
+  ))
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  ctx <- out$context[[1L]]
+  # producer-only key is added
+  expect_identical(ctx$status_code, 404L)
+  # producer key WINS on collision with the uniform ruleset stamp
+  expect_identical(ctx$submission_channel, "sitemap_ping")
+  # uniform ruleset axes the producer did not touch are preserved
+  expect_identical(ctx$discovery_provenance, "organic")
+})
+
+test_that("a finding with no context contribution keeps the uniform stamp", {
+  # one page finding contributes context, a plain protocol finding does not;
+  # the plain finding must still carry the uniform ruleset context unchanged.
+  parts <- list(
+    page_part(context = list(list(status_code = 404L))),
+    protocol_findings(
+      code = "PROTOCOL_DUPLICATE_LOC",
+      severity = "warning",
+      subject_type = "entry",
+      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      message = "dup",
+      evidence = list(finding_evidence()),
+      is_strict_only = FALSE
+    )
+  )
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  plain <- out$context[out$code == "PROTOCOL_DUPLICATE_LOC"][[1L]]
+  expect_identical(plain, unclass(ruleset_context()))
+  expect_false("status_code" %in% names(plain))
+})
+
+test_that("producer-supplied remediation_hint passes through", {
+  parts <- list(page_part(remediation_hint = "Remove the noindex directive."))
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_identical(out$remediation_hint, "Remove the noindex directive.")
+})
+
+test_that("producer remediation_hint passes through on the baseline path too", {
+  # remediation_hint is a pinned column, so pass-through does not require a
+  # ruleset; a producer hint survives with ruleset = NULL and no v2 columns.
+  parts <- list(page_part(remediation_hint = "Fix it."))
+  out <- assemble_findings(parts, "strict", ruleset = NULL)
+  expect_identical(out$remediation_hint, "Fix it.")
+  expect_named(out, contract_cols)
+  expect_false("context" %in% names(out))
+  expect_false("provenance" %in% names(out))
+})
+
+test_that("producer-supplied provenance overrides the (code,ruleset) default", {
+  # PROTOCOL_URL_OUT_OF_SCOPE defaults to "documented" under google; a producer
+  # verdict of "inferred" (the cross-channel fold, §0.10) overrides it.
+  parts <- list(page_part(provenance = "inferred"))
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_identical(out$provenance, "inferred")
+})
+
+test_that("an NA producer provenance keeps the (code,ruleset) default", {
+  # a producer that attaches the column but leaves a row NA must not clobber the
+  # per-code default; PROTOCOL_URL_OUT_OF_SCOPE stays "documented" under google.
+  parts <- list(page_part(provenance = NA_character_))
+  out <- assemble_findings(
+    parts,
+    "strict",
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_identical(out$provenance, "documented")
+})
+
+test_that("producer optional columns do not leak into the baseline schema", {
+  # context / provenance are v2-additive; on the NULL baseline path a producer
+  # that attaches them must still yield the frozen 10-column contract.
+  parts <- list(page_part(
+    context = list(list(status_code = 404L)),
+    provenance = "inferred"
+  ))
+  out <- assemble_findings(parts, "strict", ruleset = NULL)
+  expect_named(out, contract_cols)
+  expect_false("context" %in% names(out))
+  expect_false("provenance" %in% names(out))
+})
+
+test_that("defaults are byte-identical whether or not a producer opts in", {
+  # the same logical part with vs. without the (empty) optional columns must
+  # assemble to an identical tibble -- padding + merge collapse to the stamp.
+  base <- protocol_findings(
+    code = "PROTOCOL_URL_OUT_OF_SCOPE",
+    severity = "warning",
+    subject_type = "entry",
+    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    message = "page finding",
+    evidence = list(finding_evidence()),
+    is_strict_only = FALSE
+  )
+  spec <- findings_ruleset_spec("google", ruleset_context())
+  plain <- assemble_findings(list(base), "strict", ruleset = spec)
+  opted <- assemble_findings(
+    list(page_part(
+      context = vector("list", 1L),
+      provenance = NA_character_,
+      remediation_hint = NA_character_
+    )),
+    "strict",
+    ruleset = spec
+  )
+  expect_identical(plain, opted)
+})
