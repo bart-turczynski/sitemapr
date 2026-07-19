@@ -185,6 +185,50 @@ test_that("a clean sitemap reports no findings", {
   expect_match(html, "No issues found", fixed = TRUE)
 })
 
+test_that("the report layer order stays in lockstep with the findings order", {
+  # Regression guard for SITE-lwvktkte: report_findings_section() filters
+  # findings to report_layer_order, so any layer it omits (previously `page`
+  # and `robots`) is silently dropped from the report. It must cover every
+  # layer the assembler can emit, in the same order.
+  expect_identical(
+    sitemapr_test_ns$report_layer_order,
+    sitemapr_test_ns$findings_layer_order
+  )
+})
+
+test_that("robots- and page-layer findings render in the report", {
+  # A findings tibble carrying a robots-layer and a page-layer finding (the two
+  # layers report_layer_order used to omit). Both must reach the findings
+  # section (SITE-lwvktkte).
+  findings <- tibble::tibble(
+    code = c("ROBOTS_DISALLOWED", "PAGE_NOINDEX"),
+    severity = c("warning", "warning"),
+    layer = c("robots", "page"),
+    subject_type = c("url", "url"),
+    subject_ref = c("https://ex.com/blocked", "https://ex.com/hidden"),
+    message = c(
+      "URL is disallowed by robots.txt.",
+      "Page carries a noindex directive."
+    ),
+    evidence = list(
+      sitemapr_test_ns$finding_evidence(),
+      sitemapr_test_ns$finding_evidence()
+    ),
+    mode = c("strict", "strict"),
+    is_strict_only = c(FALSE, FALSE),
+    remediation_hint = c(NA_character_, NA_character_)
+  )
+  urls <- report_urls_fixture(loc = "https://ex.com/blocked")
+
+  html <- render_string("robots-page-label", urls = urls, findings = findings)
+
+  expect_match(html, "ROBOTS_DISALLOWED", fixed = TRUE)
+  expect_match(html, "PAGE_NOINDEX", fixed = TRUE)
+  # The layer headings name each layer.
+  expect_match(html, ">robots (", fixed = TRUE)
+  expect_match(html, ">page (", fixed = TRUE)
+})
+
 # ---- precomputed inputs ------------------------------------------------------
 
 test_that("precomputed urls/findings are consumed without recomputation", {
