@@ -453,8 +453,8 @@ Every engine cell below carries an ADR-009 provenance tag: **executable**
 > Producer provenance varies by fold path (single-channel `documented`,
 > cross-channel `inferred`) via the assembler's producer-provenance carrier.
 > Interpretation has **no** `robotstxtr` dependency, per §0.3. The **§5.4 trap
-> synthesis is split out** to SITE-zbpfswsz (it needs a robots-facts sink
-> threaded to `page_inspection_finalize`).
+> synthesis** was split out to SITE-zbpfswsz and is now delivered too — see
+> §5.4.
 
 > **Axis handling SUPERSEDED by §0.3.** The fold semantics below stand, but the
 > per-engine axis is carried by `robotstxtr` engine-contract-v1 (no new ADR-009
@@ -555,6 +555,46 @@ Separate the two comparisons — they have different safety under sampling:
 is about cross-page pointing-back, not cross-method disagreement.)
 
 ### 5.4 Synthesis — robots.txt `Disallow` × `noindex` (the trap)
+
+> **DELIVERED — SITE-zbpfswsz (E.3b).** `R/page-robots-trap.R` attaches the
+> synthesis as the `remediation_hint` of the already-emitted `PAGE_*_NOINDEX`
+> finding (option a — no new code, no registry migration). It is a **decorator**
+> over `page_noindex_findings()`, so the fold producer keeps its zero
+> `robotstxtr` dependency (§0.3) while the synthesis — an *access* ×
+> *interpretation* join — legitimately consults the sibling.
+>
+> **The sink.** The per-source robots facts ride the existing **page** sink
+> (`sink$robots`, `R/validate-sitemap.R`), merged call-wide by
+> `robots_facts_merge()` and consulted in `page_inspection_finalize()`. Riding
+> the page sink rather than a sink of its own is deliberate: the synthesis is
+> the only consumer and runs only under `inspect_pages = TRUE`, so a `NULL`
+> sink already means "never recorded" and **no call site threads a second
+> argument** — the `inspect_pages = FALSE` byte-identity invariant is preserved
+> structurally rather than by convention. `validate_robots()` is now the
+> findings-only composition over `robots_part()`, which returns both halves of
+> the single E.1b evaluation.
+>
+> **Two gates, both able only to decline.** (1) The mechanic must be
+> `documented` for the engine — Google and Bing; **Yandex is never stamped**
+> (§13.5). (2) The decision must be attributable to the engine's **own**
+> matcher: `policy_ruleset` *and* `matcher_backend` must equal the engine, and
+> the public contract must report that matcher `available` with
+> `matcher_semantics` equal to its own engine. Against robotstxtr v0.2.0 Bing's
+> matcher is `capability_unavailable`, so **only Google stamps in practice** —
+> exactly the anti-laundering outcome intended. Combined with
+> `robots_decision_trichotomy()`'s conservatism (`"disallow"` requires an
+> evaluated matcher verdict), the synthesis can never manufacture a trap.
+>
+> **Group naming.** The default `robots_user_agent` is `"*"`, and a decision for
+> the `*` group is not a claim about a crawler that may carry a group of its
+> own. The hint therefore **names the evaluated group** rather than implying the
+> engine's product token was matched.
+>
+> **Context keys.** A hinted row also gains `page_noindex_trap`,
+> `page_noindex_trap_engine`, and `page_noindex_trap_provenance` in the
+> engine-aware `context` list-column, so the claim is machine-readable. The
+> row's own `provenance` column is left alone — it describes the *fold*, not the
+> trap.
 
 A URL can be simultaneously advertised in the sitemap, `Disallow`-ed by
 robots.txt, and carrying a `noindex`. This is a misconfiguration sitemapr is

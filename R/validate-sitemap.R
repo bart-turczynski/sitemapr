@@ -674,7 +674,33 @@ page_sink_new <- function() {
   # when the source declares none / carries no such column). Consumed by the
   # E.4 page-hreflang reconciliation; ignored by transport / canonical.
   sink$alt <- list()
+  # The per-source robots facts objects this call evaluated (E.3b). They ride
+  # the PAGE sink rather than a sink of their own because the §5.4 synthesis is
+  # the only consumer and it runs only when page inspection is on — so a
+  # NULL sink (inspect_pages = FALSE) already means "never recorded", and no
+  # call site has to thread a second argument.
+  sink$robots <- list()
   sink
+}
+
+# Record one source's evaluated robots facts into the sink. A no-op when page
+# inspection is off (NULL sink) or the robots check is inactive (NULL facts),
+# so neither the inspect_pages = FALSE path nor the check_robots = FALSE path
+# changes.
+page_sink_add_robots <- function(sink, facts) {
+  if (is.null(sink) || is.null(facts)) {
+    return(invisible(NULL))
+  }
+  sink$robots[[length(sink$robots) + 1L]] <- facts
+  invisible(NULL)
+}
+
+# The call-wide consultable robots facts, or NULL when nothing was evaluated.
+page_sink_robots_facts <- function(sink) {
+  if (is.null(sink)) {
+    return(NULL)
+  }
+  robots_facts_merge(sink$robots)
 }
 
 # Record advertised `locs` (from the same rows-bearing branch that feeds the
@@ -724,7 +750,13 @@ append_robots_part <- function(
   if (is.null(robots_ua)) {
     return(parts)
   }
-  parts[[length(parts) + 1L]] <- validate_robots(locs, robots_ua, base)
+  # One evaluation, two consumers (E.1b): the ROBOTS_* findings for this source
+  # and — via the sink — the call-wide decision the §5.4 trap synthesis
+  # consults. The findings half is byte-identical to the former
+  # `validate_robots()` call.
+  part <- robots_part(locs, robots_ua, base)
+  page_sink_add_robots(sink, part$facts)
+  parts[[length(parts) + 1L]] <- part$findings
   parts
 }
 

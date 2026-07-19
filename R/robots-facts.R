@@ -219,6 +219,35 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
   )
 }
 
+# Merge the per-source facts a validate call accumulated into ONE consultable
+# object (E.3b). Each source evaluates its own advertised locs, so a URL two
+# sitemaps both advertise is evaluated twice — under the SAME context, against
+# the same robots.txt, so the two decisions agree and the first is kept.
+#
+# The merged object carries `decisions`/`legacy` as NULL on purpose: it exists
+# to be CONSULTED (`robots_decision_for()` / `robots_facts_consultable()`), not
+# to derive findings from. `robots_findings_from_facts()` stays per-source,
+# where each finding still anchors to its own advertising sitemap base.
+robots_facts_merge <- function(parts) {
+  parts <- parts[!vapply(parts, is.null, logical(1L))]
+  if (length(parts) == 0L) {
+    return(NULL)
+  }
+  urls <- unlist(lapply(parts, function(p) p$urls), use.names = FALSE)
+  decision <- unlist(lapply(parts, function(p) p$decision), use.names = FALSE)
+  keep <- !duplicated(urls)
+  structure(
+    list(
+      context = parts[[1L]]$context,
+      urls = urls[keep],
+      decision = decision[keep],
+      decisions = NULL,
+      legacy = NULL
+    ),
+    class = "sitemapr_robots_facts"
+  )
+}
+
 # Consult the facts for one URL (the §5.4 synthesis entry point). Returns
 # "allow", "disallow", or "undetermined"; a URL that was never evaluated (not
 # advertised, not testable, or robots evaluation disabled) is "undetermined".
