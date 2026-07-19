@@ -120,7 +120,12 @@ test_that("resolve_robots_ua returns NULL when the check is off", {
 })
 
 test_that("resolve_robots_ua returns the UA when robotstxtr is available", {
-  local_mocked_bindings(robotstxtr_available = function() TRUE)
+  # The contract gate is stubbed too, so the test stays hermetic: it asserts
+  # the UA passthrough, not whether the sibling happens to be installed.
+  local_mocked_bindings(
+    robotstxtr_available = function() TRUE,
+    robotstxtr_engine_contract = function() NULL
+  )
   expect_identical(resolve_robots_ua(TRUE, "Googlebot"), "Googlebot")
 })
 
@@ -177,4 +182,80 @@ test_that("the default call runs no robots check (no robots-layer rows)", {
   path <- write_urlset("https://disallow.example/private/x")
   f <- validate_sitemap(path, mode = "non-strict")
   expect_identical(sum(f$layer == "robots"), 0L)
+})
+
+# ---- engine-contract gate (SITE-ykagmqdd) ------------------------------------
+
+test_that("the pinned contract id matches the installed robotstxtr", {
+  skip_if_not_installed("robotstxtr")
+  contract <- robotstxtr_engine_contract()
+  expect_identical(contract$contract_id, robotstxtr_contract_id())
+  # The gate returns the whole public contract object, not just the id.
+  expect_s3_class(contract, "robots_engine_contract_v1")
+})
+
+test_that("a contract id that has moved on aborts loudly", {
+  skip_if_not_installed("robotstxtr")
+  local_mocked_bindings(
+    robotstxtr_contract_id = function() "robotstxtr.engine-aware/v99"
+  )
+  expect_error(
+    robotstxtr_engine_contract(),
+    class = "sitemapr_robotstxtr_contract"
+  )
+  # The message names both sides of the mismatch and the fix.
+  cnd <- tryCatch(
+    robotstxtr_engine_contract(),
+    sitemapr_robotstxtr_contract = function(cnd) cnd
+  )
+  expect_match(conditionMessage(cnd), "v99", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "pak::pak", fixed = TRUE)
+})
+
+test_that("an incompatible engine aborts rather than skipping silently", {
+  skip_if_not_installed("robotstxtr")
+  local_mocked_bindings(
+    robotstxtr_contract_id = function() "robotstxtr.engine-aware/v99"
+  )
+  # Contrast with the ABSENT engine, which warns and degrades gracefully: a
+  # present-but-wrong engine must not silently produce robots findings.
+  expect_error(
+    resolve_robots_ua(TRUE, "*"),
+    class = "sitemapr_robotstxtr_contract"
+  )
+})
+
+test_that("matcher capability is read through the public accessor", {
+  skip_if_not_installed("robotstxtr")
+  cap <- robotstxtr_matcher_capability()
+  expect_false(is.null(cap))
+  # Matches what the public contract object carries (no internal reach-in).
+  expect_identical(cap, robotstxtr_engine_contract()$matcher_capability)
+})
+
+test_that("a stale build with the right id but no capability aborts", {
+  skip_if_not_installed("robotstxtr")
+  # Reproduces the pre-#43 robotstxtr: SAME contract id, older schema, and no
+  # matcher_capability. The contract id alone cannot discriminate this, so the
+  # gate must catch it on the capability field.
+  local_mocked_bindings(
+    robotstxtr_engine_contract_raw = function() {
+      list(
+        contract_id = robotstxtr_contract_id(),
+        schema_revision = "2026-07-17.1"
+      )
+    }
+  )
+  cnd <- tryCatch(
+    robotstxtr_engine_contract(),
+    sitemapr_robotstxtr_contract = function(cnd) cnd
+  )
+  expect_s3_class(cnd, "sitemapr_robotstxtr_contract")
+  # The message names the stale schema and the one sitemapr needs.
+  expect_match(conditionMessage(cnd), "2026-07-17.1", fixed = TRUE)
+  expect_match(
+    conditionMessage(cnd),
+    robotstxtr_contract_schema(),
+    fixed = TRUE
+  )
 })
