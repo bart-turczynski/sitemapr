@@ -331,14 +331,17 @@ page_inspection_finalize <- function(
     limits = limits,
     policy = policy
   )
-  subjects <- list(loc = sink$loc, base = sink$base)
+  subjects <- list(loc = sink$loc, base = sink$base, alt = sink$alt)
   # Sibling producers over the same run: transport (this file) on the failed /
-  # redirect outcomes, canonical (R/page-canonical.R) on the usable_body /
-  # partial outcomes. They join the same `parts` list so the assembler stamps
-  # one ruleset/mode over each page-layer finding (baseline ten / engine 14).
+  # redirect outcomes, canonical (R/page-canonical.R) + hreflang
+  # (R/page-hreflang.R) on the usable_body / partial outcomes. They join one
+  # `parts` list so the assembler stamps one ruleset/mode over each page-layer
+  # finding (baseline ten / engine 14). Only hreflang reads `subjects$alt` (the
+  # sitemap-declared alternates); transport / canonical ignore it.
   parts <- list(
     page_transport_findings(run, subjects = subjects),
-    page_canonical_findings(run, subjects = subjects)
+    page_canonical_findings(run, subjects = subjects),
+    page_hreflang_findings(run, subjects = subjects)
   )
   page <- assemble_findings(parts, mode, ruleset)
   result <- combine_findings_contracts(list(base, page), ruleset)
