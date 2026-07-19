@@ -273,11 +273,20 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
 #' @keywords internal
 #' @noRd
 validate_robots <- function(locs, user_agent, base = NA_character_) {
+  robots_part(locs, user_agent, base)$findings
+}
+
+# Evaluate one source's advertised locs and return BOTH halves: the ROBOTS_*
+# findings and the facts object they were derived from. `validate_robots()` is
+# the findings-only composition; the validate pipeline calls this instead
+# because the §5.4 trap synthesis (E.3b) has to retain the facts — the whole
+# point of the E.1b split is that ONE evaluation feeds both consumers.
+robots_part <- function(locs, user_agent, base = NA_character_) {
   facts <- robots_evaluate_facts(
     locs,
     context = robots_context(product_token = user_agent)
   )
-  robots_findings_from_facts(facts, base)
+  list(facts = facts, findings = robots_findings_from_facts(facts, base))
 }
 
 # Derive the ROBOTS_* findings from an already-evaluated facts object (E.1b).

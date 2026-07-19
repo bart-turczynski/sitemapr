@@ -1005,3 +1005,19 @@ equivalent Yandex case — URL-only indexing when robots.txt blocks the fetch �
 is **not yet sourced from primary Yandex documentation** and is therefore not
 encoded here in any form. It stays a `documentation_gap` until a primary quote
 is obtained.
+
+**Stamping requires the engine's own matcher.** The synthesis states an
+*access* fact (robots.txt blocks the fetch) alongside an *interpretation* fact
+(the page carries a `noindex`). The access half may only be attributed to an
+engine whose **own** matcher produced it: both robots axes must name that
+engine, and `robots_engine_contract_v1()` must report that matcher `available`
+with its own `matcher_semantics`. This is §13.1's anti-laundering rule applied
+to the synthesis. Under `robotstxtr` v0.2.0 the Bing matcher reports
+`capability_unavailable`, so although the Bing *mechanic* is `documented`, no
+Bing synthesis is emitted — a documented mechanic does not license borrowing
+another engine's verdict. Provenance: `application_choice`.
+
+**The evaluated robots group is named in the message.** A decision for the `*`
+group is not a claim about a crawler that may declare a group of its own, so
+the synthesis reports which group was evaluated rather than implying the
+engine's product token was matched. Provenance: `application_choice`.

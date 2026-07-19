@@ -350,8 +350,15 @@ page_inspection_finalize <- function(
     page_hreflang_findings(run, subjects = subjects),
     # E.3 is the one producer that needs the ruleset: its fold is
     # engine-dependent (§13.2), so the engine cannot be left to the
-    # assembler's per-code stamp.
-    page_noindex_findings(run, subjects = subjects, ruleset = ruleset)
+    # assembler's per-code stamp. E.3b then decorates its output with the §5.4
+    # trap hint, joining the noindex findings to the call-wide robots decision
+    # the sink accumulated. The decoration is a separate pass so the fold
+    # producer stays free of any robotstxtr dependency (§0.3).
+    page_noindex_attach_trap(
+      page_noindex_findings(run, subjects = subjects, ruleset = ruleset),
+      page_sink_robots_facts(sink),
+      page_noindex_engine(ruleset)
+    )
   )
   page <- assemble_findings(parts, mode, ruleset)
   result <- combine_findings_contracts(list(base, page), ruleset)
