@@ -35,7 +35,7 @@ vri_local_sitemap <- function(loc = "https://example.com/a") {
 
 # ---- byte-identity: inspect_pages = FALSE ------------------------------------
 
-test_that("baseline inspect_pages = FALSE is byte-identical, no coverage attr", {
+test_that("baseline inspect_pages = FALSE is byte-identical, no coverage", {
   path <- vri_local_sitemap()
   off <- validate_sitemap_ruleset(path, "sitemaps.org")
   explicit_off <- validate_sitemap_ruleset(
@@ -84,7 +84,7 @@ test_that("baseline inspect_pages = TRUE emits page rows + coverage attr", {
   expect_identical(ncol(out), 10L)
 })
 
-# ---- inspect_pages = TRUE under an engine overlay (the point of the slice) ----
+# ---- inspect_pages = TRUE under an engine overlay (the point of E.1f) --------
 
 test_that("engine overlay stamps page findings with the additive columns", {
   path <- vri_local_sitemap("https://example.com/a")
