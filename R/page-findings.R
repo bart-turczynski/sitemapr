@@ -181,7 +181,8 @@ page_findings <- function(
   message = character(0),
   evidence = list(),
   context = list(),
-  is_strict_only = logical(0)
+  is_strict_only = logical(0),
+  provenance = NA_character_
 ) {
   n <- length(code)
   tibble::tibble(
@@ -193,7 +194,12 @@ page_findings <- function(
     message = as.character(message),
     evidence = if (length(evidence) > 0L) evidence else vector("list", n),
     context = if (length(context) > 0L) context else vector("list", n),
-    is_strict_only = as.logical(is_strict_only)
+    is_strict_only = as.logical(is_strict_only),
+    # Producer-supplied provenance (§0.10): NA leaves the assembler's
+    # `(code, ruleset)` default in force, so every existing producer is
+    # unaffected. E.3 supplies it because the SAME code carries different
+    # provenance by fold path.
+    provenance = rep(as.character(provenance), length.out = n)
   )
 }
 
@@ -341,7 +347,11 @@ page_inspection_finalize <- function(
   parts <- list(
     page_transport_findings(run, subjects = subjects),
     page_canonical_findings(run, subjects = subjects),
-    page_hreflang_findings(run, subjects = subjects)
+    page_hreflang_findings(run, subjects = subjects),
+    # E.3 is the one producer that needs the ruleset: its fold is
+    # engine-dependent (§13.2), so the engine cannot be left to the
+    # assembler's per-code stamp.
+    page_noindex_findings(run, subjects = subjects, ruleset = ruleset)
   )
   page <- assemble_findings(parts, mode, ruleset)
   result <- combine_findings_contracts(list(base, page), ruleset)

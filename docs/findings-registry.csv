@@ -80,8 +80,8 @@ PAGE_STATUS_REDIRECT,warning,page,page-url,FALSE,active,,PAGE_STATUS_REDIRECT,ba
 PAGE_REDIRECT_CHAIN,info,page,page-url,FALSE,active,,PAGE_REDIRECT_CHAIN,baseline
 PAGE_CANONICAL_MISMATCH,warning,page,page-url,FALSE,active,,PAGE_CANONICAL_MISMATCH,baseline
 PAGE_CANONICAL_MISSING,info,page,page-url,FALSE,active,,PAGE_CANONICAL_MISSING,baseline
-PAGE_META_ROBOTS_NOINDEX,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_META_ROBOTS_NOINDEX,baseline
-PAGE_XROBOTSTAG_NOINDEX,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_XROBOTSTAG_NOINDEX,baseline
+PAGE_META_ROBOTS_NOINDEX,warning,page,page-url,FALSE,active,,PAGE_META_ROBOTS_NOINDEX,baseline
+PAGE_XROBOTSTAG_NOINDEX,warning,page,page-url,FALSE,active,,PAGE_XROBOTSTAG_NOINDEX,baseline
 PAGE_HREFLANG_MISMATCH,warning,page,page-url,FALSE,active,,PAGE_HREFLANG_MISMATCH,baseline
 ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,active,,ROBOTS_DISALLOWED,baseline
 ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,open,ROBOTS_FETCH_FAILED,baseline

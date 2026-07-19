@@ -448,6 +448,14 @@ Every engine cell below carries an ADR-009 provenance tag: **executable**
 
 ### 5.1 Effective indexability — meta robots + X-Robots-Tag (E.3)
 
+> **DELIVERED (fold) — SITE-weonydlw.** `R/page-noindex.R` implements the
+> three-stage model below; both `PAGE_*_NOINDEX` registry rows are active.
+> Producer provenance varies by fold path (single-channel `documented`,
+> cross-channel `inferred`) via the assembler's producer-provenance carrier.
+> Interpretation has **no** `robotstxtr` dependency, per §0.3. The **§5.4 trap
+> synthesis is split out** to SITE-zbpfswsz (it needs a robots-facts sink
+> threaded to `page_inspection_finalize`).
+
 > **Axis handling SUPERSEDED by §0.3.** The fold semantics below stand, but the
 > per-engine axis is carried by `robotstxtr` engine-contract-v1 (no new ADR-009
 > axis; explicit API carrier, not silent derivation) and provenance is
