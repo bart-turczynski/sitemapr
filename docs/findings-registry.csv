@@ -73,11 +73,11 @@ HREFLANG_DUPLICATE,warning,protocol,entry,FALSE,active,,HREFLANG_DUPLICATE,basel
 HREFLANG_MISSING_SELF_REFERENCE,warning,protocol,document,FALSE,active,,,baseline
 HREFLANG_NON_RECIPROCAL,warning,protocol,document,FALSE,active,,,baseline
 HREFLANG_INCONSISTENT_LANGUAGE,warning,protocol,document,FALSE,active,,,baseline
-PAGE_FETCH_FAILED,error,page,page-url,FALSE,deferred-v0.2,,PAGE_FETCH_FAILED,baseline
-PAGE_SSRF_BLOCKED,error,page,page-url,FALSE,deferred-v0.2,,PAGE_SSRF_BLOCKED,baseline
-PAGE_STATUS_ERROR,error,page,page-url,FALSE,deferred-v0.2,,PAGE_STATUS_ERROR,baseline
-PAGE_STATUS_REDIRECT,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_STATUS_REDIRECT,baseline
-PAGE_REDIRECT_CHAIN,info,page,page-url,FALSE,deferred-v0.2,,PAGE_REDIRECT_CHAIN,baseline
+PAGE_FETCH_FAILED,error,page,page-url,FALSE,active,,PAGE_FETCH_FAILED,baseline
+PAGE_SSRF_BLOCKED,error,page,page-url,FALSE,active,,PAGE_SSRF_BLOCKED,baseline
+PAGE_STATUS_ERROR,error,page,page-url,FALSE,active,,PAGE_STATUS_ERROR,baseline
+PAGE_STATUS_REDIRECT,warning,page,page-url,FALSE,active,,PAGE_STATUS_REDIRECT,baseline
+PAGE_REDIRECT_CHAIN,info,page,page-url,FALSE,active,,PAGE_REDIRECT_CHAIN,baseline
 PAGE_CANONICAL_MISMATCH,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_CANONICAL_MISMATCH,baseline
 PAGE_CANONICAL_MISSING,info,page,page-url,FALSE,deferred-v0.2,,PAGE_CANONICAL_MISSING,baseline
 PAGE_META_ROBOTS_NOINDEX,warning,page,page-url,FALSE,deferred-v0.2,,PAGE_META_ROBOTS_NOINDEX,baseline
