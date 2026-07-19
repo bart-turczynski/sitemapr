@@ -10,15 +10,20 @@
 # (`code, severity, layer, subject_type, subject_ref, message, evidence,
 # is_strict_only`) and leaves the `mode`/dedup/sort to Layer F.
 #
-# The engine is the sibling package `robotstxtr`, used WHOLESALE via
-# `allowed_by_robots_url()`: it owns the faithful Google matcher AND the
-# HTTP-status -> policy semantics (a 404/410 is allow-all, a 5xx/timeout/network
-# failure or an SSRF block is indeterminate), and it fetches each distinct
-# origin's robots.txt exactly once. sitemapr does NOT reimplement fetching or
-# matching; it feeds `robotstxtr` the advertised URLs plus a matcher user-agent
-# and turns `robots_decisions$results` into findings. The `ssrf_guard = TRUE`
-# opt-out is left at its default so the robots.txt fetch honours the same
-# SSRF posture as the rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
+# The engine is the sibling package `robotstxtr`, used WHOLESALE: it owns the
+# faithful matcher AND the HTTP-status -> policy semantics (a 404/410 is
+# allow-all, a 5xx/timeout/network failure or an SSRF block is indeterminate),
+# and it fetches each distinct origin's robots.txt exactly once. sitemapr does
+# NOT reimplement fetching or matching. The `ssrf_guard = TRUE` opt-out is left
+# at its default so the robots.txt fetch honours the same SSRF posture as the
+# rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
+#
+# Since E.1b (SITE-kwkggijf) evaluation itself lives in R/robots-facts.R and
+# routes through the v1 engine contract, so the robots axes and `matcher_status`
+# flow through for E.3's per-engine synthesis gate. THIS file only derives
+# findings from that already-evaluated facts object. The derivation reads the
+# facts' Google-bounded legacy view so E.5's output stayed byte-identical
+# across the refactor.
 #
 # `robotstxtr` is an OPTIONAL dependency (DESCRIPTION Suggests). Availability is
 # resolved once by the caller (R/validate-sitemap.R): this producer is only ever
@@ -268,17 +273,42 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
 #' @keywords internal
 #' @noRd
 validate_robots <- function(locs, user_agent, base = NA_character_) {
-  testable <- robots_testable_locs(locs)
-  if (length(testable) == 0L) {
+  facts <- robots_evaluate_facts(
+    locs,
+    context = robots_context(product_token = user_agent)
+  )
+  robots_findings_from_facts(facts, base)
+}
+
+# Derive the ROBOTS_* findings from an already-evaluated facts object (E.1b).
+# Split from evaluation so the same single evaluation feeds BOTH these findings
+# and the §5.4 synthesis.
+#
+# The rows are read from the facts' LEGACY view, not from the v1 results: the
+# messages and evidence quote legacy vocabulary (`fetch_outcome`) and the
+# legacy `allowed` trichotomy, so reading it keeps E.5's output byte-identical
+# across this refactor (ADR-009 §5 back-compat). That view is Google-bounded by
+# the shim, so a non-Google context has no legacy rows to derive from and is
+# rejected rather than silently emitting nothing.
+robots_findings_from_facts <- function(facts, base = NA_character_) {
+  if (!robots_facts_consultable(facts)) {
     return(empty_robots_findings())
   }
-
-  decisions <- robotstxtr::allowed_by_robots_url(
-    testable,
-    user_agent = user_agent,
-    ssrf_guard = TRUE
-  )
-  results <- decisions$results
+  if (is.null(facts$legacy)) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "ROBOTS_* findings are derived through the Google-bounded legacy ",
+          "adapter, but the robots context selects policy '%s' / matcher ",
+          "'%s'. Consult the decision object instead."
+        ),
+        facts$context$policy_ruleset,
+        facts$context$matcher_backend
+      ),
+      class = "sitemapr_robots_findings_unsupported"
+    )
+  }
+  results <- facts$legacy$results
 
   out <- list()
   for (i in seq_len(nrow(results))) {
