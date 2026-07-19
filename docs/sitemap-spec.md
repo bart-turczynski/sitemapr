@@ -828,3 +828,180 @@ validation of robots.txt; no crawler-lifecycle emulation; **Bing** sitemap
 status/cross-site behavior is **not invented** — undocumented Bing cells stay
 `documentation_gap`; general HTTP / page-indexing guidance is **not** promoted
 into sitemap-specific behavior; historical values are labeled, never normative.
+
+---
+
+## 13. Per-engine page-directive interpretation (Layer E)
+
+Governing design: `docs/design/layer-e-page-inspection.md` §0.3, §5.1, §5.3.
+Where §12 covers rules about the **sitemap document**, this section covers the
+interpretation of directives found on the **pages a sitemap advertises** — the
+`<meta name=robots>` / `X-Robots-Tag` fold (E.3) and hreflang reconciliation
+(E.4). The §12.0 vocabulary, provenance tags, atomicity rule, and source
+precedence apply here unchanged.
+
+**No new ADR-009 axis.** The crawler-token vocabulary is not reinvented:
+`robotstxtr` engine-contract-v1 already owns it, and this section documents
+sitemapr's interpretation *on top of* that vocabulary.
+
+### 13.0 Naming bridge — sitemap ruleset ↔ robots policy ruleset
+
+The two value sets are **different axes** and are related by a documented
+**preset**, never a silent derivation (ADR-009 §1 independence):
+
+| `sitemap_ruleset` (§12, sitemapr-owned) | `robots_policy_ruleset` (`robotstxtr`) |
+|---|---|
+| `sitemaps.org` (baseline / "no engine") | `rfc9309` |
+| `google` | `google` |
+| `bing` | `bing` |
+| `yandex` | `yandex` |
+| *(no sitemap-side equivalent)* | `assumed_rfc9309` |
+
+Selecting a sitemap ruleset does **not** select a robots policy. A Bing *sitemap*
+ruleset does not imply a Bing *robots* policy: the two are chosen independently,
+because "which engine's sitemap rules am I validating under" and "which engine's
+robots semantics govern access" are different questions.
+
+**Explicit API carrier.** The robots axes are carried explicitly by
+`robots_context(product_token, policy_ruleset, matcher_backend)`, with
+`robots_context_preset()` supplying the documented presets above. A preset
+**retains its expanded values** on the returned object, so a caller can read
+back exactly which product token, policy ruleset, and matcher backend were
+selected — the mapping is inspectable, not implicit. Provenance:
+`application_choice` (the bridge is a named sitemapr product decision, not an
+engine-documented mapping).
+
+### 13.1 Crawler-token model — steal the vocabulary, do not invoke the matcher
+
+Page-directive scoping reuses `robotstxtr`'s **product-token** vocabulary and
+its published capability boundary, read from the **public** accessor
+`robots_engine_contract_v1()$matcher_capability`
+(`engine_backend_capability_v1()` is internal to `robotstxtr` and must not be
+reached into):
+
+| Backend | `token_policy` | Meaning for page-directive scoping |
+|---|---|---|
+| `google` | `arbitrary_valid` | any syntactically valid token may be named |
+| `bing` | `bounded_profiles` | only the supported vendor profiles |
+| `yandex` | `bounded_profiles` | only the supported vendor profiles |
+| `rfc9309` | `rfc9309` | RFC 9309 token rules |
+
+**Use vs. steal, by layer.** The robots matcher is *literally used* for the
+**access** decision (E.5, E.1b, the §0.6 sitemap-blocked check). For page-directive
+**interpretation** only the vocabulary is reused: matching a crawler name in
+`<meta name="googlebot-news">` or a crawler-prefixed `X-Robots-Tag` is
+**prefix/string matching on a token**, not robots.txt group selection, and the
+matcher is never invoked for it.
+
+**Why this boundary matters:** `robotstxtr` is a `Suggests`. Interpretation MUST
+degrade gracefully when it is absent — only the access checks may gate on its
+presence. Provenance: `application_choice`.
+
+Carried over from `robotstxtr`'s own contract, the **anti-laundering rule**
+applies here too: a decision computed under one engine's parsing reflects *that
+engine's parsing*, never a prediction about the crawler a token happens to name.
+
+### 13.2 The three-stage fold (E.3)
+
+A naive "`noindex` in either channel wins" fold is **wrong** — it skips crawler
+scoping and assumes a cross-engine conflict rule that does not hold. The model
+is three stages:
+
+1. **Extract** (Contract B): every directive fact, per channel
+   (`<meta name=robots>` vs `X-Robots-Tag`), per crawler scope. Pure extraction,
+   no interpretation.
+2. **Crawler-applicability filter:** keep only directives applying to the target
+   crawler for the chosen engine. Unscoped directives always apply; scoped
+   directives apply only to their named crawler; general and engine-specific
+   names combine.
+3. **Engine fold:** resolve the surviving set to an effective directive.
+
+| Engine | meta ≡ header | fold rule | channel-only notes | provenance |
+|---|---|---|---|---|
+| **Google** | yes | most-restrictive wins; the negative rules combine; `none` ⊇ `noindex` | non-HTML → header-only | `documented` (the general most-restrictive rule) |
+| **Bing** | yes | most-restrictive wins, **explicitly cross-channel** — "if both forms present, the most restrictive applies" | not documented | `documented` |
+| **Yandex** | yes | **allow-wins** — an explicit `index` / `all` overrides a `noindex` | `all` is meta-only | `documented` |
+
+**Split cell (atomicity, §12.0).** For Google the *general* most-restrictive rule
+is `documented`, but applying it **across channels** (meta vs header
+specifically) has no worked example in Google's documentation. That atomic fact
+is therefore separate and **`inferred`** — diagnostic only, and it may not drive
+a hard verdict on its own.
+
+**Note the divergence direction.** Google and Bing fold toward the *restrictive*
+reading; **Yandex folds the opposite way** (an explicit allow overrides a
+`noindex`). Engine divergence therefore only bites on an **explicit conflict**.
+In the common case — `noindex` in exactly one channel with nothing opposing it —
+all three engines agree; that agreement is `inferred` but safe.
+
+**Must handle:** `none` (= `noindex,nofollow`), crawler-scoped meta names and
+crawler-prefixed `X-Robots-Tag`, repeated or comma-separated headers and multiple
+meta tags, and Yandex's channel-specific support.
+
+**Out of scope for v0.2:** time-scoped directives (`unavailable_after`). The
+check is therefore scoped to **effective `noindex`**, not full "indexability" —
+canonical, HTTP status, and robots access also bear on whether a URL is really
+indexable, and are reported by their own checks.
+
+### 13.3 hreflang interpretation (E.4)
+
+E.4 is a **reconciliation/consistency check, not a presence check**: the sitemap
+and on-page methods are officially equivalent, so "missing on-page hreflang" is
+not a defect when the sitemap carries it.
+
+| Engine | sitemap-vs-page conflict verdict | provenance |
+|---|---|---|
+| **Google** | methods are equivalent; disagreement is a **consistency diagnostic** | equivalence `documented` |
+| **Bing** | no equivalence, precedence, or reciprocity documented → diagnostic only | `documentation_gap` |
+| **Yandex** | sitemap hreflang **discontinued**; validate on-page markup directly — the page is authoritative | `documented` |
+| **sitemaps.org** | base spec defines no hreflang; `xhtml:link` is a Google extension | `documented` |
+
+**Split cell (atomicity).** For Google the *equivalence of methods* is
+`documented`; the **severity of a cross-method disagreement** is a separate
+atomic fact with no primary source, so it is **`inferred`** — diagnostic only.
+A sitemap-vs-page hreflang disagreement is never a hard failure.
+
+**Do not conflate reciprocity with cross-method disagreement.** Google's
+return-tag rule ("if two pages do not both point to each other, the tags are
+ignored") is about **cross-page** pointing-back, not about a page disagreeing
+with the sitemap. Cross-page reciprocity is **not safe under sampling**: a graph
+built over a *sample* is incomplete by construction and would emit false
+"no return tag" findings. It requires full corpus coverage, and the sampled
+page-inspection path deliberately does not compute it.
+
+### 13.4 Baseline behavior — `sitemaps.org` / "no engine"
+
+Under the baseline ruleset there is **no engine fold to apply**. The page-layer
+checks still run and still emit, as **generic consistency diagnostics** carrying
+no per-engine interpretation:
+
+- **E.2 canonical** — a mismatch is reported as a consistency diagnostic. Even
+  under `google` this is deliberately softened: sitemap inclusion is an
+  explicitly **weaker** canonicalization signal than a redirect or `rel=canonical`
+  (`documented`), so a mismatch means "the page prefers a different canonical
+  than the sitemap advertises", never "the sitemap is wrong".
+- **E.3 noindex** — the channel codes (`PAGE_META_ROBOTS_NOINDEX`,
+  `PAGE_XROBOTSTAG_NOINDEX`) report *what and where* the directive was seen.
+  Without an engine overlay no fold verdict is computed, so the effective-
+  indexability conclusion is omitted rather than guessed.
+- **E.4 hreflang** — set disagreement is reported under the shared identity
+  rules with no engine-specific severity.
+
+Baseline emission is **suppression-free**: the checks are not silently disabled
+without an engine, because the underlying facts are engine-neutral observations.
+What an overlay adds is *interpretation*, not *detection*. Provenance:
+`application_choice`.
+
+### 13.5 Non-goals
+
+This section does **not** mint new code strings; page-layer codes are registered
+in the findings registry, not invented here. It does not promote general HTTP or
+page-indexing guidance into sitemap-specific behavior, and it does not invent
+undocumented engine behavior — undocumented Bing cells stay `documentation_gap`.
+
+**Yandex `noindex` × robots.txt is deliberately absent.** The robots.txt-blocked
+× `noindex` synthesis (design §5.4) is documented for Google and Bing only. The
+equivalent Yandex case — URL-only indexing when robots.txt blocks the fetch —
+is **not yet sourced from primary Yandex documentation** and is therefore not
+encoded here in any form. It stays a `documentation_gap` until a primary quote
+is obtained.

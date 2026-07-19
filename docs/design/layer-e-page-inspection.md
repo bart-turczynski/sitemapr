@@ -705,11 +705,13 @@ verdict, so it can only ever decline to claim a trap, never manufacture one.
   existing independent axes via `validate_sitemap_ruleset()` + `ruleset_context()`.
   The "which crawler do these page directives target" concept reuses the
   product-token axis idea; the **HTTP request User-Agent stays distinct** from it.
-  **Open contract question:** page-directive interpretation (§5.1 fold, §5.3
-  hreflang) may need either (a) a documented per-engine fold table in
-  `docs/sitemap-spec.md` keyed off an existing axis, or (b) an ADR-009 amendment
-  adding a `page_directive_ruleset` axis. Axes are ADR-owned — this cannot be
-  invented in an implementation slice. **Settle before E.3/E.4 file.**
+  **Open contract question — SETTLED (SITE-makpbnan):** option **(a)**. The
+  per-engine page-directive interpretation is documented in
+  `docs/sitemap-spec.md` **§13**, keyed off the existing axes; there is **no**
+  new `page_directive_ruleset` axis and no ADR-009 amendment. The robots axes
+  are carried by the explicit `robots_context()` / `robots_context_preset()`
+  carrier (E.1b), with the `sitemap_ruleset → robots_policy_ruleset` bridge
+  expressed as a documented preset whose expanded values are retained.
 - **Provenance on every cell** (§5 tables). Diagnostic-only cells never drive a
   verdict.
 - **Six-field outcome model** reused for the page-fetch outcome (§3.1
