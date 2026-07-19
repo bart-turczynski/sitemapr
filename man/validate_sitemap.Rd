@@ -14,7 +14,12 @@ validate_sitemap(
   index_limits = NULL,
   policy = request_policy(),
   check_robots = FALSE,
-  robots_user_agent = "*"
+  robots_user_agent = "*",
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
 )
 
 validate_sitemaps(
@@ -25,7 +30,12 @@ validate_sitemaps(
   index_limits = NULL,
   policy = request_policy(),
   check_robots = FALSE,
-  robots_user_agent = "*"
+  robots_user_agent = "*",
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
 )
 }
 \arguments{
@@ -57,6 +67,35 @@ package). Defaults to \code{FALSE}.}
 \item{robots_user_agent}{The robots.txt group to match against when
 \code{check_robots = TRUE}, e.g. \code{"*"} (the catch-all group, the default) or a
 specific crawler token such as \code{"Googlebot"}.}
+
+\item{inspect_pages}{Logical; the master opt-in for per-URL page inspection
+(Layer E). When \code{FALSE} (the default) no page is fetched and the result is
+byte-identical to a call without it: the pinned ten-column findings surface
+and no \code{page_coverage} attribute. When \code{TRUE}, a budgeted, deduplicated,
+deterministically-sampled set of the advertised page URLs is fetched and
+each fetch's transport outcome maps to at most one \code{page}-layer finding
+(\code{PAGE_STATUS_ERROR}, \code{PAGE_STATUS_REDIRECT}, \code{PAGE_REDIRECT_CHAIN},
+\code{PAGE_FETCH_FAILED}, \code{PAGE_SSRF_BLOCKED}); the run's coverage rides the
+\code{page_coverage} attribute (see Value). Network expansion is never
+implicit. Page inspection is batch-wide: one budget over the union of the
+call's deduped page URLs.}
+
+\item{page_sample}{Integer sample size for \code{page_mode = "sample"}: how many
+of the deduplicated page URLs to inspect, chosen by a deterministic stable
+hash order so re-runs pick the same set. Ignored when \code{page_mode = "full"}.}
+
+\item{page_mode}{\code{"sample"} (inspect \code{page_sample} deduplicated URLs, the
+default) or \code{"full"} (inspect every deduplicated URL, subject to the
+budget caps).}
+
+\item{page_budget}{A page-inspection budget list: the aggregate caps (max
+pages, max requests/hops, max aggregate bytes, per-page body cap, max wall
+time), each caller-overridable with a safe default. Applies only when
+\code{inspect_pages = TRUE}.}
+
+\item{page_user_agent}{The HTTP request User-Agent sent when fetching pages
+(recorded for the "what did the inspector see" caveat; distinct from a
+robots product token). Defaults to sitemapr's inspector UA.}
 }
 \value{
 The findings tibble described in \code{docs/findings-contract.md}: the
@@ -64,7 +103,11 @@ columns \code{code}, \code{severity}, \code{layer}, \code{subject_type}, \code{s
 \code{message}, \code{evidence}, \code{mode}, \code{is_strict_only}, and \code{remediation_hint}, in
 the contract's stable order. The same source and mode yield a row-for-row
 identical tibble across calls. A genuine transport, SSRF, or HTTP failure
-raises a classed error condition.
+raises a classed error condition. When \code{inspect_pages = TRUE}, the tibble
+additionally carries a \code{page_coverage} attribute (\code{attr(x, "page_coverage")}) — a versioned, batch-wide named list reporting what the
+run covered (\code{eligible}, \code{deduplicated}, \code{selected}, \code{attempted},
+\code{completed}, \code{partial}, and which caps bit) so a sampled or capped run is
+never misread as clean; it is absent when \code{inspect_pages = FALSE}.
 }
 \description{
 The public validation entry point. Reads one or more sitemap sources —
