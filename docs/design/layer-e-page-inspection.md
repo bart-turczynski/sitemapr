@@ -104,6 +104,28 @@ separate, coordinated cross-repo migration, never a silent flip in an issue.
 
 ### 0.6 New check — sitemap document blocked by robots.txt (E.5 sibling)
 
+> **DELIVERED — SITE-zfggbgsj.** The registry decision went to the **new code**
+> option: `ROBOTS_SITEMAP_DISALLOWED` (`warning`, `layer = robots`,
+> `subject_type = source`, `ruleset = baseline`, `reconcile = open`). Reusing
+> `ROBOTS_DISALLOWED` would have collapsed two cases whose remediations differ —
+> "fix robots.txt / move the sitemap" vs. "unblock or drop these listed URLs" —
+> into one code separable only by inspecting the subject scope.
+>
+> `validate_robots_sitemap()` (`R/robots-validate.R`) evaluates the source's own
+> url through the same E.1b facts machinery and derives the finding from the
+> Google-bounded legacy view, exactly as E.5 does. It is appended per source in
+> `validate_sitemap_source()` rather than inside the per-format branches: a
+> sitemap at a `Disallow`-ed path is a defect whether the document parses as a
+> `urlset`, an HTML masquerade, or a corrupt gzip. Cost is one extra robots.txt
+> fetch per source on the opt-in path (robotstxtr holds no cross-call cache).
+>
+> **Scope, as shipped:** the url tested is the sitemap **as requested**, not the
+> post-redirect final url — that is the address a crawler matches and the one an
+> owner would change. Top-level sources only; index children stay out of scope.
+> An undecidable robots.txt emits **nothing** at document level, since there is
+> no `source`-scoped analog of `ROBOTS_INDETERMINATE` and the listed-URL check
+> already reports the same unfetchable robots.txt for that origin.
+
 We consume the robots.txt `Sitemap:` directive for **discovery only** and
 explicitly ignore `Disallow`/`Allow` there (`R/discovery.R:312`); all robots
 allow/deny checking targets the *listed URLs*. Add the document-level analog:

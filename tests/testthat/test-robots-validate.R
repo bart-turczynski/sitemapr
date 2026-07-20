@@ -259,3 +259,122 @@ test_that("a stale build with the right id but no capability aborts", {
     fixed = TRUE
   )
 })
+
+# ---- document-level check: the sitemap itself (§0.6, SITE-zfggbgsj) ---------
+
+test_that("a disallowed sitemap document yields ROBOTS_SITEMAP_DISALLOWED", {
+  skip_if_not_installed("robotstxtr")
+  f <- with_robots(validate_robots_sitemap(
+    "https://disallow.example/private/sitemap.xml",
+    user_agent = "*",
+    base = "sitemap://disallow.example/private/sitemap.xml"
+  ))
+
+  expect_identical(nrow(f), 1L)
+  expect_identical(f$code, "ROBOTS_SITEMAP_DISALLOWED")
+  expect_identical(f$severity, "warning")
+  expect_identical(f$layer, "robots")
+  # Source-scoped: the document itself, so the ref carries no fragment.
+  expect_identical(f$subject_type, "source")
+  expect_identical(
+    f$subject_ref,
+    "sitemap://disallow.example/private/sitemap.xml"
+  )
+  expect_match(f$evidence[[1L]]$excerpt, "disallow: /private")
+  expect_identical(f$evidence[[1L]]$line, 2L)
+})
+
+test_that("an allowed sitemap document yields no row", {
+  skip_if_not_installed("robotstxtr")
+  f <- with_robots(validate_robots_sitemap(
+    "https://allow.example/sitemap.xml",
+    user_agent = "*",
+    base = "sitemap://allow.example/sitemap.xml"
+  ))
+  expect_identical(nrow(f), 0L)
+})
+
+test_that("an undecidable robots.txt yields no document-level row", {
+  skip_if_not_installed("robotstxtr")
+  # There is deliberately no source-scoped analog of ROBOTS_INDETERMINATE.
+  f <- with_robots(validate_robots_sitemap(
+    "https://boom.example/sitemap.xml",
+    user_agent = "*",
+    base = "sitemap://boom.example/sitemap.xml"
+  ))
+  expect_identical(nrow(f), 0L)
+})
+
+test_that("a non-http(s) sitemap source is skipped (no robots.txt governs)", {
+  skip_if_not_installed("robotstxtr")
+  # A local file path never reaches the fetcher, so no mock is needed.
+  f <- validate_robots_sitemap(
+    "/var/tmp/sitemap.xml",
+    user_agent = "*",
+    base = "sitemap:///var/tmp/sitemap.xml"
+  )
+  expect_identical(nrow(f), 0L)
+})
+
+test_that("a non-legacy robots context is rejected, not silently empty", {
+  skip_if_not_installed("robotstxtr")
+  facts <- with_robots(robots_evaluate_facts(
+    "https://disallow.example/private/sitemap.xml",
+    context = robots_context_preset("rfc9309")
+  ))
+  expect_error(
+    robots_sitemap_findings_from_facts(facts, base = "sitemap://s.xml"),
+    class = "sitemapr_robots_findings_unsupported"
+  )
+})
+
+# A transport mock that serves a urlset for any `/sitemap.xml` path and defers
+# to mock_robots for the robots.txt requests, so the document-level check can be
+# exercised end-to-end through validate_sitemap() on a REMOTE sitemap.
+mock_sitemap_and_robots <- function(req) {
+  path <- httr2::url_parse(req$url)$path
+  if (identical(basename(path), "sitemap.xml")) {
+    return(httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list(`content-type` = "application/xml"),
+      body = charToRaw(paste0(
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        "<url><loc>https://allow.example/ok</loc></url></urlset>"
+      ))
+    ))
+  }
+  mock_robots(req)
+}
+
+test_that("validate_sitemap flags a sitemap its own robots.txt disallows", {
+  skip_if_not_installed("robotstxtr")
+  f <- httr2::with_mocked_responses(
+    mock_sitemap_and_robots,
+    validate_sitemap(
+      "https://disallow.example/private/sitemap.xml",
+      mode = "non-strict",
+      check_robots = TRUE
+    )
+  )
+
+  doc <- f[f$code == "ROBOTS_SITEMAP_DISALLOWED", , drop = FALSE]
+  expect_identical(nrow(doc), 1L)
+  expect_identical(doc$subject_type, "source")
+  expect_identical(
+    doc$subject_ref,
+    "sitemap://disallow.example/private/sitemap.xml"
+  )
+})
+
+test_that("the document check stays off on a default call", {
+  skip_if_not_installed("robotstxtr")
+  f <- httr2::with_mocked_responses(
+    mock_sitemap_and_robots,
+    validate_sitemap(
+      "https://disallow.example/private/sitemap.xml",
+      mode = "non-strict"
+    )
+  )
+  expect_identical(sum(f$code == "ROBOTS_SITEMAP_DISALLOWED"), 0L)
+})

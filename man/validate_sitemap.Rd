@@ -61,8 +61,8 @@ headers, authentication, a proxy, TLS options, retry/backoff, and per-host
 throttling there. Defaults to the no-op policy.}
 
 \item{check_robots}{Logical; when \code{TRUE}, run the robots.txt allow/disallow
-check over the advertised URLs (requires the optional \code{robotstxtr}
-package). Defaults to \code{FALSE}.}
+check over the advertised URLs and the sitemap document itself (requires
+the optional \code{robotstxtr} package). Defaults to \code{FALSE}.}
 
 \item{robots_user_agent}{The robots.txt group to match against when
 \code{check_robots = TRUE}, e.g. \code{"*"} (the catch-all group, the default) or a
@@ -139,9 +139,12 @@ engine), emitting \code{robots}-layer findings for URLs that are disallowed
 (\code{ROBOTS_DISALLOWED}, \code{warning}) or that cannot be decided because robots.txt
 would not fetch (\code{ROBOTS_INDETERMINATE}, \code{info}). Each distinct origin's
 robots.txt is fetched once under the SSRF-guarded fetch policy; matching is
-offline, so every advertised URL is checked with no sampling. When
-\code{robotstxtr} is not installed, a classed warning naming the install command
-is signalled and the check is skipped; every other layer is unaffected.
+offline, so every advertised URL is checked with no sampling. The sitemap
+document's own URL is tested too: a sitemap published at a path its own
+robots.txt disallows yields \code{ROBOTS_SITEMAP_DISALLOWED} (\code{warning}, scoped to
+the source). When \code{robotstxtr} is not installed, a classed warning naming the
+install command is signalled and the check is skipped; every other layer is
+unaffected.
 }
 \examples{
 xml <- paste0(
