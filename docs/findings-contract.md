@@ -492,15 +492,16 @@ None. Every registry row reconciles or is documented below.
   `ROBOTS_INDETERMINATE` and folded both codes into it (sitemap-validator
   PR #26, SITE-wrylygzd); the two old spellings survive only as deprecated
   aliases there, so their `validator-only` rows are dropped from the registry.
-  The specific cause is carried in the finding message, not the code.
-  `ROBOTS_DISALLOWED` reconciles cleanly (both ports share the name).
+  As here, the specific cause is carried in `evidence.excerpt` (the validator
+  records its raw robots outcome; PR #27) rather than in the code or the message
+  text. `ROBOTS_DISALLOWED` reconciles cleanly (both ports share the name).
 - **`ROBOTS_SITEMAP_DISALLOWED`** — minted by sitemapr (SITE-zfggbgsj) and since
   adopted by the validator under the same spelling (PR #26, SMV-jphseemf), which
   had no document-level robots check at all before. `validator_code` now matches
-  and the row reconciles. Note that the validator emits no evidence on this code
-  yet: its robots client returns a bare outcome with no matched-rule or
-  one-based line data, the same gap its `ROBOTS_DISALLOWED` has. Closing that is
-  a separate change on the validator side affecting both codes.
+  and the row reconciles. Both ports now also agree on evidence: the validator
+  surfaces `RobotsMatcher::matching_line()` through its native binding and emits
+  the same `type: value` excerpt and one-based line on this code and on
+  `ROBOTS_DISALLOWED` (PR #28, SMV-syrxvtho).
 
 - **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
