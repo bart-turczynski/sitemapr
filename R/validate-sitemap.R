@@ -820,7 +820,34 @@ validate_sitemap_source <- function(
     validate_xml_parts(src, user_agent, limits, index_limits, policy, ruleset)
   }
 
+  # The document-level robots check (§0.6) is independent of how the document
+  # parsed — a sitemap at a Disallow-ed path is a defect whether it is a valid
+  # urlset, an HTML masquerade or a corrupt gzip — so it is appended once here
+  # rather than inside the per-format branches. It evaluates the source's OWN
+  # url, which costs one extra robots.txt fetch per source on the opt-in
+  # check_robots path; robotstxtr holds no cross-call cache.
+  parts <- append_robots_sitemap_part(
+    parts,
+    as.character(source$normalized_url)[[1L]],
+    robots_ua,
+    src$base
+  )
+
   assemble_findings(parts, mode, ruleset)
+}
+
+# Append the document-level robots part for the source's own url, or leave
+# `parts` untouched when the robots check is inactive (`robots_ua` NULL).
+append_robots_sitemap_part <- function(parts, sitemap_url, robots_ua, base) {
+  if (is.null(robots_ua)) {
+    return(parts)
+  }
+  parts[[length(parts) + 1L]] <- validate_robots_sitemap(
+    sitemap_url,
+    robots_ua,
+    base
+  )
+  parts
 }
 
 # Row-bind already assembled findings contracts from per-source validation. The
@@ -933,16 +960,19 @@ findings_ruleset_spec <- function(sitemap_ruleset, context) {
 #' (`ROBOTS_DISALLOWED`, `warning`) or that cannot be decided because robots.txt
 #' would not fetch (`ROBOTS_INDETERMINATE`, `info`). Each distinct origin's
 #' robots.txt is fetched once under the SSRF-guarded fetch policy; matching is
-#' offline, so every advertised URL is checked with no sampling. When
-#' `robotstxtr` is not installed, a classed warning naming the install command
-#' is signalled and the check is skipped; every other layer is unaffected.
+#' offline, so every advertised URL is checked with no sampling. The sitemap
+#' document's own URL is tested too: a sitemap published at a path its own
+#' robots.txt disallows yields `ROBOTS_SITEMAP_DISALLOWED` (`warning`, scoped to
+#' the source). When `robotstxtr` is not installed, a classed warning naming the
+#' install command is signalled and the check is skipped; every other layer is
+#' unaffected.
 #'
 #' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
 #'   strict-only findings are dropped and schema violations are downgraded to
 #'   `warning`; in `strict`, the documented info-to-warning codes are elevated.
 #' @param check_robots Logical; when `TRUE`, run the robots.txt allow/disallow
-#'   check over the advertised URLs (requires the optional `robotstxtr`
-#'   package). Defaults to `FALSE`.
+#'   check over the advertised URLs and the sitemap document itself (requires
+#'   the optional `robotstxtr` package). Defaults to `FALSE`.
 #' @param robots_user_agent The robots.txt group to match against when
 #'   `check_robots = TRUE`, e.g. `"*"` (the catch-all group, the default) or a
 #'   specific crawler token such as `"Googlebot"`.

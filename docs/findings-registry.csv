@@ -85,6 +85,7 @@ PAGE_XROBOTSTAG_NOINDEX,warning,page,page-url,FALSE,active,,PAGE_XROBOTSTAG_NOIN
 PAGE_HREFLANG_MISMATCH,warning,page,page-url,FALSE,active,,PAGE_HREFLANG_MISMATCH,baseline
 ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,active,,ROBOTS_DISALLOWED,baseline
 ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,open,ROBOTS_FETCH_FAILED,baseline
+ROBOTS_SITEMAP_DISALLOWED,warning,robots,source,FALSE,active,open,,baseline
 ROBOTS_NOT_TESTABLE,info,robots,page-url,FALSE,validator-only,,ROBOTS_NOT_TESTABLE,baseline
 ROBOTS_FETCH_FAILED,info,robots,page-url,FALSE,validator-only,,ROBOTS_FETCH_FAILED,baseline
 REPORT_TRUNCATED,info,report,report,FALSE,validator-only,,REPORT_TRUNCATED,baseline

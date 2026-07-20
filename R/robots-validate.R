@@ -41,14 +41,15 @@ robots_findings <- function(
   subject_ref = character(0),
   message = character(0),
   evidence = list(),
-  is_strict_only = logical(0)
+  is_strict_only = logical(0),
+  subject_type = "page-url"
 ) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
     severity = as.character(severity),
     layer = rep("robots", n),
-    subject_type = rep("page-url", n),
+    subject_type = rep(subject_type, n),
     subject_ref = as.character(subject_ref),
     message = as.character(message),
     evidence = if (length(evidence) > 0L) evidence else vector("list", n),
@@ -247,6 +248,147 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
   )
 }
 
+# Reject a facts object whose context has no Google-bounded legacy view. Every
+# ROBOTS_* finding — listed-URL and document-level alike — is derived through
+# that view, so a context selecting another policy/matcher must consult the
+# decision object instead of silently producing an empty findings tibble.
+robots_legacy_view_required <- function(facts) {
+  rlang::abort(
+    sprintf(
+      paste0(
+        "ROBOTS_* findings are derived through the Google-bounded legacy ",
+        "adapter, but the robots context selects policy '%s' / matcher ",
+        "'%s'. Consult the decision object instead."
+      ),
+      facts$context$policy_ruleset,
+      facts$context$matcher_backend
+    ),
+    class = "sitemapr_robots_findings_unsupported"
+  )
+}
+
+# --- Document-level check: is the sitemap itself disallowed? (§0.6) ----------
+#
+# The checks above test the URLs a sitemap ADVERTISES. This one tests the
+# sitemap DOCUMENT's own URL: a sitemap published at a path its own robots.txt
+# `Disallow`-es is a self-contradiction — the site both advertises the document
+# and forbids crawlers from fetching it. Webmaster tools warn on it; the exact
+# fetch mechanics vary by engine (a submitted sitemap may still be read), so it
+# is framed as a consistency diagnostic (`warning`), never a hard failure.
+#
+# Scope: the sitemap URL as REQUESTED (the advertised/submitted address), not
+# the post-redirect final URL — the requested address is what a crawler matches
+# against robots.txt, and it is the address the site owner would have to change.
+# Only the top-level source documents of a call are tested; index children are
+# fetched during expansion and are out of scope for this slice.
+#
+# Indeterminacy (robots.txt would not fetch) deliberately produces NO row here:
+# `ROBOTS_INDETERMINATE` is a `page-url`-scoped code, and a document-level
+# analog would be a second coordinated registry addition for a strictly weaker
+# signal — the listed-URL check already reports the same unfetchable robots.txt
+# whenever the sitemap advertises anything on that origin.
+
+# The source-scoped subject_ref for a document-level robots finding: the
+# sitemap's own document base, with no fragment (findings-contract.md "Subject
+# ref format" — a `source` subject is the document itself).
+robots_sitemap_subject_ref <- function(base) {
+  if (is.null(base)) NA_character_ else base
+}
+
+# One ROBOTS_SITEMAP_DISALLOWED finding. Evidence mirrors ROBOTS_DISALLOWED:
+# the matched `type: value` snippet in `excerpt` and its one-based robots.txt
+# line in `line`.
+robots_sitemap_disallowed_finding <- function(base, url, res_row) {
+  robots_findings(
+    code = "ROBOTS_SITEMAP_DISALLOWED",
+    severity = "warning",
+    subject_type = "source",
+    subject_ref = robots_sitemap_subject_ref(base),
+    message = sprintf(
+      paste0(
+        "Sitemap document %s is disallowed by its own robots.txt (matched ",
+        "%s '%s'); crawlers are told not to fetch a sitemap the site ",
+        "advertises."
+      ),
+      url,
+      res_row$matched_rule_type,
+      res_row$matched_rule_value
+    ),
+    evidence = list(finding_evidence(
+      excerpt = sprintf(
+        "%s: %s",
+        res_row$matched_rule_type,
+        res_row$matched_rule_value
+      ),
+      line = res_row$matched_line
+    )),
+    is_strict_only = FALSE
+  )
+}
+
+#' Sitemap-document robots finding-producer (§0.6, E.5 sibling)
+#'
+#' Tests the sitemap document's own URL against the governing robots.txt and
+#' returns a `ROBOTS_SITEMAP_DISALLOWED` (`warning`) row when the document is
+#' disallowed for the matcher user-agent. An allowed or undecidable document
+#' produces no row, as does a non-http(s) source (a local file has no robots.txt
+#' to contradict).
+#'
+#' @param sitemap_url The sitemap's requested URL.
+#' @param user_agent The matcher user-agent (the robots.txt group to evaluate),
+#'   as in `validate_robots()`.
+#' @param base The sitemap's document-level `subject_ref`; the finding anchors
+#'   to it unfragmented (`subject_type = "source"`).
+#' @return A robots-layer findings tibble in the contract's 8-column producer
+#'   shape; zero rows when the document is not disallowed.
+#' @keywords internal
+#' @noRd
+validate_robots_sitemap <- function(
+  sitemap_url,
+  user_agent,
+  base = NA_character_
+) {
+  url <- robots_testable_locs(sitemap_url)
+  if (length(url) == 0L) {
+    return(empty_robots_findings())
+  }
+  facts <- robots_evaluate_facts(
+    url,
+    context = robots_context(product_token = user_agent)
+  )
+  robots_sitemap_findings_from_facts(facts, base)
+}
+
+# Derive the document-level finding from an already-evaluated facts object. The
+# facts here describe exactly ONE url (the sitemap's own), so the legacy view
+# carries at most one row. Like robots_findings_from_facts() this reads the
+# Google-bounded legacy view and rejects a non-legacy context rather than
+# silently emitting nothing.
+robots_sitemap_findings_from_facts <- function(facts, base = NA_character_) {
+  if (!robots_facts_consultable(facts)) {
+    return(empty_robots_findings())
+  }
+  if (is.null(facts$legacy)) {
+    robots_legacy_view_required(facts)
+  }
+  results <- facts$legacy$results
+  out <- list()
+  for (i in seq_len(nrow(results))) {
+    row <- results[i, , drop = FALSE]
+    if (isFALSE(row$allowed)) {
+      out[[length(out) + 1L]] <- robots_sitemap_disallowed_finding(
+        base,
+        row$url,
+        row
+      )
+    }
+  }
+  if (length(out) == 0L) {
+    return(empty_robots_findings())
+  }
+  do.call(rbind, out)
+}
+
 #' Robots allow/disallow finding-producer (Layer E check #7)
 #'
 #' Tests each sitemap-advertised URL against the governing robots.txt via the
@@ -304,18 +446,7 @@ robots_findings_from_facts <- function(facts, base = NA_character_) {
     return(empty_robots_findings())
   }
   if (is.null(facts$legacy)) {
-    rlang::abort(
-      sprintf(
-        paste0(
-          "ROBOTS_* findings are derived through the Google-bounded legacy ",
-          "adapter, but the robots context selects policy '%s' / matcher ",
-          "'%s'. Consult the decision object instead."
-        ),
-        facts$context$policy_ruleset,
-        facts$context$matcher_backend
-      ),
-      class = "sitemapr_robots_findings_unsupported"
-    )
+    robots_legacy_view_required(facts)
   }
   results <- facts$legacy$results
 
