@@ -84,10 +84,8 @@ PAGE_META_ROBOTS_NOINDEX,warning,page,page-url,FALSE,active,,PAGE_META_ROBOTS_NO
 PAGE_XROBOTSTAG_NOINDEX,warning,page,page-url,FALSE,active,,PAGE_XROBOTSTAG_NOINDEX,baseline
 PAGE_HREFLANG_MISMATCH,warning,page,page-url,FALSE,active,,PAGE_HREFLANG_MISMATCH,baseline
 ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,active,,ROBOTS_DISALLOWED,baseline
-ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,open,ROBOTS_FETCH_FAILED,baseline
-ROBOTS_SITEMAP_DISALLOWED,warning,robots,source,FALSE,active,open,,baseline
-ROBOTS_NOT_TESTABLE,info,robots,page-url,FALSE,validator-only,,ROBOTS_NOT_TESTABLE,baseline
-ROBOTS_FETCH_FAILED,info,robots,page-url,FALSE,validator-only,,ROBOTS_FETCH_FAILED,baseline
+ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,done,ROBOTS_INDETERMINATE,baseline
+ROBOTS_SITEMAP_DISALLOWED,warning,robots,source,FALSE,active,done,ROBOTS_SITEMAP_DISALLOWED,baseline
 REPORT_TRUNCATED,info,report,report,FALSE,validator-only,,REPORT_TRUNCATED,baseline
 INSPECTION_FULL_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_FULL_CAP_HIT,baseline
 INSPECTION_SAMPLE_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_SAMPLE_CAP_HIT,baseline

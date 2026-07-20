@@ -480,22 +480,27 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-- **`ROBOTS_INDETERMINATE`** ↔ validator `ROBOTS_FETCH_FAILED` (best-match).
-  sitemapr collapses the two "cannot decide" outcomes into ONE `info` code:
-  robots.txt would not fetch (a 5xx/timeout/network/TLS failure or an SSRF
-  block). The sibling validator currently splits this across two codes,
-  `ROBOTS_FETCH_FAILED` (fetch failed) and `ROBOTS_NOT_TESTABLE`, both carried
-  here as `validator-only` rows. Per the "sitemapr names canonical" rule the
-  validator adopts `ROBOTS_INDETERMINATE`, collapsing its two codes; until it
-  does, this row stays `reconcile = open`. `ROBOTS_DISALLOWED` reconciles
-  cleanly (both ports share the name).
-- **`ROBOTS_SITEMAP_DISALLOWED`** — minted by sitemapr (SITE-zfggbgsj) with no
-  validator counterpart yet, so `validator_code` is blank and the row is
-  `reconcile = open`. Per the "sitemapr names canonical" rule the sibling adopts
-  this spelling when it implements the document-level check; adding the row here
-  is the coordinated registry addition, not a silent invention.
+None. Every registry row reconciles or is documented below.
 
 ### Resolved reconciliations
+
+- **`ROBOTS_INDETERMINATE`** — sitemapr collapses the two "cannot decide"
+  outcomes into ONE `info` code: robots.txt would not fetch (a
+  5xx/timeout/network/TLS failure or an SSRF block), or the decision is
+  otherwise NA. The sibling validator split this across `ROBOTS_FETCH_FAILED`
+  and `ROBOTS_NOT_TESTABLE`. Per the "sitemapr names canonical" rule it adopted
+  `ROBOTS_INDETERMINATE` and folded both codes into it (sitemap-validator
+  PR #26, SITE-wrylygzd); the two old spellings survive only as deprecated
+  aliases there, so their `validator-only` rows are dropped from the registry.
+  The specific cause is carried in the finding message, not the code.
+  `ROBOTS_DISALLOWED` reconciles cleanly (both ports share the name).
+- **`ROBOTS_SITEMAP_DISALLOWED`** — minted by sitemapr (SITE-zfggbgsj) and since
+  adopted by the validator under the same spelling (PR #26, SMV-jphseemf), which
+  had no document-level robots check at all before. `validator_code` now matches
+  and the row reconciles. Note that the validator emits no evidence on this code
+  yet: its robots client returns a bare outcome with no matched-rule or
+  one-based line data, the same gap its `ROBOTS_DISALLOWED` has. Closing that is
+  a separate change on the validator side affecting both codes.
 
 - **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,
