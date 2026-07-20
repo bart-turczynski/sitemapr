@@ -341,6 +341,21 @@ a versioned contract change is intended):
 
 - SSRF block / scheme restriction / HTTPS→HTTP downgrade → `outcome =
   safety_refused` → `PAGE_SSRF_BLOCKED`. Never a page verdict, never `allow`.
+
+> **DELIVERED (downgrade refusal) — SITE-iqqoekjk.** `page_hop_is_downgrade()`
+> in `R/fetch.R` rejects a redirect hop stepping `https` → `http` inside
+> `page_fetch_follow()`, aborting `sitemapr_scheme_downgrade`, which `page_fetch()`
+> maps to `safety_refused` (and E.1f already maps that to `PAGE_SSRF_BLOCKED`).
+> The hop that *issued* the downgrading `Location` is recorded before the abort,
+> so the captured chain shows where the refusal happened; the refused target is
+> never requested. The check precedes the redirect-cap check, per ADR-010 §3's
+> safety-over-resource precedence. The rejection is **unconditional** and does
+> not collide with the deliberate inferred-scheme `https` → `http` fallback in
+> `fetch_connection_failure()`: that fallback is a *connection-failure* retry on
+> the `fetch_source()` path, never a redirect hop, and page inspection has no
+> scheme inference of its own (page URLs are advertised `<loc>`s, which always
+> carry an explicit scheme). Only `https` → `http` counts — a same-scheme hop and
+> an `http` → `https` upgrade both pass through.
 - **Per-page body cap reached → `outcome = partial`, body prefix retained.** The
   page cap (§3.3, single-MB range) is a **truncate-and-retain** bound, distinct
   from ADR-003's 500 MB per-resource safety ceiling — which stays a *discard*

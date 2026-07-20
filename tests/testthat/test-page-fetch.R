@@ -232,6 +232,86 @@ test_that("a non-HTTP(S) scheme is refused as safety_refused", {
   expect_identical(art$outcome, "safety_refused")
 })
 
+# ---- HTTPS->HTTP downgrade -> safety_refused (ADR-010 section 3) -------------
+
+test_that("an https->http downgrade redirect classifies as safety_refused", {
+  state <- new.env(parent = emptyenv())
+  state$requested <- character(0)
+  httr2::local_mocked_responses(function(req) {
+    state$requested <- c(state$requested, req$url)
+    page_mock_redirect("https://example.com/0", "http://example.com/1")
+  })
+
+  art <- page_fetch("https://example.com/0")
+  expect_identical(art$outcome, "safety_refused")
+  # The refused target is never requested; only the hop that issued the
+  # downgrading Location was performed, and it is captured.
+  expect_identical(state$requested, "https://example.com/0")
+  expect_length(art$hops, 1L)
+  expect_identical(art$hops[[1L]]$location, "http://example.com/1")
+  expect_true(is.na(art$final_url))
+  expect_length(art$body, 0L)
+})
+
+test_that("a downgrade deeper in the chain is refused at that hop", {
+  httr2::local_mocked_responses(list(
+    page_mock_redirect("https://example.com/0", "https://example.com/1"),
+    page_mock_redirect("https://example.com/1", "http://example.com/2")
+  ))
+  art <- page_fetch("https://example.com/0")
+  expect_identical(art$outcome, "safety_refused")
+  expect_length(art$hops, 2L)
+})
+
+test_that("a downgrade outranks the redirect cap (safety over resource)", {
+  # The downgrade sits on the hop that would ALSO exceed max_redirects = 1;
+  # ADR-010 section 3 pins safety above the resource limit.
+  httr2::local_mocked_responses(list(
+    page_mock_redirect("https://example.com/0", "https://example.com/1"),
+    page_mock_redirect("https://example.com/1", "http://example.com/2")
+  ))
+  art <- page_fetch(
+    "https://example.com/0",
+    limits = fetch_limits(max_redirects = 1L)
+  )
+  expect_identical(art$outcome, "safety_refused")
+})
+
+test_that("an http->https upgrade and same-scheme hops are not refused", {
+  httr2::local_mocked_responses(list(
+    page_mock_redirect("http://example.com/0", "https://example.com/1"),
+    page_mock_redirect("https://example.com/1", "https://example.com/2"),
+    page_mock_ok(url = "https://example.com/2")
+  ))
+  art <- page_fetch("http://example.com/0")
+  expect_identical(art$outcome, "usable_body")
+  expect_identical(art$final_url, "https://example.com/2")
+})
+
+test_that("an http->http hop is not a downgrade", {
+  httr2::local_mocked_responses(list(
+    page_mock_redirect("http://example.com/0", "http://example.com/1"),
+    page_mock_ok(url = "http://example.com/1")
+  ))
+  art <- page_fetch("http://example.com/0")
+  expect_identical(art$outcome, "usable_body")
+})
+
+test_that("page_hop_is_downgrade keys on scheme only, case-insensitively", {
+  expect_true(page_hop_is_downgrade(
+    "HTTPS://example.com/a",
+    "HTTP://example.com/b"
+  ))
+  expect_false(page_hop_is_downgrade(
+    "https://example.com/a",
+    "https://example.com/b"
+  ))
+  expect_false(page_hop_is_downgrade(
+    "http://example.com/a",
+    "https://example.com/b"
+  ))
+})
+
 # ---- redirect cap exceeded -> redirect_over_budget ---------------------------
 
 test_that("exceeding the redirect cap classifies as redirect_over_budget", {
