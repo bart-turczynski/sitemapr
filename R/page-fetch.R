@@ -132,8 +132,8 @@ page_fetch_requested_url <- function(url) {
 #' SSRF-guarded fetch/redirect machinery unchanged; adds the per-page
 #' truncate-and-retain body cap (ADR-010 §2) on top of the 500 MB per-resource
 #' ceiling. Classification of the outcome follows §3.2 + ADR-010:
-#'   * SSRF block / non-HTTP(S) scheme (and, where the guard rejects it, an
-#'     HTTPS->HTTP downgrade) -> `safety_refused` (never a page verdict);
+#'   * SSRF block / non-HTTP(S) scheme / a redirect hop stepping https->http
+#'     -> `safety_refused` (never a page verdict);
 #'   * per-page body cap reached -> `partial`, prefix RETAINED, `truncated`;
 #'   * 500 MB ceiling discard OR deadline/transport with no body -> `incomplete`
 #'     / `transport_fail` (no usable body);
@@ -193,6 +193,9 @@ page_fetch <- function(
       throttle_state = throttle_state
     ),
     sitemapr_ssrf_blocked = function(cnd) list(outcome = "safety_refused"),
+    sitemapr_scheme_downgrade = function(cnd) {
+      list(outcome = "safety_refused")
+    },
     sitemapr_redirect_limit = function(cnd) {
       list(outcome = "redirect_over_budget")
     },

@@ -1119,12 +1119,36 @@ page_fetch_terminal <- function(resp, limits, page_body_cap) {
   )
 }
 
+# Does a redirect hop step the scheme DOWN from https to http? This is ADR-010
+# section 3's third safety_refused refusal class, alongside the SSRF address
+# block and the non-HTTP(S) scheme restriction. Only https -> http counts: a
+# same-scheme hop and an http -> https upgrade both pass through.
+#
+# The rejection is UNCONDITIONAL on the page path, and that does not collide
+# with the deliberate inferred-scheme https -> http fallback in
+# fetch_connection_failure(): that fallback is a CONNECTION-failure retry on the
+# fetch_source() path, never a redirect hop, and page inspection has no
+# scheme-inference of its own (page URLs are sitemap-advertised <loc>s, which
+# always carry an explicit scheme). So every page-fetch hop is a
+# non-inferred-scheme request.
+page_hop_is_downgrade <- function(from_url, to_url) {
+  startsWith(tolower(from_url), "https://") &&
+    startsWith(tolower(to_url), "http://")
+}
+
 # Manual redirect loop for page inspection. Ordering is load-bearing (ADR-003):
-# guard -> perform -> record -> follow, on every hop. Reaching the redirect cap
-# aborts `sitemapr_redirect_limit` (mapped to `redirect_over_budget`); the SSRF
-# guard aborts `sitemapr_ssrf_blocked` (mapped to `safety_refused`); transport
-# failures propagate as `httr2_failure`/`sitemapr_timeout` (mapped to
-# `transport_fail`). On a terminal response it returns page_fetch_terminal().
+# guard -> perform -> record -> follow, on every hop. The SSRF guard aborts
+# `sitemapr_ssrf_blocked` and a scheme downgrade aborts
+# `sitemapr_scheme_downgrade` (both mapped to `safety_refused`); reaching the
+# redirect cap aborts `sitemapr_redirect_limit` (mapped to
+# `redirect_over_budget`); transport failures propagate as
+# `httr2_failure`/`sitemapr_timeout` (mapped to `transport_fail`). On a terminal
+# response it returns page_fetch_terminal().
+#
+# The downgrade check precedes the redirect-cap check because safety outranks
+# resource limits (ADR-010 section 3). The hop that ISSUED the downgrading
+# Location is recorded first, so the captured chain shows where the refusal
+# happened; the refused target itself is never requested.
 page_fetch_follow <- function(
   url,
   limits,
@@ -1155,6 +1179,19 @@ page_fetch_follow <- function(
       next_url
     )
     if (!is.na(next_url)) {
+      if (page_hop_is_downgrade(current_url, next_url)) {
+        rlang::abort(
+          sprintf(
+            "Refused an HTTPS to HTTP downgrade redirect from %s to %s.",
+            current_url,
+            next_url
+          ),
+          class = "sitemapr_scheme_downgrade",
+          url = url,
+          from_url = current_url,
+          to_url = next_url
+        )
+      }
       hops <- hops + 1L
       if (hops > limits$max_redirects) {
         rlang::abort(
