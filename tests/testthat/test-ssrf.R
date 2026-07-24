@@ -248,6 +248,57 @@ test_that("the :: and ::1 specials are NOT read as IPv4-compatible", {
   expect_identical(guard("http://[::1]/")$reason, "loopback")
 })
 
+# ---- specials classify on the expanded address, not the literal --------------
+
+# Helper: the pure matcher with rurl out of the picture, so these pin layer 2
+# on its own rather than rurl's canonicalization of the literal (SITE-vovtwvuh).
+reason_of <- function(host) sitemapr_test_ns$ssrf_check(host, "http")$reason
+
+test_that("every spelling of ::1 classifies as loopback", {
+  # All six are the SAME 128 bits. Deciding the specials on the literal string
+  # matched only the exact "::1" and let every other spelling reach the default
+  # allow -- ssrf_embedded_ipv4() deliberately skips tail32 <= 1, so the
+  # embedding decoder did not catch them either. Matching the EXPANDED hextets
+  # is what makes all spellings agree.
+  expect_identical(reason_of("[::1]"), "loopback")
+  expect_identical(reason_of("[0::1]"), "loopback")
+  expect_identical(reason_of("[::0:1]"), "loopback")
+  expect_identical(reason_of("[0:0:0:0:0:0:0:1]"), "loopback")
+  expect_identical(reason_of("[::0.0.0.1]"), "loopback")
+  expect_identical(reason_of("[0:0:0:0:0:0:0.0.0.1]"), "loopback")
+})
+
+test_that("every spelling of :: classifies as unspecified", {
+  expect_identical(reason_of("[::]"), "unspecified")
+  expect_identical(reason_of("[0::]"), "unspecified")
+  expect_identical(reason_of("[::0]"), "unspecified")
+  expect_identical(reason_of("[0:0:0:0:0:0:0:0]"), "unspecified")
+  expect_identical(reason_of("[::0.0.0.0]"), "unspecified")
+  expect_identical(reason_of("[0:0:0:0:0:0:0.0.0.0]"), "unspecified")
+})
+
+test_that("dotted spellings of ::1 and :: are blocked on both layers", {
+  # Defense in depth, both layers pinned so neither can regress silently behind
+  # the other: (1) rurl canonicalizes the literal before the matcher sees it,
+  # (2) ssrf_classify_ipv6() now classifies the expanded address, so it catches
+  # these on its own even if rurl stops normalizing them.
+  expect_identical(guard("http://[::0.0.0.1]/")$reason, "loopback")
+  expect_identical(guard("http://[::0.0.0.0]/")$reason, "unspecified")
+})
+
+test_that("the specials do not swallow neighbouring addresses", {
+  # One past the loopback special: with the low hextet above 1 the literal is
+  # no longer a special and still routes to the embedding decoder, so the
+  # deprecated IPv4-compatible reason keeps its meaning.
+  expect_identical(reason_of("[::2]"), "ipv4-compatible")
+  # A public IPv4-compatible address is still allowed, so the wider special
+  # match did not turn into over-blocking.
+  expect_true(is.na(reason_of("[::8.8.8.8]")))
+  # A literal that does not expand to 8 hextets is not a special either.
+  short <- sitemapr_test_ns$ssrf_ipv6_hextets("1:2:3")
+  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_special(short)))
+})
+
 # ---- NAT64 well-known prefix 64:ff9b::/96 ------------------------------------
 
 test_that("NAT64 WKP embedding loopback is rejected (hex + dotted)", {
