@@ -231,7 +231,7 @@ ssrf_embedded_ipv4 <- function(h) {
   }
   # IPv4-compatible (deprecated): six zero hextets. tail32 > 1 excludes the
   # unspecified (::) and loopback (::1) specials, which must not be read as
-  # 0.0.0.0 / 0.0.0.1.
+  # 0.0.0.0 / 0.0.0.1; ssrf_ipv6_special() has already claimed those two.
   if (all(h[1:6] == 0) && tail32 > 1) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-compatible"))
   }
@@ -258,17 +258,30 @@ ssrf_embedded_reason <- function(low) {
   emb[[2L]]
 }
 
+# The two all-zero-prefix IPv6 specials, decided on the EXPANDED address (the 8
+# numeric hextets) rather than on the literal string: `::1` is loopback and `::`
+# is unspecified. Matching the expansion is what makes every spelling of those
+# same 128 bits agree — compressed ("::1"), fully written ("0:0:0:0:0:0:0:1"),
+# partially compressed ("0::1"), and the dotted-quad tails ("::0.0.0.1",
+# "0:0:0:0:0:0:0.0.0.0"). String matching blocked one spelling while allowing an
+# identical other one, which is a bypass. Returns NA when `h` is neither special
+# (including when the literal did not expand to 8 hextets at all).
+ssrf_ipv6_special <- function(h) {
+  if (is.null(h) || !all(h[1:7] == 0) || h[8L] > 1) {
+    return(NA_character_)
+  }
+  if (h[8L] == 1) "loopback" else "unspecified"
+}
+
 # Classify an IPv6 literal (brackets already stripped) against ADR-003 ranges.
 ssrf_classify_ipv6 <- function(s) {
   low <- tolower(s)
 
-  # Pure-literal specials first, so an embedding decoder can never mislabel them
+  # Pure-address specials first, so an embedding decoder can never mislabel them
   # (e.g. read "::1" as the IPv4-compatible address 0.0.0.1).
-  if (low == "::1") {
-    return("loopback")
-  }
-  if (low == "::") {
-    return("unspecified")
+  special <- ssrf_ipv6_special(ssrf_ipv6_hextets(low))
+  if (!is.na(special)) {
+    return(special)
   }
 
   embedded <- ssrf_embedded_reason(low)
