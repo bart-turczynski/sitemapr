@@ -359,3 +359,198 @@ test_that("on_urls must be a function", {
     class = "sitemapr_bad_input"
   )
 })
+
+# A <feed> root in a namespace parse_feed() does not recognize: it sniffs as
+# "feed" but is rejected as an unsupported dialect.
+au_unsupported_feed <- function() {
+  paste0(
+    "<feed xmlns=\"http://example.com/not-atom\">",
+    "<title>t</title></feed>"
+  )
+}
+
+# ---- entry-point and unsupported roots ---------------------------------------
+
+test_that("a failed entry-point fetch becomes a problem, not an abort", {
+  # audit_fetch_bytes() raises sitemapr_entrypoint_error; audit_one_source()
+  # catches it so one bad source cannot kill the whole audit.
+  httr2::local_mocked_responses(
+    function(req) httr2::response(status_code = 500L, url = req$url)
+  )
+
+  a <- suppressWarnings(audit_sitemap("https://example.com/s.xml"))
+
+  expect_s3_class(a, "sitemap_audit")
+  expect_identical(nrow(audit_urls(a)), 0L)
+  expect_true("FETCH_FAILED" %in% audit_findings(a)$code)
+  expect_identical(nrow(audit_problems(a)), 1L)
+  expect_match(audit_problems(a)$message, "failed with HTTP 500")
+})
+
+test_that("an HTML body is reported as a masquerading sitemap", {
+  path <- withr::local_tempfile(fileext = ".html")
+  writeBin(
+    charToRaw("<html><head><title>x</title></head><body>hi</body></html>"),
+    path
+  )
+
+  a <- suppressWarnings(audit_sitemap(path))
+  expect_true("UNSUPPORTED_HTML_MASQUERADE" %in% audit_findings(a)$code)
+})
+
+test_that("an unsupported feed dialect falls back to the XML root path", {
+  # Sniffs as "feed" on its <feed> root, but parse_feed() rejects the
+  # namespace, so validation continues as generic XML rather than erroring.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeBin(charToRaw(au_unsupported_feed()), path)
+
+  a <- suppressWarnings(audit_sitemap(path))
+  expect_true("UNSUPPORTED_ROOT" %in% audit_findings(a)$code)
+})
+
+# ---- index children ----------------------------------------------------------
+
+test_that("a remote index records the root and each child as sources", {
+  sink <- new.env()
+  httr2::local_mocked_responses(au_counting_mock(
+    list(
+      "https://example.com/i.xml" = au_index_body("https://example.com/c1.xml"),
+      "https://example.com/c1.xml" = au_urlset_body("https://example.com/p1")
+    ),
+    sink
+  ))
+
+  a <- suppressWarnings(audit_sitemap("https://example.com/i.xml"))
+
+  # Root metadata is rbound with the expansion's per-child sources.
+  expect_identical(nrow(audit_sources(a)), 2L)
+  expect_identical(nrow(audit_urls(a)), 1L)
+  expect_identical(nrow(audit_tree(a)), 1L)
+})
+
+test_that("an index child that is an unsupported feed is rejected, not fatal", {
+  sink <- new.env()
+  httr2::local_mocked_responses(au_counting_mock(
+    list(
+      "https://example.com/i2.xml" = au_index_body("https://example.com/f.xml"),
+      "https://example.com/f.xml" = au_unsupported_feed()
+    ),
+    sink
+  ))
+
+  a <- suppressWarnings(audit_sitemap("https://example.com/i2.xml"))
+
+  # The feed child gets its own problem category, mapped to UNSUPPORTED_FEED,
+  # and is recorded as a rejected tree node rather than aborting the index.
+  expect_identical(audit_problems(a)$category, "feed")
+  expect_true("UNSUPPORTED_FEED" %in% audit_findings(a)$code)
+  expect_identical(audit_tree(a)$status, "rejected")
+})
+
+# ---- streaming and empty batches ---------------------------------------------
+
+test_that("a throwing on_urls callback aborts with a classed condition", {
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeBin(charToRaw(au_urlset_body("https://example.com/p1")), path)
+
+  # The callback error is re-raised rather than swallowed into a problem row,
+  # so a broken consumer surfaces instead of silently dropping leaves.
+  expect_error(
+    audit_sitemap(path, on_urls = function(rows, source) stop("boom")),
+    class = "sitemapr_stream_callback_error"
+  )
+})
+
+test_that("a batch with no sources yields every empty component schema", {
+  one <- create_source_records("https://example.com/s.xml", as = "sitemap")
+  none <- one[0L, , drop = FALSE]
+
+  out <- audit_sitemap_batch(
+    none,
+    mode = "non-strict",
+    user_agent = "test",
+    limits = fetch_limits(),
+    index_limits = index_limits(),
+    policy = request_policy()
+  )
+
+  expect_identical(out$rows, empty_sitemap_rows())
+  expect_identical(nrow(out$findings), 0L)
+  expect_identical(nrow(out$sources), 0L)
+  expect_identical(nrow(out$problems), 0L)
+  expect_identical(nrow(out$tree), 0L)
+})
+
+test_that("a childless index records only the root as a source", {
+  # The expansion produces no per-child sources, so the root metadata stands
+  # alone rather than being rbound with an empty frame.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeBin(
+    charToRaw(paste0(
+      "<sitemapindex ",
+      "xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+      "</sitemapindex>"
+    )),
+    path
+  )
+
+  a <- suppressWarnings(audit_sitemap(path))
+
+  expect_identical(nrow(audit_sources(a)), 1L)
+  expect_identical(nrow(audit_urls(a)), 0L)
+  expect_identical(nrow(audit_tree(a)), 0L)
+  # An index with no <sitemap> children violates the schema.
+  expect_true("SCHEMA_INVALID" %in% audit_findings(a)$code)
+})
+
+test_that("combining trees drops empty parts and preserves the schema", {
+  # All-empty: the empty schema stands rather than an rbind of nothing.
+  expect_identical(
+    audit_combine_trees(list(empty_sitemap_tree(), empty_sitemap_tree())),
+    empty_sitemap_tree()
+  )
+
+  node <- function(url) {
+    sitemap_tree_rows(
+      depth = 0L,
+      parent_sitemap = NA_character_,
+      sitemap_url = url,
+      page_count = 1L,
+      gzip = FALSE,
+      status = "ok",
+      reason = NA_character_,
+      provenance = "discovered"
+    )
+  }
+
+  # Populated parts are row-bound in order, with empty parts filtered out
+  # rather than contributing rows or breaking the bind.
+  combined <- audit_combine_trees(list(
+    node("https://example.com/1.xml"),
+    empty_sitemap_tree(),
+    node("https://example.com/2.xml")
+  ))
+
+  expect_identical(nrow(combined), 2L)
+  expect_identical(
+    combined$sitemap_url,
+    c("https://example.com/1.xml", "https://example.com/2.xml")
+  )
+  expect_named(combined, names(empty_sitemap_tree()))
+})
+
+test_that("an index with no child budget keeps only root metadata", {
+  # The expansion runs (the root IS a sitemapindex) but a zero child budget
+  # means no child fetch metadata exists, so the root record stands alone
+  # rather than being rbound with an absent per-child frame.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeBin(charToRaw(au_index_body("https://example.com/c.xml")), path)
+
+  a <- suppressWarnings(audit_sitemap(
+    path,
+    index_limits = index_limits(max_children = 0L)
+  ))
+
+  expect_identical(nrow(audit_sources(a)), 1L)
+  expect_identical(nrow(audit_urls(a)), 0L)
+})
