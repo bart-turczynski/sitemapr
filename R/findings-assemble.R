@@ -226,23 +226,115 @@ findings_provenance_for <- function(code, ruleset) {
   prov
 }
 
+# Optional per-finding columns a producer MAY attach on top of the 8-column
+# producer shape. `context` and `provenance` ride the schema-v2 additive
+# surface; `remediation_hint` is already a pinned column. Absent by default:
+# every current (baseline / protocol / schema / classification / index) producer
+# attaches none, so the byte-identical path is preserved until a page producer
+# opts in. When at least one part carries one of these, `findings_bind_parts()`
+# pads the rest so heterogeneous parts row-bind cleanly.
+findings_producer_optional_cols <- function() {
+  c("context", "provenance", "remediation_hint")
+}
+
+# Row-bind the producer parts. When no part carries a producer-optional column
+# this is the original `do.call(rbind, parts)` verbatim, so existing callers hit
+# the exact baseline path. When a producer opts in, every part is padded with
+# the absent optional columns (empty per-finding context, NA provenance, NA
+# hint) so the parts share a column set and `rbind` matches them by name.
+findings_bind_parts <- function(parts) {
+  has_optional <- any(vapply(
+    parts,
+    function(p) any(findings_producer_optional_cols() %in% names(p)),
+    logical(1)
+  ))
+  if (!has_optional) {
+    return(do.call(rbind, parts))
+  }
+  parts <- lapply(parts, function(p) {
+    n <- nrow(p)
+    if (is.null(p[["context"]])) {
+      p$context <- vector("list", n)
+    }
+    if (is.null(p[["provenance"]])) {
+      p$provenance <- rep(NA_character_, n)
+    }
+    if (is.null(p[["remediation_hint"]])) {
+      p$remediation_hint <- rep(NA_character_, n)
+    }
+    p
+  })
+  do.call(rbind, parts)
+}
+
+# Build the per-finding `context` list-column: each row's context is the uniform
+# ruleset `base_ctx` MERGED with that finding's own contribution (if any).
+# Producer keys WIN on collision (`modifyList` overlays `extra` onto `base`), so
+# a page producer can refine an axis the ruleset also stamps. A finding that
+# supplies no contribution (NULL / empty) gets the uniform `base_ctx` unchanged,
+# which is exactly the pre-merge behavior.
+findings_merge_context <- function(base_ctx, producer_context, n) {
+  base_list <- rep(list(base_ctx), n)
+  if (is.null(producer_context)) {
+    return(base_list)
+  }
+  Map(
+    function(base, extra) {
+      if (is.null(extra) || length(extra) == 0L) {
+        return(base)
+      }
+      utils::modifyList(base, extra)
+    },
+    base_list,
+    producer_context
+  )
+}
+
+# Resolve the per-finding `provenance`: it DEFAULTS to the `(code, ruleset)`
+# value from `findings_provenance_for()`; a producer-supplied non-NA provenance
+# OVERRIDES the default for those rows (§0.10 option (a)). A producer that
+# supplies none (NULL, or all-NA) keeps the `(code, ruleset)` default, so the
+# per-code provenance tables stay authoritative for every current producer.
+findings_override_provenance <- function(default_prov, producer_provenance) {
+  if (is.null(producer_provenance)) {
+    return(default_prov)
+  }
+  supplied <- !is.na(producer_provenance)
+  default_prov[supplied] <- as.character(producer_provenance[supplied])
+  default_prov
+}
+
 # Stamp the additive engine-aware columns onto an assembled findings tibble.
 # `ruleset` is a ruleset spec (a list of `ruleset`, `ruleset_revision`,
 # `context`) or NULL for the baseline path. When NULL the tibble is returned
 # UNCHANGED so the schema-v1 contract is byte-identical. When non-NULL the four
 # columns are appended per row: the `ruleset` / `ruleset_revision` scalars, a
 # `context` list-column carrying the context object as a plain named list, and
-# the per-finding `provenance` default. The context list keeps the constructor's
-# fixed axis order, so the list-column is built deterministically.
-findings_stamp_ruleset <- function(findings, ruleset) {
+# the per-finding `provenance`. `producer_context` / `producer_provenance` are
+# the (row-aligned) per-finding contributions captured before the 10-column
+# re-impose; both default to NULL, in which case the columns collapse to the
+# uniform-stamp / `(code, ruleset)`-default behavior of every existing caller.
+findings_stamp_ruleset <- function(
+  findings,
+  ruleset,
+  producer_context = NULL,
+  producer_provenance = NULL
+) {
   if (is.null(ruleset)) {
     return(findings)
   }
   n <- nrow(findings)
   findings$ruleset <- rep(ruleset$ruleset, n)
   findings$ruleset_revision <- rep(ruleset$ruleset_revision, n)
-  findings$context <- rep(list(unclass(ruleset$context)), n)
-  findings$provenance <- findings_provenance_for(findings$code, ruleset$ruleset)
+  findings$context <- findings_merge_context(
+    unclass(ruleset$context),
+    producer_context,
+    n
+  )
+  findings$provenance <- findings_override_provenance(
+    findings_provenance_for(findings$code, ruleset$ruleset),
+    producer_provenance
+  )
   findings$severity <- findings_severity_for(
     findings$code,
     ruleset$ruleset,
@@ -301,10 +393,17 @@ assemble_findings <- function(parts, mode, ruleset = NULL) {
     return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
   }
 
-  findings <- do.call(rbind, parts)
+  findings <- findings_bind_parts(parts)
   findings$mode <- rep(mode, nrow(findings))
   findings <- findings_apply_mode(findings, mode)
-  findings$remediation_hint <- rep(NA_character_, nrow(findings))
+  # remediation_hint pass-through: a producer-supplied hint column (any non-NA
+  # rows) is PRESERVED; producers that supply none get the all-NA default. The
+  # column is pinned (col 10), so it survives the re-impose below unchanged.
+  if (is.null(findings[["remediation_hint"]])) {
+    findings$remediation_hint <- rep(NA_character_, nrow(findings))
+  } else {
+    findings$remediation_hint <- as.character(findings$remediation_hint)
+  }
 
   if (nrow(findings) == 0L) {
     return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
@@ -313,10 +412,18 @@ assemble_findings <- function(parts, mode, ruleset = NULL) {
   findings <- findings_dedup(findings)
   findings <- findings_sort(findings)
 
+  # Capture the row-aligned producer-supplied context / provenance BEFORE the
+  # 10-column re-impose drops them; they feed the stamp's per-finding merge /
+  # override. `[[` is NULL when the producer attached none -> default behavior.
+  producer_context <- findings[["context"]]
+  producer_provenance <- findings[["provenance"]]
+
   cols <- names(empty_findings_contract())
   findings <- findings[, cols, drop = FALSE]
   findings_stamp_ruleset(
     tibble::new_tibble(findings, nrow = nrow(findings)),
-    ruleset
+    ruleset,
+    producer_context,
+    producer_provenance
   )
 }

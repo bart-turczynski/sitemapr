@@ -299,8 +299,11 @@ Emitted under `layer = "classification"`.
 - `INDEX_CHILD_COUNT_EXCEEDED` — child count cap reached
 
 ### Robots codes (`ROBOTS_*`)
-Emitted under `layer = "robots"` (`subject_type = "page-url"`) by the opt-in
-robots allow/disallow check (`validate_sitemap(check_robots = TRUE)`). The check
+Emitted under `layer = "robots"` by the opt-in
+robots allow/disallow check (`validate_sitemap(check_robots = TRUE)`). Two of
+the three codes are `subject_type = "page-url"` (the listed-URL check); the
+third is `subject_type = "source"` (the sitemap document itself). The
+listed-URL check
 tests every absolute http(s) `<loc>` a sitemap advertises against its governing
 robots.txt, using the sibling `robotstxtr` package (its faithful Google matcher
 and HTTP-status→policy semantics). Each distinct origin's robots.txt is fetched
@@ -313,6 +316,22 @@ URLs are checked with no sampling. An allowed URL produces no row.
 - `ROBOTS_INDETERMINATE` — robots.txt could not be fetched or evaluated (a
   5xx/timeout/network/TLS failure or an SSRF block), so the decision is
   undetermined (`info`). A 404/410 robots.txt is allow-all and produces no row.
+- `ROBOTS_SITEMAP_DISALLOWED` — the **sitemap document itself** is disallowed by
+  its own robots.txt (`warning`, `subject_type = "source"`). A site that both
+  advertises a sitemap and forbids crawlers from fetching it contradicts itself;
+  the remediation (fix robots.txt or move the sitemap) is different from that of
+  a blocked listed URL, which is why it is a distinct code. Evidence carries the
+  matched rule exactly as `ROBOTS_DISALLOWED` does. Scope and limits:
+  - The url tested is the sitemap **as requested** (the advertised/submitted
+    address a crawler matches against robots.txt), not the post-redirect final
+    url; the finding still anchors to the document's `source` subject_ref.
+  - Only the top-level source documents of a call are tested. Sitemap-index
+    children are fetched during expansion and are out of scope in v1.
+  - A non-http(s) source (a local file) has no governing robots.txt and is
+    skipped.
+  - An undecidable robots.txt produces **no** document-level row: there is no
+    `source`-scoped analog of `ROBOTS_INDETERMINATE`, and the listed-URL check
+    already reports the same unfetchable robots.txt for that origin.
 
 `robotstxtr` is an optional dependency (`Suggests`); when it is not installed
 and `check_robots = TRUE`, `validate_sitemap()` signals a classed warning
@@ -444,7 +463,7 @@ alignment is mechanical.
   `archive-entry` → `archive-member`.
 
 ### Row status semantics (`status` column)
-- `active` — emitted by the sitemapr pipeline today (57 codes). Two of them —
+- `active` — emitted by the sitemapr pipeline today (72 codes). Three of them —
   the `ROBOTS_*` codes — fire only on an opt-in `check_robots = TRUE` call.
 - `reserved` — canonical and documented, but surfaced as a condition rather than
   a findings row in v1 (the two `FETCH_*` codes).
@@ -461,17 +480,28 @@ alignment is mechanical.
 
 ## Open reconciliation items
 
-- **`ROBOTS_INDETERMINATE`** ↔ validator `ROBOTS_FETCH_FAILED` (best-match).
-  sitemapr collapses the two "cannot decide" outcomes into ONE `info` code:
-  robots.txt would not fetch (a 5xx/timeout/network/TLS failure or an SSRF
-  block). The sibling validator currently splits this across two codes,
-  `ROBOTS_FETCH_FAILED` (fetch failed) and `ROBOTS_NOT_TESTABLE`, both carried
-  here as `validator-only` rows. Per the "sitemapr names canonical" rule the
-  validator adopts `ROBOTS_INDETERMINATE`, collapsing its two codes; until it
-  does, this row stays `reconcile = open`. `ROBOTS_DISALLOWED` reconciles
-  cleanly (both ports share the name).
+None. Every registry row reconciles or is documented below.
 
 ### Resolved reconciliations
+
+- **`ROBOTS_INDETERMINATE`** — sitemapr collapses the two "cannot decide"
+  outcomes into ONE `info` code: robots.txt would not fetch (a
+  5xx/timeout/network/TLS failure or an SSRF block), or the decision is
+  otherwise NA. The sibling validator split this across `ROBOTS_FETCH_FAILED`
+  and `ROBOTS_NOT_TESTABLE`. Per the "sitemapr names canonical" rule it adopted
+  `ROBOTS_INDETERMINATE` and folded both codes into it (sitemap-validator
+  PR #26, SITE-wrylygzd); the two old spellings survive only as deprecated
+  aliases there, so their `validator-only` rows are dropped from the registry.
+  As here, the specific cause is carried in `evidence.excerpt` (the validator
+  records its raw robots outcome; PR #27) rather than in the code or the message
+  text. `ROBOTS_DISALLOWED` reconciles cleanly (both ports share the name).
+- **`ROBOTS_SITEMAP_DISALLOWED`** — minted by sitemapr (SITE-zfggbgsj) and since
+  adopted by the validator under the same spelling (PR #26, SMV-jphseemf), which
+  had no document-level robots check at all before. `validator_code` now matches
+  and the row reconciles. Both ports now also agree on evidence: the validator
+  surfaces `RobotsMatcher::matching_line()` through its native binding and emits
+  the same `type: value` excerpt and one-based line on this code and on
+  `ROBOTS_DISALLOWED` (PR #28, SMV-syrxvtho).
 
 - **`UNSUPPORTED_MALFORMED_GZIP` / `UNSUPPORTED_MALFORMED_ARCHIVE`** (two rows)
   ↔ validator `DECOMPRESS_FAILED` (plus `DECOMPRESS_TOO_MANY_FILES`,

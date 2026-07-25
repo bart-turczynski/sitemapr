@@ -40,6 +40,7 @@ reference:
     contents:
       - sitemap_tree
       - sitemap_tree_from_bytes
+      - probe_url
 
   - title: "Validation"
     desc: >
@@ -47,6 +48,41 @@ reference:
       rules, returning stable, reproducible findings.
     contents:
       - validate_sitemap
+      - validate_sitemap_ruleset
+
+  - title: "Rulesets"
+    desc: >
+      Engine-aware validation: the supported rulesets, their published
+      revisions, and the per-source context (including submission presets)
+      that drives engine-specific interpretation.
+    contents:
+      - sitemap_rulesets
+      - ruleset_revision
+      - ruleset_context
+      - ruleset_context_for_child
+      - gsc_submission
+      - robots_cross_submission
+
+  - title: "Auditing"
+    desc: >
+      Audit a sitemap in a single pass, compare audits over time, and access
+      the components of a result.
+    contents:
+      - audit_sitemap
+      - sitemap_audit
+      - compare_sitemap_audits
+      - audit_unchanged
+      - audit_accessors
+      - sitemap_companions
+
+  - title: "Limits"
+    desc: >
+      Default bounds for discovery, sitemapindex expansion, and bounded HTTP
+      fetches.
+    contents:
+      - discovery_limits
+      - index_limits
+      - fetch_limits
 
   - title: "Reporting"
     desc: "Render a self-contained HTML report for a sitemap."

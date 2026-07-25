@@ -31,8 +31,16 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
+      # Use build_site() (not build_site_github_pages()): _pkgdown.yml sets
+      # `destination: site` because docs/ holds durable project docs, and
+      # build_site() honors that field. build_site_github_pages() force-defaults
+      # dest_dir="docs" and its clean step aborts on the non-pkgdown docs/ dir.
+      # The .nojekyll marker (which build_site_github_pages would add) is written
+      # explicitly so GitHub Pages serves the site verbatim.
       - name: Build site
-        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
+        run: |
+          pkgdown::build_site(new_process = FALSE, install = FALSE)
+          writeLines("", "site/.nojekyll")
         shell: Rscript {0}
 
       # _pkgdown.yml sets `destination: site` (docs/ holds durable project docs),

@@ -24,6 +24,15 @@
 #   64:ff9b:1::/48     NAT64 local-use  "nat64" (RFC 6052 §2.2 packing)
 # DNS resolve-then-check and arbitrary (deployment-configured) NAT64 prefixes
 # remain out of scope per ADR-003 §1.
+#
+# KNOWN POSTURE — malformed IPv6 literals FAIL OPEN. Every IPv6 rule reads the
+# expanded hextets, so a literal ssrf_ipv6_hextets() cannot resolve to exactly 8
+# hextets ("fe80:::1", "::12345", "::ffff:999.1.1.1") matches no rule and
+# reaches the default allow. That is safe today only because ADR-003 §1 has the
+# guard run on hosts rurl has already normalized, and rurl rejects such literals
+# before we see them — the guard does not enforce it itself. Whether to fail
+# closed instead is deliberately unsettled: see SITE-zgufvkks (mirrored as
+# robotstxtr ROBO-udnyuuwn), and revisit if rurl's host handling ever loosens.
 
 # ---- helpers: IPv4 -----------------------------------------------------------
 
@@ -231,20 +240,19 @@ ssrf_embedded_ipv4 <- function(h) {
   }
   # IPv4-compatible (deprecated): six zero hextets. tail32 > 1 excludes the
   # unspecified (::) and loopback (::1) specials, which must not be read as
-  # 0.0.0.0 / 0.0.0.1.
+  # 0.0.0.0 / 0.0.0.1; ssrf_ipv6_special() has already claimed those two.
   if (all(h[1:6] == 0) && tail32 > 1) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-compatible"))
   }
   NULL
 }
 
-# IPv6->IPv4 embedding prefixes: decode the literal, and if it embeds an IPv4
-# address that itself falls in a blocked range, return the embedding's reason
-# code (bypass prevention, ADR-003). A public embedded address is allowed,
-# matching the IPv4-literal policy; NA when there is no blocked embedding. The
-# bit-layout decoding lives in ssrf_ipv6_hextets / ssrf_embedded_ipv4.
-ssrf_embedded_reason <- function(low) {
-  h <- ssrf_ipv6_hextets(low)
+# IPv6->IPv4 embedding prefixes: given the 8 expanded hextets, if they embed an
+# IPv4 address that itself falls in a blocked range, return the embedding's
+# reason code (bypass prevention, ADR-003). A public embedded address is
+# allowed, matching the IPv4-literal policy; NA when there is no blocked
+# embedding. The bit-layout decoding lives in ssrf_embedded_ipv4.
+ssrf_embedded_reason <- function(h) {
   if (is.null(h)) {
     return(NA_character_)
   }
@@ -258,33 +266,65 @@ ssrf_embedded_reason <- function(low) {
   emb[[2L]]
 }
 
+# The two all-zero-prefix IPv6 specials, decided on the EXPANDED address (the 8
+# numeric hextets) rather than on the literal string: `::1` is loopback and `::`
+# is unspecified. Matching the expansion is what makes every spelling of those
+# same 128 bits agree — compressed ("::1"), fully written ("0:0:0:0:0:0:0:1"),
+# partially compressed ("0::1"), and the dotted-quad tails ("::0.0.0.1",
+# "0:0:0:0:0:0:0.0.0.0"). String matching blocked one spelling while allowing an
+# identical other one, which is a bypass. Returns NA when `h` is neither special
+# (including when the literal did not expand to 8 hextets at all).
+ssrf_ipv6_special <- function(h) {
+  if (is.null(h) || !all(h[1:7] == 0) || h[8L] > 1) {
+    return(NA_character_)
+  }
+  if (h[8L] == 1) "loopback" else "unspecified"
+}
+
+# The two prefix-matched IPv6 blocks, decided on the EXPANDED hextets for the
+# same reason the specials are (SITE-vovtwvuh): a hextet may be written with
+# leading zeros, so matching the literal string mis-decides the prefix in BOTH
+# directions.
+#   link-local     fe80::/10     -> first hextet 0xfe80..0xfebf
+#   cloud-metadata fd00:ec2::/32 -> first two hextets exactly (AWS metadata)
+# The old "^fd00:ec2:" string match let "fd00:0ec2::254" — the same 128 bits —
+# through unblocked, a real bypass of the metadata block. The old
+# "^fe[89ab][0-9a-f]?:" made the 4th hex digit optional, so the 3-digit hextet
+# "fe8" (0x0fe8) matched despite being nowhere near fe80::/10. Returns NA when
+# `h` is in neither block (including when the literal did not expand at all).
+ssrf_ipv6_prefix_block <- function(h) {
+  if (is.null(h)) {
+    return(NA_character_)
+  }
+  if (bitwAnd(h[1L], 0xffc0) == 0xfe80) {
+    return("link-local")
+  }
+  if (h[1L] == 0xfd00 && h[2L] == 0x0ec2) {
+    return("cloud-metadata")
+  }
+  NA_character_
+}
+
 # Classify an IPv6 literal (brackets already stripped) against ADR-003 ranges.
+# The literal is expanded once here and every rule below reads those hextets, so
+# no rule can disagree with another about what address it is looking at. NA when
+# the literal is allowed or did not expand to 8 hextets.
 ssrf_classify_ipv6 <- function(s) {
-  low <- tolower(s)
+  h <- ssrf_ipv6_hextets(s)
 
-  # Pure-literal specials first, so an embedding decoder can never mislabel them
+  # Pure-address specials first, so an embedding decoder can never mislabel them
   # (e.g. read "::1" as the IPv4-compatible address 0.0.0.1).
-  if (low == "::1") {
-    return("loopback")
-  }
-  if (low == "::") {
-    return("unspecified")
+  special <- ssrf_ipv6_special(h)
+  if (!is.na(special)) {
+    return(special)
   }
 
-  embedded <- ssrf_embedded_reason(low)
+  embedded <- ssrf_embedded_reason(h)
   if (!is.na(embedded)) {
     return(embedded)
   }
 
-  # Link-local fe80::/10 — first hextet 0xfe80..0xfebf.
-  if (grepl("^fe[89ab][0-9a-f]?:", low) || grepl("^fe[89ab][0-9a-f]?$", low)) {
-    return("link-local")
-  }
-  # Cloud-metadata IPv6 (AWS) fd00:ec2::254 and its /64 metadata prefix.
-  if (low == "fd00:ec2::254" || grepl("^fd00:ec2:", low)) {
-    return("cloud-metadata")
-  }
-  NA_character_
+  ssrf_ipv6_prefix_block(h)
 }
 
 # ---- main guard --------------------------------------------------------------

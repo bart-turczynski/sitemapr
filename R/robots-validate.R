@@ -10,15 +10,20 @@
 # (`code, severity, layer, subject_type, subject_ref, message, evidence,
 # is_strict_only`) and leaves the `mode`/dedup/sort to Layer F.
 #
-# The engine is the sibling package `robotstxtr`, used WHOLESALE via
-# `allowed_by_robots_url()`: it owns the faithful Google matcher AND the
-# HTTP-status -> policy semantics (a 404/410 is allow-all, a 5xx/timeout/network
-# failure or an SSRF block is indeterminate), and it fetches each distinct
-# origin's robots.txt exactly once. sitemapr does NOT reimplement fetching or
-# matching; it feeds `robotstxtr` the advertised URLs plus a matcher user-agent
-# and turns `robots_decisions$results` into findings. The `ssrf_guard = TRUE`
-# opt-out is left at its default so the robots.txt fetch honours the same
-# SSRF posture as the rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
+# The engine is the sibling package `robotstxtr`, used WHOLESALE: it owns the
+# faithful matcher AND the HTTP-status -> policy semantics (a 404/410 is
+# allow-all, a 5xx/timeout/network failure or an SSRF block is indeterminate),
+# and it fetches each distinct origin's robots.txt exactly once. sitemapr does
+# NOT reimplement fetching or matching. The `ssrf_guard = TRUE` opt-out is left
+# at its default so the robots.txt fetch honours the same SSRF posture as the
+# rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
+#
+# Since E.1b (SITE-kwkggijf) evaluation itself lives in R/robots-facts.R and
+# routes through the v1 engine contract, so the robots axes and `matcher_status`
+# flow through for E.3's per-engine synthesis gate. THIS file only derives
+# findings from that already-evaluated facts object. The derivation reads the
+# facts' Google-bounded legacy view so E.5's output stayed byte-identical
+# across the refactor.
 #
 # `robotstxtr` is an OPTIONAL dependency (DESCRIPTION Suggests). Availability is
 # resolved once by the caller (R/validate-sitemap.R): this producer is only ever
@@ -36,14 +41,15 @@ robots_findings <- function(
   subject_ref = character(0),
   message = character(0),
   evidence = list(),
-  is_strict_only = logical(0)
+  is_strict_only = logical(0),
+  subject_type = "page-url"
 ) {
   n <- length(code)
   tibble::tibble(
     code = as.character(code),
     severity = as.character(severity),
     layer = rep("robots", n),
-    subject_type = rep("page-url", n),
+    subject_type = rep(subject_type, n),
     subject_ref = as.character(subject_ref),
     message = as.character(message),
     evidence = if (length(evidence) > 0L) evidence else vector("list", n),
@@ -66,6 +72,115 @@ robotstxtr_available <- function() {
 # The install command named in the optional-dependency guard message.
 robotstxtr_install_hint <- function() {
   "pak::pak('bart-turczynski/robotstxtr')"
+}
+
+# The `robotstxtr` engine-aware contract sitemapr is built against
+# (docs/design/layer-e-page-inspection.md §0.9; robotstxtr v0.2.0). Pinned as a
+# literal so a sibling that moved to an incompatible contract is caught at the
+# seam instead of silently producing robots findings under different matcher
+# semantics.
+robotstxtr_contract_id <- function() {
+  "robotstxtr.engine-aware/v1"
+}
+
+# The engine schema revision sitemapr was developed against. Reported in the
+# gate's error message for diagnosis; it is deliberately NOT an equality gate,
+# since robotstxtr may ship additive revisions that stay compatible.
+#
+# It is recorded because `contract_id` alone does NOT discriminate builds: a
+# pre-#43 robotstxtr reports the SAME `robotstxtr.engine-aware/v1` id while
+# carrying schema 2026-07-17.1 and no `matcher_capability` at all. The gate
+# below therefore checks for the capability field sitemapr consumes rather than
+# trusting the contract id by itself.
+robotstxtr_contract_schema <- function() {
+  "2026-07-18.2"
+}
+
+# The public v1 contract object of the INSTALLED `robotstxtr`, gated before it
+# is handed out. Only ever called once availability is established.
+#
+# Three failure shapes, all loud (a classed error, never a silent skip): an
+# install that does not expose the accessor at all, one whose `contract_id` has
+# moved on, and one carrying the right id but no `matcher_capability` (the
+# pre-#43 build). Absence of the package stays a warning + graceful skip in
+# resolve_robots_ua() — that is a setup fact about the user's machine — but a
+# version that is present and INCOMPATIBLE would otherwise yield wrong robots
+# findings, so it aborts instead.
+#
+# Only the exported accessor is touched: `engine_backend_capability_v1()` and
+# the other `*_v1()` helpers are robotstxtr internals and are deliberately not
+# reached into (SITE-ykagmqdd step 4).
+
+# The raw contract object straight from the sibling, with no gating. Split out
+# as a named binding so tests can stand in an older/foreign contract shape
+# without needing that build installed.
+robotstxtr_engine_contract_raw <- function() {
+  ns <- asNamespace("robotstxtr")
+  if (!exists("robots_engine_contract_v1", envir = ns, inherits = FALSE)) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "the installed 'robotstxtr' does not expose ",
+          "robots_engine_contract_v1(); sitemapr requires robotstxtr ",
+          "(>= 0.2.0) carrying engine contract '%s'. Update it with %s."
+        ),
+        robotstxtr_contract_id(),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  robotstxtr::robots_engine_contract_v1()
+}
+
+robotstxtr_engine_contract <- function() {
+  contract <- robotstxtr_engine_contract_raw()
+  if (!identical(contract$contract_id, robotstxtr_contract_id())) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "incompatible 'robotstxtr' engine contract: sitemapr is built ",
+          "against '%s' but the installed package reports '%s'. Update it ",
+          "with %s."
+        ),
+        robotstxtr_contract_id(),
+        as.character(contract$contract_id)[[1L]],
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  # The capability check that the contract id cannot make: a stale build
+  # advertises the same id but omits `matcher_capability`, so consuming it
+  # would silently yield NULL capability rather than failing.
+  if (is.null(contract$matcher_capability)) {
+    schema <- contract$schema_revision
+    if (is.null(schema)) {
+      schema <- "unknown"
+    }
+    rlang::abort(
+      sprintf(
+        paste0(
+          "the installed 'robotstxtr' reports engine contract '%s' but ",
+          "carries no matcher_capability (schema '%s'); sitemapr needs the ",
+          "capability-bearing schema '%s' or newer. Update it with %s."
+        ),
+        robotstxtr_contract_id(),
+        as.character(schema)[[1L]],
+        robotstxtr_contract_schema(),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  contract
+}
+
+# The matcher capability table, read through the PUBLIC contract accessor. The
+# consulted-robots refactor (E.1b) reads capability from here rather than from
+# robotstxtr's internal `engine_backend_capability_v1()`.
+robotstxtr_matcher_capability <- function() {
+  robotstxtr_engine_contract()$matcher_capability
 }
 
 # Only absolute http(s) URLs are robots-testable: a relative or non-http `<loc>`
@@ -133,6 +248,147 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
   )
 }
 
+# Reject a facts object whose context has no Google-bounded legacy view. Every
+# ROBOTS_* finding — listed-URL and document-level alike — is derived through
+# that view, so a context selecting another policy/matcher must consult the
+# decision object instead of silently producing an empty findings tibble.
+robots_legacy_view_required <- function(facts) {
+  rlang::abort(
+    sprintf(
+      paste0(
+        "ROBOTS_* findings are derived through the Google-bounded legacy ",
+        "adapter, but the robots context selects policy '%s' / matcher ",
+        "'%s'. Consult the decision object instead."
+      ),
+      facts$context$policy_ruleset,
+      facts$context$matcher_backend
+    ),
+    class = "sitemapr_robots_findings_unsupported"
+  )
+}
+
+# --- Document-level check: is the sitemap itself disallowed? (§0.6) ----------
+#
+# The checks above test the URLs a sitemap ADVERTISES. This one tests the
+# sitemap DOCUMENT's own URL: a sitemap published at a path its own robots.txt
+# `Disallow`-es is a self-contradiction — the site both advertises the document
+# and forbids crawlers from fetching it. Webmaster tools warn on it; the exact
+# fetch mechanics vary by engine (a submitted sitemap may still be read), so it
+# is framed as a consistency diagnostic (`warning`), never a hard failure.
+#
+# Scope: the sitemap URL as REQUESTED (the advertised/submitted address), not
+# the post-redirect final URL — the requested address is what a crawler matches
+# against robots.txt, and it is the address the site owner would have to change.
+# Only the top-level source documents of a call are tested; index children are
+# fetched during expansion and are out of scope for this slice.
+#
+# Indeterminacy (robots.txt would not fetch) deliberately produces NO row here:
+# `ROBOTS_INDETERMINATE` is a `page-url`-scoped code, and a document-level
+# analog would be a second coordinated registry addition for a strictly weaker
+# signal — the listed-URL check already reports the same unfetchable robots.txt
+# whenever the sitemap advertises anything on that origin.
+
+# The source-scoped subject_ref for a document-level robots finding: the
+# sitemap's own document base, with no fragment (findings-contract.md "Subject
+# ref format" — a `source` subject is the document itself).
+robots_sitemap_subject_ref <- function(base) {
+  if (is.null(base)) NA_character_ else base
+}
+
+# One ROBOTS_SITEMAP_DISALLOWED finding. Evidence mirrors ROBOTS_DISALLOWED:
+# the matched `type: value` snippet in `excerpt` and its one-based robots.txt
+# line in `line`.
+robots_sitemap_disallowed_finding <- function(base, url, res_row) {
+  robots_findings(
+    code = "ROBOTS_SITEMAP_DISALLOWED",
+    severity = "warning",
+    subject_type = "source",
+    subject_ref = robots_sitemap_subject_ref(base),
+    message = sprintf(
+      paste0(
+        "Sitemap document %s is disallowed by its own robots.txt (matched ",
+        "%s '%s'); crawlers are told not to fetch a sitemap the site ",
+        "advertises."
+      ),
+      url,
+      res_row$matched_rule_type,
+      res_row$matched_rule_value
+    ),
+    evidence = list(finding_evidence(
+      excerpt = sprintf(
+        "%s: %s",
+        res_row$matched_rule_type,
+        res_row$matched_rule_value
+      ),
+      line = res_row$matched_line
+    )),
+    is_strict_only = FALSE
+  )
+}
+
+#' Sitemap-document robots finding-producer (§0.6, E.5 sibling)
+#'
+#' Tests the sitemap document's own URL against the governing robots.txt and
+#' returns a `ROBOTS_SITEMAP_DISALLOWED` (`warning`) row when the document is
+#' disallowed for the matcher user-agent. An allowed or undecidable document
+#' produces no row, as does a non-http(s) source (a local file has no robots.txt
+#' to contradict).
+#'
+#' @param sitemap_url The sitemap's requested URL.
+#' @param user_agent The matcher user-agent (the robots.txt group to evaluate),
+#'   as in `validate_robots()`.
+#' @param base The sitemap's document-level `subject_ref`; the finding anchors
+#'   to it unfragmented (`subject_type = "source"`).
+#' @return A robots-layer findings tibble in the contract's 8-column producer
+#'   shape; zero rows when the document is not disallowed.
+#' @keywords internal
+#' @noRd
+validate_robots_sitemap <- function(
+  sitemap_url,
+  user_agent,
+  base = NA_character_
+) {
+  url <- robots_testable_locs(sitemap_url)
+  if (length(url) == 0L) {
+    return(empty_robots_findings())
+  }
+  facts <- robots_evaluate_facts(
+    url,
+    context = robots_context(product_token = user_agent)
+  )
+  robots_sitemap_findings_from_facts(facts, base)
+}
+
+# Derive the document-level finding from an already-evaluated facts object. The
+# facts here describe exactly ONE url (the sitemap's own), so the legacy view
+# carries at most one row. Like robots_findings_from_facts() this reads the
+# Google-bounded legacy view and rejects a non-legacy context rather than
+# silently emitting nothing.
+robots_sitemap_findings_from_facts <- function(facts, base = NA_character_) {
+  if (!robots_facts_consultable(facts)) {
+    return(empty_robots_findings())
+  }
+  if (is.null(facts$legacy)) {
+    robots_legacy_view_required(facts)
+  }
+  results <- facts$legacy$results
+  out <- list()
+  for (i in seq_len(nrow(results))) {
+    row <- results[i, , drop = FALSE]
+    if (isFALSE(row$allowed)) {
+      out[[length(out) + 1L]] <- robots_sitemap_disallowed_finding(
+        base,
+        row$url,
+        row
+      )
+    }
+  }
+  if (length(out) == 0L) {
+    return(empty_robots_findings())
+  }
+  do.call(rbind, out)
+}
+
 #' Robots allow/disallow finding-producer (Layer E check #7)
 #'
 #' Tests each sitemap-advertised URL against the governing robots.txt via the
@@ -159,17 +415,40 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
 #' @keywords internal
 #' @noRd
 validate_robots <- function(locs, user_agent, base = NA_character_) {
-  testable <- robots_testable_locs(locs)
-  if (length(testable) == 0L) {
+  robots_part(locs, user_agent, base)$findings
+}
+
+# Evaluate one source's advertised locs and return BOTH halves: the ROBOTS_*
+# findings and the facts object they were derived from. `validate_robots()` is
+# the findings-only composition; the validate pipeline calls this instead
+# because the §5.4 trap synthesis (E.3b) has to retain the facts — the whole
+# point of the E.1b split is that ONE evaluation feeds both consumers.
+robots_part <- function(locs, user_agent, base = NA_character_) {
+  facts <- robots_evaluate_facts(
+    locs,
+    context = robots_context(product_token = user_agent)
+  )
+  list(facts = facts, findings = robots_findings_from_facts(facts, base))
+}
+
+# Derive the ROBOTS_* findings from an already-evaluated facts object (E.1b).
+# Split from evaluation so the same single evaluation feeds BOTH these findings
+# and the §5.4 synthesis.
+#
+# The rows are read from the facts' LEGACY view, not from the v1 results: the
+# messages and evidence quote legacy vocabulary (`fetch_outcome`) and the
+# legacy `allowed` trichotomy, so reading it keeps E.5's output byte-identical
+# across this refactor (ADR-009 §5 back-compat). That view is Google-bounded by
+# the shim, so a non-Google context has no legacy rows to derive from and is
+# rejected rather than silently emitting nothing.
+robots_findings_from_facts <- function(facts, base = NA_character_) {
+  if (!robots_facts_consultable(facts)) {
     return(empty_robots_findings())
   }
-
-  decisions <- robotstxtr::allowed_by_robots_url(
-    testable,
-    user_agent = user_agent,
-    ssrf_guard = TRUE
-  )
-  results <- decisions$results
+  if (is.null(facts$legacy)) {
+    robots_legacy_view_required(facts)
+  }
+  results <- facts$legacy$results
 
   out <- list()
   for (i in seq_len(nrow(results))) {
