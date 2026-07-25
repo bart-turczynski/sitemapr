@@ -370,3 +370,89 @@ test_that("inspect_pages = FALSE stays byte-identical with noindex active", {
   expect_identical(off, explicit_off)
   expect_false("page" %in% off$layer)
 })
+
+# ---- guards and skips --------------------------------------------------------
+#
+# The defensive arms the public paths never reach: empty inputs, an engine with
+# no crawler vocabulary, and the per-item `next`es that keep one unusable
+# occurrence from aborting a run. Exercised by calling the internals directly.
+
+test_that("an unknown engine answers to no crawler names", {
+  # The switch default. Scoping is a local constant, so an engine outside the
+  # three overlays scopes nothing rather than erroring.
+  expect_identical(page_engine_crawlers("duckduckbot"), character(0))
+})
+
+test_that("an absent directive value tokenizes to nothing", {
+  expect_identical(page_directive_tokens(NULL), character(0))
+  expect_identical(page_directive_tokens(character(0)), character(0))
+})
+
+test_that("an empty body yields no meta facts", {
+  expect_identical(page_meta_robots_facts(NULL), list())
+  expect_identical(page_meta_robots_facts(raw(0)), list())
+})
+
+test_that("an unparseable body yields no meta facts", {
+  # read_html() is lenient enough that no byte sequence reliably fails it, so
+  # the parse-failure guard is forced with a stubbed parser.
+  facts <- with_mocked_bindings(
+    page_meta_robots_facts(charToRaw("<html></html>")),
+    read_html = function(...) stop("unparseable"),
+    .package = "xml2"
+  )
+  expect_identical(facts, list())
+})
+
+test_that("a meta name we do not recognize is skipped", {
+  # `description` carries a name and a content, so it reaches the loop and is
+  # rejected there rather than by the XPath.
+  ex <- page_noindex_extract(pn_art(paste0(
+    "<html><head>",
+    "<meta name=\"description\" content=\"noindex\">",
+    "</head></html>"
+  )))
+  expect_identical(ex$status, "absent")
+})
+
+test_that("an X-Robots-Tag carrying no tokens is skipped", {
+  facts <- page_xrobots_facts(list("X-Robots-Tag" = c("", "noindex")))
+  expect_length(facts, 1L)
+  expect_identical(facts[[1L]]$raw, "noindex")
+})
+
+test_that("no facts survive the applicability filter trivially", {
+  expect_identical(page_noindex_applicable(list(), "google"), list())
+})
+
+test_that("the baseline ruleset selects no engine", {
+  # Both spellings of "no engine fold" (§13.4).
+  expect_null(page_noindex_engine(list(ruleset = "sitemaps.org")))
+  expect_null(page_noindex_engine(list()))
+})
+
+test_that("a channel with no raw directive excerpts as its own name", {
+  expect_identical(page_noindex_excerpt(list(), "meta"), "meta")
+  meta_only <- list(list(channel = "meta", raw = "noindex"))
+  expect_identical(page_noindex_excerpt(meta_only, "header"), "header")
+})
+
+test_that("a run with no artifacts produces no findings", {
+  run <- structure(
+    list(artifacts = list(), coverage = list()),
+    class = "page_inspection_run"
+  )
+  expect_identical(nrow(page_noindex_findings(run)), 0L)
+})
+
+test_that("a subject with no fetched artifact is skipped, not fatal", {
+  run <- pn_run(pn_art(pn_meta("noindex")))
+  subjects <- list(
+    loc = c("https://example.com/never-fetched", "https://example.com/a"),
+    base = c("https://example.com/s.xml", "https://example.com/s.xml")
+  )
+  f <- page_noindex_findings(run, subjects = subjects)
+  # The unfetched loc drops out; the fetched one still reports.
+  expect_identical(nrow(f), 1L)
+  expect_identical(f$code, "PAGE_META_ROBOTS_NOINDEX")
+})
