@@ -24,6 +24,15 @@
 #   64:ff9b:1::/48     NAT64 local-use  "nat64" (RFC 6052 §2.2 packing)
 # DNS resolve-then-check and arbitrary (deployment-configured) NAT64 prefixes
 # remain out of scope per ADR-003 §1.
+#
+# KNOWN POSTURE — malformed IPv6 literals FAIL OPEN. Every IPv6 rule reads the
+# expanded hextets, so a literal ssrf_ipv6_hextets() cannot resolve to exactly 8
+# hextets ("fe80:::1", "::12345", "::ffff:999.1.1.1") matches no rule and
+# reaches the default allow. That is safe today only because ADR-003 §1 has the
+# guard run on hosts rurl has already normalized, and rurl rejects such literals
+# before we see them — the guard does not enforce it itself. Whether to fail
+# closed instead is deliberately unsettled: see SITE-zgufvkks (mirrored as
+# robotstxtr ROBO-udnyuuwn), and revisit if rurl's host handling ever loosens.
 
 # ---- helpers: IPv4 -----------------------------------------------------------
 
