@@ -1,12 +1,17 @@
 # ADR-003: v1 network safety policy
 
 - Status: Accepted (amended 2026-06-28 — two-axis body-limit model, §3;
-  amended 2026-07-19 by ADR-010 — per-page truncate-and-retain cap, §3)
+  amended 2026-07-19 by ADR-010 — per-page truncate-and-retain cap, §3;
+  amended 2026-07-25 — two corrections, see Consequences and Revisit
+  conditions; no decision changed)
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
   `docs/sitemap-spec.md` (§2 three-axis limit model — authoritative);
-  `docs/decisions/ADR-010-page-inspection.md` (per-page body cap — amends §3 below)
+  `docs/decisions/ADR-010-page-inspection.md` (per-page body cap — amends §3 below);
+  `ssrfr` `docs/decisions/ADR-001-network-safety-policy.md` (supersedes §1 and §4
+  **for `ssrfr`'s scope only**, on the grounds that its audience — long-lived
+  servers fetching attacker-supplied URLs — has a different threat model)
 
 ---
 
@@ -208,16 +213,37 @@ contact URL is assembled at runtime from `utils::packageDescription()`.
 
 ### Negative / accepted trade-offs
 - DNS-rebinding is not caught in v1. Documented explicitly.
-- A hostname like `evil.internal.corp` that resolves to `10.0.0.1` is not
-  blocked unless `ssrf_guard = FALSE` is set; users on trusted networks
-  should use the opt-out rather than rely on structural matching.
+- A hostname like `evil.internal.corp` that resolves to `10.0.0.1` is **not
+  blocked at all** — unconditionally, since the structural guard never resolves
+  it. Separately, users on trusted networks who *want* to reach such hosts
+  should set `ssrf_guard = FALSE` rather than expect structural matching to
+  accommodate them.
+
+  *(Corrected 2026-07-25. The earlier wording — "is not blocked unless
+  `ssrf_guard = FALSE` is set" — was self-contradictory: that flag disables the
+  guard, so it cannot cause blocking. It conflated the unconditional gap with
+  the unrelated opt-out advice.)*
 
 ---
 
 ## Revisit conditions
 
-- A reliable, CRAN-safe DNS resolution primitive is available (e.g., a
+- ~~A reliable, CRAN-safe DNS resolution primitive is available (e.g., a
   future `httr2` feature or a lightweight CRAN package) that does not depend
-  on `system2` or `nslookup`.
+  on `system2` or `nslookup`.~~ **Met (recorded 2026-07-25).** `curl::nslookup()`
+  is a C-level libcurl call — not a shell-out to the `nslookup` binary — and
+  returns all A/AAAA records. It is already an indirect dependency via `httr2`.
+
+  This condition is therefore no longer what defers §1. The deferral now rests
+  solely on the remaining §1 reasons: offline-testability, and the judgement
+  that the residual threat model (a hostname resolving to a private IP) applies
+  to multi-tenant services more than to a library whose callers fetch their own
+  sitemaps. Both are still held. `ssrfr` reached the **opposite** conclusion on
+  the second reason for its own audience — see the Related link above — so if
+  `sitemapr` ever gains a server-side, attacker-supplied-URL use case, that
+  reason lapses and §1 should be revisited immediately.
 - User reports of real-world SSRF attempts against library callers
   demonstrate that the structural guard is insufficient.
+- A dependency on `ssrfr` becomes viable, at which point the vendored matcher
+  in `R/ssrf.R` is replaced rather than kept in sync by hand
+  (**SITE-yeozymry**).
