@@ -201,3 +201,109 @@ test_that("inspect_pages surfaces a canonical mismatch in the page layer", {
   expect_identical(page_rows$code, "PAGE_CANONICAL_MISMATCH")
   expect_identical(ncol(out), 10L)
 })
+
+# ---- content-type and resolution edges ---------------------------------------
+
+test_that("a response with no Content-Type is treated as HTML", {
+  # A usable body with no declared type is parsed as markup, so it can still be
+  # `absent` of a canonical rather than not_applicable.
+  expect_true(page_content_is_html(pc_art(headers = list())))
+  expect_true(page_content_is_html(pc_art()))
+  expect_false(page_content_is_html(
+    pc_art(headers = list("Content-Type" = "application/pdf"))
+  ))
+})
+
+test_that("an empty or blank canonical target does not resolve", {
+  base <- "https://example.com/a"
+  expect_identical(page_canonical_resolve("", base), NA_character_)
+  expect_identical(page_canonical_resolve("   ", base), NA_character_)
+  expect_identical(page_canonical_resolve(NA_character_, base), NA_character_)
+})
+
+# ---- Link header parsing -----------------------------------------------------
+
+test_that("a Link segment with no bracketed URI is skipped", {
+  # Only `<uri>; params` segments are link-values; anything else is ignored
+  # rather than treated as a target.
+  expect_length(
+    page_link_header_canonicals(list(Link = "notalink; rel=canonical")),
+    0L
+  )
+
+  # A malformed segment does not suppress a well-formed one alongside it.
+  mixed <- "badseg; rel=canonical, <https://example.com/c>; rel=\"canonical\""
+  expect_identical(
+    page_link_header_canonicals(list(Link = mixed)),
+    "https://example.com/c"
+  )
+})
+
+# ---- head parsing edges ------------------------------------------------------
+
+test_that("an absent or unparseable body yields no canonical targets", {
+  none <- list(base = "https://example.com/a", targets = character(0))
+  expect_identical(page_html_canonicals(raw(0), "https://example.com/a"), none)
+
+  # xml2's HTML parser accepts even binary junk, so the tryCatch guard is
+  # pinned by forcing the parse to fail.
+  testthat::local_mocked_bindings(
+    read_html = function(...) stop("parse failed"),
+    .package = "xml2"
+  )
+  expect_identical(
+    page_html_canonicals(
+      charToRaw(canonical_link("https://example.com/c")),
+      "https://example.com/a"
+    ),
+    none
+  )
+})
+
+test_that("a <base href> sets the resolution base, with a fallback", {
+  usable <- page_html_canonicals(
+    charToRaw(paste0(
+      "<html><head><base href=\"/sub/\">",
+      "<link rel=\"canonical\" href=\"c.html\">",
+      "</head></html>"
+    )),
+    "https://example.com/a"
+  )
+  expect_identical(usable$base, "https://example.com/sub/")
+
+  # An unresolvable <base href> falls back to the response final_url rather
+  # than poisoning every relative target with NA.
+  broken <- page_html_canonicals(
+    charToRaw("<html><head><base href=\"://nonsense\"></head></html>"),
+    "https://example.com/a"
+  )
+  expect_identical(broken$base, "https://example.com/a")
+})
+
+# ---- findings assembly -------------------------------------------------------
+
+test_that("a run with no artifacts produces no canonical findings", {
+  empty <- structure(
+    list(artifacts = list(), coverage = list()),
+    class = "page_inspection_run"
+  )
+
+  out <- page_canonical_findings(empty)
+  expect_identical(nrow(out), 0L)
+  expect_identical(out, empty_page_findings())
+})
+
+test_that("a subject loc with no fetched artifact is skipped", {
+  art <- pc_art(canonical_link("https://example.com/a"))
+  absent <- "https://example.com/never-fetched"
+  subjects <- list(
+    loc = c(art$requested_url, absent),
+    base = list(
+      sitemap_subject_ref(art$requested_url),
+      sitemap_subject_ref(absent)
+    )
+  )
+
+  # The unfetched loc is skipped rather than erroring on a NULL artifact.
+  expect_identical(nrow(page_canonical_findings(pc_run(art), subjects)), 0L)
+})
