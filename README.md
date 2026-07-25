@@ -10,7 +10,11 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 [![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml)
 [![Codecov
 coverage](https://codecov.io/gh/bart-turczynski/sitemapr/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/sitemapr)
-[![DOI](https://zenodo.org/badge/1282558407.svg)](https://zenodo.org/badge/latestdoi/1282558407)
+<!-- No DOI badge yet: zenodo.org/badge/latestdoi/1282558407 404s because the
+     repo has no Zenodo deposit, and R CMD check --as-cran flags it as a
+     possibly invalid URL. Re-add it after the first GitHub release archives
+     to Zenodo (SITE-ewcnqior). The all-software search badge below resolves
+     and stays. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
@@ -75,9 +79,9 @@ writeLines(sitemap, path)
 read_sitemap(path)
 #> # A tibble: 2 × 9
 #>   loc    lastmod             changefreq priority images video  news   alternates
-#>   <chr>  <dttm>              <chr>         <dbl> <list> <list> <list> <list>    
-#> 1 https… 2024-01-01 00:00:00 <NA>              1 <NULL> <NULL> <NULL> <NULL>    
-#> 2 https… NA                  monthly          NA <NULL> <NULL> <NULL> <NULL>    
+#>   <chr>  <dttm>              <chr>         <dbl> <list> <list> <list> <list>
+#> 1 https… 2024-01-01 00:00:00 <NA>              1 <NULL> <NULL> <NULL> <NULL>
+#> 2 https… NA                  monthly          NA <NULL> <NULL> <NULL> <NULL>
 #> # ℹ 1 more variable: source_sitemap <chr>
 ```
 
@@ -105,9 +109,9 @@ writeLines(invalid, path)
 findings <- validate_sitemap(path)
 findings[, c("code", "severity", "layer")]
 #> # A tibble: 3 × 3
-#>   code                           severity layer   
-#>   <chr>                          <chr>    <chr>   
-#> 1 SCHEMA_INVALID                 error    schema  
+#>   code                           severity layer
+#>   <chr>                          <chr>    <chr>
+#> 1 SCHEMA_INVALID                 error    schema
 #> 2 PROTOCOL_PRIORITY_OUT_OF_RANGE error    protocol
 #> 3 PROTOCOL_URL_NOT_ABSOLUTE      error    protocol
 ```

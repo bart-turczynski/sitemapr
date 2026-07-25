@@ -19,7 +19,11 @@ knitr::opts_chunk$set(
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml)
 [![Codecov coverage](https://codecov.io/gh/bart-turczynski/sitemapr/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/sitemapr)
-[![DOI](https://zenodo.org/badge/1282558407.svg)](https://zenodo.org/badge/latestdoi/1282558407)
+<!-- No DOI badge yet: zenodo.org/badge/latestdoi/1282558407 404s because the
+     repo has no Zenodo deposit, and R CMD check --as-cran flags it as a
+     possibly invalid URL. Re-add it after the first GitHub release archives
+     to Zenodo (SITE-ewcnqior). The all-software search badge below resolves
+     and stays. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
 [![pkgcheck](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml)
