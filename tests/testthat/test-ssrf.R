@@ -68,6 +68,35 @@ test_that("link-local IPv6 fe80::/10 is rejected", {
   expect_identical(guard("http://[febf::1]/")$reason, "link-local")
 })
 
+test_that("link-local matches fe80::/10 by value, not by literal prefix", {
+  # SITE-mhfmtdxa. The old "^fe[89ab][0-9a-f]?:" made the 4th hex digit
+  # optional, so a 3-digit first hextet ("fe8" = 0x0fe8) matched despite being
+  # nowhere near fe80::/10. The block is exactly 0xfe80..0xfebf. Asserted on
+  # the classifier directly so rurl's canonicalization cannot mask the rule.
+  classify <- sitemapr_test_ns$ssrf_classify_ipv6
+  expect_identical(classify("fe80::1"), "link-local")
+  expect_identical(classify("fe80:0:0:0:0:0:0:1"), "link-local")
+  expect_identical(classify("FE80::1"), "link-local")
+  expect_identical(
+    classify("febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+    "link-local"
+  )
+  # Formerly over-blocked: 0x0fe8/0x0fea/0x0feb are ordinary global addresses.
+  expect_true(is.na(classify("fe8::")))
+  expect_true(is.na(classify("fe8:0:0:0:0:0:0:1")))
+  expect_true(is.na(classify("fe9::")))
+  expect_true(is.na(classify("fea::1")))
+  expect_true(is.na(classify("feb::")))
+  # Immediately outside the /10 on either side.
+  expect_true(is.na(classify("fe7f::1")))
+  expect_true(is.na(classify("fec0::1")))
+  # A literal that does not expand to 8 hextets matches no prefix block.
+  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_prefix_block(
+    sitemapr_test_ns$ssrf_ipv6_hextets("fea:")
+  )))
+  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_prefix_block(NULL)))
+})
+
 # ---- cloud-metadata ----------------------------------------------------------
 
 test_that("cloud metadata endpoint 169.254.169.254 is rejected (feature)", {
@@ -91,6 +120,26 @@ test_that("AWS IPv6 metadata fd00:ec2::254 is rejected", {
   res <- guard("http://[fd00:ec2::254]/")
   expect_false(res$allowed)
   expect_identical(res$reason, "cloud-metadata")
+})
+
+test_that("every spelling of the AWS IPv6 metadata prefix is blocked", {
+  # SITE-mhfmtdxa. A hextet may carry leading zeros, so "ec2" and "0ec2" are
+  # the same 16 bits. Matching the literal "^fd00:ec2:" blocked the first
+  # spelling and let the second through — a real bypass of the metadata block,
+  # not merely an inconsistency. All of these are fd00:0ec2::/32.
+  classify <- sitemapr_test_ns$ssrf_classify_ipv6
+  expect_identical(classify("fd00:ec2::254"), "cloud-metadata")
+  expect_identical(classify("fd00:0ec2::254"), "cloud-metadata")
+  expect_identical(classify("fd00:0ec2:0:0:0:0:0:0254"), "cloud-metadata")
+  expect_identical(classify("fd00:ec2:0:0:0:0:0:254"), "cloud-metadata")
+  expect_identical(classify("FD00:0EC2::254"), "cloud-metadata")
+  expect_identical(classify("fd00:0ec2:ffff::1"), "cloud-metadata")
+  # End to end through the real parse path as well.
+  expect_identical(guard("http://[fd00:0ec2::254]/")$reason, "cloud-metadata")
+  # Neighbours outside the /32 stay allowed: only these two hextets match.
+  expect_true(is.na(classify("fd00:ec3::254")))
+  expect_true(is.na(classify("fd01:ec2::254")))
+  expect_true(is.na(classify("fd00::1")))
 })
 
 # ---- unspecified -------------------------------------------------------------
@@ -495,17 +544,19 @@ test_that("ssrf_ipv6_hextets returns NULL for non-IPv6 / malformed input", {
 })
 
 test_that("ssrf_embedded_reason returns NA when no blocked embedding", {
+  # Takes the expanded hextets, not the literal: the classifier expands once
+  # and every rule reads that same expansion (SITE-mhfmtdxa).
+  reason <- function(s) {
+    sitemapr_test_ns$ssrf_embedded_reason(sitemapr_test_ns$ssrf_ipv6_hextets(s))
+  }
   # Malformed literal: hextet parse fails, so there is nothing to decode.
-  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("::zz")))
+  expect_true(is.na(reason("::zz")))
   # Well-formed IPv6 with no embedding prefix.
-  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("fe80::1")))
+  expect_true(is.na(reason("fe80::1")))
   # Embedding prefix but a PUBLIC embedded address is allowed (NA).
-  expect_true(is.na(sitemapr_test_ns$ssrf_embedded_reason("::ffff:8.8.8.8")))
+  expect_true(is.na(reason("::ffff:8.8.8.8")))
   # Embedding prefix wrapping a blocked address yields its reason code.
-  expect_identical(
-    sitemapr_test_ns$ssrf_embedded_reason("::ffff:127.0.0.1"),
-    "ipv4-mapped"
-  )
+  expect_identical(reason("::ffff:127.0.0.1"), "ipv4-mapped")
 })
 
 test_that("ssrf_check allows when there is no host to evaluate", {
