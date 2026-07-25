@@ -336,3 +336,24 @@ test_that("inspect_pages = FALSE stays byte-identical with the sink live", {
   # The robots findings are unaffected by the E.1b/E.3b evaluation split.
   expect_identical(sum(off$code == "ROBOTS_DISALLOWED"), 1L)
 })
+
+test_that("a matcher backend other than the engine is not attributable", {
+  # The policy ruleset matches, but the verdict came from a different matcher,
+  # so the synthesis may not be attributed to this engine.
+  facts <- prt_facts(
+    context = robots_context(
+      policy_ruleset = "google",
+      matcher_backend = "rfc9309"
+    )
+  )
+  expect_false(page_trap_matcher_attributable("google", facts))
+})
+
+test_that("a finding whose context carries no loc is left alone", {
+  findings <- prt_findings()
+  findings$context[[1L]] <- list(unrelated = TRUE)
+  out <- page_noindex_attach_trap(findings, prt_facts(), "google")
+  # No loc to join on -> no hint, and the tibble comes back unchanged.
+  expect_false("remediation_hint" %in% names(out))
+  expect_identical(nrow(out), nrow(findings))
+})

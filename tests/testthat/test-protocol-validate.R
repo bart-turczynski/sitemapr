@@ -1655,3 +1655,30 @@ test_that("classification diagnostics are deterministic across calls", {
   }
   expect_identical(call(), call())
 })
+
+test_that("the baseline establishes authority from its own evidence set", {
+  # sitemaps.org accepts the cross-submit mechanisms; the google arm is tested
+  # separately because it additionally gates on the submission channel.
+  spec <- list(
+    ruleset = "sitemaps.org",
+    context = list(authority_evidence = "same_location_default")
+  )
+  expect_true(loc_authority_established(spec))
+})
+
+test_that("a verified property set with no scope covers nothing", {
+  # Authority is established, but without a bound property there is no host to
+  # compare against, so coverage is withheld rather than assumed.
+  spec <- list(
+    ruleset = "google",
+    context = list(
+      authority_evidence = "verified_property_set",
+      submission_channel = "search_console_api",
+      property_scope = NA_character_
+    )
+  )
+  expect_identical(
+    loc_authority_covers(spec, c("https://a.example", "https://b.example")),
+    c(FALSE, FALSE)
+  )
+})

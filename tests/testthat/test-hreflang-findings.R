@@ -192,3 +192,11 @@ test_that("the producer emits the contract-shaped producer columns", {
   )
   expect_false(any(f$is_strict_only))
 })
+
+test_that("a key absent from the graph represents itself", {
+  nodes <- tibble::tibble(url_key = "https://example.com/a", url_raw = "A")
+  expect_identical(
+    hreflang_node_raw(nodes, "https://example.com/zzz"),
+    "https://example.com/zzz"
+  )
+})

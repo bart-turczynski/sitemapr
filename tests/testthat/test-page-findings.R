@@ -335,3 +335,41 @@ test_that("inspect_pages = TRUE with an all-clean page emits no page rows", {
   cov <- attr(out, "page_coverage")
   expect_identical(cov$completed, 1L)
 })
+
+test_that("a redirect with an unknown endpoint is not a mismatch", {
+  # Without both endpoints there is nothing to compare, so the check declines
+  # rather than reporting a redirect it cannot evidence.
+  expect_false(page_is_redirect(list(
+    final_url = NA_character_,
+    requested_url = "https://example.com/a"
+  )))
+})
+
+test_that("transport findings skip runs and subjects with no artifact", {
+  empty_run <- structure(
+    list(artifacts = list(), coverage = list()),
+    class = "page_inspection_run"
+  )
+  expect_identical(nrow(page_transport_findings(empty_run)), 0L)
+
+  loc <- "https://example.com/a"
+  art <- page_fetch_artifact(
+    requested_url = loc,
+    outcome = "transport_fail",
+    request_user_agent = "inspector/test"
+  )
+  entry <- list(fetch_url = loc, advertised = loc, artifact = art)
+  run <- structure(
+    list(artifacts = stats::setNames(list(entry), loc), coverage = list()),
+    class = "page_inspection_run"
+  )
+  f <- page_transport_findings(
+    run,
+    subjects = list(
+      loc = c("https://example.com/never-fetched", loc),
+      base = c("sitemap://example.com/s.xml", "sitemap://example.com/s.xml")
+    )
+  )
+  # The unfetched subject drops out; the fetched one still reports.
+  expect_identical(nrow(f), 1L)
+})

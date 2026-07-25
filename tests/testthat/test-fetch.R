@@ -967,3 +967,33 @@ test_that("scheme_inferred = FALSE does not retry over http", {
   # Only the https attempt; no http downgrade.
   expect_identical(state$schemes, "https")
 })
+
+test_that("an empty headers or tls list normalizes to NULL", {
+  # Distinct from NULL: an empty container is accepted and carries nothing,
+  # rather than tripping the named-list validation below it.
+  expect_null(request_policy_check_headers(list()))
+  expect_null(request_policy_check_tls(list()))
+})
+
+test_that("a throttle-off state grants no free request", {
+  expect_identical(operation_free_requests(NULL), 0L)
+})
+
+test_that("a non-default port stays in the throttle bucket key", {
+  expect_identical(
+    throttle_host_key("https://example.com:8443/x"),
+    "example.com:8443"
+  )
+  # The scheme default still collapses.
+  expect_identical(
+    throttle_host_key("https://example.com:443/x"),
+    "example.com"
+  )
+})
+
+test_that("preparing a request with a non-policy object is refused", {
+  expect_error(
+    request_policy_prepare(list(), NULL, "https://example.com/"),
+    class = "sitemapr_invalid_request_policy"
+  )
+})

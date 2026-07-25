@@ -201,3 +201,22 @@ test_that("it consumes real parser output (alternates list-column shape)", {
   expect_identical(g$edges$hreflang, "de")
   expect_setequal(g$nodes$url_key, c("https://a.com/en", "https://a.com/de"))
 })
+
+test_that("no usable URL yields all-NA keys without parsing", {
+  expect_identical(hreflang_graph_key(c(NA, "  ")), c(NA_character_, NA))
+})
+
+test_that("an occurrence with an unkeyable endpoint drops out entirely", {
+  # A row with no loc still produces an occurrence (the alternate carries an
+  # href), so the zero-occurrence guard does not fire. Its source key is NA, the
+  # edge is dropped, and the graph collapses to empty at the second guard.
+  # A non-absolute URL is NOT unkeyable — it keys to its own trimmed raw string
+  # — so an absent loc is the way in.
+  rows <- mk_rows(
+    loc = NA_character_,
+    alternates = list(list(mk_link("en", "https://other.com/de")))
+  )
+  g <- build_hreflang_graph(rows)
+  expect_identical(nrow(g$nodes), 0L)
+  expect_identical(nrow(g$edges), 0L)
+})
