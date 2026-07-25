@@ -260,6 +260,47 @@ test_that("a stale build with the right id but no capability aborts", {
   )
 })
 
+test_that("a stale build reporting no schema at all is named 'unknown'", {
+  skip_if_not_installed("robotstxtr")
+  # A build older still than the one above: right contract id, no capability,
+  # and no `schema_revision` to quote back. The gate must still abort, naming
+  # the schema it could not read rather than interpolating an empty string.
+  local_mocked_bindings(
+    robotstxtr_engine_contract_raw = function() {
+      list(contract_id = robotstxtr_contract_id())
+    }
+  )
+  cnd <- tryCatch(
+    robotstxtr_engine_contract(),
+    sitemapr_robotstxtr_contract = function(cnd) cnd
+  )
+  expect_s3_class(cnd, "sitemapr_robotstxtr_contract")
+  expect_match(conditionMessage(cnd), "schema 'unknown'", fixed = TRUE)
+})
+
+test_that("an install without the contract accessor aborts loudly", {
+  skip_if_not_installed("robotstxtr")
+  # The oldest failure shape: a robotstxtr that does not expose
+  # robots_engine_contract_v1() at all. Stood in by swapping the namespace the
+  # gate reads, so no such build has to be installed to exercise it.
+  local_mocked_bindings(
+    robotstxtr_namespace = function() new.env(parent = emptyenv())
+  )
+  cnd <- tryCatch(
+    robotstxtr_engine_contract_raw(),
+    sitemapr_robotstxtr_contract = function(cnd) cnd
+  )
+  expect_s3_class(cnd, "sitemapr_robotstxtr_contract")
+  # The message names the missing accessor, the required version, and the fix.
+  expect_match(
+    conditionMessage(cnd),
+    "robots_engine_contract_v1()",
+    fixed = TRUE
+  )
+  expect_match(conditionMessage(cnd), "0.2.0", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "pak::pak", fixed = TRUE)
+})
+
 # ---- document-level check: the sitemap itself (§0.6, SITE-zfggbgsj) ---------
 
 test_that("a disallowed sitemap document yields ROBOTS_SITEMAP_DISALLOWED", {
@@ -314,6 +355,23 @@ test_that("a non-http(s) sitemap source is skipped (no robots.txt governs)", {
     base = "sitemap:///var/tmp/sitemap.xml"
   )
   expect_identical(nrow(f), 0L)
+})
+
+test_that("a facts object with nothing evaluated yields no document row", {
+  skip_if_not_installed("robotstxtr")
+  # The document check short-circuits on non-consultable facts before it ever
+  # reaches for the legacy view, so a NULL (robots evaluation off) and a facts
+  # object carrying no urls both yield the empty producer shape, not an error.
+  expect_identical(nrow(robots_sitemap_findings_from_facts(NULL)), 0L)
+  expect_identical(
+    nrow(robots_sitemap_findings_from_facts(
+      structure(
+        list(urls = character(0)),
+        class = "sitemapr_robots_facts"
+      )
+    )),
+    0L
+  )
 })
 
 test_that("a non-legacy robots context is rejected, not silently empty", {
