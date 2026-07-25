@@ -199,3 +199,126 @@ test_that("inspect_pages = FALSE stays byte-identical with alternates", {
   expect_null(attr(off, "page_coverage"))
   expect_false("page" %in% off$layer)
 })
+
+# ---- head parsing edge cases -------------------------------------------------
+
+test_that("an absent or unparseable body yields no links", {
+  expect_identical(
+    page_hreflang_html_links(raw(0), "https://example.com/a"),
+    list(base = "https://example.com/a", links = list())
+  )
+
+  # xml2's HTML parser is famously lenient, so the tryCatch guard is pinned by
+  # forcing the parse to fail rather than by feeding it malformed markup.
+  testthat::local_mocked_bindings(
+    read_html = function(...) stop("parse failed"),
+    .package = "xml2"
+  )
+  expect_identical(
+    page_hreflang_html_links(
+      charToRaw(ph_html(c("de", "https://example.com/de"))),
+      "https://example.com/a"
+    ),
+    list(base = "https://example.com/a", links = list())
+  )
+})
+
+test_that("a <base href> sets the resolution base for relative alternates", {
+  art <- ph_art(paste0(
+    "<html><head><base href=\"/sub/\">",
+    "<link rel=\"alternate\" hreflang=\"de\" href=\"de.html\">",
+    "</head></html>"
+  ))
+  html <- page_hreflang_html_links(art$body, art$final_url)
+
+  expect_identical(html$base, "https://example.com/sub/")
+  # The relative alternate resolves against <base>, not against final_url.
+  set <- page_hreflang_norm_set(html$links, html$base)
+  expect_match(set, "example.com/sub/de.html")
+})
+
+test_that("an unresolvable <base href> falls back to the final URL", {
+  html <- page_hreflang_html_links(
+    charToRaw("<html><head><base href=\"://nonsense\"></head></html>"),
+    "https://example.com/a"
+  )
+
+  expect_identical(html$base, "https://example.com/a")
+})
+
+test_that("a blank hreflang tag drops the alternate", {
+  # A tag that trims to nothing has no locale identity, so it cannot join the
+  # comparable set.
+  set <- page_hreflang_norm_set(
+    list(
+      list(tag = "  ", href = "https://example.com/de"),
+      list(tag = "fr", href = "https://example.com/fr")
+    ),
+    "https://example.com/a"
+  )
+
+  expect_length(set, 1L)
+  expect_match(set, "^fr\t")
+})
+
+# ---- sitemap-declared set ----------------------------------------------------
+
+test_that("sitemap alternates missing href or hreflang are dropped", {
+  loc <- "https://example.com/"
+  expect_length(page_hreflang_declared_set(list(ph_alt("de", NULL)), loc), 0L)
+  no_tag <- ph_alt(NULL, "https://example.com/de")
+  expect_length(page_hreflang_declared_set(list(no_tag), loc), 0L)
+})
+
+test_that("a sitemap alternate with a non-alternate rel is dropped", {
+  loc <- "https://example.com/"
+  stylesheet <- ph_alt("de", "https://example.com/de", rel = "stylesheet")
+  expect_length(page_hreflang_declared_set(list(stylesheet), loc), 0L)
+
+  # An ABSENT rel is permitted (the attribute is optional); only a present rel
+  # that is not "alternate" disqualifies the link.
+  expect_length(
+    page_hreflang_declared_set(
+      list(ph_alt("de", "https://example.com/de", rel = NULL)),
+      loc
+    ),
+    1L
+  )
+})
+
+# ---- findings assembly -------------------------------------------------------
+
+test_that("a run with no artifacts produces no hreflang findings", {
+  empty <- structure(
+    list(artifacts = list(), coverage = list()),
+    class = "page_inspection_run"
+  )
+
+  out <- page_hreflang_findings(empty)
+  expect_identical(nrow(out), 0L)
+  expect_identical(out, empty_page_findings())
+})
+
+test_that("NULL subjects self-anchor each advertised loc", {
+  # The direct-producer path passes no subjects: each loc anchors itself with
+  # no sitemap-declared alternates, so no mismatch can fire.
+  art <- ph_art(ph_html(c("de", "https://example.com/de")))
+
+  expect_identical(nrow(page_hreflang_findings(ph_run(art))), 0L)
+})
+
+test_that("a subject loc with no fetched artifact is skipped", {
+  art <- ph_art(ph_html(c("de", "https://example.com/de")))
+  absent <- "https://example.com/never-fetched"
+  subjects <- list(
+    loc = c(art$requested_url, absent),
+    base = list(
+      sitemap_subject_ref(art$requested_url),
+      sitemap_subject_ref(absent)
+    ),
+    alt = list(NULL, NULL)
+  )
+
+  # The unfetched loc is skipped rather than erroring on a NULL artifact.
+  expect_identical(nrow(page_hreflang_findings(ph_run(art), subjects)), 0L)
+})
