@@ -114,8 +114,16 @@ robotstxtr_contract_schema <- function() {
 # The raw contract object straight from the sibling, with no gating. Split out
 # as a named binding so tests can stand in an older/foreign contract shape
 # without needing that build installed.
+# The installed sibling's namespace, read through a named seam. Split out for
+# the same reason as the raw contract below: a test can stand in a namespace
+# that predates `robots_engine_contract_v1()` without needing that build
+# installed, and `asNamespace()` itself is a base binding tests cannot shadow.
+robotstxtr_namespace <- function() {
+  asNamespace("robotstxtr")
+}
+
 robotstxtr_engine_contract_raw <- function() {
-  ns <- asNamespace("robotstxtr")
+  ns <- robotstxtr_namespace()
   if (!exists("robots_engine_contract_v1", envir = ns, inherits = FALSE)) {
     rlang::abort(
       sprintf(
@@ -176,9 +184,11 @@ robotstxtr_engine_contract <- function() {
   contract
 }
 
-# The matcher capability table, read through the PUBLIC contract accessor. The
-# consulted-robots refactor (E.1b) reads capability from here rather than from
-# robotstxtr's internal `engine_backend_capability_v1()`.
+# The matcher capability table, read through the PUBLIC contract accessor
+# rather than robotstxtr's internal `engine_backend_capability_v1()`. A
+# convenience composition: the per-engine consumer (R/page-robots-trap.R) reads
+# `matcher_capability` off the gated contract object directly, since it needs
+# the rest of the contract in the same call.
 robotstxtr_matcher_capability <- function() {
   robotstxtr_engine_contract()$matcher_capability
 }
