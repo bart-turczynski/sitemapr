@@ -9,8 +9,9 @@
 # matcher below always evaluates and is independently testable. The reason codes
 # returned are machine-readable and stable:
 #   "loopback", "private", "link-local", "cloud-metadata", "unspecified",
-#   "ipv4-mapped", "ipv4-translated", "ipv4-compatible", "nat64",
-#   "numeric-literal", "scheme"; NA when allowed.
+#   "ipv4-mapped", "ipv4-translated", "ipv4-compatible", "nat64", "6to4",
+#   "teredo", "isatap", "malformed-address", "numeric-literal", "scheme";
+#   NA when allowed.
 #
 # IPv6->IPv4 embedding (ADR-003 §1). Several IPv6 spellings embed a 32-bit IPv4
 # address; left undecoded each is a bypass of the IPv4 range checks. We decode
@@ -22,17 +23,23 @@
 #   ::/96              IPv4-compatible  "ipv4-compatible" (deprecated SIIT)
 #   64:ff9b::/96       NAT64 well-known "nat64"
 #   64:ff9b:1::/48     NAT64 local-use  "nat64" (RFC 6052 §2.2 packing)
-# DNS resolve-then-check and arbitrary (deployment-configured) NAT64 prefixes
-# remain out of scope per ADR-003 §1.
+#   2002::/16          6to4             "6to4"   (IPv4 at bits 16-47)
+#   2001::/32          Teredo           "teredo" (low 32 bits, XOR 0xffffffff)
+#   any prefix         ISATAP           "isatap" (IPv4 after a *:5efe marker)
+# The last three are IPv6 TRANSITION mechanisms: they embed the IPv4 address
+# somewhere other than the low 32 bits, so a decoder that only reads the tail
+# misses them entirely (SITE-uxxdadsa). DNS resolve-then-check and arbitrary
+# (deployment-configured) NAT64 prefixes remain out of scope per ADR-003 §1.
 #
-# KNOWN POSTURE — malformed IPv6 literals FAIL OPEN. Every IPv6 rule reads the
+# POSTURE — malformed IPv6 literals FAIL CLOSED. Every IPv6 rule reads the
 # expanded hextets, so a literal ssrf_ipv6_hextets() cannot resolve to exactly 8
-# hextets ("fe80:::1", "::12345", "::ffff:999.1.1.1") matches no rule and
-# reaches the default allow. That is safe today only because ADR-003 §1 has the
-# guard run on hosts rurl has already normalized, and rurl rejects such literals
-# before we see them — the guard does not enforce it itself. Whether to fail
-# closed instead is deliberately unsettled: see SITE-zgufvkks (mirrored as
-# robotstxtr ROBO-udnyuuwn), and revisit if rurl's host handling ever loosens.
+# hextets ("fe80:::1", "::12345", "::ffff:999.1.1.1") is not an address this
+# guard can reason about. It is refused with "malformed-address" rather than
+# reaching the default allow (SITE-zgufvkks, mirrored as robotstxtr
+# ROBO-udnyuuwn). Such a literal is unreachable through the real fetch path —
+# rurl rejects it before the guard sees it — but the guard no longer depends on
+# that, which is the reliance SITE-vovtwvuh set out to remove. Because the
+# classifier refuses up front, the rules below may assume 8 numeric hextets.
 
 # ---- helpers: IPv4 -----------------------------------------------------------
 
@@ -244,6 +251,46 @@ ssrf_embedded_ipv4 <- function(h) {
   if (all(h[1:6] == 0) && tail32 > 1) {
     return(list(ssrf_num_to_quad(tail32), "ipv4-compatible"))
   }
+  ssrf_transition_ipv4(h)
+}
+
+# The IPv6 TRANSITION mechanisms, which also embed an IPv4 address but not in
+# the low 32 bits — so ssrf_embedded_ipv4()'s tail32 never sees them:
+#   6to4   (RFC 3056) 2002::/16   V4ADDR at bits 16-47, i.e. hextets 2-3
+#   Teredo (RFC 4380) 2001::/32   client IPv4 in the low 32 bits, but stored
+#                                 XOR-obfuscated with 0xffffffff
+#   ISATAP (RFC 5214) any prefix  IPv4 in the interface identifier, after a
+#                                 0000:5efe / 0200:5efe marker
+# Adding these prefixes to the blocked range table would NOT fix the gap:
+# 2002::/16 and 2001::/32 are legitimately globally reachable, and what has to
+# be classified is the address they WRAP. The set of embedding forms is a
+# decoder inventory, not a range table (ssrfr ADR-001 §2.3, INV-13
+# embedded-address corollary) — this is the defect class behind pydantic-ai's
+# three CVEs against one blocklist, each a different transition wrapper of the
+# same metadata address.
+#
+# These are fixed, IANA-assigned, RFC-defined forms rather than
+# deployment-configured prefixes, so they sit inside the scope ADR-003 §1 claims
+# (amended 2026-07-25 for SITE-uxxdadsa). Called last, so the RFC 6052 / 4291
+# forms above always win a spelling both could claim.
+ssrf_transition_ipv4 <- function(h) {
+  # 6to4: V4ADDR sits immediately after the 2002 prefix, in hextets 2-3.
+  if (h[1L] == 0x2002) {
+    return(list(ssrf_num_to_quad(h[2L] * 65536 + h[3L]), "6to4"))
+  }
+  # Teredo: the client IPv4 is stored ones-complemented, so no rule over the
+  # literal bits can ever see it. XOR with 0xffffffff == 4294967295 - tail32.
+  if (all(h[1:2] == c(0x2001, 0))) {
+    tail32 <- h[7L] * 65536 + h[8L]
+    return(list(ssrf_num_to_quad(4294967295 - tail32), "teredo"))
+  }
+  # ISATAP: the outer 64-bit prefix is arbitrary (fe80::/10 catches only the
+  # link-local case, and only incidentally), so the marker in hextets 5-6 is
+  # the whole of the form. The u-bit is set when the address is globally
+  # unique, giving the two documented markers 0000:5efe and 0200:5efe.
+  if (all(c(h[5L] %in% c(0, 0x200), h[6L] == 0x5efe))) {
+    return(list(ssrf_num_to_quad(h[7L] * 65536 + h[8L]), "isatap"))
+  }
   NULL
 }
 
@@ -253,9 +300,6 @@ ssrf_embedded_ipv4 <- function(h) {
 # allowed, matching the IPv4-literal policy; NA when there is no blocked
 # embedding. The bit-layout decoding lives in ssrf_embedded_ipv4.
 ssrf_embedded_reason <- function(h) {
-  if (is.null(h)) {
-    return(NA_character_)
-  }
   emb <- ssrf_embedded_ipv4(h)
   if (is.null(emb) || !ssrf_is_dotted_quad(emb[[1L]])) {
     return(NA_character_)
@@ -272,10 +316,11 @@ ssrf_embedded_reason <- function(h) {
 # same 128 bits agree — compressed ("::1"), fully written ("0:0:0:0:0:0:0:1"),
 # partially compressed ("0::1"), and the dotted-quad tails ("::0.0.0.1",
 # "0:0:0:0:0:0:0.0.0.0"). String matching blocked one spelling while allowing an
-# identical other one, which is a bypass. Returns NA when `h` is neither special
-# (including when the literal did not expand to 8 hextets at all).
+# identical other one, which is a bypass. Returns NA when `h` is neither
+# special. `h` is always 8 numeric hextets — the classifier refuses a literal
+# that did not expand before any rule runs.
 ssrf_ipv6_special <- function(h) {
-  if (is.null(h) || !all(h[1:7] == 0) || h[8L] > 1) {
+  if (!all(h[1:7] == 0) || h[8L] > 1) {
     return(NA_character_)
   }
   if (h[8L] == 1) "loopback" else "unspecified"
@@ -291,11 +336,8 @@ ssrf_ipv6_special <- function(h) {
 # through unblocked, a real bypass of the metadata block. The old
 # "^fe[89ab][0-9a-f]?:" made the 4th hex digit optional, so the 3-digit hextet
 # "fe8" (0x0fe8) matched despite being nowhere near fe80::/10. Returns NA when
-# `h` is in neither block (including when the literal did not expand at all).
+# `h` is in neither block.
 ssrf_ipv6_prefix_block <- function(h) {
-  if (is.null(h)) {
-    return(NA_character_)
-  }
   if (bitwAnd(h[1L], 0xffc0) == 0xfe80) {
     return("link-local")
   }
@@ -307,10 +349,17 @@ ssrf_ipv6_prefix_block <- function(h) {
 
 # Classify an IPv6 literal (brackets already stripped) against ADR-003 ranges.
 # The literal is expanded once here and every rule below reads those hextets, so
-# no rule can disagree with another about what address it is looking at. NA when
-# the literal is allowed or did not expand to 8 hextets.
+# no rule can disagree with another about what address it is looking at. NA only
+# when the literal expanded and no rule claimed it.
 ssrf_classify_ipv6 <- function(s) {
   h <- ssrf_ipv6_hextets(s)
+
+  # A literal that does not expand to 8 hextets is not an address this guard can
+  # reason about, so it is refused rather than allowed (SITE-zgufvkks). Refusing
+  # here — before any rule — is also what lets the rules below assume 8 hextets.
+  if (is.null(h)) {
+    return("malformed-address")
+  }
 
   # Pure-address specials first, so an embedding decoder can never mislabel them
   # (e.g. read "::1" as the IPv4-compatible address 0.0.0.1).

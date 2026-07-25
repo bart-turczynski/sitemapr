@@ -3,7 +3,9 @@
 - Status: Accepted (amended 2026-06-28 — two-axis body-limit model, §3;
   amended 2026-07-19 by ADR-010 — per-page truncate-and-retain cap, §3;
   amended 2026-07-25 — two corrections, see Consequences and Revisit
-  conditions; no decision changed)
+  conditions; no decision changed; amended 2026-07-25 — §1 covers the three
+  IPv6 transition embeddings (SITE-uxxdadsa) and malformed IPv6 literals now
+  fail closed with `malformed-address` (SITE-zgufvkks))
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
@@ -55,12 +57,32 @@ any of the following:
   IPv4-mapped `::ffff:a.b.c.d` (`::ffff:0:0/96`); IPv4-translated
   `::ffff:0:a.b.c.d` (`::ffff:0:0:0/96`); deprecated IPv4-compatible `::a.b.c.d`
   (`::/96`, excluding `::`/`::1`); NAT64 well-known `64:ff9b::a.b.c.d`
-  (`64:ff9b::/96`); and NAT64 local-use `64:ff9b:1::/48` (RFC 6052 §2.2 packing,
-  IPv4 split across the reserved u-byte). Dotted, hex-hextet, and fully-expanded
-  spellings are all handled, since `rurl` normalizes them inconsistently. This
-  prevents IPv6-notation bypass of the IPv4 range checks. *Arbitrary
-  deployment-configured NAT64 prefixes are not covered (only the two
-  IANA-assigned ones); DNS resolve-then-check remains out of scope (below).*
+  (`64:ff9b::/96`); NAT64 local-use `64:ff9b:1::/48` (RFC 6052 §2.2 packing,
+  IPv4 split across the reserved u-byte); and the three IPv6 **transition
+  mechanisms** — 6to4 `2002::/16` (RFC 3056, IPv4 at bits 16–47), Teredo
+  `2001::/32` (RFC 4380, IPv4 in the low 32 bits but XOR-obfuscated with
+  `0xffffffff`), and ISATAP (RFC 5214, IPv4 in the interface identifier after a
+  `0000:5efe` / `0200:5efe` marker, under an *arbitrary* outer prefix). Dotted,
+  hex-hextet, and fully-expanded spellings are all handled, since `rurl`
+  normalizes them inconsistently. This prevents IPv6-notation bypass of the IPv4
+  range checks. *Arbitrary deployment-configured NAT64 prefixes are not covered
+  (only the two IANA-assigned ones); DNS resolve-then-check remains out of scope
+  (below).*
+
+  The covered set is a **decoder inventory, not a range table.** Blocking
+  `2002::/16` or `2001::/32` as ranges would be wrong — both are legitimately
+  globally reachable — and would not address the defect: what must be classified
+  is the address the wrapper *carries*. Only a blocked embedded address is
+  rejected; a public one still passes. The transition forms were added
+  2026-07-25 (SITE-uxxdadsa) after all three were verified to reach the default
+  allow; they are fixed, IANA-assigned, RFC-defined prefixes, so they were
+  always inside the scope this section claims rather than a scope extension.
+  ISATAP under a link-local prefix was blocked before that, but incidentally, by
+  the `fe80::/10` rule rather than by decoding — a rule that happens to cover a
+  case for an unrelated reason is not coverage. See `ssrfr` ADR-001 §2.3 for the
+  normative statement (INV-13 embedded-address corollary), and the `pydantic-ai`
+  CVE sequence for the same defect class recurring three times against one
+  blocklist.
 - **Numeric/octal literals:** reject hosts encoded as raw decimal integers,
   hex integers, or octal octets (e.g., `0x7f000001`, `017700000001`,
   `2130706433`)
@@ -77,16 +99,25 @@ matching the literal decided them inconsistently and was a bypass in both
 directions (SITE-vovtwvuh for `::1`/`::`, SITE-mhfmtdxa for `fe80::/10` and
 `fd00:ec2::/32`).
 
-**Open, revisit later: malformed IPv6 literals fail open.** A consequence of
-the above is that a literal which cannot be expanded to exactly 8 hextets
-(`fe80:::1`, `::12345`, `::ffff:999.1.1.1`) matches no rule and reaches the
-default allow. This is not a known bypass — the guard sees only hosts `rurl`
-has already normalized, and `rurl` rejects such literals first — but it means
-the property is enforced by the parse layer rather than by the guard, which is
-the reliance SITE-vovtwvuh otherwise set out to remove. Failing closed would
-add a reason code to the stable list above and so requires an amendment to this
-ADR, not just an implementation change. Tracked as **SITE-zgufvkks** (mirrored
-as robotstxtr **ROBO-udnyuuwn**); revisit if `rurl`'s host handling loosens.
+**Malformed IPv6 literals fail closed** (amended 2026-07-25, SITE-zgufvkks;
+mirrored as robotstxtr **ROBO-udnyuuwn**). A literal that cannot be expanded to
+exactly 8 hextets (`fe80:::1`, `::12345`, `::ffff:999.1.1.1`, more than one `::`
+run) is not an address the guard can reason about. It is refused with the reason
+code **`malformed-address`** rather than reaching the default allow.
+
+Previously such a literal matched no rule and was allowed. That was not a known
+bypass — the guard sees only hosts `rurl` has already normalized, and `rurl`
+rejects these first — but it left the property enforced by the parse layer
+rather than by the guard, which is exactly the reliance SITE-vovtwvuh set out to
+remove for the IPv6 specials. The same argument applies to malformed input, so
+the guard now enforces it itself and no longer depends on `rurl`'s host handling
+staying strict.
+
+`malformed-address` is deliberately the code `ssrfr`'s vocabulary already
+reserves for this case (`ssrf-guard-spec.md` §5, INV-11), so the eventual
+extraction does not have to rename a published value. Refusing before any rule
+runs is also what lets every IPv6 rule assume 8 numeric hextets, which removed
+three defensive `is.null()` branches from the matcher.
 
 **DNS resolve-then-check is deferred to post-v1.** Resolving hostnames before
 fetching would catch DNS-rebinding attacks and hosts that resolve to private
@@ -223,6 +254,19 @@ contact URL is assembled at runtime from `utils::packageDescription()`.
   `ssrf_guard = FALSE` is set" — was self-contradictory: that flag disables the
   guard, so it cannot cause blocking. It conflated the unconditional gap with
   the unrelated opt-out advice.)*
+- Failing closed on malformed IPv6 literals means a host containing a colon that
+  is not a decodable IPv6 address is now refused rather than allowed. `rurl`
+  rejects such hosts before the guard sees them, so no reachable behaviour
+  changes; the cost is that the guard is stricter than the parse layer rather
+  than the other way round, which is the intended direction.
+- Reason codes are additive here (`6to4`, `teredo`, `isatap`,
+  `malformed-address`). They widen the stable vocabulary a caller may see in a
+  `sitemapr_ssrf_blocked` condition, but rename nothing.
+- The transition decoders block by *classification*, not by routability. A 6to4
+  or Teredo address whose wrapped IPv4 is blocked is refused whether or not the
+  host would actually have routed that mechanism; RFC 7526 deprecated 6to4
+  anycast, so in many deployments the connection would simply have failed. That
+  is fail-closed by accident, and not a property to rely on.
 
 ---
 
