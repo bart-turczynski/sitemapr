@@ -194,6 +194,156 @@ test_that("the diff is deterministic and independent of input order", {
   expect_identical(added_a$loc, "https://e/z")
 })
 
+test_that("a multi-element list cell is compared element-wise", {
+  # `sources$redirect_chain` holds a bare character vector, so a multi-hop
+  # chain exercises the vector arm of the cell serializer.
+  src <- function(chain) {
+    source_metadata(
+      requested_url = "https://e/s.xml",
+      redirect_chain = chain
+    )
+  }
+  hops <- c("https://e/a", "https://e/b")
+
+  same <- compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(hops))
+  )
+  expect_true(audit_unchanged(same))
+
+  # Reordering the hops is a real content change, not a no-op: element order
+  # is part of the chain's identity.
+  reordered <- compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(rev(hops)))
+  )
+  chain <- reordered$components$sources
+  expect_identical(nrow(chain$changed), 1L)
+  expect_identical(nrow(chain$added), 0L)
+
+  # A longer chain sharing its prefix is likewise a change, so the serializer
+  # cannot be collapsing the vector to its first element.
+  extended <- compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(c(hops, "https://e/c")))
+  )
+  expect_identical(nrow(extended$components$sources$changed), 1L)
+})
+
+test_that("an unnamed list cell serializes positionally", {
+  # A chain supplied as an unnamed list (rather than a character vector) has
+  # no element names to qualify its parts, so the cell serializer falls back
+  # to bare positional values.
+  src <- function(chain) {
+    source_metadata(
+      requested_url = "https://e/s.xml",
+      redirect_chain = chain
+    )
+  }
+  hops <- list("https://e/a", "https://e/b")
+
+  expect_true(audit_unchanged(compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(hops))
+  )))
+
+  reordered <- compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(rev(hops)))
+  )
+  expect_identical(nrow(reordered$components$sources$changed), 1L)
+
+  # Container shape is part of the signature: a list cell and the equivalent
+  # character vector serialize differently ("{a,b}" vs "a;b") and so DO diff.
+  # Harmless here because a given producer emits one shape consistently, but
+  # it means the comparison is structural, not value-only.
+  boxed <- compare_sitemap_audits(
+    sitemap_audit(sources = src(hops)),
+    sitemap_audit(sources = src(unlist(hops)))
+  )
+  expect_identical(nrow(boxed$components$sources$changed), 1L)
+})
+
+test_that("a named list cell compares on names as well as values", {
+  # `sources$namespaces` is a named list; the prefix a URI is bound to is part
+  # of the content, so rebinding it under a new prefix is a change.
+  src <- function(ns) {
+    source_metadata(requested_url = "https://e/s.xml", namespaces = ns)
+  }
+  ns <- list(sm = "http://www.sitemaps.org/schemas/sitemap/0.9")
+
+  expect_true(audit_unchanged(compare_sitemap_audits(
+    sitemap_audit(sources = src(ns)),
+    sitemap_audit(sources = src(ns))
+  )))
+
+  renamed <- list(d1 = ns$sm)
+  changed <- compare_sitemap_audits(
+    sitemap_audit(sources = src(ns)),
+    sitemap_audit(sources = src(renamed))
+  )
+  expect_identical(nrow(changed$components$sources$changed), 1L)
+})
+
+test_that("added and removed problems are detected", {
+  problem <- parse_problems(
+    severity = "warning",
+    category = "classification",
+    subject_ref = "https://e/s.xml",
+    message = "not a sitemap"
+  )
+  none <- sitemap_audit()
+  one <- sitemap_audit(problems = problem)
+
+  added <- compare_sitemap_audits(none, one)$components$problems
+  expect_identical(nrow(added$added), 1L)
+  expect_identical(nrow(added$removed), 0L)
+
+  removed <- compare_sitemap_audits(one, none)$components$problems
+  expect_identical(nrow(removed$removed), 1L)
+  expect_identical(nrow(removed$added), 0L)
+})
+
+test_that("printing an empty diff reports no changes", {
+  audit <- sitemap_audit(urls = make_urls("https://example.com/"))
+  d <- compare_sitemap_audits(audit, audit)
+
+  expect_output(print(d), "<sitemap_audit_diff>")
+  expect_output(print(d), "no changes")
+  # The per-component count lines are suppressed entirely when nothing moved.
+  expect_identical(
+    capture.output(print(d)),
+    c(
+      "<sitemap_audit_diff>",
+      "  no changes"
+    )
+  )
+  expect_false(withVisible(print(d))$visible)
+})
+
+test_that("printing a non-empty diff reports per-component counts", {
+  old <- sitemap_audit(
+    urls = make_urls(c("https://e/keep", "https://e/gone"), priority = "0.5")
+  )
+  new <- sitemap_audit(
+    urls = make_urls(
+      c("https://e/keep", "https://e/new"),
+      priority = c("0.9", "0.5")
+    )
+  )
+  d <- compare_sitemap_audits(old, new)
+
+  expect_output(print(d), "<sitemap_audit_diff>")
+  expect_false(any(grepl("no changes", capture.output(print(d)), fixed = TRUE)))
+  # urls: one added, one removed, one changed (the kept loc's priority moved).
+  expect_output(print(d), "urls\\s+\\+1\\s+-1\\s+~1")
+  # Every component gets a line, including the ones that did not move.
+  out <- capture.output(print(d))
+  expect_length(out, 1L + length(audit_component_names()))
+  expect_output(print(d), "findings\\s+\\+0\\s+-0\\s+~0")
+  expect_false(withVisible(print(d))$visible)
+})
+
 test_that("non-audit arguments raise a classed error", {
   audit <- sitemap_audit()
   expect_error(
