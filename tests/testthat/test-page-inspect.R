@@ -403,3 +403,20 @@ test_that("a single throttle_state paces same-host fetches across the run", {
   expect_length(slept$calls, 1L)
   expect_identical(slept$calls, 10)
 })
+
+test_that("an unexpected fetch error still yields a transport_fail artifact", {
+  # page_fetch() captures its own failures as artifacts, so this belt only
+  # fires on something unforeseen — one page must never abort the sample.
+  art <- page_inspection_fetch_one(
+    "https://example.com/a",
+    list(page_body_cap = 100L),
+    fetch_limits(),
+    "inspector/test",
+    TRUE,
+    request_policy(),
+    NULL,
+    function(...) stop("unexpected")
+  )
+  expect_identical(art$outcome, "transport_fail")
+  expect_identical(art$requested_url, "https://example.com/a")
+})

@@ -60,3 +60,16 @@ test_that("validate_engine_format emits nothing for a not_documented dialect", {
   out <- validate_engine_format("atom0.3", base, spec_for("google"))
   expect_identical(nrow(out), 0L)
 })
+
+test_that("a dialect outside an engine's table falls to its default", {
+  # The per-engine tables list only the dialects sitemapr parses; anything else
+  # takes the engine default rather than returning NA.
+  expect_identical(
+    engine_format_support("rss3.0", list(ruleset = "google")),
+    "supported"
+  )
+  expect_identical(
+    engine_format_support("rss3.0", list(ruleset = "yandex")),
+    "unsupported"
+  )
+})

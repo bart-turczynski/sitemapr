@@ -809,3 +809,64 @@ test_that("the batch ruleset wrapper stamps the additive columns", {
   expect_true("PROTOCOL_DUPLICATE_LOC" %in% out$code)
   expect_true("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% out$code)
 })
+
+# ---- guards on the index/protocol/sink helpers -------------------------------
+
+test_that("an unsupported feed dialect falls through to the XML branch", {
+  # parse_feed() raises sitemapr_unsupported_feed for a <feed> in a non-Atom
+  # namespace; the source is then validated as plain XML, which names the root.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeLines(
+    "<feed xmlns=\"http://example.com/not-atom\"><entry/></feed>",
+    path
+  )
+  out <- validate_sitemap(path)
+  expect_identical(unique(out$code), "UNSUPPORTED_ROOT")
+})
+
+test_that("index_source_row returns NULL when there is nothing to match", {
+  sources <- tibble::tibble(final_url = "https://example.com/c1.xml")
+  expect_null(index_source_row(NULL, "https://example.com/c1.xml"))
+  expect_null(index_source_row(sources, NA_character_))
+  # Present sources, but no row for this sitemap.
+  expect_null(index_source_row(sources, "https://example.com/zzz.xml"))
+})
+
+test_that("a byte size is withheld when it would not be the protocol's", {
+  expect_identical(index_source_byte_size(NULL), NA_real_)
+  # A gzip child records its COMPRESSED size; the limit is on the uncompressed
+  # bytes, so no size is claimed rather than a wrong one.
+  expect_identical(
+    index_source_byte_size(tibble::tibble(format = "gzip", bytes = 10)),
+    NA_real_
+  )
+})
+
+test_that("index_protocol_parts is empty without rows", {
+  expect_identical(index_protocol_parts(NULL, NULL, "sitemap://x"), list())
+})
+
+test_that("rows with no known source sitemap validate against the fallback", {
+  rows <- sitemap_rows(
+    loc = "https://example.com/a",
+    source_sitemap = NA_character_
+  )
+  parts <- index_protocol_parts(rows, NULL, "sitemap://example.com/s.xml")
+  # One ungrouped protocol part, anchored on the fallback base.
+  expect_length(parts, 1L)
+})
+
+test_that("the page sink is inert when absent or given nothing", {
+  expect_null(page_sink_robots_facts(NULL))
+  sink <- new.env(parent = emptyenv())
+  # Blank and NA locs are dropped, leaving nothing to record.
+  expect_null(page_sink_add(sink, c(NA, ""), "sitemap://example.com/s.xml"))
+  expect_null(sink$loc)
+})
+
+test_that("a source without alternates contributes one NULL per loc", {
+  sink <- new.env(parent = emptyenv())
+  page_sink_add(sink, "https://example.com/a", "sitemap://example.com/s.xml")
+  expect_length(sink$alt, 1L)
+  expect_null(sink$alt[[1L]])
+})

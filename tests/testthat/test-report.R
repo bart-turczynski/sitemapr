@@ -467,3 +467,7 @@ test_that("an explicit urls/findings still wins over a supplied audit", {
     render_string(f, urls = override, findings = audit_findings(audit))
   )
 })
+
+test_that("a feed source gets its own format label", {
+  expect_identical(report_format_label("feed"), "RSS/Atom")
+})

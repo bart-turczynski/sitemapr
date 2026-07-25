@@ -133,3 +133,12 @@ test_that("summary.sitemap_audit returns component and severity counts", {
   expect_identical(unname(s$findings), rep(0L, 4L))
   expect_identical(s$n_sources, 1L)
 })
+
+test_that("a non-data-frame component is rejected by class", {
+  # The component contract is checked before any column inspection, so a
+  # non-tabular value fails loudly rather than erroring deeper in setdiff().
+  expect_error(
+    audit_validate_component(1:3, "urls"),
+    class = "sitemapr_bad_input"
+  )
+})

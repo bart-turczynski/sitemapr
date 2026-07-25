@@ -297,3 +297,11 @@ test_that("one evaluation serves findings AND the synthesis consult", {
     "allow"
   )
 })
+
+test_that("a zero-row result set yields no decisions", {
+  empty <- robots_decision_trichotomy(
+    tibble::tibble(source_id = character(0), matcher_status = character(0)),
+    tibble::tibble(source_id = character(0), final_http_status = integer(0))
+  )
+  expect_identical(empty, character(0))
+})
