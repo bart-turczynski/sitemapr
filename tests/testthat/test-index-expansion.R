@@ -529,3 +529,129 @@ test_that("bing inherits the same-site rule (cross-site child out of scope)", {
     index_child_out_of_scope(idx_deep, "https://other.com/child.xml", bing_spec)
   )
 })
+
+test_that("an in-scope child under an engine overlay emits nothing", {
+  # The overlay is active and the children are real, but none is out of scope:
+  # distinct from the baseline dormancy above, which never evaluates scope.
+  google_spec <- findings_ruleset_spec("google", ruleset_context())
+  out <- index_child_scope_findings(
+    idx_deep,
+    c(
+      "https://example.com/deep/child-1.xml",
+      "https://example.com/deep/lower/child-2.xml"
+    ),
+    idx_base,
+    google_spec
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+# ---- Child-failure and scheduler guards --------------------------------------
+#
+# The defensive arms of the traversal: a child that fetches but does not parse,
+# and the pre-fetch scheduler's depth / budget / already-visited gates. The
+# scheduler helpers take the accumulator directly, so they are driven with a
+# minimal stand-in rather than through a full expansion.
+
+test_that("a child that fetches but does not parse is rejected, not fatal", {
+  root <- "https://example.com/sitemap.xml"
+  broken <- "https://example.com/broken.xml"
+  # A urlset whose closing tag is missing: it sniffs as a urlset, then fails to
+  # parse — the one shape that reaches the unparseable-child path.
+  truncated <- paste0(
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    "<url><loc>https://example.com/a</loc></url>"
+  )
+  local_index_server(stats::setNames(list(truncated), broken))
+
+  res <- expand_root(root, index_xml(broken))
+
+  expect_identical(res$problems$category, "classification")
+  expect_match(res$problems$message, "could not be parsed", fixed = TRUE)
+  expect_identical(res$tree$reason, "unparseable")
+  expect_identical(res$tree$status, "rejected")
+  # The traversal completes and simply contributes no rows.
+  expect_identical(nrow(res$rows), 0L)
+})
+
+# A stand-in accumulator carrying only the fields the pre-fetch scheduler reads.
+ix_prefetch_acc <- function(visited = character(0), total = 0L) {
+  acc <- new.env(parent = emptyenv())
+  acc$visited <- visited
+  acc$total_sitemaps <- total
+  acc$max_active <- 1L
+  acc$fetch_cache <- new.env(parent = emptyenv())
+  acc$throttle_state <- NULL
+  acc
+}
+
+test_that("an empty batch fetches nothing", {
+  acc <- ix_prefetch_acc()
+  expect_null(fetch_batch_into_cache(
+    character(0),
+    2L,
+    "ua",
+    fetch_limits(),
+    request_policy(),
+    acc
+  ))
+  expect_length(ls(acc$fetch_cache), 0L)
+})
+
+test_that("children past the depth limit are never dispatched", {
+  acc <- ix_prefetch_acc()
+  prefetch_index_children(
+    "https://example.com/c1.xml",
+    "k1",
+    9L,
+    "ua",
+    index_limits(max_depth = 1L),
+    fetch_limits(),
+    request_policy(),
+    acc
+  )
+  expect_length(ls(acc$fetch_cache), 0L)
+})
+
+test_that("an already-visited child is skipped by the scheduler", {
+  acc <- ix_prefetch_acc(visited = "k1")
+  prefetch_index_children(
+    "https://example.com/c1.xml",
+    "k1",
+    1L,
+    "ua",
+    index_limits(),
+    fetch_limits(),
+    request_policy(),
+    acc
+  )
+  expect_length(ls(acc$fetch_cache), 0L)
+})
+
+test_that("dispatch stops at the remaining sitemap-count budget", {
+  local_index_server(list(
+    "https://example.com/c1.xml" = urlset_xml("https://example.com/a"),
+    "https://example.com/c2.xml" = urlset_xml("https://example.com/b")
+  ))
+  # One slot left in the aggregate budget: reserve-before-dispatch (§3) warms
+  # the first child only.
+  acc <- ix_prefetch_acc(total = 4L)
+  prefetch_index_children(
+    c("https://example.com/c1.xml", "https://example.com/c2.xml"),
+    c("k1", "k2"),
+    1L,
+    "ua",
+    index_limits(max_total_sitemaps = 5L),
+    fetch_limits(),
+    request_policy(),
+    acc
+  )
+  expect_identical(ls(acc$fetch_cache), "https://example.com/c1.xml")
+})
+
+test_that("a leaf reference with no fetch record reports NA", {
+  # The callback-error message must still name something when the source row is
+  # absent or shaped without a final_url.
+  expect_identical(stream_leaf_ref(NULL), NA_character_)
+  expect_identical(stream_leaf_ref(list(requested_url = "x")), NA_character_)
+})

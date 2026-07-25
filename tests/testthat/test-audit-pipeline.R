@@ -428,6 +428,25 @@ test_that("a remote index records the root and each child as sources", {
   expect_identical(nrow(audit_tree(a)), 1L)
 })
 
+test_that("a childless remote index records the root as its only source", {
+  sink <- new.env()
+  httr2::local_mocked_responses(au_counting_mock(
+    list("https://example.com/i0.xml" = au_index_body()),
+    sink
+  ))
+
+  a <- suppressWarnings(audit_sitemap("https://example.com/i0.xml"))
+
+  # Expansion RAN (the root is remote) but produced no per-child sources, so
+  # the root metadata stands alone rather than being rbound with anything.
+  expect_identical(nrow(audit_sources(a)), 1L)
+  expect_identical(
+    audit_sources(a)$final_url,
+    "https://example.com/i0.xml"
+  )
+  expect_identical(nrow(audit_urls(a)), 0L)
+})
+
 test_that("an index child that is an unsupported feed is rejected, not fatal", {
   sink <- new.env()
   httr2::local_mocked_responses(au_counting_mock(
