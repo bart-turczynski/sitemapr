@@ -65,6 +65,24 @@ The guard runs on **parsed host and IP components from `rurl`** — it does not
 re-parse the host itself. `sitemapr` owns the range/pattern matching; `rurl`
 owns the parse.
 
+Every IPv6 rule matches on the **expanded address** (the 8 numeric hextets),
+never on the literal string. A hextet may be written with leading zeros and a
+`::` run may be placed anywhere, so the same 128 bits have many spellings;
+matching the literal decided them inconsistently and was a bypass in both
+directions (SITE-vovtwvuh for `::1`/`::`, SITE-mhfmtdxa for `fe80::/10` and
+`fd00:ec2::/32`).
+
+**Open, revisit later: malformed IPv6 literals fail open.** A consequence of
+the above is that a literal which cannot be expanded to exactly 8 hextets
+(`fe80:::1`, `::12345`, `::ffff:999.1.1.1`) matches no rule and reaches the
+default allow. This is not a known bypass — the guard sees only hosts `rurl`
+has already normalized, and `rurl` rejects such literals first — but it means
+the property is enforced by the parse layer rather than by the guard, which is
+the reliance SITE-vovtwvuh otherwise set out to remove. Failing closed would
+add a reason code to the stable list above and so requires an amendment to this
+ADR, not just an implementation change. Tracked as **SITE-zgufvkks** (mirrored
+as robotstxtr **ROBO-udnyuuwn**); revisit if `rurl`'s host handling loosens.
+
 **DNS resolve-then-check is deferred to post-v1.** Resolving hostnames before
 fetching would catch DNS-rebinding attacks and hosts that resolve to private
 IPs without being expressed as literals. However:
