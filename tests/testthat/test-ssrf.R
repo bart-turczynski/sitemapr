@@ -90,11 +90,9 @@ test_that("link-local matches fe80::/10 by value, not by literal prefix", {
   # Immediately outside the /10 on either side.
   expect_true(is.na(classify("fe7f::1")))
   expect_true(is.na(classify("fec0::1")))
-  # A literal that does not expand to 8 hextets matches no prefix block.
-  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_prefix_block(
-    sitemapr_test_ns$ssrf_ipv6_hextets("fea:")
-  )))
-  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_prefix_block(NULL)))
+  # A literal that does not expand to 8 hextets is refused outright rather than
+  # falling through the prefix rules to the default allow (SITE-zgufvkks).
+  expect_identical(classify("fea:"), "malformed-address")
 })
 
 # ---- cloud-metadata ----------------------------------------------------------
@@ -343,9 +341,12 @@ test_that("the specials do not swallow neighbouring addresses", {
   # A public IPv4-compatible address is still allowed, so the wider special
   # match did not turn into over-blocking.
   expect_true(is.na(reason_of("[::8.8.8.8]")))
-  # A literal that does not expand to 8 hextets is not a special either.
-  short <- sitemapr_test_ns$ssrf_ipv6_hextets("1:2:3")
-  expect_true(is.na(sitemapr_test_ns$ssrf_ipv6_special(short)))
+  # A literal that does not expand to 8 hextets is not a special either — it is
+  # refused before any rule runs (SITE-zgufvkks).
+  expect_identical(
+    sitemapr_test_ns$ssrf_classify_ipv6("1:2:3"),
+    "malformed-address"
+  )
 })
 
 # ---- NAT64 well-known prefix 64:ff9b::/96 ------------------------------------
@@ -389,6 +390,124 @@ test_that("NAT64 /48 embedding a PUBLIC address is allowed", {
   res <- guard("http://[64:ff9b:1:808:8:800::]/")
   expect_true(res$allowed)
   expect_true(is.na(res$reason))
+})
+
+# ---- IPv6 transition embeddings: 6to4 / Teredo / ISATAP (SITE-uxxdadsa) ------
+# Each of these packs the IPv4 address somewhere other than the low 32 bits, so
+# the tail-reading decoders above miss them and every vector here reached the
+# default allow before the decoders were added. The blocked/public pairs are the
+# point: these prefixes are legitimately reachable, so only the WRAPPED address
+# may decide the outcome.
+
+test_that("6to4 2002::/16 decodes the IPv4 at bits 16-47", {
+  # Wrapping, in order: 127.0.0.1, 10.0.0.1, 192.168.0.1.
+  expect_identical(guard("http://[2002:7f00:1::]/")$reason, "6to4")
+  expect_identical(guard("http://[2002:a00:1::]/")$reason, "6to4")
+  expect_identical(guard("http://[2002:c0a8:1::]/")$reason, "6to4")
+})
+
+test_that("6to4 wrapping the cloud-metadata IP is rejected", {
+  res <- guard("http://[2002:a9fe:a9fe::]/") # a9fe:a9fe == 169.254.169.254
+  expect_false(res$allowed)
+  expect_identical(res$reason, "6to4")
+})
+
+test_that("6to4 wrapping a PUBLIC address is allowed", {
+  # 8080:8080 == 128.128.128.128. The 2002::/16 prefix is globally reachable,
+  # so the prefix alone must not block.
+  res <- guard("http://[2002:8080:8080::]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+test_that("Teredo 2001::/32 undoes the XOR obfuscation of the client IPv4", {
+  # f5ff:fffe XOR ffff:ffff == 0a00:0001 == 10.0.0.1.
+  expect_identical(
+    guard("http://[2001:0:0:0:0:0:f5ff:fffe]/")$reason,
+    "teredo"
+  )
+  # 5601:5601 XOR ffff:ffff == a9fe:a9fe == 169.254.169.254.
+  res <- guard("http://[2001:0:0:0:0:0:5601:5601]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "teredo")
+})
+
+test_that("Teredo wrapping a PUBLIC address is allowed", {
+  # f7f7:f7f7 XOR ffff:ffff == 0808:0808 == 8.8.8.8.
+  res <- guard("http://[2001:0:0:0:0:0:f7f7:f7f7]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+test_that("the Teredo prefix does not swallow 2001:db8::/32", {
+  # Teredo is 2001:0000::/32 — the second hextet must be zero. The
+  # documentation range 2001:db8::/32 is a neighbour, not a Teredo address.
+  res <- guard("http://[2001:db8::1]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+test_that("ISATAP decodes the IPv4 after the marker under ANY prefix", {
+  # Global prefix: nothing but the marker identifies the form.
+  expect_identical(guard("http://[2001:db8::5efe:a00:1]/")$reason, "isatap")
+  # Both documented markers (u-bit clear and set) are recognized.
+  expect_identical(guard("http://[2001:db8::200:5efe:a00:1]/")$reason, "isatap")
+})
+
+test_that("ISATAP under a link-local prefix names the embedded address", {
+  # fe80::5efe:a00:1 was blocked before this decoder existed, but only
+  # incidentally — by the outer fe80::/10 rule. It is now blocked for the
+  # actual reason: it wraps 10.0.0.1.
+  res <- guard("http://[fe80::5efe:a00:1]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "isatap")
+})
+
+test_that("ISATAP wrapping a PUBLIC address is allowed", {
+  # 808:808 == 8.8.8.8 under a documentation prefix.
+  res <- guard("http://[2001:db8::5efe:808:808]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+test_that("ISATAP wrapping a public address still falls back to the prefix", {
+  # The embedded address is public, so the ISATAP decoder allows it — but the
+  # outer fe80::/10 prefix still blocks, and reports its own reason.
+  res <- guard("http://[fe80::5efe:808:808]/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "link-local")
+})
+
+test_that("an ISATAP-shaped hextet pair without the marker is allowed", {
+  # 5eff is not the 5efe marker; nothing here embeds an address.
+  res <- guard("http://[2001:db8::5eff:a00:1]/")
+  expect_true(res$allowed)
+  expect_true(is.na(res$reason))
+})
+
+# ---- malformed IPv6 literals fail closed (SITE-zgufvkks) ---------------------
+# These are unreachable through the integration surface — rurl rejects them
+# before the guard sees them — so they are driven through ssrf_check() directly.
+# The point of the change is precisely that the guard no longer leans on rurl
+# for this: a literal it cannot expand is refused on its own authority.
+
+test_that("a malformed IPv6 literal is refused, not allowed", {
+  malformed <- function(host) {
+    sitemapr_test_ns$ssrf_check(host = host, scheme = "https")
+  }
+  # Three colons in a row: no valid "::" run to expand.
+  expect_identical(malformed("[fe80:::1]")$reason, "malformed-address")
+  # Over-long hextet.
+  expect_identical(malformed("[::12345]")$reason, "malformed-address")
+  # Dotted-quad tail that is not a valid IPv4 address.
+  expect_identical(malformed("[::ffff:999.1.1.1]")$reason, "malformed-address")
+  # More than one zero-compression run.
+  expect_false(malformed("[1::2::3]")$allowed)
+})
+
+test_that("well-formed IPv6 literals are unaffected by the fail-closed rule", {
+  res <- sitemapr_test_ns$ssrf_check(host = "[2606:2800::]", scheme = "https")
+  expect_true(res$allowed)
 })
 
 # ---- embedding decoder does not over-block normal IPv6 -----------------------
@@ -545,12 +664,12 @@ test_that("ssrf_ipv6_hextets returns NULL for non-IPv6 / malformed input", {
 
 test_that("ssrf_embedded_reason returns NA when no blocked embedding", {
   # Takes the expanded hextets, not the literal: the classifier expands once
-  # and every rule reads that same expansion (SITE-mhfmtdxa).
+  # and every rule reads that same expansion (SITE-mhfmtdxa). A literal that
+  # does not expand never reaches here — ssrf_classify_ipv6() refuses it first
+  # (SITE-zgufvkks) — so these helpers take 8 hextets, never NULL.
   reason <- function(s) {
     sitemapr_test_ns$ssrf_embedded_reason(sitemapr_test_ns$ssrf_ipv6_hextets(s))
   }
-  # Malformed literal: hextet parse fails, so there is nothing to decode.
-  expect_true(is.na(reason("::zz")))
   # Well-formed IPv6 with no embedding prefix.
   expect_true(is.na(reason("fe80::1")))
   # Embedding prefix but a PUBLIC embedded address is allowed (NA).
