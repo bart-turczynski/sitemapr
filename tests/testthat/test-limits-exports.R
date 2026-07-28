@@ -143,8 +143,8 @@ test_that("sources()/problems() dispatch on a sitemap_audit object", {
 
   # Audit-promoted companions equal the read_sitemap() attributes they came
   # from (round-trip compatibility).
-  expect_equal(sources(audit), attr(urls, "sources"))
-  expect_equal(problems(audit), attr(urls, "problems"))
+  expect_identical(sources(audit), attr(urls, "sources"))
+  expect_identical(problems(audit), attr(urls, "problems"))
 })
 
 test_that("sources()/problems() default methods return NULL when absent", {

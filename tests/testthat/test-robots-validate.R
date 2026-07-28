@@ -225,12 +225,11 @@ test_that("an incompatible engine aborts rather than skipping silently", {
   )
 })
 
-test_that("matcher capability is read through the public accessor", {
+test_that("the gated contract carries a matcher capability table", {
   skip_if_not_installed("robotstxtr")
-  cap <- robotstxtr_matcher_capability()
-  expect_false(is.null(cap))
-  # Matches what the public contract object carries (no internal reach-in).
-  expect_identical(cap, robotstxtr_engine_contract()$matcher_capability)
+  # Read off the public contract object, as the per-engine consumer
+  # (R/page-robots-trap.R) does -- no internal reach-in.
+  expect_false(is.null(robotstxtr_engine_contract()$matcher_capability))
 })
 
 test_that("a stale build with the right id but no capability aborts", {

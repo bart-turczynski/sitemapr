@@ -350,7 +350,7 @@ page_noindex_channel_finding <- function(
   page_findings(
     code = code,
     severity = page_noindex_severity(code),
-    subject_ref = page_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = page_noindex_message(channel, loc, fold, engine),
     evidence = list(finding_evidence(
       excerpt = page_noindex_excerpt(extract$facts, channel)

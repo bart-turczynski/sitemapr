@@ -115,6 +115,15 @@ protocol_ref_fragment <- function(base, fragment) {
   paste0(base, fragment)
 }
 
+# The page-url subject_ref for a per-URL finding: the advertising sitemap's base
+# with a `#page-url:<loc>` fragment (findings-contract.md "Subject ref format"),
+# so the finding stays anchored to the document that advertised the page. Shared
+# by every layer that reports against a listed URL (page and robots alike), so
+# the fragment format has one definition.
+page_url_subject_ref <- function(base, loc) {
+  protocol_ref_fragment(base, paste0("#page-url:", loc))
+}
+
 # The document-level subject_ref base for a sitemap URL: `sitemap://` + the URL
 # with its scheme stripped (the findings-contract authority form, e.g.
 # `sitemap://example.com/sitemap.xml`). `NA` in -> `NA` out (fragment-only ref).

@@ -70,7 +70,7 @@ test_that("audit_sitemap() returns a valid sitemap_audit", {
   expect_s3_class(audit_urls(a), "tbl_df")
   expect_s3_class(audit_findings(a), "tbl_df")
   # The container validates its own column contracts on construction.
-  expect_silent(sitemapr:::validate_sitemap_audit(a))
+  expect_silent(validate_sitemap_audit(a))
 })
 
 # ---- EQUIVALENCE: the core acceptance ----------------------------------------

@@ -6,7 +6,7 @@
 # transport producer leaves alone. It NEVER fetches, never modifies
 # page_fetch()/page_inspection_run()/the assembler. It reuses page-findings.R's
 # producer shape (page_findings/empty_page_findings), subject_ref anchor
-# (page_subject_ref), and loc->artifact map (page_loc_artifact_map).
+# (page_url_subject_ref), and loc->artifact map (page_loc_artifact_map).
 #
 # Governing contracts (conform, do not restate):
 #   docs/design/layer-e-page-inspection.md
@@ -213,7 +213,7 @@ page_canonical_one_finding <- function(art, loc, base) {
     return(page_findings(
       code = "PAGE_CANONICAL_MISSING",
       severity = page_canonical_severity("PAGE_CANONICAL_MISSING"),
-      subject_ref = page_subject_ref(base, loc),
+      subject_ref = page_url_subject_ref(base, loc),
       message = sprintf(
         "Advertised page %s declares no rel=canonical.",
         loc
@@ -238,7 +238,7 @@ page_canonical_one_finding <- function(art, loc, base) {
   page_findings(
     code = "PAGE_CANONICAL_MISMATCH",
     severity = page_canonical_severity("PAGE_CANONICAL_MISMATCH"),
-    subject_ref = page_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = sprintf(
       "Advertised page %s prefers a different canonical: %s.",
       loc,

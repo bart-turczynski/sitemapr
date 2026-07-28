@@ -183,7 +183,7 @@ page_hreflang_one_finding <- function(art, loc, base, alt) {
   page_findings(
     code = "PAGE_HREFLANG_MISMATCH",
     severity = page_hreflang_severity("PAGE_HREFLANG_MISMATCH"),
-    subject_ref = page_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = sprintf(
       "Advertised page %s declares hreflang alternates that differ %s",
       loc,

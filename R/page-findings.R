@@ -162,13 +162,6 @@ page_context <- function(art) {
   )
 }
 
-# The page-url subject_ref for a page finding: the advertising sitemap's base
-# with a `#page-url:<loc>` fragment (findings-contract.md "Subject ref format"),
-# so the finding stays anchored to the document that advertised the page.
-page_subject_ref <- function(base, loc) {
-  protocol_ref_fragment(base, paste0("#page-url:", loc))
-}
-
 # Construct the page-layer findings tibble: the contract-shaped producer subset
 # every producer emits (`code, severity, layer, subject_type, subject_ref,
 # message, evidence, is_strict_only`) plus the optional engine-aware `context`
@@ -214,7 +207,7 @@ page_one_finding <- function(code, art, loc, base) {
   page_findings(
     code = code,
     severity = page_code_severity(code),
-    subject_ref = page_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = page_message(code, art, loc),
     evidence = list(finding_evidence(excerpt = page_excerpt(code, art))),
     context = list(page_context(art)),

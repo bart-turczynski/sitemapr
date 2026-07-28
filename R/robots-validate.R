@@ -184,15 +184,6 @@ robotstxtr_engine_contract <- function() {
   contract
 }
 
-# The matcher capability table, read through the PUBLIC contract accessor
-# rather than robotstxtr's internal `engine_backend_capability_v1()`. A
-# convenience composition: the per-engine consumer (R/page-robots-trap.R) reads
-# `matcher_capability` off the gated contract object directly, since it needs
-# the rest of the contract in the same call.
-robotstxtr_matcher_capability <- function() {
-  robotstxtr_engine_contract()$matcher_capability
-}
-
 # Only absolute http(s) URLs are robots-testable: a relative or non-http `<loc>`
 # is not something a crawler fetches, and feeding it to the matcher would only
 # echo the malformed-loc problems the protocol layer already reports. The
@@ -203,14 +194,6 @@ robots_testable_locs <- function(locs) {
   unique(locs[loc_absoluteness(locs) == "http(s)"])
 }
 
-# The page-url subject_ref for a robots finding: the advertising sitemap's base
-# with a `#page-url:<loc>` fragment (findings-contract.md "Subject ref format").
-# `base` is the sitemap that listed the URL, so the finding stays anchored to
-# the document that advertised the blocked page.
-robots_subject_ref <- function(base, loc) {
-  protocol_ref_fragment(base, paste0("#page-url:", loc))
-}
-
 # One ROBOTS_DISALLOWED finding for a disallowed URL. Evidence carries the
 # matcher's matched robots.txt rule: the `type: value` snippet in `excerpt`
 # (e.g. `disallow: /private`) and the one-based `matched_line` in `line`.
@@ -218,7 +201,7 @@ robots_disallowed_finding <- function(base, loc, res_row) {
   robots_findings(
     code = "ROBOTS_DISALLOWED",
     severity = "warning",
-    subject_ref = robots_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = sprintf(
       "Sitemap-listed URL %s is disallowed by robots.txt (matched %s '%s').",
       loc,
@@ -244,7 +227,7 @@ robots_indeterminate_finding <- function(base, loc, res_row) {
   robots_findings(
     code = "ROBOTS_INDETERMINATE",
     severity = "info",
-    subject_ref = robots_subject_ref(base, loc),
+    subject_ref = page_url_subject_ref(base, loc),
     message = sprintf(
       paste0(
         "robots.txt for %s could not be evaluated (fetch outcome: %s); ",
