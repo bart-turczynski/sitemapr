@@ -94,14 +94,15 @@ probe_text_excerpt <- function(bytes, max_chars = 500L) {
 }
 
 # Direct URL-line count for a plain-text sitemap, mirroring parse_sitemap_text()
-# (R/parse-text.R): one URL per non-blank, trimmed line. Text bytes never carry
-# a NUL (a NUL sniffs as binary), so the UTF-8 decode is safe.
+# (R/parse-text.R): one URL per non-blank, trimmed line. Decoding goes through
+# the parser's `text_as_string()` so the BOM strip stays in step with it — a
+# BOM-only document has no URL lines, but U+FEFF is not blank to `trimws()` and
+# would otherwise count as one.
 probe_text_url_count <- function(bytes) {
   if (is.null(bytes) || length(bytes) == 0L) {
     return(NA_integer_)
   }
-  s <- rawToChar(bytes)
-  Encoding(s) <- "UTF-8"
+  s <- text_as_string(bytes)
   lines <- trimws(strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]])
   as.integer(sum(nzchar(lines)))
 }
@@ -273,8 +274,14 @@ new_sitemapr_probe <- function(url, final_url, status_code, content_type, cls) {
 
 # Build a probe record for an error state (not_found / fetch_error), carrying a
 # problems row and no body classification.
-probe_error_record <- function(url, final_url, status_code, content_type,
-                               detected_type, message) {
+probe_error_record <- function(
+  url,
+  final_url,
+  status_code,
+  content_type,
+  detected_type,
+  message
+) {
   cls <- probe_empty_classification(FALSE, NA_character_)
   cls$detected_type <- detected_type
   cls$problems <- probe_problem(final_url, message, category = "fetch")
@@ -286,7 +293,11 @@ probe_error_record <- function(url, final_url, status_code, content_type,
 probe_fetch_error <- function(url, cnd) {
   final_url <- if (!is.null(cnd$url)) cnd$url else url
   probe_error_record(
-    url, final_url, NA_integer_, NA_character_, "fetch_error",
+    url,
+    final_url,
+    NA_integer_,
+    NA_character_,
+    "fetch_error",
     sprintf("fetch failed: %s", conditionMessage(cnd))
   )
 }
@@ -305,7 +316,11 @@ probe_from_record <- function(url, rec) {
       "fetch_error"
     }
     return(probe_error_record(
-      url, final_url, as.integer(status), content_type, detected_type,
+      url,
+      final_url,
+      as.integer(status),
+      content_type,
+      detected_type,
       sprintf("HTTP %s while fetching %s", status, final_url)
     ))
   }

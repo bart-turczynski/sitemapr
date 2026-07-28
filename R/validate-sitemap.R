@@ -806,7 +806,10 @@ validate_sitemap_source <- function(
   } else if (identical(src$format, "html")) {
     list(validate_classification(source_meta(html_masquerade = TRUE), src$base))
   } else if (identical(src$format, "text")) {
-    text <- rawToChar(src$bytes)
+    # Decode via the parser's own helper, not a bare `rawToChar()`: it strips a
+    # leading UTF-8 BOM (which `trimws()` would not) so the first URL line is
+    # not reported with U+FEFF prepended, and it classes decode failures.
+    text <- text_as_string(src$bytes)
     append_robots_part(
       list(validate_text_protocol(text, src$base)),
       strsplit(text, "\r\n|\r|\n", perl = TRUE)[[1L]],

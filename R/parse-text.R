@@ -15,17 +15,75 @@
 #     `source_sitemap`) is NA / per-row NULL.
 #
 # Line endings: LF, CRLF, and lone-CR are all accepted as line separators.
+#
+# Byte-order marks: a leading UTF-8 BOM is stripped from the raw bytes before
+# decoding. U+FEFF is not POSIX whitespace, so `trimws()` would not remove it
+# and it would ride into the first `<loc>` as a leading character, silently
+# corrupting that URL. A UTF-16/UTF-32 BOM is rejected outright rather than
+# decoded: the format is defined as UTF-8, and the NUL bytes such a document
+# carries would otherwise surface as a bare `rawToChar()` error.
+
+# Byte-order marks recognised on the raw bytes, longest-first so UTF-32LE is
+# tested before its UTF-16LE prefix. Only the UTF-8 mark is strippable; the
+# rest name an encoding the text format does not permit.
+text_boms <- list(
+  list(bytes = as.raw(c(0x00, 0x00, 0xFE, 0xFF)), encoding = "UTF-32BE"),
+  list(bytes = as.raw(c(0xFF, 0xFE, 0x00, 0x00)), encoding = "UTF-32LE"),
+  list(bytes = as.raw(c(0xEF, 0xBB, 0xBF)), encoding = "UTF-8"),
+  list(bytes = as.raw(c(0xFE, 0xFF)), encoding = "UTF-16BE"),
+  list(bytes = as.raw(c(0xFF, 0xFE)), encoding = "UTF-16LE")
+)
+
+# The BOM leading `bytes`, or NULL when none is present.
+text_detect_bom <- function(bytes) {
+  for (bom in text_boms) {
+    n <- length(bom$bytes)
+    if (length(bytes) >= n && all(bytes[seq_len(n)] == bom$bytes)) {
+      return(bom)
+    }
+  }
+  NULL
+}
 
 # Coerce already-fetched bytes or text to a single UTF-8 character string.
-# Raw input is decoded as UTF-8 (the format's declared encoding); a character
-# vector is collapsed with newlines so multi-element inputs split as lines.
+# Raw input is decoded as UTF-8 (the format's declared encoding) after any
+# leading UTF-8 BOM is stripped; a character vector is collapsed with newlines
+# so multi-element inputs split as lines. A non-UTF-8 BOM, or bytes that are
+# not decodable as a string at all, raise `sitemapr_text_parse_error`.
 text_as_string <- function(x) {
-  if (is.raw(x)) {
-    s <- rawToChar(x)
-    Encoding(s) <- "UTF-8"
-    return(s)
+  if (!is.raw(x)) {
+    return(paste(as.character(x), collapse = "\n"))
   }
-  paste(as.character(x), collapse = "\n")
+
+  bom <- text_detect_bom(x)
+  if (!is.null(bom)) {
+    if (!identical(bom$encoding, "UTF-8")) {
+      rlang::abort(
+        sprintf(
+          paste0(
+            "The text sitemap begins with a %s byte-order mark; the text ",
+            "format is defined as UTF-8."
+          ),
+          bom$encoding
+        ),
+        class = "sitemapr_text_parse_error"
+      )
+    }
+    x <- x[-seq_along(bom$bytes)]
+  }
+
+  s <- tryCatch(
+    rawToChar(x),
+    error = function(cnd) {
+      rlang::abort(
+        "The text sitemap could not be decoded as UTF-8 text.",
+        class = "sitemapr_text_parse_error",
+        parent = cnd
+      )
+    }
+  )
+  Encoding(s) <- "UTF-8"
+  s
 }
 
 #' Parse a text sitemap document into rows

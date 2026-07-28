@@ -24,7 +24,7 @@ text/long-urls.txt	PROTOCOL_TEXT_URL_TOO_LONG
 text/mac-line-endings.txt	<none>
 text/mixed-schemes-and-query.txt	<none>
 text/trailing-whitespace.txt	<none>
-text/utf8-bom.txt	PROTOCOL_URL_NOT_ABSOLUTE
+text/utf8-bom.txt	<none>
 text/valid.txt	<none>
 text/windows-line-endings.txt	<none>
 xml/bad-namespace.xml	SCHEMA_UNKNOWN_NAMESPACE

@@ -71,6 +71,49 @@ test_that("raw UTF-8 bytes are decoded and parsed", {
   )
 })
 
+test_that("a leading UTF-8 BOM is stripped from the first URL", {
+  bytes <- c(
+    as.raw(c(0xEF, 0xBB, 0xBF)),
+    charToRaw("https://a/\nhttps://b/")
+  )
+  rows <- parse_sitemap_text(bytes)
+  expect_identical(rows$loc, c("https://a/", "https://b/"))
+  # U+FEFF survives trimws(), so guard the leading codepoint directly.
+  expect_false(utf8ToInt(substr(rows$loc[[1L]], 1L, 1L)) == 65279L)
+})
+
+test_that("a BOM-only document yields the zero-row schema", {
+  expect_identical(nrow(parse_sitemap_text(as.raw(c(0xEF, 0xBB, 0xBF)))), 0L)
+})
+
+test_that("a non-UTF-8 byte-order mark is rejected", {
+  expect_error(
+    parse_sitemap_text(as.raw(c(0xFF, 0xFE, 0x68, 0x00, 0x74, 0x00))),
+    class = "sitemapr_text_parse_error"
+  )
+  expect_error(
+    parse_sitemap_text(as.raw(c(0xFE, 0xFF, 0x00, 0x68))),
+    class = "sitemapr_text_parse_error"
+  )
+  expect_error(
+    parse_sitemap_text(as.raw(c(0x00, 0x00, 0xFE, 0xFF, 0x00))),
+    class = "sitemapr_text_parse_error"
+  )
+  expect_error(
+    parse_sitemap_text(as.raw(c(0xFF, 0xFE, 0x00, 0x00, 0x68))),
+    class = "sitemapr_text_parse_error"
+  )
+})
+
+test_that("undecodable bytes raise a classed condition, not a bare error", {
+  # An embedded NUL makes rawToChar() fail; the module contract is that every
+  # failure is classed (architecture.md section 3).
+  expect_error(
+    parse_sitemap_text(c(charToRaw("https://a/"), as.raw(0L), charToRaw("b"))),
+    class = "sitemapr_text_parse_error"
+  )
+})
+
 test_that("source_sitemap provenance is written to every row", {
   rows <- parse_sitemap_text(
     "https://a/\nhttps://b/",

@@ -393,8 +393,11 @@ audit_findings_document <- function(artifact) {
     )))
   }
   if (identical(fmt, "text")) {
+    # `text_as_string()` rather than a bare `rawToChar()` so the BOM strip and
+    # classed decode failures match the validate path (R/validate-sitemap.R);
+    # the two are cross-checked for equality in test-audit-pipeline.R.
     return(list(validate_text_protocol(
-      rawToChar(artifact$bytes),
+      text_as_string(artifact$bytes),
       artifact$base
     )))
   }

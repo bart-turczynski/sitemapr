@@ -75,6 +75,23 @@ test_that("a long text-sitemap line yields PROTOCOL_TEXT_URL_TOO_LONG", {
   expect_true("PROTOCOL_TEXT_URL_TOO_LONG" %in% out$code)
 })
 
+test_that("a UTF-8 BOM on a text sitemap yields no spurious findings", {
+  path <- withr::local_tempfile(fileext = ".txt")
+  writeBin(
+    c(
+      as.raw(c(0xEF, 0xBB, 0xBF)),
+      charToRaw("https://example.com/a\nhttps://example.com/b\n")
+    ),
+    path
+  )
+
+  out <- validate_sitemap(path)
+  # Before the BOM strip the first line read as U+FEFF + "https://…", which
+  # tripped PROTOCOL_URL_NOT_ABSOLUTE on an otherwise conformant document.
+  expect_false("PROTOCOL_URL_NOT_ABSOLUTE" %in% out$code)
+  expect_identical(nrow(out), 0L)
+})
+
 # Serve an index whose single child <loc> is fetched offline and its body
 # supplied by the test; returns the mock function.
 vs_feed_index_mock <- function(
