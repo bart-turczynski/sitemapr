@@ -668,8 +668,10 @@ validate_news_element <- function(n) {
 
 # Value-rule violations for one `<video:video>` element, as a character vector
 # of messages (empty = clean). Covers the bounded optionals (sitemap-spec.md
-# §5.3); required-child presence and the content_loc/player_loc one-of rule
-# are structural and left to the schema layer.
+# §5.3) plus the content_loc/player_loc one-of rule. Required-child presence is
+# structural and IS enforced by the schema layer; the one-of rule is NOT, and
+# cannot be — it is not expressible in XSD 1.0 (see the note in
+# inst/schemas/sitemap-video.xsd), which is why it lives here.
 # `<video:duration>` must be an integer within the protocol range.
 video_duration_msgs <- function(v) {
   dur <- ext_child_text(v, "duration")
@@ -769,8 +771,23 @@ video_relationship_msgs <- function(v) {
   msgs
 }
 
+# At least one of `<video:player_loc>` / `<video:content_loc>` must be present
+# (sitemap-spec.md §5.3). Each is individually optional in the XSD — the
+# alternation is not expressible in XSD 1.0 — so this is the only layer that
+# can catch a `<video:video>` carrying neither.
+video_one_of_loc_msgs <- function(v) {
+  if (ext_has_child(v, "player_loc") || ext_has_child(v, "content_loc")) {
+    return(character(0))
+  }
+  paste0(
+    "<video:video> has neither <video:player_loc> nor <video:content_loc>; ",
+    "at least one is required."
+  )
+}
+
 validate_video_element <- function(v, max_tags) {
   c(
+    video_one_of_loc_msgs(v),
     video_duration_msgs(v),
     video_rating_msgs(v),
     video_tag_count_msgs(v, max_tags),

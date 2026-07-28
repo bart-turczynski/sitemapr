@@ -1154,6 +1154,30 @@ test_that("a clean video produces no findings", {
   expect_length(ext_codes("video", list(mk_video())), 0L)
 })
 
+test_that("a video with neither player_loc nor content_loc is flagged", {
+  # Not expressible in XSD 1.0 (each is individually optional), so the protocol
+  # layer is the only place this can be caught.
+  v <- mk_video()
+  v <- v[names(v) != "content_loc"]
+  expect_identical(
+    ext_codes("video", list(v)),
+    "PROTOCOL_VIDEO_FIELD_INVALID"
+  )
+})
+
+test_that("either player_loc or content_loc alone satisfies the one-of rule", {
+  content_only <- mk_video()
+  expect_length(ext_codes("video", list(content_only)), 0L)
+
+  player_only <- mk_video()
+  player_only <- player_only[names(player_only) != "content_loc"]
+  player_only$player_loc <- leaf("https://e.com/player")
+  expect_length(ext_codes("video", list(player_only)), 0L)
+
+  both <- mk_video(player_loc = leaf("https://e.com/player"))
+  expect_length(ext_codes("video", list(both)), 0L)
+})
+
 test_that("an out-of-range or non-integer duration is flagged", {
   for (d in c("0", "40000", "40.5", "abc")) {
     cc <- ext_codes("video", list(mk_video(duration = leaf(d))))

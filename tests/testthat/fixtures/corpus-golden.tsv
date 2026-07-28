@@ -75,5 +75,6 @@ xml/valid-schema-bad-protocol.xml	PROTOCOL_CHANGEFREQ_INVALID PROTOCOL_LASTMOD_I
 xml/valid-video.xml	<none>
 xml/video-missing-description.xml	SCHEMA_INVALID
 xml/video-missing-required.xml	SCHEMA_INVALID
+xml/video-no-player-or-content-loc.xml	PROTOCOL_VIDEO_FIELD_INVALID
 xml/whitespace-heavy.xml	PROTOCOL_LASTMOD_DATE_ONLY
 xml/xsi-schemalocation.xml	<none>
