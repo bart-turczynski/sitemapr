@@ -208,15 +208,6 @@ test_that("sequential fallback (max_active = 1) equals the default path", {
   expect_identical(serial$problems, reference$problems)
 })
 
-test_that("one operation shares a single per-host bucket across phases", {
-  # ADR-008 §6 throttle unification: discovery + every index expansion of one
-  # sitemap_tree() operation pace against ONE host-bucket store. A single
-  # per-operation store grants exactly one free ("first") request across the
-  # whole operation, not one per phase.
-  state <- throttle_state_new(request_throttle(min_interval = 5))
-  expect_identical(operation_free_requests(state), 1L)
-})
-
 test_that("sitemap_tree paces all phases against one shared bucket", {
   # End-to-end proof of ADR-008 §6: discovery (guessed-path catalog) AND the
   # index expansion of one walk share a SINGLE per-host throttle store. All

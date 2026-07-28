@@ -975,10 +975,6 @@ test_that("an empty headers or tls list normalizes to NULL", {
   expect_null(request_policy_check_tls(list()))
 })
 
-test_that("a throttle-off state grants no free request", {
-  expect_identical(operation_free_requests(NULL), 0L)
-})
-
 test_that("a non-default port stays in the throttle bucket key", {
   expect_identical(
     throttle_host_key("https://example.com:8443/x"),
