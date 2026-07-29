@@ -1078,6 +1078,15 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-checks>summary{cursor:pointer;font-weight:600;font-size:.9rem;
   padding:6px 0;color:#16a34a;}
 .smr-checks>summary:hover{text-decoration:underline;}
+/* recommendations */
+.smr-rec{padding:.75rem 1rem;background:var(--card);
+  border:1px solid var(--border);border-left:3px solid var(--accent2);
+  border-radius:8px;margin-bottom:.75rem;}
+.smr-rec-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.smr-rec-title{font-weight:600;}
+.smr-rec-detail{margin:.4rem 0 .3rem;font-size:.9rem;}
+.smr-rec-src a{color:var(--link);}
+.smr-rec-src a+a::before{content:\", \";color:var(--muted);}
 .smr-ok-note{display:inline-block;padding:4px 12px;
   background:rgba(22,163,74,.12);
   color:#16a34a;border-radius:4px;font-weight:600;}
@@ -1194,6 +1203,7 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
     report_severity_dashboard(findings),
     report_findings_section(findings),
     report_checks_section(urls, sources, findings),
+    report_recommendations_section(urls, sources),
     report_url_table(urls),
     htmltools::tags$footer(
       class = "smr-footer",
@@ -1322,17 +1332,21 @@ report_return <- function(html, output) {
 #' `lastmod`/`priority`/`changefreq` presence), `lastmod` coverage cards with a
 #' by-month histogram, a collapsible URL folder tree grouped by path segment, a
 #' severity dashboard, the findings grouped by validation layer (deduplicated by
-#' code, with evidence excerpts), the checks that ran and passed, and a
-#' searchable, sortable, CSV-exportable URL table.
+#' code, with evidence excerpts), the checks that ran and passed, prescriptive
+#' recommendations, and a searchable, sortable, CSV-exportable URL table.
 #'
-#' One section reads the run rather than the findings. The **Checks** section is
+#' Two sections read the run rather than the findings. The **Checks** section is
 #' driven by the finding-code registry: it enumerates the checks this package
 #' actually implements, marks those that ran and did not fire as passed, and
 #' names the layers the run did not exercise as neither passed nor failed — so
 #' an empty findings table can be told apart from a validation that never ran.
 #' A layer counts as having run only on positive evidence, which understates
 #' rather than overstates: `check_robots = TRUE` leaves no trace when nothing is
-#' disallowed, so a clean robots run reads as "not exercised".
+#' disallowed, so a clean robots run reads as "not exercised". The
+#' **Recommendations** section is prescriptive rather than diagnostic — stale or
+#' absent `lastmod`, `priority`/`changefreq` that the major engines ignore, and
+#' the 50,000-URL / 50 MB / 50,000-child bounds as they are approached — each
+#' carrying its source and one provenance tag.
 #'
 #' The output is entirely self-contained: all CSS, JavaScript (search, sort,
 #' CSV export, tree toggle, and a light/dark theme toggle), and data are
