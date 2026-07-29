@@ -388,7 +388,11 @@ audit_findings_projection <- function(artifact, mode) {
   if (identical(artifact$kind, "document")) {
     parts[[length(parts) + 1L]] <- encoding_findings(
       artifact$bytes,
-      artifact$root_meta$charset[[1L]],
+      charset_for_document(
+        artifact$root_meta$charset[[1L]],
+        artifact$root_meta$content_type[[1L]],
+        identical(artifact$raw_fmt, "gzip")
+      ),
       artifact$base
     )
   }

@@ -60,7 +60,8 @@ validation_source_bytes <- function(
     return(list(
       bytes = readBin(target, what = "raw", n = file.info(target)$size),
       final_url = NA_character_,
-      charset = NA_character_
+      charset = NA_character_,
+      content_type = NA_character_
     ))
   }
 
@@ -85,7 +86,8 @@ validation_source_bytes <- function(
   list(
     bytes = attr(rec, "body"),
     final_url = rec$final_url,
-    charset = rec$charset[[1L]]
+    charset = rec$charset[[1L]],
+    content_type = rec$content_type[[1L]]
   )
 }
 
@@ -152,12 +154,22 @@ resolve_validation_source <- function(x, user_agent, limits, policy) {
     return(validation_archive_source(target$target, bytes, final_url, base))
   }
 
-  if (identical(fmt, "gzip")) {
+  was_gzip <- identical(fmt, "gzip")
+  if (was_gzip) {
     bytes <- gzip_decompress(bytes)
     fmt <- sniff_format(bytes)
   }
 
-  validation_document_source(bytes, fmt, final_url, base, source$charset)
+  # Decided here, where both the compression fact and the declared Content-Type
+  # are in hand, so the downstream encoding producer sees one already-resolved
+  # charset rather than re-deriving the rule.
+  validation_document_source(
+    bytes,
+    fmt,
+    final_url,
+    base,
+    charset_for_document(source$charset, source$content_type, was_gzip)
+  )
 }
 
 archive_gzip_error_part <- function(cnd, src) {

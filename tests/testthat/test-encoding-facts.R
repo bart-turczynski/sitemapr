@@ -246,3 +246,137 @@ test_that("a source with no document bytes emits no encoding finding", {
   out <- suppressWarnings(validate_sitemap(bad_gzip))
   expect_identical(out$code, "UNSUPPORTED_MALFORMED_GZIP")
 })
+
+# ---- charset_for_document() -------------------------------------------------
+#
+# A `charset` on a compressed body describes whatever the Content-Type says the
+# body is. On a binary container it says nothing about the document inside, so
+# comparing it to the inner XML declaration invented an ENCODING_CONFLICT
+# (SITE-ppojfsed). Mirrors the sibling's charsetForDecompressedBody().
+
+test_that("an uncompressed body always keeps its HTTP charset", {
+  # The document bytes ARE the response bytes, so the charset describes them
+  # whatever the media type is called.
+  expect_identical(
+    charset_for_document("iso-8859-1", "application/octet-stream", FALSE),
+    "iso-8859-1"
+  )
+  expect_identical(
+    charset_for_document("utf-8", "text/xml", FALSE),
+    "utf-8"
+  )
+})
+
+test_that("a compressed body drops a charset on a binary container", {
+  for (ct in binary_container_types) {
+    expect_identical(
+      charset_for_document("iso-8859-1", ct, TRUE),
+      NA_character_
+    )
+  }
+  # Case and surrounding space are not significant in a media type.
+  expect_identical(
+    charset_for_document("iso-8859-1", "  APPLICATION/GZIP  ", TRUE),
+    NA_character_
+  )
+})
+
+test_that("a compressed body keeps a charset on an XML or text type", {
+  expect_identical(
+    charset_for_document("iso-8859-1", "text/xml", TRUE),
+    "iso-8859-1"
+  )
+  expect_identical(
+    charset_for_document("iso-8859-1", "application/xml", TRUE),
+    "iso-8859-1"
+  )
+})
+
+test_that("a compressed body with no Content-Type drops the charset", {
+  # An absent type asserts nothing about what the bytes are.
+  expect_identical(
+    charset_for_document("iso-8859-1", NA_character_, TRUE),
+    NA_character_
+  )
+})
+
+test_that("an absent charset stays absent whatever the type", {
+  expect_identical(
+    charset_for_document(NA_character_, "text/xml", TRUE),
+    NA_character_
+  )
+  expect_identical(
+    charset_for_document(NA_character_, "application/gzip", FALSE),
+    NA_character_
+  )
+})
+
+# ---- the gzip charset false positive, end to end ----------------------------
+
+# Serve `body` gzipped, with the given Content-Type (NA serves none).
+enc_gzip_mock <- function(body, content_type) {
+  path <- withr::local_tempfile(fileext = ".gz", .local_envir = parent.frame())
+  con <- gzfile(path, "wb")
+  writeBin(charToRaw(body), con)
+  close(con)
+  gz <- readBin(path, "raw", file.info(path)$size)
+  function(req) {
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = if (is.na(content_type)) {
+        list()
+      } else {
+        list("Content-Type" = content_type)
+      },
+      body = gz
+    )
+  }
+}
+
+enc_validate_gzip <- function(body, content_type) {
+  suppressWarnings(httr2::with_mocked_responses(
+    enc_gzip_mock(body, content_type),
+    validate_sitemap("https://example.com/sitemap.xml.gz")
+  ))
+}
+
+test_that("a gzip container charset invents no encoding conflict", {
+  # A UTF-8 sitemap, correctly declared, gzipped, served with a charset on the
+  # CONTAINER type. Before the fix this reported ENCODING_CONFLICT against a
+  # perfectly conformant document.
+  body <- enc_urlset("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+  out <- enc_validate_gzip(body, "application/gzip; charset=iso-8859-1")
+  expect_false("ENCODING_CONFLICT" %in% out$code)
+  expect_identical(nrow(out), 0L)
+
+  out <- enc_validate_gzip(body, "application/octet-stream; charset=iso-8859-1")
+  expect_identical(nrow(out), 0L)
+
+  out <- enc_validate_gzip(body, NA_character_)
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("a gzip served as XML still reports a real encoding conflict", {
+  # The narrowing must not silence the case where the charset IS a claim about
+  # the sitemap — that would trade a false positive for a false negative.
+  body <- enc_urlset("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>")
+  out <- enc_validate_gzip(body, "text/xml; charset=UTF-8")
+  expect_true("ENCODING_CONFLICT" %in% out$code)
+
+  out <- enc_validate_gzip(body, "application/xml; charset=UTF-8")
+  expect_true("ENCODING_CONFLICT" %in% out$code)
+})
+
+test_that("audit and validate agree on a gzipped source's charset", {
+  # The rule lives in one shared helper, but the two projections call it from
+  # different call sites — this is the net for the second one.
+  body <- enc_urlset("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+  ct <- "application/gzip; charset=iso-8859-1"
+  validated <- enc_validate_gzip(body, ct)
+  audited <- suppressWarnings(httr2::with_mocked_responses(
+    enc_gzip_mock(body, ct),
+    audit_findings(audit_sitemap("https://example.com/sitemap.xml.gz"))
+  ))
+  expect_identical(audited$code, validated$code)
+})

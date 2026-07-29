@@ -106,10 +106,61 @@ content_type_charset <- function(header) {
   sub(pattern, "\\1", m, perl = TRUE, ignore.case = TRUE)
 }
 
+# Media types that name a compressed *container*. A `charset` parameter on one
+# of these describes the container's bytes — which are binary — and asserts
+# nothing about the encoding of the document inside it.
+binary_container_types <- c(
+  "application/gzip",
+  "application/x-gzip",
+  "application/gzip-compressed",
+  "application/gzipped",
+  "application/x-gunzip",
+  "application/octet-stream",
+  "application/x-tar",
+  "application/tar",
+  "application/x-compressed",
+  "application/x-compressed-tar",
+  "binary/octet-stream"
+)
+
+# Decide whether the response's HTTP charset describes the DOCUMENT whose bytes
+# the encoding facts are read from, and so may be compared against that
+# document's own BOM and XML declaration.
+#
+# When the body was not compressed the document bytes ARE the response bytes, so
+# the charset always describes them. When the body was gzip, what the charset
+# describes depends on what the server said the body was:
+#
+#   application/gzip; charset=…  the charset labels a binary container and is
+#     meaningless — comparing it to the inner XML declaration emits a false
+#     ENCODING_CONFLICT, so it is dropped.
+#   text/xml; charset=…          the server is labelling the payload as XML
+#     text, so the charset is a real claim about the sitemap and a mismatch
+#     with the declaration is a real conflict worth reporting.
+#
+# An absent Content-Type on a compressed body says nothing either, so it drops
+# too. Mirrors the sibling's `charsetForDecompressedBody()` (sitemap-validator
+# e90ccdf) rule for rule, closing a cross-port divergence recorded on
+# SMV-dhrpsgvo — sitemapr used to compare unconditionally.
+charset_for_document <- function(charset, content_type, was_gzip) {
+  if (!isTRUE(was_gzip) || is.na(charset)) {
+    return(charset)
+  }
+  if (is.na(content_type)) {
+    return(NA_character_)
+  }
+  if (tolower(trimws(content_type)) %in% binary_container_types) {
+    return(NA_character_)
+  }
+  charset
+}
+
 # The classification-layer encoding findings for one source: the three facts,
 # bundled into a `source_meta()` and handed to the D.6 producer. `bytes` are the
 # DECOMPRESSED source bytes (a gzip's BOM and declaration live in the inflated
-# stream); `http_charset` is NA for a local file, which has no response.
+# stream); `http_charset` is NA for a local file, which has no response, and for
+# a compressed body whose Content-Type named a binary container (see
+# `charset_for_document()`).
 encoding_findings <- function(bytes, http_charset, base) {
   validate_encoding(
     source_meta(
