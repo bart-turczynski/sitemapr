@@ -700,6 +700,88 @@ test_that("a malformed lastmod produces PROTOCOL_LASTMOD_INVALID", {
   expect_identical(lm$subject_ref, paste0(base, "#entry:2"))
 })
 
+# ---- index-entry lastmod (sitemap-spec 12.7) ---------------------------------
+
+index_children <- function(loc, lastmod) {
+  tibble::tibble(loc = loc, lastmod = lastmod)
+}
+
+test_that("an invalid index-entry lastmod produces LASTMOD_INVALID", {
+  out <- validate_index_lastmod(
+    index_children(
+      c("https://example.com/a.xml", "https://example.com/b.xml"),
+      c("2004-12-23T18:00:15+00:00", "not-a-date")
+    ),
+    base
+  )
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "PROTOCOL_LASTMOD_INVALID")
+  expect_identical(out$severity, "error")
+  expect_identical(out$layer, "protocol")
+  # Named by child, not by ordinal: the ref says WHICH sitemap is wrong.
+  expect_identical(
+    out$subject_ref,
+    paste0(base, "#index-child:https://example.com/b.xml")
+  )
+  expect_identical(out$evidence[[1L]]$excerpt, "not-a-date")
+})
+
+test_that("a date-only index-entry lastmod is strict-only info", {
+  out <- validate_index_lastmod(
+    index_children("https://example.com/a.xml", "2004-12-23"),
+    base
+  )
+  expect_identical(out$code, "PROTOCOL_LASTMOD_DATE_ONLY")
+  expect_identical(out$severity, "info")
+  expect_true(out$is_strict_only)
+})
+
+test_that("index-entry lastmod messaging names the child sitemap file", {
+  out <- validate_index_lastmod(
+    index_children("https://example.com/a.xml", "not-a-date"),
+    base
+  )
+  # Spec 12.7: an index <lastmod> dates the child FILE, not a page in it, so
+  # the page-level wording must not be reused verbatim.
+  expect_match(out$message, "^Child sitemap <lastmod>")
+})
+
+test_that("absent and valid index-entry lastmods produce nothing", {
+  out <- validate_index_lastmod(
+    index_children(
+      c("https://example.com/a.xml", "https://example.com/b.xml"),
+      c(NA_character_, "2004-12-23T18:00:15+00:00")
+    ),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+  expect_named(out, names(empty_protocol_findings()))
+})
+
+test_that("an index with no children produces nothing", {
+  out <- validate_index_lastmod(
+    index_children(character(0), character(0)),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("index and urlset agree on the same lastmod values", {
+  vals <- c("not-a-date", "2004-12-23", "2004-12-23T18:00:15+00:00")
+  n <- seq_along(vals)
+  idx <- validate_index_lastmod(
+    index_children(sprintf("https://example.com/%d.xml", n), vals),
+    base
+  )
+  url <- validate_protocol(
+    rows_with_lastmod(sprintf("https://example.com/%d", seq_along(vals)), vals),
+    sitemap_url = sm_url
+  )
+  url <- url[grepl("^PROTOCOL_LASTMOD_(INVALID|DATE_ONLY)$", url$code), ]
+  expect_setequal(idx$code, url$code)
+  expect_setequal(idx$severity, url$severity)
+})
+
 test_that("a datetime lastmod without a timezone is invalid", {
   out <- validate_protocol(
     rows_with_lastmod("https://example.com/a", "2004-12-23T18:00:15"),

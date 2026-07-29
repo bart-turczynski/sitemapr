@@ -176,12 +176,24 @@ test_that("a sitemapindex yields child loc/lastmod and empty rows", {
   expect_identical(res$kind, "sitemapindex")
   expect_identical(nrow(res$rows), 0L)
   expect_identical(res$children$loc, c("https://a/s1.xml", "https://a/s2.xml"))
-  expect_s3_class(res$children$lastmod, "POSIXct")
-  expect_identical(
-    res$children$lastmod[[1L]],
-    as.POSIXct("2026-01-01 00:00:00", tz = "UTC")
-  )
+  # ADR-004 faithful rows: the RAW string, matching parse_urlset(). Coercing
+  # here would destroy the text the lastmod validators judge.
+  expect_type(res$children$lastmod, "character")
+  expect_identical(res$children$lastmod[[1L]], "2026-01-01")
   expect_true(is.na(res$children$lastmod[[2L]]))
+})
+
+test_that("an index carries an unparseable lastmod through verbatim", {
+  xml <- paste0(
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "<sitemap><loc>https://a/s1.xml</loc>",
+    "<lastmod> not-a-date </lastmod></sitemap>",
+    "<sitemap><loc>https://a/s2.xml</loc><lastmod></lastmod></sitemap>",
+    "</sitemapindex>"
+  )
+  children <- parse_sitemap_xml(xml)$children
+  expect_identical(children$lastmod[[1L]], "not-a-date")
+  expect_true(is.na(children$lastmod[[2L]]))
 })
 
 test_that("an unsupported root raises a classed condition", {

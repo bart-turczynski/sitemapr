@@ -473,14 +473,20 @@ audit_validate_xml_parts <- function(artifact) {
   }
 
   # sitemapindex. A local index has no origin URL, so children are never
-  # fetched: only the schema part is produced (matching validate_index_parts()).
+  # fetched — but its own <lastmod> values are document-local and stay
+  # reportable either way (matching validate_index_parts()).
+  lastmod_part <- validate_index_lastmod(
+    parse_sitemapindex(xml2::xml_root(doc)),
+    artifact$base
+  )
   if (is.null(artifact$ex)) {
-    return(list(schema))
+    return(list(schema, lastmod_part))
   }
 
   ex <- artifact$ex
   parts <- list(
     schema,
+    lastmod_part,
     index_findings_from_problems(ex$problems, artifact$base)
   )
   feeds <- index_feed_children(ex$problems)

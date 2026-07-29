@@ -40,7 +40,7 @@ xml/image-duplicate-locs.xml	PROTOCOL_DUPLICATE_LOC
 xml/image-missing-loc.xml	SCHEMA_INVALID
 xml/index-empty.xml	SCHEMA_INVALID
 xml/index-invalid-child-urls.xml	SCHEMA_INVALID
-xml/index-mixed-valid-invalid.xml	SCHEMA_INVALID
+xml/index-mixed-valid-invalid.xml	PROTOCOL_LASTMOD_INVALID SCHEMA_INVALID
 xml/index-nested.xml	<none>
 xml/index-self-reference.xml	<none>
 xml/index-single-child.xml	<none>

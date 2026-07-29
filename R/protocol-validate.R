@@ -519,6 +519,79 @@ validate_field_values <- function(rows, base) {
   do.call(rbind, out)
 }
 
+# Index-entry `<lastmod>` rules (sitemap-spec §12.7). The SAME two codes the
+# urlset path emits — sitemap-validator's validateIndexFields() agrees, so the
+# cross-port contract needs no new code — but a distinct subject and distinct
+# wording: an index `<lastmod>` dates the CHILD SITEMAP FILE, not any page in
+# it, so the page-level phrasing must not be reused verbatim.
+#
+# Takes the `parse_sitemapindex()` child table (faithful raw `lastmod` since
+# ADR-004 was applied to the index path). Purely document-local — the values are
+# in the index itself — so this runs whether or not children are ever fetched.
+# Refs use the documented `#index-child:<url>` fragment (findings-contract.md),
+# which names the offending child rather than an ordinal.
+validate_index_lastmod <- function(children, base) {
+  lm <- children$lastmod
+  cls <- classify_lastmod(lm)
+  out <- list()
+
+  for (j in which(cls == "invalid")) {
+    out[[length(out) + 1L]] <- index_lastmod_finding(
+      "PROTOCOL_LASTMOD_INVALID",
+      "error",
+      base,
+      children$loc[[j]],
+      lm[[j]],
+      sprintf(
+        "Child sitemap <lastmod> '%s' is not a valid W3C Date-Time value.",
+        trimws(as.character(lm[[j]]))
+      )
+    )
+  }
+  for (j in which(cls == "date-only")) {
+    out[[length(out) + 1L]] <- index_lastmod_finding(
+      "PROTOCOL_LASTMOD_DATE_ONLY",
+      "info",
+      base,
+      children$loc[[j]],
+      lm[[j]],
+      sprintf(
+        "Child sitemap <lastmod> '%s' is date-only; including a time is %s",
+        trimws(as.character(lm[[j]])),
+        "recommended."
+      ),
+      is_strict_only = TRUE
+    )
+  }
+
+  if (length(out) == 0L) {
+    return(empty_protocol_findings())
+  }
+  do.call(rbind, out)
+}
+
+# One index-child lastmod finding row. `subject_type` stays "entry" (the
+# registry's declared subject for these codes); the ref carries which child.
+index_lastmod_finding <- function(
+  code,
+  severity,
+  base,
+  loc,
+  raw,
+  message,
+  is_strict_only = FALSE
+) {
+  protocol_findings(
+    code = code,
+    severity = severity,
+    subject_type = "entry",
+    subject_ref = protocol_ref_fragment(base, paste0("#index-child:", loc)),
+    message = message,
+    evidence = list(finding_evidence(excerpt = as.character(raw))),
+    is_strict_only = is_strict_only
+  )
+}
+
 # Corpus-level lastmod-honesty heuristics (sitemap-spec.md §4.1). These scan
 # ALL dated entries of one sitemap, so they are document-level, not per-entry.
 # `fetched_at` is the sitemap's fetch/generation time (NA skips the

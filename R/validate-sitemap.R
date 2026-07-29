@@ -465,12 +465,16 @@ validate_index_parts <- function(
   policy,
   ruleset = NULL
 ) {
-  parts <- list(schema)
+  children <- parse_sitemapindex(xml2::xml_root(doc))
+
+  # Index-entry <lastmod> is document-local, so it is judged before the
+  # expansion gate below: a local index has no origin to fetch children from,
+  # but its own <lastmod> values are right here and stay reportable.
+  parts <- list(schema, validate_index_lastmod(children, src$base))
   if (is.na(src$final_url)) {
     return(parts)
   }
 
-  children <- parse_sitemapindex(xml2::xml_root(doc))
   ex <- expand_index(
     src$final_url,
     children,

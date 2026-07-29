@@ -443,6 +443,39 @@ test_that("an over-budget URL total yields INDEX_TOTAL_URLS_EXCEEDED", {
   expect_true(all(row$severity == "error"))
 })
 
+test_that("a LOCAL index still reports its own bad lastmod values", {
+  # A local index has no origin to fetch children from, so validate_index_parts
+  # returns early. Index <lastmod> is document-local, so it must be judged
+  # BEFORE that gate — this pins the ordering, not just the rule.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeLines(
+    paste0(
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      "<sitemap><loc>https://example.com/a.xml</loc>",
+      "<lastmod>not-a-date</lastmod></sitemap>",
+      "<sitemap><loc>https://example.com/b.xml</loc>",
+      "<lastmod>2024-01-15</lastmod></sitemap>",
+      "<sitemap><loc>https://example.com/c.xml</loc>",
+      "<lastmod>2024-12-23T18:00:15+00:00</lastmod></sitemap>",
+      "</sitemapindex>"
+    ),
+    path
+  )
+  out <- validate_sitemap(path)
+
+  bad <- out[out$code == "PROTOCOL_LASTMOD_INVALID", ]
+  expect_identical(nrow(bad), 1L)
+  expect_match(bad$subject_ref, "#index-child:https://example\\.com/a\\.xml$")
+
+  dateonly <- out[out$code == "PROTOCOL_LASTMOD_DATE_ONLY", ]
+  expect_identical(nrow(dateonly), 1L)
+  expect_match(
+    dateonly$subject_ref,
+    "#index-child:https://example\\.com/b\\.xml$"
+  )
+})
+
 # --- Internal helper guards (empty/NULL inputs) ----------------------------
 # These map/feed helpers are only reached with non-empty inputs by the public
 # entry point, but each documents an empty-input contract (a zero-row tibble /

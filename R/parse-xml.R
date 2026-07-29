@@ -185,14 +185,21 @@ parse_urlset <- function(root, source_sitemap) {
 
 # Parse a `sitemapindex` root into a tibble of child sitemaps (loc + lastmod),
 # the input the index-expansion slice consumes.
+#
+# `lastmod` is the RAW string, exactly as `parse_urlset()` carries it (ADR-004
+# faithful rows): coercing here would destroy the original text before any
+# validator could judge it, which is precisely what made an invalid index-entry
+# `<lastmod>` unreportable. Callers wanting a `POSIXct` coerce late, the same
+# way `project_typed_rows()` does for URL rows.
 parse_sitemapindex <- function(root) {
   sm_nodes <- xml2::xml_find_all(root, xpath_child_local("sitemap"))
   loc <- trimws(xml2::xml_text(
     xml2::xml_find_first(sm_nodes, xpath_child_local("loc"))
   ))
-  lastmod <- parse_lastmod(xml2::xml_text(
+  lastmod <- trimws(xml2::xml_text(
     xml2::xml_find_first(sm_nodes, xpath_child_local("lastmod"))
   ))
+  lastmod[!is.na(lastmod) & !nzchar(lastmod)] <- NA_character_
   tibble::tibble(loc = loc, lastmod = lastmod)
 }
 
