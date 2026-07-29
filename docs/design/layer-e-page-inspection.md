@@ -549,7 +549,14 @@ canonicals (across or within channels), relative URLs (resolve against response
 base / `<base>`), fragments, the final redirect URL, malformed HTML, and non-HTML
 responses. Findings: `PAGE_CANONICAL_MISMATCH` (page canonicalizes to a *different*
 URL than the advertised `loc`), `PAGE_CANONICAL_MISSING` (info; softened by the
-§1 unrendered-snapshot caveat — a JS-injected canonical would be invisible here).
+§1 unrendered-snapshot caveat — a JS-injected canonical would be invisible here),
+`PAGE_CANONICAL_RELATIVE` (info; the declaration was a relative reference — an
+interpretation of the §4 `relative` fact, not a new signal, and independent of the
+consistency verdict, so a page whose relative canonical resolves to the advertised
+`loc` still carries it). Ported from the sibling TypeScript implementation, which
+minted the code; Google resolves relative canonicals but
+[recommends against them](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls),
+the failure mode being a crawled staging copy canonicalizing to itself.
 
 **Soften the assertion:** the sitemap does *not* "assert this URL is canonical."
 For Google, sitemap inclusion is an explicitly **weaker** canonicalization signal

@@ -138,11 +138,17 @@ test_that("the HTTP Link header canonical is honored (http_link channel)", {
 })
 
 test_that("a relative canonical resolves against the final URL", {
-  # Relative /b resolves to https://example.com/b -> mismatch with loc /a.
+  # Relative /b resolves to https://example.com/b -> mismatch with loc /a. The
+  # relative FORM is a second, independent finding (see the RELATIVE block
+  # below).
   art <- pc_art(canonical_link("/b"), final = "https://example.com/a")
   out <- page_canonical_findings(pc_run(art))
-  expect_identical(out$code, "PAGE_CANONICAL_MISMATCH")
-  expect_match(out$message, "https://example.com/b", fixed = TRUE)
+  expect_identical(
+    out$code,
+    c("PAGE_CANONICAL_MISMATCH", "PAGE_CANONICAL_RELATIVE")
+  )
+  mismatch <- out[out$code == "PAGE_CANONICAL_MISMATCH", ]
+  expect_match(mismatch$message, "https://example.com/b", fixed = TRUE)
 })
 
 test_that("a <base href> overrides the base for a relative canonical", {
@@ -153,7 +159,85 @@ test_that("a <base href> overrides the base for a relative canonical", {
   art <- pc_art(body, final = "https://example.com/a")
   out <- page_canonical_findings(pc_run(art))
   # Resolves against the <base>, not the final URL: /sub/page.
-  expect_match(out$message, "https://example.com/sub/page", fixed = TRUE)
+  mismatch <- out[out$code == "PAGE_CANONICAL_MISMATCH", ]
+  expect_match(mismatch$message, "https://example.com/sub/page", fixed = TRUE)
+})
+
+# ---- §4 relative / fragment facts + PAGE_CANONICAL_RELATIVE ------------------
+
+test_that("every fact records the §4 relative and fragment fields", {
+  ex <- page_canonical_extract(pc_art(canonical_link("/b#main")))
+  expect_named(
+    ex$facts[[1L]],
+    c("channel", "raw", "relative", "fragment", "resolved")
+  )
+  expect_true(ex$facts[[1L]]$relative)
+  expect_identical(ex$facts[[1L]]$fragment, "main")
+})
+
+test_that("an absolute canonical with a fragment is not relative", {
+  # ADR-005 drops the fragment from the comparison key, so /a#main IS the loc.
+  art <- pc_art(canonical_link("https://example.com/a#main"))
+  ex <- page_canonical_extract(art)
+  expect_false(ex$facts[[1L]]$relative)
+  expect_identical(ex$facts[[1L]]$fragment, "main")
+  expect_identical(nrow(page_canonical_findings(pc_run(art))), 0L)
+})
+
+test_that("no fragment is recorded as NA, and a bare # as empty", {
+  plain <- page_canonical_extract(
+    pc_art(canonical_link("https://example.com/a"))
+  )
+  expect_identical(plain$facts[[1L]]$fragment, NA_character_)
+  bare <- page_canonical_extract(
+    pc_art(canonical_link("https://example.com/a#"))
+  )
+  expect_identical(bare$facts[[1L]]$fragment, "")
+})
+
+test_that("a relative canonical agreeing with the loc still reports the form", {
+  # The independence case: /a resolves to exactly the advertised loc, so there
+  # is no mismatch — the relative FORM is still what this code reports.
+  art <- pc_art(canonical_link("/a"), final = "https://example.com/a")
+  out <- page_canonical_findings(pc_run(art))
+  expect_identical(out$code, "PAGE_CANONICAL_RELATIVE")
+  expect_identical(out$severity, "info")
+  expect_match(out$message, "relative reference: /a", fixed = TRUE)
+})
+
+test_that("protocol-relative and scheme-less canonicals count as relative", {
+  # Both carry no scheme. The scheme-less form is the one rurl would resolve by
+  # INFERRING http:, which is why relativeness is a lexical test.
+  for (href in c("//example.com/a", "example.com/a")) {
+    ex <- page_canonical_extract(pc_art(canonical_link(href)))
+    expect_true(ex$facts[[1L]]$relative, info = href)
+  }
+})
+
+test_that("a leading token that is a scheme by the grammar is not relative", {
+  # RFC 3986 §3.1 reads `example.com:` as a scheme, ambiguous as that looks —
+  # and so does the sibling port's new URL(). Pinned so the two cannot drift.
+  ex <- page_canonical_extract(pc_art(canonical_link("example.com:8080/a")))
+  expect_false(ex$facts[[1L]]$relative)
+})
+
+test_that("a relative canonical in the Link header is reported too", {
+  # RFC 8288 permits a relative URI-Reference in a link-value.
+  art <- pc_art(
+    "<html><head></head></html>",
+    headers = list(
+      "Content-Type" = "text/html",
+      "Link" = "</a>; rel=\"canonical\""
+    )
+  )
+  out <- page_canonical_findings(pc_run(art))
+  expect_identical(out$code, "PAGE_CANONICAL_RELATIVE")
+})
+
+test_that("an absent canonical yields no relative finding", {
+  # The status gate: only `observed` can carry a form diagnostic. MISSING alone.
+  out <- page_canonical_findings(pc_run(pc_art("<html><head></head></html>")))
+  expect_identical(out$code, "PAGE_CANONICAL_MISSING")
 })
 
 # ---- registry conformance ----------------------------------------------------
@@ -165,7 +249,8 @@ test_that("emitted canonical severities conform to the registry", {
   # page_canonical_severity() fails a CRAN-safe unit test too.
   expected <- c(
     PAGE_CANONICAL_MISMATCH = "warning",
-    PAGE_CANONICAL_MISSING = "info"
+    PAGE_CANONICAL_MISSING = "info",
+    PAGE_CANONICAL_RELATIVE = "info"
   )
   for (code in names(expected)) {
     expect_identical(page_canonical_severity(code), unname(expected[[code]]))
