@@ -24,7 +24,11 @@
 # the XML rows path: `validate_text_protocol()` reads the RAW document text, not
 # the parsed rows, because the row tibble has already dropped blank lines and
 # line numbers (R/parse-text.R). It is a standalone producer parallel to
-# `validate_protocol()`; the Layer F assembler routes text sources to it.
+# `validate_protocol()`; the Layer F assembler routes text sources to it. The
+# two document-wide rules that do not depend on parsed markup — the URL-count
+# cap and byte-identical duplicate detection — are reported under the SAME
+# codes on both paths (`PROTOCOL_URL_COUNT_EXCEEDED`, `PROTOCOL_DUPLICATE_LOC`)
+# so the format never changes a finding's identity.
 #
 # The extension rules (D.4) read the `images`/`video`/`news` list-columns,
 # whose entries are `xml2::as_list()` conversions of the extension elements
@@ -162,6 +166,12 @@ has_invalid_escape <- function(loc) {
 # `%` is deliberately excluded (a malformed escape is the INVALID_ESCAPE code
 # and a well-formed `%XX` is conformant); `#` is excluded (the fragment lint).
 # Drives the `warning` tier of PROTOCOL_URL_NOT_ESCAPED (ADR-005 decision 2).
+# The control range deliberately starts at \x01, not \x00: a NUL can never
+# reach this predicate on either path, so widening it would be dead code. The
+# text path raises in `text_as_string()` (`rawToChar()` rejects an embedded
+# NUL) and libxml2 rejects a NUL at parse both as a raw byte and as `&#0;` —
+# it is not a legal XML character at all (XML 1.0 §2.2). Verified on
+# SITE-lcmvzpel; do not "fix" the boundary.
 has_uri_illegal_char <- function(loc) {
   grepl("[ \"<>\\\\^`{|}\x01-\x1f\x7f]", loc, perl = TRUE, useBytes = TRUE)
 }
@@ -304,9 +314,11 @@ classify_lastmod <- function(raw) {
 }
 
 # Document-level URL-count rule. More than `limit` URL entries is a non-fatal
-# protocol violation (reading continues; sitemap-spec.md §2 Axis 2).
-validate_url_count <- function(rows, base, limit) {
-  n <- nrow(rows)
+# protocol violation (reading continues; sitemap-spec.md §2 Axis 2). Takes the
+# entry COUNT rather than the rows so the text path can share it: there `n` is
+# the number of non-blank lines, which is exactly what `parse_sitemap_text()`
+# turns into rows.
+validate_url_count <- function(n, base, limit) {
   if (is.na(limit) || n <= limit) {
     return(empty_protocol_findings())
   }
@@ -1895,15 +1907,20 @@ protocol_text_finding <- function(
 #' is checked: a blank/whitespace-only line emits a strict-only
 #' `PROTOCOL_TEXT_BLANK_LINE` `info`; a non-absolute line emits
 #' `PROTOCOL_URL_NOT_ABSOLUTE`; an absolute line missing a host emits
-#' `PROTOCOL_URL_NO_HOST`; an over-long line emits `PROTOCOL_TEXT_URL_TOO_LONG`.
-#' Findings are scoped to their 1-based line via the `#line:<n>` subject_ref and
-#' carry a ≤ 200-char excerpt. Like the XML producer it does not assemble the
-#' final contract (no `mode`, filtering, dedup, or sort — those are Layer F).
+#' `PROTOCOL_URL_NO_HOST`; an over-long line emits `PROTOCOL_TEXT_URL_TOO_LONG`;
+#' an absolute line byte-identical to an earlier one emits
+#' `PROTOCOL_DUPLICATE_LOC`. Findings are scoped to their 1-based line via the
+#' `#line:<n>` subject_ref and carry a ≤ 200-char excerpt. The document-level
+#' `PROTOCOL_URL_COUNT_EXCEEDED` rule is shared with the XML path. Like the XML
+#' producer it does not assemble the final contract (no `mode`, filtering,
+#' dedup, or sort — those are Layer F).
 #'
 #' @param text The raw text-sitemap document: a character string/vector or raw
 #'   bytes (decoded as UTF-8), the same input `parse_sitemap_text()` accepts.
 #' @param subject_ref The document-level `sitemap://…` base for each finding's
 #'   `subject_ref`. `NA` yields fragment-only refs.
+#' @param limits Layer D limit thresholds; see `protocol_limits()`. Only
+#'   `max_url_count` applies to the text format.
 #' @return A protocol-findings tibble (zero rows when every line conforms).
 #' @keywords internal
 #' @noRd
@@ -1945,19 +1962,26 @@ text_not_absolute_findings <- function(url_idx, vals, kind, subject_ref) {
   out
 }
 
-# Host/length checks over the absolute http(s) text lines (`abs_k` indexes into
-# `vals`/`url_idx`).
-text_absolute_findings <- function(url_idx, abs_k, vals, subject_ref) {
-  out <- list()
-  if (length(abs_k) == 0L) {
-    return(out)
+# The host component of each absolute http(s) text line, `""` when absent.
+# Parsed once per document and shared by the host/length and duplicate checks
+# so a 50,000-line sitemap costs one `parse_url_adapter()` call, not two.
+text_absolute_hosts <- function(vals) {
+  if (length(vals) == 0L) {
+    return(character(0))
   }
-  parsed <- parse_url_adapter(vals[abs_k])
+  host <- as.character(parse_url_adapter(vals)$host)
+  host[is.na(host)] <- ""
+  host
+}
+
+# Host/length checks over the absolute http(s) text lines (`abs_k` indexes into
+# `vals`/`url_idx`; `hosts` is `text_absolute_hosts(vals[abs_k])`).
+text_absolute_findings <- function(url_idx, abs_k, vals, hosts, subject_ref) {
+  out <- list()
   for (m in seq_along(abs_k)) {
     i <- url_idx[abs_k[m]]
     l <- vals[abs_k[m]]
-    host <- as.character(parsed$host[m])
-    if (is.na(host) || !nzchar(host)) {
+    if (!nzchar(hosts[m])) {
       out[[length(out) + 1L]] <- protocol_text_finding(
         "PROTOCOL_URL_NO_HOST",
         "error",
@@ -1986,7 +2010,40 @@ text_absolute_findings <- function(url_idx, abs_k, vals, subject_ref) {
   out
 }
 
-validate_text_protocol <- function(text, subject_ref = NA_character_) {
+# Byte-identical repeat detection over the absolute, host-bearing text lines,
+# the text-format counterpart of `loc_duplicate_findings()`'s plain-duplicate
+# tier: same code, same `warning` severity, each repeat flagged against its own
+# line. Only that tier is ported — the canonical-equivalence tier
+# (`PROTOCOL_URL_EQUIVALENT`) has no text counterpart in the sibling port, so
+# adding one here would put the two ports' text goldens out of joint.
+text_duplicate_findings <- function(url_idx, abs_k, vals, hosts, subject_ref) {
+  out <- list()
+  first_seen <- new.env(parent = emptyenv())
+  for (m in which(nzchar(hosts))) {
+    i <- url_idx[abs_k[m]]
+    l <- vals[abs_k[m]]
+    prior <- first_seen[[l]]
+    if (is.null(prior)) {
+      assign(l, i, envir = first_seen)
+      next
+    }
+    out[[length(out) + 1L]] <- protocol_text_finding(
+      "PROTOCOL_DUPLICATE_LOC",
+      "warning",
+      subject_ref,
+      i,
+      l,
+      sprintf("Line %d: URL is byte-identical to line %d.", i, prior)
+    )
+  }
+  out
+}
+
+validate_text_protocol <- function(
+  text,
+  subject_ref = NA_character_,
+  limits = protocol_limits()
+) {
   s <- text_as_string(text)
   if (!nzchar(s)) {
     return(empty_protocol_findings())
@@ -2010,17 +2067,28 @@ validate_text_protocol <- function(text, subject_ref = NA_character_) {
   vals <- trimmed[url_idx]
   kind <- loc_absoluteness(vals)
   abs_k <- which(kind == "http(s)")
+  hosts <- text_absolute_hosts(vals[abs_k])
 
-  out <- c(
+  # The count rule is document-level, so it takes every URL line — including
+  # the malformed and repeated ones, matching the XML path where `nrow(rows)`
+  # counts entries rather than conformant entries.
+  parts <- c(
     out,
     text_not_absolute_findings(url_idx, vals, kind, subject_ref),
-    text_absolute_findings(url_idx, abs_k, vals, subject_ref)
+    text_absolute_findings(url_idx, abs_k, vals, hosts, subject_ref),
+    text_duplicate_findings(url_idx, abs_k, vals, hosts, subject_ref),
+    list(validate_url_count(
+      length(url_idx),
+      subject_ref,
+      limits$max_url_count
+    ))
   )
 
-  if (length(out) == 0L) {
+  parts <- parts[vapply(parts, nrow, integer(1)) > 0L]
+  if (length(parts) == 0L) {
     return(empty_protocol_findings())
   }
-  do.call(rbind, out)
+  do.call(rbind, parts)
 }
 
 #' Validate parsed sitemap rows against protocol/semantic rules (Layer D)
@@ -2085,7 +2153,7 @@ validate_protocol <- function(
       parts,
       list(
         validate_loc_urls(rows, sitemap_url, subject_ref, ruleset),
-        validate_url_count(rows, subject_ref, limits$max_url_count),
+        validate_url_count(nrow(rows), subject_ref, limits$max_url_count),
         validate_doc_size(
           byte_size,
           subject_ref,

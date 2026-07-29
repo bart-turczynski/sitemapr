@@ -1497,6 +1497,135 @@ test_that("text validation is deterministic across repeated calls", {
   expect_identical(call(), call())
 })
 
+# --- Text: duplicate lines (shares PROTOCOL_DUPLICATE_LOC) -----------------
+
+test_that("a repeated line is a warning PROTOCOL_DUPLICATE_LOC", {
+  out <- validate_text_protocol(
+    paste(
+      "https://example.com/a",
+      "https://example.com/b",
+      "https://example.com/a",
+      sep = "\n"
+    ),
+    base
+  )
+  expect_identical(out$code, "PROTOCOL_DUPLICATE_LOC")
+  expect_identical(out$severity, "warning")
+  expect_identical(out$subject_ref, paste0(base, "#line:3"))
+  expect_identical(out$message, "Line 3: URL is byte-identical to line 1.")
+})
+
+test_that("the duplicate finding names the first line, not the previous one", {
+  out <- validate_text_protocol(
+    strrep("https://example.com/a\n", 3L),
+    base
+  )
+  expect_identical(nrow(out), 2L)
+  expect_identical(
+    out$message,
+    c(
+      "Line 2: URL is byte-identical to line 1.",
+      "Line 3: URL is byte-identical to line 1."
+    )
+  )
+})
+
+test_that("blank lines do not shift the duplicate's line number", {
+  out <- validate_text_protocol(
+    "https://example.com/a\n\nhttps://example.com/a",
+    base
+  )
+  dup <- out[out$code == "PROTOCOL_DUPLICATE_LOC", ]
+  expect_identical(dup$evidence[[1]]$line, 3L)
+})
+
+test_that("lines differing only after trimming still count as duplicates", {
+  # The parser trims each line, so the trimmed form is what becomes a row.
+  out <- validate_text_protocol(
+    "  https://example.com/a\nhttps://example.com/a  ",
+    base
+  )
+  expect_identical(out$code, "PROTOCOL_DUPLICATE_LOC")
+})
+
+test_that("a case-only difference is not a byte-identical duplicate", {
+  # No PROTOCOL_URL_EQUIVALENT tier on the text path (see the producer's note),
+  # so a non-identical repeat is simply not reported.
+  out <- validate_text_protocol(
+    "https://example.com/a\nhttps://example.com/A",
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("repeated non-absolute lines are not duplicate findings", {
+  out <- validate_text_protocol("/rel\n/rel", base)
+  expect_identical(
+    out$code,
+    c("PROTOCOL_URL_NOT_ABSOLUTE", "PROTOCOL_URL_NOT_ABSOLUTE")
+  )
+})
+
+test_that("repeated host-less lines are not duplicate findings", {
+  out <- validate_text_protocol("http://\nhttp://", base)
+  expect_identical(
+    out$code,
+    c("PROTOCOL_URL_NO_HOST", "PROTOCOL_URL_NO_HOST")
+  )
+})
+
+# --- Text: URL count cap (shares PROTOCOL_URL_COUNT_EXCEEDED) --------------
+
+txt_urls <- function(n) {
+  paste(sprintf("https://example.com/p%d", seq_len(n)), collapse = "\n")
+}
+
+test_that("too many text URL lines produce PROTOCOL_URL_COUNT_EXCEEDED", {
+  out <- validate_text_protocol(
+    txt_urls(3L),
+    base,
+    limits = protocol_limits(max_url_count = 2L)
+  )
+  expect_identical(out$code, "PROTOCOL_URL_COUNT_EXCEEDED")
+  expect_identical(out$severity, "error")
+  expect_identical(out$subject_type, "document")
+  expect_identical(out$subject_ref, base)
+  expect_identical(
+    out$message,
+    "Sitemap has 3 URL entries; the protocol limit is 2."
+  )
+})
+
+test_that("a text URL count at the limit does not fire", {
+  out <- validate_text_protocol(
+    txt_urls(2L),
+    base,
+    limits = protocol_limits(max_url_count = 2L)
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("the count rule takes every URL line, blanks excluded", {
+  # Malformed and repeated lines still occupy an entry (they become rows), but
+  # blank lines do not.
+  text <- paste("/rel", "", "https://example.com/a", "/rel", sep = "\n")
+  out <- validate_text_protocol(
+    text,
+    base,
+    limits = protocol_limits(max_url_count = 2L)
+  )
+  cnt <- out[out$code == "PROTOCOL_URL_COUNT_EXCEEDED", ]
+  expect_identical(
+    cnt$message,
+    "Sitemap has 3 URL entries; the protocol limit is 2."
+  )
+})
+
+test_that("the text count rule defaults to the 50000 protocol limit", {
+  expect_identical(protocol_limits()$max_url_count, 50000L)
+  expect_identical(nrow(validate_text_protocol(txt_urls(3L), base)), 0L)
+})
+
 # --- D.6 classification diagnostics: unsupported input ---------------------
 
 test_that("an unsupported root yields a classification UNSUPPORTED_ROOT", {
