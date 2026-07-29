@@ -887,3 +887,61 @@ test_that("a source without alternates contributes one NULL per loc", {
   expect_length(sink$alt, 1L)
   expect_null(sink$alt[[1L]])
 })
+
+# ---- binary sources: the three entry points must agree (SITE-ctkdkuna) -------
+
+# A source whose tar-magic window holds a NUL followed by a non-NUL used to make
+# the SNIFFER raise a bare base R `embedded nul in string`, escaping through
+# validate_sitemap() and read_sitemap() while audit_sitemap() survived. The
+# shared corpus is byte-identical to the sibling port's fixtures/, so this is
+# locked in here rather than as a corpus fixture.
+nul_interleaved_file <- function() {
+  bytes <- raw(300L)
+  bytes[258:262] <- as.raw(c(0L, 97L, 0L, 97L, 0L))
+  path <- withr::local_tempfile(.local_envir = parent.frame())
+  writeBin(bytes, path)
+  path
+}
+
+plain_binary_file <- function() {
+  path <- withr::local_tempfile(.local_envir = parent.frame())
+  writeBin(raw(300L), path)
+  path
+}
+
+test_that("a NUL-interleaved source never raises a bare base R error", {
+  path <- nul_interleaved_file()
+  for (entry in list(validate_sitemap, read_sitemap)) {
+    cnd <- tryCatch(entry(path), error = function(e) e)
+    expect_s3_class(cnd, "condition")
+    expect_true(any(grepl("^sitemapr_", class(cnd))))
+  }
+})
+
+test_that("audit_sitemap() no longer disagrees with the other two", {
+  # It always survived; the point is that the other two now do too, and that
+  # all three treat the bytes as the binary they are.
+  expect_s3_class(audit_sitemap(nul_interleaved_file()), "sitemap_audit")
+})
+
+test_that("NUL-interleaved bytes behave exactly like plain binary bytes", {
+  outcome <- function(path) {
+    vapply(
+      list(validate_sitemap, read_sitemap),
+      function(entry) {
+        tryCatch(
+          {
+            entry(path)
+            "returned"
+          },
+          error = function(e) class(e)[[1L]]
+        )
+      },
+      character(1)
+    )
+  }
+  expect_identical(
+    outcome(nul_interleaved_file()),
+    outcome(plain_binary_file())
+  )
+})

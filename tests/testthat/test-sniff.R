@@ -72,6 +72,40 @@ test_that("tar magic not at offset 257 does not classify as tar", {
   expect_false(identical(sniff(block), "tar"))
 })
 
+test_that("a NUL-interleaved magic window classifies, never raises", {
+  # SITE-ctkdkuna: reading the magic through rawToChar() raised a bare base R
+  # `embedded nul in string` here, because a NUL FOLLOWED BY a non-NUL cannot
+  # be decoded. All-NUL and trailing-NUL windows decode fine, which is why the
+  # existing coverage (512 zero bytes) never reached it.
+  block <- raw(300L)
+  block[258:262] <- as.raw(c(0L, 97L, 0L, 97L, 0L))
+  expect_identical(sniff(block), "binary")
+})
+
+test_that("every magic-window shape sniffs without decoding the bytes", {
+  windows <- list(
+    interleaved = c(0L, 97L, 0L, 97L, 0L),
+    all_nul = c(0L, 0L, 0L, 0L, 0L),
+    trailing_nul = c(97L, 97L, 0L, 0L, 0L),
+    leading_nul = c(0L, 0L, 97L, 97L, 97L),
+    high_bytes = c(0xFFL, 0x00L, 0xFEL, 0x00L, 0xFDL)
+  )
+  for (nm in names(windows)) {
+    block <- raw(300L)
+    block[258:262] <- as.raw(windows[[nm]])
+    expect_identical(sniff(block), "binary", info = nm)
+  }
+})
+
+test_that("a real ustar magic still classifies as tar after the raw compare", {
+  # The byte compare must not have loosened the match: only the exact five
+  # ASCII bytes at offset 257 are tar.
+  expect_identical(sniff(make_tar_header()), "tar")
+  near <- make_tar_header()
+  near[262] <- charToRaw("X")
+  expect_false(identical(sniff(near), "tar"))
+})
+
 # ---- xml-urlset --------------------------------------------------------------
 
 test_that("XML urlset classifies as xml-urlset", {

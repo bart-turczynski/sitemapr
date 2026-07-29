@@ -57,12 +57,19 @@ sniff_bom_length <- function(bytes) {
 
 # POSIX (ustar) tar puts the magic "ustar" at offset 257 (0-based) in the first
 # 512-byte header block. We need at least offset+5 bytes to read it.
+#
+# The five bytes are compared RAW, never via `rawToChar()`: decoding raises
+# `embedded nul in string` on a NUL followed by a non-NUL, and this predicate
+# runs on unvetted bytes before anything has classified them. Routing the magic
+# through a string made the sniffer — the first thing every entry point calls —
+# raise a bare base R error on the very binary inputs the "binary"
+# classification exists to name (SITE-ctkdkuna). Testing five ASCII bytes needs
+# no decoding; this matches `sniff_starts_with()`'s byte-comparison idiom.
 sniff_is_tar <- function(bytes) {
   if (length(bytes) < 262L) {
     return(FALSE)
   }
-  magic <- rawToChar(bytes[258:262])
-  identical(magic, "ustar")
+  all(bytes[258:262] == charToRaw("ustar"))
 }
 
 # ---- helpers: text vs binary -------------------------------------------------
