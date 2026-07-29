@@ -15,6 +15,15 @@ source of truth shared with the sibling TypeScript implementation
 When the two disagree, the CSV wins for code metadata and this document wins
 for structure and semantics.
 
+The registry is committed **twice**, byte-identically. `docs/findings-registry.csv`
+is the canonical, cross-port copy — the one the sibling reads and the one to edit.
+`inst/findings-registry.csv` is a shipped duplicate: `docs/` is `.Rbuildignore`d,
+so an *installed* sitemapr cannot read the canonical copy, and run-time code needs
+one (see the `status` semantics below). The package reads only the `inst/` copy,
+through `system.file()`. `tools/check-findings-registry.R` asserts the two files
+are byte-identical, so **editing a registry row means copying the `docs/` file over
+the `inst/` one** or the check fails.
+
 ---
 
 ## Output tibble columns
@@ -24,7 +33,7 @@ for structure and semantics.
 | `code` | `character` | Machine-readable finding code (see `findings-registry.csv`). Stable across releases; changes are breaking. |
 | `severity` | `character` | `"fatal"` / `"error"` / `"warning"` / `"info"` |
 | `layer` | `character` | Which processing layer produced this finding (see layer vocabulary). |
-| `subject_type` | `character` | What the finding refers to (`"document"`, `"entry"`, `"field"`, `"index-child"`, `"archive-member"`, `"source"`, `"report"`). |
+| `subject_type` | `character` | What the finding refers to (`"document"`, `"entry"`, `"field"`, `"index-child"`, `"archive-member"`, `"page-url"`, `"source"`, `"report"`). |
 | `subject_ref` | `character` | Stable reference within the subject (e.g. `"sitemap://example.com/sitemap.xml"`, `"sitemap://…#entry:42"`, `"sitemap://…#field:loc"`). Never a raw integer offset; always anchored to a stable identifier. |
 | `message` | `character` | Human-readable description of the finding. Suitable for display; may change across patch releases. |
 | `evidence` | `list` | Named list: `excerpt` (character ≤ 500 chars; ≤ 200 chars for text-sitemap lines), `line` (integer or `NA`), `column` (integer or `NA`). Always a normalized snippet, never raw parser output. |
@@ -55,15 +64,15 @@ The `layer` column is constrained to this fixed set:
 | `"schema"` | XSD Layer C validation |
 | `"protocol"` | Protocol/semantic Layer D checks |
 | `"index-expansion"` | Sitemap index recursion, cycle detection, depth/count caps |
-| `"page"` | Per-URL page inspection (Layer E, v0.2) |
-| `"robots"` | robots.txt allow/disallow testing (v0.2) |
+| `"page"` | Per-URL live page inspection (Layer E) |
+| `"robots"` | robots.txt allow/disallow testing (Layer E) |
 | `"report"` | Finding assembly, dedup, cross-source aggregation |
 
-`"robots"` is emitted by the opt-in robots allow/disallow check (Layer E check
-#7; `validate_sitemap(check_robots = TRUE)`); it stays empty on a default call.
-`"page"` remains reserved for the rest of the v0.2 per-URL inspection epic (the
-`PAGE_*` codes) and is not yet emitted. Encoding findings (`ENCODING_*`) are
-emitted under `"classification"`, not a separate encoding layer.
+Both Layer E layers ship and both are **opt-in**, so both stay empty on a default
+call. `"robots"` is emitted by `validate_sitemap(check_robots = TRUE)` and
+`"page"` by `validate_sitemap(inspect_pages = TRUE)`. Encoding findings
+(`ENCODING_*`) are emitted under `"classification"`, not a separate encoding
+layer.
 
 ---
 
@@ -98,8 +107,9 @@ that is not at fault; the child URL is carried as `evidence` instead.
 The `page`/`robots` layers use the `page-url` subject to scope a finding to one
 advertised page URL. Its `subject_ref` anchors to the sitemap that advertised
 the URL and names the page in the fragment:
-`sitemap://<sitemap-url>#page-url:<url>`. The `robots` layer emits it today; the
-`page` layer will reuse it when the rest of Layer E lands.
+`sitemap://<sitemap-url>#page-url:<url>`. Both layers emit it. The one exception
+in the family is `ROBOTS_SITEMAP_DISALLOWED`, which is about the sitemap document
+rather than a URL it lists and therefore takes the `source` subject.
 
 ---
 
@@ -140,7 +150,9 @@ failure and `"document"` for a document-generic failure; the CSV records
 Codes are namespaced by a layer-oriented prefix. The authoritative list — with
 severity, layer, subject type, strict flag, sitemapr implementation status, and
 the reconciling `sitemap-validator` code — is `findings-registry.csv`. The
-prose below documents the semantics of the v1 codes sitemapr emits or reserves.
+prose below documents the semantics of the codes sitemapr emits. Codes carried
+`validator-only` are not documented here; the registry row and the
+[alignment section](#cross-implementation-alignment) cover them.
 
 ### Fetch codes (`FETCH_*`)
 - `FETCH_FAILED` — the submitted source could not be fetched or read for a
@@ -194,7 +206,7 @@ finding and continue with other submitted sources; batched `read_sitemap()` /
 - `PROTOCOL_URL_TOO_LONG` — `loc` exceeds 2 048 characters (XML; the
   text-sitemap variant is `PROTOCOL_TEXT_URL_TOO_LONG`)
 - `PROTOCOL_URL_DECODED_TOO_LONG` — **per-engine ruleset code**
-  (`ruleset = yandex`, `status = deferred-ruleset`, not yet emitted). A `loc`
+  (`ruleset = yandex`, `active`; emitted only under the `yandex` overlay). A `loc`
   whose **percent-decoded whole-URL** length exceeds ~1 024 chars under the
   `yandex` ruleset (`error`). Distinct from `PROTOCOL_URL_TOO_LONG`: different
   threshold (~1 024 vs 2 048), a different measurement basis (decoded whole URL
@@ -202,7 +214,7 @@ finding and continue with other submitted sources; batched `read_sitemap()` /
   application_choice` (the error-dictionary "1 024" is the `documented` basis it
   rests on). See `docs/sitemap-spec.md` §12.5.
 - `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` — **per-engine ruleset code**
-  (`ruleset = yandex`, `status = deferred-ruleset`, not yet emitted). Yandex's
+  (`ruleset = yandex`, `active`; emitted only under the `yandex` overlay). Yandex's
   per-tag byte guard ("Data limit exceeded in tag X"): over-long raw tag content
   (~100 B for `lastmod`/`changefreq`/`priority`; ~1 200–1 500 B for `<loc>`),
   surfaced as a `warning`. Distinct from `PROTOCOL_SIZE_EXCEEDED` (a whole-file
@@ -245,7 +257,7 @@ hreflang-prefixed one (see `docs/sitemap-spec.md` §5.4).
 The three codes below are **whole-sitemap / cross-URL** checks
 (`subject_type = "document"`, `warning`). They read the alternate graph the
 sitemap *declares* (offline, from the sitemap bytes alone; the live per-page
-return-link check is the deferred Layer E `PAGE_HREFLANG_MISMATCH`). Each
+return-link check is the Layer E `PAGE_HREFLANG_MISMATCH`). Each
 individual `<xhtml:link>` may be syntactically valid yet a search engine can
 still ignore an incomplete cluster.
 - `HREFLANG_MISSING_SELF_REFERENCE` — a URL declares alternate-language links
@@ -307,6 +319,67 @@ Emitted under `layer = "classification"`.
 - `INDEX_DEPTH_EXCEEDED` — recursion depth exceeded the configured limit (3)
 - `INDEX_CHILD_COUNT_EXCEEDED` — child count cap reached
 
+### Page codes (`PAGE_*`)
+Emitted under `layer = "page"` by the opt-in per-URL live page inspection
+(`validate_sitemap(inspect_pages = TRUE)`); all eleven carry
+`subject_type = "page-url"` and none is strict-only. Each advertised page is
+fetched once under the SSRF-guarded fetch policy and every check reads that one
+artifact. Governed by `docs/design/layer-e-page-inspection.md`; the per-engine
+interpretation rules (the `noindex` fold, hreflang reconciliation) are
+`docs/sitemap-spec.md` §13.
+
+**Positive evidence only.** Every check below fires solely on an *observed*
+fact. A page whose relevant channel is absent, unparseable, or never fetched
+produces no row for that check rather than a speculative one; the
+`page_coverage` attribute on the findings tibble records how much of the corpus
+was actually inspected.
+
+Fetch outcome — one row per page at most, since these are terminal:
+- `PAGE_FETCH_FAILED` — the page could not be retrieved: transport failure,
+  truncated response, or an HTTP protocol error (`error`)
+- `PAGE_SSRF_BLOCKED` — the fetch was refused by the SSRF guard (`error`)
+- `PAGE_STATUS_ERROR` — the page terminates on a 4xx/5xx (`error`). A sitemap
+  should advertise URLs that resolve.
+- `PAGE_STATUS_REDIRECT` — the page resolves (2xx) but at a *different* final
+  URL than the advertised `loc` (`warning`). Advertising the pre-redirect
+  address wastes crawl budget and splits signals.
+- `PAGE_REDIRECT_CHAIN` — the redirect budget was exhausted before a terminal
+  response (`info`)
+
+Canonical (`rel=canonical`, read from both the HTML `<link>` element and the
+HTTP `Link` header):
+- `PAGE_CANONICAL_MISMATCH` — the page declares a canonical target that is not
+  the advertised `loc` (`warning`). Comparison uses the shared ADR-005 canonical
+  key (fragment dropped), so a purely cosmetic difference does not fire.
+- `PAGE_CANONICAL_MISSING` — the page declares no `rel=canonical` at all
+  (`info`)
+- `PAGE_CANONICAL_RELATIVE` — an observed canonical is written as a relative
+  reference (`info`). **HTML-`<link>` channel only:** RFC 8288 §3 explicitly
+  permits a relative target in the `Link` header, so flagging the header form
+  would be a false positive. Independent of the mismatch verdict — a relative
+  canonical resolving to the advertised `loc` is consistent and still reported,
+  and one resolving elsewhere earns both codes.
+
+Indexability directives — the two channels are reported separately, because the
+remediation differs (edit the page vs. edit the server config):
+- `PAGE_META_ROBOTS_NOINDEX` — the effective directive is `noindex` and the
+  `<meta name=robots>` channel carries it (`warning`)
+- `PAGE_XROBOTSTAG_NOINDEX` — the effective directive is `noindex` and the
+  `X-Robots-Tag` header channel carries it (`warning`)
+
+Both are decided by the three-stage fold of spec §13.2 (extract per channel,
+filter to the directives applying to the selected crawler, then apply the
+engine's fold rule), not by a naive "`noindex` anywhere wins". The engines
+diverge on an explicit conflict: Google and Bing fold toward the restrictive
+reading, Yandex toward the permissive one.
+
+- `PAGE_HREFLANG_MISMATCH` — the page's declared hreflang alternate set
+  disagrees with the set the sitemap declares for the same URL (`warning`).
+  This is a **reconciliation** check, not a presence check: the two methods are
+  officially equivalent, so a page carrying no on-page hreflang while the
+  sitemap does is not a defect and emits nothing (spec §13.3). It fires only
+  when both sets are non-empty and they disagree.
+
 ### Robots codes (`ROBOTS_*`)
 Emitted under `layer = "robots"` by the opt-in
 robots allow/disallow check (`validate_sitemap(check_robots = TRUE)`). Two of
@@ -356,9 +429,11 @@ Governed by `docs/decisions/ADR-009-per-engine-validation-profiles.md` and
 `sitemaps.org` plus opt-in `google` / `bing` / `yandex` overlays) is exposed
 **additively**: the ten-column result above is schema v1 and never changes; the
 per-engine context rides a versioned, engine-aware surface (ADR-009 §5/§6). This
-section is the contract for that additive surface. No implementation emits these
-fields yet — this slice fixes the schema and codes ahead of the implementation
-slices.
+section is the contract for that additive surface, and the surface **ships**:
+`validate_sitemap_ruleset()` / `validate_sitemaps_ruleset()` are the engine-aware
+entry points, `sitemap_rulesets()` enumerates the selectable values,
+`ruleset_revision()` returns a ruleset's published revision, and
+`ruleset_context()` / `ruleset_context_for_child()` build the `context` axes.
 
 ### Additive output-tibble fields (schema v2, engine-aware)
 
@@ -402,7 +477,7 @@ There is **no** `documented (tester)` tag: empirical tester behavior (e.g. the
 Yandex file-analysis tool) enters as `application_choice` (executable) or
 `advisory` (diagnostic), never as `documented` (§12.0).
 
-### Registry `ruleset` column and `deferred-ruleset` status
+### Registry `ruleset` column
 
 `findings-registry.csv` gains one additive per-code column, `ruleset`:
 
@@ -414,14 +489,17 @@ Yandex file-analysis tool) enters as `application_choice` (executable) or
   otherwise reuse the existing code and let the runtime `ruleset`/`provenance`
   fields carry the engine context.
 
-The two engine-specific codes minted by this slice —
-`PROTOCOL_URL_DECODED_TOO_LONG` and `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (both
-`ruleset = yandex`; see the Protocol codes above) — carry a new
-`status = deferred-ruleset`: canonical and documented, belonging to the
-per-engine ruleset epic, **not yet emitted** by any R/ code. The drift guard
-(`tools/check-findings-registry.R`, active-only) therefore skips them until an
-implementation slice wires an emitter, exactly as `deferred-v0.2` works for the
-`PAGE_*` codes.
+Three engine-specific codes are minted, all `ruleset = yandex` and all `active`:
+`PROTOCOL_URL_DECODED_TOO_LONG` and `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (see the
+Protocol codes above) and `ENGINE_UNSUPPORTED_SITEMAP_FORMAT` (see the
+Classification codes). They were registered ahead of their emitters under a
+`deferred-ruleset` status, which the implementation slices then retired; the
+status value is still accepted by `tools/check-findings-registry.R` for the next
+code registered ahead of its emitter, but **no row carries it today**.
+
+Being `active` here means "emitted when the `yandex` overlay is selected", not
+"emitted on a baseline call". A baseline run never produces an engine-specific
+code — the `ruleset` column, not the `status` column, is what scopes them.
 
 ### Migration note
 
@@ -436,13 +514,18 @@ Backwards compatibility is preserved **by construction** (ADR-009 §5):
   ruleset rides an explicit, documented **major-version** migration.
 - **Additive registry.** The `ruleset` column defaults to `baseline` for every
   existing code (a no-op for current consumers); engine-specific codes are the
-  only non-`baseline` rows and are `deferred-ruleset` (unemitted). Adding the
-  column and these rows is a documented addition, not a breaking change.
+  only non-`baseline` rows, and they are emitted only under the overlay that
+  owns them. Adding the column and these rows is a documented addition, not a
+  breaking change.
 - **Cross-repo cadence.** sitemapr's registry stays canonical; the sibling
   `sitemap-validator` adopts the additive `ruleset` column and any engine codes on
-  its own version cadence, within the published supported-sibling-version ranges
-  (ADR-009 §7). A shared-artifact shape change (the new CSV column) is coordinated,
-  not silent.
+  its own version cadence. A shared-artifact shape change (the new CSV column) is
+  coordinated, not silent. ADR-009 §7 obliges each repo to publish both its
+  schema/ruleset revisions **and** its supported sibling-version ranges. Only the
+  first half is met today: `ruleset_revision()` publishes a dated revision per
+  ruleset, and **no sibling-version range is published anywhere yet**
+  (SITE-xptyuczr). Until it is, cross-port pinning is by revision string and
+  agreement, not by a machine-readable range.
 
 ---
 
@@ -482,18 +565,45 @@ alignment is mechanical.
   strictly more precise.
 
 ### Row status semantics (`status` column)
-- `active` — emitted by the sitemapr pipeline today (72 codes). Three of them —
-  the `ROBOTS_*` codes — fire only on an opt-in `check_robots = TRUE` call.
-- `reserved` — canonical and documented, but surfaced as a condition rather than
-  a findings row in v1 (the two `FETCH_*` codes).
-- `deferred-v0.2` — belongs to the `page` Layer E inspection epic (the `PAGE_*`
-  codes); defined so the two catalogs stay aligned, not yet emitted.
-- `deferred-ruleset` — belongs to the per-engine ruleset epic (ADR-009 /
-  `sitemap-spec.md` §12); a genuinely engine-specific code, documented and
-  registered ahead of its implementation slice, not yet emitted. See
-  [Per-engine ruleset extension (ADR-009)](#per-engine-ruleset-extension-adr-009).
+
+Two values occur in the registry today, across 94 rows:
+
+- `active` — emitted by the sitemapr pipeline today (**74 codes**). Some fire
+  only under an opt-in: the three `ROBOTS_*` codes need
+  `check_robots = TRUE`, the eleven `PAGE_*` codes need `inspect_pages = TRUE`,
+  and the three `ruleset = yandex` codes need that overlay selected. "Active"
+  means an emitter exists and is reachable, not that a default call produces it.
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
-  yet; carried so the contract is complete and to guide future adoption.
+  yet (**20 codes**); carried so the contract is complete and to guide future
+  adoption.
+
+`status` has **two consumers**, which is why a row's value is load-bearing
+rather than documentation:
+
+1. **Build time.** `tools/check-findings-registry.R` diffs the set of codes
+   emitted as string literals in `R/` against the set marked `active`, in both
+   directions. A code emitted without an `active` row fails; an `active` row with
+   no emitter fails.
+2. **Run time.** `findings_active_codes()` (`R/findings-registry.R`) reads the
+   shipped `inst/` copy and returns the `active` rows only. That set is the
+   eligibility gate for the report's passed-checks table — so flipping a code to
+   `active` before its emitter exists would not merely fail the guard, it would
+   advertise to users a check that ran and passed when nothing ran.
+
+Three further values are still accepted by the guard's vocabulary but currently
+have **zero rows**, retired as the features they were holding places for
+shipped. They are kept so the next code registered ahead of its emitter has a
+status to sit in:
+
+- `reserved` — canonical and documented, but surfaced as a condition rather than
+  a findings row. Held the `FETCH_*` codes; all three are now `active` (they are
+  also still surfaced as classed conditions on scalar calls — see the Fetch
+  codes above).
+- `deferred-v0.2` — held the `PAGE_*` codes for the Layer E inspection epic; all
+  eleven are now `active`.
+- `deferred-ruleset` — held the engine-specific codes for the per-engine ruleset
+  epic (ADR-009 / `sitemap-spec.md` §12); all three are now `active`. See
+  [Per-engine ruleset extension (ADR-009)](#per-engine-ruleset-extension-adr-009).
 
 ---
 
