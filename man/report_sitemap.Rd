@@ -77,8 +77,17 @@ counts), a per-source sitemap table (format, HTTP status, URL count, and
 \code{lastmod}/\code{priority}/\code{changefreq} presence), \code{lastmod} coverage cards with a
 by-month histogram, a collapsible URL folder tree grouped by path segment, a
 severity dashboard, the findings grouped by validation layer (deduplicated by
-code, with evidence excerpts), and a searchable, sortable, CSV-exportable URL
-table.
+code, with evidence excerpts), the checks that ran and passed, and a
+searchable, sortable, CSV-exportable URL table.
+
+One section reads the run rather than the findings. The \strong{Checks} section is
+driven by the finding-code registry: it enumerates the checks this package
+actually implements, marks those that ran and did not fire as passed, and
+names the layers the run did not exercise as neither passed nor failed — so
+an empty findings table can be told apart from a validation that never ran.
+A layer counts as having run only on positive evidence, which understates
+rather than overstates: \code{check_robots = TRUE} leaves no trace when nothing is
+disallowed, so a clean robots run reads as "not exercised".
 
 The output is entirely self-contained: all CSS, JavaScript (search, sort,
 CSV export, tree toggle, and a light/dark theme toggle), and data are
