@@ -73,6 +73,40 @@ related W3C and RFC standards.
 * Robots findings are built in one vectorized pass instead of one tibble per
   URL, which dominated the cost of a high-cardinality robots result.
 
+## Per-engine rulesets
+
+* `validate_sitemap_ruleset()` and `validate_sitemaps_ruleset()` validate a
+  sitemap under a named search engine's rules instead of the sitemaps.org
+  baseline, via a `sitemap_ruleset` argument. `sitemap_rulesets()` enumerates
+  the selectable values (`"sitemaps.org"`, `"google"`, `"bing"`, `"yandex"`).
+  Selecting an engine is always explicit — nothing falls through to an overlay,
+  and the default stays `"sitemaps.org"` (ADR-009).
+* The result gains four **additive** columns under an engine ruleset:
+  `ruleset`, `ruleset_revision`, `context`, and `provenance`. A baseline call
+  returns exactly the pinned ten-column schema v1, byte-for-byte unchanged, so
+  existing callers see nothing new.
+* `provenance` records how each rule's authority was established and, crucially,
+  whether the finding may be a hard verdict: `documented`,
+  `inherited_protocol` and `application_choice` are executable, while
+  `inferred`, `documentation_gap`, `documentation_conflict` and `advisory` are
+  diagnostic and never produce an engine-specific validity failure. One fact,
+  one tag.
+* `ruleset_context()` and `ruleset_context_for_child()` build the independent
+  context axes a finding is evaluated under (`submission_channel`,
+  `discovery_provenance`, `property_scope`, and structured
+  `authority_evidence`). Context is per source: a sitemap-index child inherits
+  nothing implicitly.
+* `ruleset_revision()` returns a ruleset's published revision string, so a
+  cross-repo consumer can pin against a known version of the rules.
+* Three engine-specific finding codes ship with the surface, all Yandex and all
+  emitted only under that overlay: `PROTOCOL_URL_DECODED_TOO_LONG` (the decoded
+  whole-URL length limit, distinct from the 2 048-character raw
+  `PROTOCOL_URL_TOO_LONG`), `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (the per-tag byte
+  guard, distinct from the whole-file `PROTOCOL_SIZE_EXCEEDED`), and
+  `ENGINE_UNSUPPORTED_SITEMAP_FORMAT` (a format sitemapr parses but the selected
+  engine does not accept). Every other code applies under every ruleset by
+  inheritance.
+
 ## Reporting
 
 * `report_sitemap()` now renders four per-finding columns it previously

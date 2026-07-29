@@ -13,12 +13,14 @@
 #      equal the set of codes marked status == "active" in the registry. A new
 #      code emitted without a registry row (or a row marked active with no
 #      emitter) fails the build. This is the code-enforcement the scattered
-#      string literals otherwise lack. Codes belonging to the per-engine ruleset
-#      epic (ADR-009 / sitemap-spec.md §12) are carried status ==
-#      "deferred-ruleset" and are intentionally NOT yet emitted, so the drift
-#      check (active-only) skips them. The additive "ruleset" column marks each
-#      code's applicability: "baseline" (shared, applies under every ruleset by
-#      inheritance) or an engine name for a genuinely engine-specific rule.
+#      string literals otherwise lack. The drift check is active-only, so the
+#      three not-yet-emitted statuses ("reserved", "deferred-v0.2",
+#      "deferred-ruleset") are skipped — they carry no rows today, but stay in
+#      the vocabulary for the next code registered ahead of its emitter. The
+#      additive "ruleset" column marks each code's applicability: "baseline"
+#      (shared, applies under every ruleset by inheritance) or an engine name
+#      for a genuinely engine-specific rule; an engine-specific code is emitted
+#      only when that overlay is selected, which is orthogonal to its status.
 #
 # Run from the package root (as the verify gate and lint.yaml do).
 
