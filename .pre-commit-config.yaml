@@ -1,7 +1,10 @@
 # Overrides the shared config: the shared `verify` hook wraps the command in a
-# bash invocation that breaks on R's verify command (it contains the double
-# quotes from the rcmdcheck --as-cran argument). Here the R code is passed as a
-# single argv element, so no shell quoting is involved.
+# bash invocation that breaks on R's verify command (it contained the double
+# quotes from the rcmdcheck --as-cran argument). The chain now lives in
+# tools/verify.R, so the hook invokes a script path and no shell quoting is
+# involved at all. Keeping it in a file also means the gate is runnable on
+# demand -- `Rscript tools/verify.R` -- instead of only as a side effect of
+# pushing, which matters while the remote is unreachable.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -33,9 +36,7 @@ repos:
     hooks:
       - id: verify
         name: verify (mirrors CI)
-        entry: Rscript -e
-        args:
-          - 'source("tools/check-docs.R"); source("tools/check-findings-registry.R"); lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }; rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
+        entry: Rscript tools/verify.R
         language: system
         pass_filenames: false
         always_run: true
