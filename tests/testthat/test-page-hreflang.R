@@ -92,6 +92,119 @@ test_that("a partial body with no alternates is `unknown`", {
   expect_identical(ex$status, "unknown")
 })
 
+# ---- the `Link` header channel -----------------------------------------------
+
+# HTML content-type headers plus a `Link` field declaring alternates.
+ph_link_headers <- function(value) {
+  list("Content-Type" = "text/html; charset=UTF-8", Link = value)
+}
+
+test_that("alternates declared ONLY in the Link header are observed", {
+  # Regression: the header channel was ignored outright, so a header-only page
+  # read as `absent` and a real page/sitemap disagreement went unreported.
+  art <- ph_art(
+    "<html><head></head></html>",
+    headers = ph_link_headers(
+      "<https://example.com/de>; rel=\"alternate\"; hreflang=\"de\""
+    )
+  )
+  ex <- page_hreflang_extract(art)
+  expect_identical(ex$status, "observed")
+  expect_identical(ex$set, paste("de", "https://example.com/de", sep = "\t"))
+
+  subjects <- ph_subjects(art, list(ph_alt("fr", "https://example.com/fr")))
+  out <- page_hreflang_findings(ph_run(art), subjects)
+  expect_identical(out$code, "PAGE_HREFLANG_MISMATCH")
+})
+
+test_that("the two channels union rather than one overriding the other", {
+  art <- ph_art(
+    ph_html(c("de", "https://example.com/de")),
+    headers = ph_link_headers(
+      "<https://example.com/fr>; rel=\"alternate\"; hreflang=\"fr\""
+    )
+  )
+  expect_length(page_hreflang_extract(art)$set, 2L)
+
+  # The union agreeing with the sitemap emits nothing; either channel alone
+  # would have disagreed.
+  subjects <- ph_subjects(
+    art,
+    list(
+      ph_alt("de", "https://example.com/de"),
+      ph_alt("fr", "https://example.com/fr")
+    )
+  )
+  expect_identical(nrow(page_hreflang_findings(ph_run(art), subjects)), 0L)
+})
+
+test_that("an alternate declared in BOTH channels collapses to one entry", {
+  art <- ph_art(
+    ph_html(c("de", "https://example.com/de")),
+    headers = ph_link_headers(
+      "<https://example.com/de>; rel=\"alternate\"; hreflang=\"DE\""
+    )
+  )
+  expect_length(page_hreflang_extract(art)$set, 1L)
+})
+
+test_that("a repeated hreflang parameter names one target twice", {
+  # RFC 8288 3.4 — each occurrence declares another language for the same URI.
+  links <- page_hreflang_header_links(list(
+    Link = paste(
+      "<https://example.com/de>; rel=alternate;",
+      "hreflang=de; hreflang=de-AT"
+    )
+  ))
+  expect_length(links, 2L)
+  expect_identical(
+    vapply(links, function(l) l$tag, character(1)),
+    c("de", "de-AT")
+  )
+  expect_identical(links[[2L]]$href, "https://example.com/de")
+})
+
+test_that("a Link header without rel=alternate declares no alternates", {
+  expect_identical(
+    page_hreflang_header_links(list(
+      Link = "<https://example.com/x>; rel=\"canonical\"; hreflang=\"de\""
+    )),
+    list()
+  )
+  # rel=alternate carrying no hreflang is an alternate representation, not a
+  # localized one.
+  expect_identical(
+    page_hreflang_header_links(list(
+      Link = "<https://example.com/feed>; rel=\"alternate\""
+    )),
+    list()
+  )
+})
+
+test_that("a relative header href resolves against the final URL", {
+  # A <base href> in the body governs the body's links only, never a header's.
+  art <- ph_art(
+    "<html><head><base href=\"https://other.test/x/\"></head></html>",
+    headers = ph_link_headers("</de>; rel=\"alternate\"; hreflang=\"de\"")
+  )
+  expect_identical(
+    page_hreflang_extract(art)$set,
+    paste("de", "https://example.com/de", sep = "\t")
+  )
+})
+
+test_that("a non-HTML resource can declare alternates in the header alone", {
+  # The header form is the only channel available to a non-HTML file.
+  art <- ph_art(
+    "%PDF-1.4",
+    headers = list(
+      "Content-Type" = "application/pdf",
+      Link = "<https://example.com/de>; rel=\"alternate\"; hreflang=\"de\""
+    )
+  )
+  expect_identical(page_hreflang_extract(art)$status, "observed")
+})
+
 # ---- reconciliation predicate ------------------------------------------------
 
 test_that("agreeing page and sitemap sets emit no finding", {

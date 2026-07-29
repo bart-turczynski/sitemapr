@@ -308,7 +308,7 @@ network request (except E.5, which fetches robots.txt per origin, already done).
 | canonical | artifact body + `Link` header | `PAGE_CANONICAL_MISMATCH`, `PAGE_CANONICAL_MISSING` | E.2 | stub |
 | meta robots | artifact body | `PAGE_META_ROBOTS_NOINDEX` | E.3 | stub |
 | X-Robots-Tag | artifact header | `PAGE_XROBOTSTAG_NOINDEX` | E.3 | stub |
-| page hreflang | artifact body | `PAGE_HREFLANG_MISMATCH` | E.4 | stub |
+| page hreflang | artifact body + `Link` header | `PAGE_HREFLANG_MISMATCH` | E.4 | stub |
 | robots.txt allow/disallow | robots.txt per origin | `ROBOTS_DISALLOWED`, `ROBOTS_INDETERMINATE` | E.5 | **DONE** (PR #134) |
 
 All `PAGE_*` codes above are **already in `findings-registry.csv:76–85`** as
@@ -458,8 +458,15 @@ fetch feed every engine's fold.
   (`*`/unscoped, or a named token like `googlebot`, `bingbot`, `yandex`), and the
   raw token string. Record **all** occurrences (repeated headers, multiple meta
   tags, comma-separated lists all expand to individual facts).
-- **hreflang facts (page):** the set of `(hreflang, href)` pairs declared in the
-  page head `<link rel=alternate>`, plus whether a self-reference is present.
+- **hreflang facts (page):** the set of `(hreflang, href)` pairs the page
+  declares, plus whether a self-reference is present. **Both** declaration
+  channels count, as a **union**: the page head's `<link rel=alternate>`
+  elements and the `Link` response header's `rel=alternate` link-values (RFC
+  8288; `hreflang` may repeat within one link-value, each occurrence naming
+  another language for the same target). Google treats HTML elements, `Link`
+  headers and sitemap `xhtml:link` as equivalent methods, and the header form is
+  the only channel a non-HTML resource has. Because the set is keyed by (tag,
+  canonical href), a target declared both ways collapses to one entry.
 
 - **extraction status (per family/channel):** every family above carries a status
   so a downstream absence check can tell *absent* from *unobserved* — `observed`
@@ -532,7 +539,12 @@ divergence only bites on explicit conflict, where the Yandex fold differs.
 ### 5.2 Canonical (E.2)
 
 Extract from **both** `<link rel=canonical>` and the `Link` header (Google honors
-both, including for non-HTML files). Define behavior for: multiple/conflicting
+both, including for non-HTML files). The canonical and §5.3 hreflang producers
+read the header through **one shared RFC 8288 parser**
+(`R/page-link-header.R`), so they cannot disagree about what a link-value means:
+`rel` is a whitespace-separated **token list** whose order is not significant and
+which compares case-insensitively (§3.3) — `rel="alternate canonical"` therefore
+declares a canonical, and `rel="canonical-ish"` does not. Define behavior for: multiple/conflicting
 canonicals (across or within channels), relative URLs (resolve against response
 base / `<base>`), fragments, the final redirect URL, malformed HTML, and non-HTML
 responses. Findings: `PAGE_CANONICAL_MISMATCH` (page canonicalizes to a *different*

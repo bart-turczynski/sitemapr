@@ -4,7 +4,9 @@
 # A SIBLING producer to R/page-findings.R (transport) and R/page-canonical.R: it
 # consumes the same page_inspection_run() artifacts on the usable_body / partial
 # outcomes and emits PAGE_HREFLANG_MISMATCH. It reconciles the PAGE-declared
-# hreflang alternate set (parsed from the fetched head) against the SITEMAP-
+# hreflang alternate set — the UNION of the fetched head's <link rel=alternate>
+# elements and the `Link` response header's alternate link-values, the two
+# channels Google treats as equivalent — against the SITEMAP-
 # declared set for the same URL (the `alternates` list-column threaded onto each
 # advertising subject as `subjects$alt`). It NEVER fetches, never modifies the
 # spine or the assembler, and reuses page-findings.R's producer shape.
@@ -91,6 +93,27 @@ page_hreflang_html_links <- function(body, final_url) {
   list(base = base, links = links)
 }
 
+# The page-declared alternates carried in the `Link` response header(s): for
+# every link-value whose `rel` includes `alternate`, one (tag, href) link per
+# `hreflang` parameter — RFC 8288 §3.4 lets that parameter repeat within a
+# single link-value, each occurrence naming another language for the same
+# target. The header form is the ONLY way a non-HTML resource can declare
+# alternates, and Google treats it as equivalent to the HTML link element.
+# Targets resolve against the response final_url: a <base href> in the body
+# governs the body's links only, never a header's.
+page_hreflang_header_links <- function(headers) {
+  links <- list()
+  for (entry in page_link_header_entries(headers)) {
+    if (!page_link_has_rel(entry, "alternate")) {
+      next
+    }
+    for (tag in page_link_param_values(entry, "hreflang")) {
+      links[[length(links) + 1L]] <- list(tag = tag, href = entry$uri)
+    }
+  }
+  links
+}
+
 # Extract the page hreflang set + extraction status (§4/§5.3). Runs only on the
 # usable_body / partial outcomes (any other has no body). `observed` when the
 # page declares at least one usable alternate; otherwise `absent` (complete HTML
@@ -105,11 +128,25 @@ page_hreflang_extract <- function(art) {
   # incomplete for a set-vs-set reconciliation (a locale below the cut would
   # read as a spurious page/sitemap disagreement). Unlike a single canonical
   # value, an incomplete SET is unsafe -> `unknown`, never a verdict (§4).
+  # Header alternates do NOT rescue this: the header set is complete, but the
+  # page may declare more below the body's cut, so their union is incomplete
+  # too.
   if (identical(art$outcome, "partial")) {
     return(list(status = "unknown", set = character(0), self_ref = FALSE))
   }
   html <- page_hreflang_html_links(art$body, art$final_url)
-  set <- page_hreflang_norm_set(html$links, html$base)
+  # UNION of the two declaration channels, not one overriding the other: §5.3's
+  # methods-are-equivalent premise lets a page split its alternates across the
+  # HTML head and the `Link` header. Each channel normalizes against its OWN
+  # base, and because the set is keyed by (tag, canonical href) a target
+  # declared BOTH ways collapses to one entry rather than counting twice.
+  set <- unique(c(
+    page_hreflang_norm_set(html$links, html$base),
+    page_hreflang_norm_set(
+      page_hreflang_header_links(art$terminal_headers),
+      art$final_url
+    )
+  ))
   if (length(set) > 0L) {
     self_key <- build_loc_key(parse_url_adapter(art$final_url))[[1L]]
     hrefs <- vapply(
