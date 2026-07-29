@@ -699,6 +699,52 @@ test_that("the cap is configurable via option", {
   )
 })
 
+# ---- the pre-cap tally (SITE-tudzmegl) ---------------------------------------
+
+test_that("the pre-cap total of every capped code survives assembly", {
+  # The row set alone cannot answer "how often did this fire" once capped, so
+  # the
+  # real tally rides an attribute — the findings tibble is the public 10-column
+  # contract, and a column would be a contract migration.
+  out <- assemble_findings(list(cap_part(5000L)), "strict")
+
+  expect_identical(
+    findings_precap_totals(out),
+    stats::setNames(5000L, "ROBOTS_DISALLOWED")
+  )
+  # The rows themselves are still capped, and still 10 columns.
+  expect_identical(sum(out$code == "ROBOTS_DISALLOWED"), 100L)
+  expect_identical(ncol(out), 10L)
+})
+
+test_that("only CAPPED codes are recorded, so nrow() stays authoritative", {
+  out <- assemble_findings(
+    list(cap_part(5000L), cap_part(7L, "ROBOTS_INDETERMINATE", "info")),
+    "strict"
+  )
+  totals <- findings_precap_totals(out)
+  expect_named(totals, "ROBOTS_DISALLOWED")
+  expect_identical(totals[["ROBOTS_DISALLOWED"]], 5000L)
+})
+
+test_that("an uncapped report carries no tally at all", {
+  out <- assemble_findings(list(cap_part(100L)), "strict")
+  expect_length(findings_precap_totals(out), 0L)
+  expect_null(attr(out, "precap_totals", exact = TRUE))
+})
+
+test_that("the tally is exact for several capped codes at once", {
+  withr::local_options(list(sitemapr.max_findings_per_code = 10L))
+  out <- assemble_findings(
+    list(cap_part(50L), cap_part(31L, "ROBOTS_INDETERMINATE", "info")),
+    "strict"
+  )
+  expect_identical(
+    findings_precap_totals(out),
+    stats::setNames(c(50L, 31L), c("ROBOTS_DISALLOWED", "ROBOTS_INDETERMINATE"))
+  )
+})
+
 test_that("the rollup carries the additive columns under a ruleset overlay", {
   spec <- findings_ruleset_spec("google", ruleset_context())
   out <- assemble_findings(list(cap_part(200L)), "strict", ruleset = spec)

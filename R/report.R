@@ -528,17 +528,59 @@ report_evidence_block <- function(ev) {
   )
 }
 
-report_finding_samples <- function(sub, sev_rank) {
+# One example row per code, with the code's REAL occurrence count.
+#
+# `count` is the pre-cap total, NOT the number of rows present: since the
+# per-code cap (SITE-wlmodqza) the row set is capped at
+# `findings_per_code_cap()` per code, so a code that fired 50,000 times leaves
+# 100 rows behind. `shown` records how many rows back the example, which is what
+# lets the renderer say the total is a sample rather than implying the rows are
+# all of them.
+#
+# The sort follows the REAL count too. The cap cannot invert this ranking (a
+# capped code shows exactly `cap`, and no other code can show more), but it does
+# FLATTEN it: every capped code ties at `cap`, so 50,000 and 101 become
+# indistinguishable and their relative order is lost. Ranking on the real total
+# restores it.
+# `totals` is REQUIRED, deliberately: it must be read from the whole findings
+# tibble and threaded down, because the per-layer `[` subsetting drops the
+# attribute it rides on. A default that re-read it from `sub` would quietly
+# yield an empty tally and understate every capped code again.
+report_finding_samples <- function(sub, sev_rank, totals) {
   codes <- unique(sub$code)
   samples <- lapply(codes, function(cd) {
     rows <- sub[sub$code == cd, , drop = FALSE]
-    list(row = rows[1, , drop = FALSE], count = nrow(rows))
+    shown <- nrow(rows)
+    list(
+      row = rows[1, , drop = FALSE],
+      count = report_real_count(cd, shown, totals),
+      shown = shown
+    )
   })
   ord <- order(
     vapply(samples, function(s) sev_rank[[s$row$severity]], integer(1)),
     -vapply(samples, function(s) s$count, integer(1))
   )
   samples[ord]
+}
+
+# A code's real occurrence count: the cap's pre-cap tally when it was capped,
+# otherwise the row count (which for an uncapped code IS the total).
+report_real_count <- function(code, shown, totals) {
+  if (length(totals) == 0L || !code %in% names(totals)) {
+    return(as.integer(shown))
+  }
+  as.integer(totals[[code]])
+}
+
+# The real total across a set of findings rows: row count, plus the rows the cap
+# omitted for whichever capped codes are present here.
+report_real_total <- function(sub, totals) {
+  extra <- 0L
+  for (cd in intersect(unique(sub$code), names(totals))) {
+    extra <- extra + totals[[cd]] - sum(sub$code == cd)
+  }
+  nrow(sub) + as.integer(extra)
 }
 
 # One optional cell of a single-row findings tibble. The four ADR-009 additive
@@ -655,6 +697,21 @@ report_context_block <- function(ctx) {
   )
 }
 
+# The per-code count label. Says "N total" when every occurrence has a row, and
+# "N total (showing M)" when the cap kept only some — so the total beside a
+# code
+# is always the real one, and the gap to the rows below it is stated rather than
+# left for the reader to discover in the REPORT_TRUNCATED row. `shown` is absent
+# for a caller that built a sample by hand; then there is nothing to disclose.
+report_count_label <- function(sample) {
+  total <- format(sample$count, big.mark = ",")
+  shown <- sample$shown
+  if (is.null(shown) || shown >= sample$count) {
+    return(paste0(total, " total"))
+  }
+  sprintf("%s total (showing %s)", total, format(shown, big.mark = ","))
+}
+
 report_finding_row <- function(sample) {
   r <- sample$row
   sev <- r$severity
@@ -671,10 +728,7 @@ report_finding_row <- function(sample) {
       ),
       htmltools::tags$div(
         class = "smr-dim smr-small",
-        paste0(
-          format(sample$count, big.mark = ","),
-          " total"
-        )
+        report_count_label(sample)
       ),
       report_ruleset_badge(
         report_opt_cell(r, "ruleset"),
@@ -696,9 +750,9 @@ report_finding_row <- function(sample) {
   )
 }
 
-report_layer_block <- function(layer, findings, sev_rank) {
+report_layer_block <- function(layer, findings, sev_rank, totals) {
   sub <- findings[findings$layer == layer, , drop = FALSE]
-  samples <- report_finding_samples(sub, sev_rank)
+  samples <- report_finding_samples(sub, sev_rank, totals)
   body_rows <- lapply(samples, report_finding_row)
   codes <- unique(sub$code)
 
@@ -709,7 +763,7 @@ report_layer_block <- function(layer, findings, sev_rank) {
       layer,
       length(codes),
       if (length(codes) != 1L) "s" else "",
-      nrow(sub)
+      report_real_total(sub, totals)
     )),
     htmltools::tags$div(
       class = "smr-tablewrap",
@@ -742,11 +796,15 @@ report_findings_section <- function(findings) {
   )
   present_layers <- report_layer_order[report_layer_order %in% findings$layer]
 
+  # Read the cap's pre-cap tally once, here, and thread it down: the per-layer
+  # `[` subsetting below drops the attribute it lives on.
+  totals <- findings_precap_totals(findings)
   layer_blocks <- lapply(
     present_layers,
     report_layer_block,
     findings = findings,
-    sev_rank = sev_rank
+    sev_rank = sev_rank,
+    totals = totals
   )
 
   n_unique <- length(unique(findings$code))
@@ -756,7 +814,7 @@ report_findings_section <- function(findings) {
       "Findings (%d issue%s, %d total)",
       n_unique,
       if (n_unique != 1L) "s" else "",
-      nrow(findings)
+      report_real_total(findings, totals)
     )),
     layer_blocks
   )
