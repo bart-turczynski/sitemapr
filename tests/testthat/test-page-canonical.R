@@ -195,6 +195,18 @@ test_that("no fragment is recorded as NA, and a bare # as empty", {
   expect_identical(bare$facts[[1L]]$fragment, "")
 })
 
+test_that("an empty canonical href records relative as NA, not TRUE", {
+  # `<link rel=canonical href="">` declares nothing, so the form fact is
+  # UNKNOWN rather than relative — and an unknown form must not emit the
+  # diagnostic. With no resolvable target the body is `absent`: MISSING alone.
+  art <- pc_art(canonical_link(""))
+  ex <- page_canonical_extract(art)
+  expect_identical(ex$facts[[1L]]$relative, NA)
+  expect_identical(ex$facts[[1L]]$resolved, NA_character_)
+  out <- page_canonical_findings(pc_run(art))
+  expect_identical(out$code, "PAGE_CANONICAL_MISSING")
+})
+
 test_that("a relative canonical agreeing with the loc still reports the form", {
   # The independence case: /a resolves to exactly the advertised loc, so there
   # is no mismatch — the relative FORM is still what this code reports.
@@ -221,8 +233,10 @@ test_that("a leading token that is a scheme by the grammar is not relative", {
   expect_false(ex$facts[[1L]]$relative)
 })
 
-test_that("a relative canonical in the Link header is reported too", {
-  # RFC 8288 permits a relative URI-Reference in a link-value.
+test_that("a relative Link header canonical resolves but reports no form", {
+  # HTML CHANNEL ONLY. RFC 8288 §3 permits a relative URI-Reference as a link
+  # target, resolved against the request URL, so the header form is idiomatic
+  # and earns no diagnostic — while the §4 fact is still recorded on it.
   art <- pc_art(
     "<html><head></head></html>",
     headers = list(
@@ -230,8 +244,43 @@ test_that("a relative canonical in the Link header is reported too", {
       "Link" = "</a>; rel=\"canonical\""
     )
   )
+  ex <- page_canonical_extract(art)
+  expect_identical(ex$facts[[1L]]$channel, "http_link")
+  expect_true(ex$facts[[1L]]$relative)
+  expect_identical(ex$facts[[1L]]$resolved, "https://example.com/a")
+  # It resolved to exactly the advertised loc: consistent, and no form finding.
+  expect_identical(nrow(page_canonical_findings(pc_run(art))), 0L)
+})
+
+test_that("a relative header canonical elsewhere is a mismatch, not a form", {
+  # The suppression holds when the page IS inconsistent: MISMATCH alone, so the
+  # header form is never what adds a row.
+  art <- pc_art(
+    "<html><head></head></html>",
+    headers = list(
+      "Content-Type" = "text/html",
+      "Link" = "</b>; rel=\"canonical\""
+    )
+  )
   out <- page_canonical_findings(pc_run(art))
-  expect_identical(out$code, "PAGE_CANONICAL_RELATIVE")
+  expect_identical(out$code, "PAGE_CANONICAL_MISMATCH")
+  expect_match(out$message, "https://example.com/b", fixed = TRUE)
+})
+
+test_that("with both channels relative, the reported form is the HTML one", {
+  # Pins that the interpreter selects the html_link occurrence for the message,
+  # not merely that something relative was present.
+  art <- pc_art(
+    canonical_link("/b"),
+    headers = list(
+      "Content-Type" = "text/html",
+      "Link" = "</c>; rel=\"canonical\""
+    )
+  )
+  out <- page_canonical_findings(pc_run(art))
+  relative <- out[out$code == "PAGE_CANONICAL_RELATIVE", ]
+  expect_identical(nrow(relative), 1L)
+  expect_match(relative$message, "relative reference: /b", fixed = TRUE)
 })
 
 test_that("an absent canonical yields no relative finding", {

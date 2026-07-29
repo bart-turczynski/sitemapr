@@ -278,22 +278,31 @@ page_canonical_consistency_finding <- function(extract, loc, base) {
 }
 
 # The relative-form diagnostic for one extraction, or NULL. Fires when a
-# canonical was OBSERVED and at least one occurrence was declared as a relative
-# reference (the §4 `relative` fact).
+# canonical was OBSERVED and at least one HTML-CHANNEL occurrence was declared
+# as a relative reference (the §4 `relative` fact).
 #
 # This INTERPRETS a fact §4 already mandates; it is not a new signal. It is also
 # independent of the consistency verdict above: a relative canonical resolving
 # to exactly the advertised loc is consistent and still worth reporting, and one
 # resolving elsewhere earns both codes.
 #
+# HTML CHANNEL ONLY — the `html_link` facts, never `http_link`. The fact itself
+# is recorded on every occurrence in both channels (§4 mandates that, and the
+# facts ride the finding `context`); it is the INTERPRETATION that is scoped.
+# RFC 8288 §3 explicitly permits a relative URI-Reference as a `Link` target,
+# resolved against the request URL, so a relative header canonical is idiomatic
+# rather than a smell — and the Google recommendation this diagnostic rests on
+# is scoped to the link ELEMENT ("relative paths with the rel=canonical link
+# element"), as is the failure it warns about (a crawled staging copy
+# canonicalizing to itself instead of to production). Flagging the header form
+# would be a false positive on a newly reachable code: SITE-dsdkjvyw widened
+# what the header channel even sees.
+#
 # Ruleset framing (ADR-009, SITE-eoqgkcij): canonical is not a sitemaps.org
 # concept, so this is a baseline consistency diagnostic carrying NO engine
 # verdict. Severity is `info`, matching PAGE_CANONICAL_MISSING — Google resolves
 # relative canonicals exactly as a browser does, so the form is advice, not a
-# defect. Their canonicalization doc is nonetheless explicit ("Use absolute
-# paths rather than relative paths with the rel=canonical link element"), the
-# failure it warns about being a crawled staging copy canonicalizing to itself
-# instead of to production.
+# defect.
 #
 # Ported from the sibling TypeScript implementation, where the code originated
 # (checkCanonicalAbsolute, src/lib/services/inspection/checks/canonical.ts).
@@ -303,7 +312,7 @@ page_canonical_relative_finding <- function(extract, loc, base) {
   }
   rel <- vapply(
     extract$facts,
-    function(f) isTRUE(f$relative),
+    function(f) isTRUE(f$relative) && identical(f$channel, "html_link"),
     logical(1)
   )
   if (!any(rel)) {

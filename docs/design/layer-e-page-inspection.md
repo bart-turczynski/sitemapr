@@ -558,6 +558,16 @@ minted the code; Google resolves relative canonicals but
 [recommends against them](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls),
 the failure mode being a crawled staging copy canonicalizing to itself.
 
+**`PAGE_CANONICAL_RELATIVE` is scoped to the `html_link` channel** (decided
+2026-07-29, both ports). The `relative` **fact** is still recorded on every
+occurrence in **both** channels — §4 mandates that, and the facts ride the
+finding `context` — but only an HTML link element earns the diagnostic. RFC 8288
+§3 explicitly permits a relative URI-Reference as a `Link` target, resolved
+against the request URL, so the header form is idiomatic rather than a smell; and
+the Google recommendation above is scoped to the link *element*, as is the
+staging-copy failure it warns about. This is the fact/interpretation split doing
+its job: the channel distinction lives entirely in the interpreter.
+
 **Soften the assertion:** the sitemap does *not* "assert this URL is canonical."
 For Google, sitemap inclusion is an explicitly **weaker** canonicalization signal
 than redirects or `rel=canonical` (`documented`). So a mismatch is "the page
