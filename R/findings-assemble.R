@@ -425,6 +425,16 @@ findings_truncation_row <- function(template, omitted, cap) {
 # row. Expects `findings` already sorted, so the survivors are the first `cap`
 # in contract order and the choice is deterministic across runs. Re-sorts only
 # when a rollup is actually appended, leaving the uncapped path untouched.
+#
+# Also stamps the `precap_totals` attribute — a named integer vector of the REAL
+# occurrence count of every capped code. The row set alone can no longer answer
+# "how often did this fire", and a reader who only counts rows understates a
+# capped code by up to three orders of magnitude. Deliberately an attribute and
+# not a column: the findings tibble is the PUBLIC 10-column contract (schema
+# v1), so a column would be a contract migration. Only CAPPED codes are
+# recorded —
+# for every other code the row count IS the total, so a consumer falls back to
+# nrow() and cannot be misled by an absent entry.
 findings_cap_per_code <- function(findings, cap = findings_per_code_cap()) {
   if (!is.finite(cap) || nrow(findings) == 0L) {
     return(findings)
@@ -435,7 +445,24 @@ findings_cap_per_code <- function(findings, cap = findings_per_code_cap()) {
   }
   omitted <- table(findings$code[!keep])
   kept <- findings[keep, , drop = FALSE]
-  findings_sort(rbind(kept, findings_truncation_row(kept, omitted, cap)))
+  out <- findings_sort(rbind(kept, findings_truncation_row(kept, omitted, cap)))
+  totals <- table(findings$code)[names(omitted)]
+  attr(out, "precap_totals") <- stats::setNames(
+    as.integer(totals),
+    names(omitted)
+  )
+  out
+}
+
+# The real pre-cap occurrence count of every capped code, or an empty vector
+# when nothing was capped. The one reader of the `precap_totals` attribute, so a
+# consumer never has to know whether it is present.
+findings_precap_totals <- function(findings) {
+  totals <- attr(findings, "precap_totals", exact = TRUE)
+  if (is.null(totals)) {
+    return(stats::setNames(integer(0), character(0)))
+  }
+  totals
 }
 
 #' Assemble producer finding tibbles into the final contract tibble (Layer F)
@@ -497,11 +524,16 @@ assemble_findings <- function(parts, mode, ruleset = NULL) {
   producer_provenance <- findings[["provenance"]]
 
   cols <- names(empty_findings_contract())
+  # `[` and new_tibble() both drop it, so the cap's pre-cap tally is carried
+  # across the re-impose by hand and re-attached to what callers actually get.
+  precap_totals <- attr(findings, "precap_totals", exact = TRUE)
   findings <- findings[, cols, drop = FALSE]
-  findings_stamp_ruleset(
+  out <- findings_stamp_ruleset(
     tibble::new_tibble(findings, nrow = nrow(findings)),
     ruleset,
     producer_context,
     producer_provenance
   )
+  attr(out, "precap_totals") <- precap_totals
+  out
 }

@@ -616,3 +616,139 @@ test_that("a missing provenance emits no badge", {
   expect_null(report_provenance_badge(NULL))
   expect_null(report_provenance_badge(NA_character_))
 })
+
+# ---- real vs post-cap counts (SITE-tudzmegl) ---------------------------------
+
+# `n` synthetic findings under one code, assembled so the per-code cap runs.
+cnt_findings <- function(..., cap = NULL) {
+  parts <- lapply(list(...), function(p) {
+    loc <- sprintf("https://e.com/p/%04d", seq_len(p$n))
+    robots_findings(
+      code = rep(p$code, p$n),
+      severity = rep(p$severity, p$n),
+      subject_ref = paste0("sitemap://e.com/s.xml#page-url:", loc),
+      message = paste("disallowed:", loc),
+      evidence = lapply(loc, function(u) finding_evidence(excerpt = u)),
+      is_strict_only = rep(FALSE, p$n)
+    )
+  })
+  if (!is.null(cap)) {
+    withr::local_options(list(sitemapr.max_findings_per_code = cap))
+  }
+  assemble_findings(parts, "strict")
+}
+
+cnt_part <- function(n, code = "ROBOTS_DISALLOWED", severity = "warning") {
+  list(n = n, code = code, severity = severity)
+}
+
+cnt_samples <- function(findings, layer = "robots") {
+  sev_rank <- stats::setNames(
+    seq_along(report_severity_levels),
+    report_severity_levels
+  )
+  sub <- findings[findings$layer == layer, , drop = FALSE]
+  report_finding_samples(sub, sev_rank, findings_precap_totals(findings))
+}
+
+test_that("a capped code reports its REAL count, not the surviving rows", {
+  # The count is the one number a reader uses to size a problem; showing 100 for
+  # a code that fired 5,000 times understates it by two orders of magnitude.
+  s <- cnt_samples(cnt_findings(cnt_part(5000L)))
+
+  expect_length(s, 1L)
+  expect_identical(s[[1L]]$count, 5000L)
+  expect_identical(s[[1L]]$shown, 100L)
+})
+
+test_that("an uncapped code still reports its row count", {
+  s <- cnt_samples(cnt_findings(cnt_part(7L)))
+  expect_identical(s[[1L]]$count, 7L)
+  expect_identical(s[[1L]]$shown, 7L)
+})
+
+test_that("two capped codes are ranked by their real counts, not by the cap", {
+  # Both cap to the same number of rows, so post-cap they TIE and their relative
+  # order is lost. The cap cannot INVERT the ranking -- a capped code shows
+  # exactly the cap and nothing can show more -- but it does flatten it.
+  findings <- cnt_findings(
+    cnt_part(101L, "ROBOTS_DISALLOWED"),
+    cnt_part(5000L, "ROBOTS_INDETERMINATE", "warning")
+  )
+  s <- cnt_samples(findings)
+
+  expect_identical(
+    vapply(s, function(x) x$row$code, character(1)),
+    c("ROBOTS_INDETERMINATE", "ROBOTS_DISALLOWED")
+  )
+  expect_identical(vapply(s, function(x) x$count, integer(1)), c(5000L, 101L))
+  # Same rows behind each, which is exactly why row counts cannot order them.
+  expect_identical(vapply(s, function(x) x$shown, integer(1)), c(100L, 100L))
+})
+
+test_that("severity still outranks the count", {
+  findings <- cnt_findings(
+    cnt_part(5000L, "ROBOTS_DISALLOWED", "warning"),
+    cnt_part(3L, "ROBOTS_INDETERMINATE", "error")
+  )
+  s <- cnt_samples(findings)
+  expect_identical(s[[1L]]$row$severity, "error")
+})
+
+test_that("a sampled count label discloses the gap; an exact one does not", {
+  expect_identical(
+    report_count_label(list(count = 5000L, shown = 100L)),
+    "5,000 total (showing 100)"
+  )
+  expect_identical(report_count_label(list(count = 7L, shown = 7L)), "7 total")
+  # A hand-built sample carries no `shown`, so there is nothing to disclose.
+  expect_identical(report_count_label(list(count = 7L)), "7 total")
+})
+
+test_that("the layer and section totals count omitted rows too", {
+  findings <- cnt_findings(cnt_part(5000L))
+  totals <- findings_precap_totals(findings)
+  sub <- findings[findings$layer == "robots", , drop = FALSE]
+
+  expect_identical(report_real_total(sub, totals), 5000L)
+  # The whole report adds the rollup row itself: 5,000 + 1.
+  expect_identical(report_real_total(findings, totals), 5001L)
+  # With nothing capped the real total is just the row count.
+  plain <- cnt_findings(cnt_part(4L))
+  expect_identical(
+    report_real_total(plain, findings_precap_totals(plain)),
+    4L
+  )
+})
+
+test_that("the rendered report shows the real total for a capped code", {
+  # End to end through validate_sitemap(): the tally has to survive the
+  # assembler's 10-column re-impose to reach the renderer at all.
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeLines(
+    paste0(
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      paste(
+        sprintf(
+          "<url><loc>https://example.com/p%d</loc>%s</url>",
+          seq_len(6L),
+          "<priority>7.5</priority>"
+        ),
+        collapse = ""
+      ),
+      "</urlset>"
+    ),
+    path
+  )
+  withr::local_options(list(sitemapr.max_findings_per_code = 2L))
+
+  findings <- validate_sitemap(path)
+  expect_identical(
+    findings_precap_totals(findings)[["PROTOCOL_PRIORITY_OUT_OF_RANGE"]],
+    6L
+  )
+
+  html <- render_string(path)
+  expect_match(html, "6 total (showing 2)", fixed = TRUE)
+  expect_false(grepl(">2 total<", html, fixed = TRUE))
+})
