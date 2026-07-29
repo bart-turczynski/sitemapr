@@ -60,7 +60,10 @@ could instead use a fixture.
 
 Every scenario in this section must have at least one fixture file in
 `tests/testthat/fixtures/` and at least one `testthat` test asserting the
-expected output or condition.
+expected output or condition. The one exception is a scenario that depends on
+HTTP response metadata, which a local fixture file cannot carry: those are
+covered by mocked-response tests and are called out explicitly where they
+appear (see §2.7).
 
 ### 2.1 Standards-baseline scenarios
 
@@ -133,11 +136,29 @@ expected output or condition.
 
 ### 2.7 Encoding scenarios
 
+These are imported cross-port fixtures (SITE-uivyzfhe), so the paths below are
+relative to `tests/testthat/fixtures/` rather than bare names, and every outcome
+is pinned in `fixtures/corpus-golden.tsv`.
+
 | Scenario | Fixture | Expected behavior |
 |---|---|---|
-| BOM-prefixed UTF-8 | `encoding-bom-utf8.xml` | Passes |
-| BOM vs XML declaration conflict | `encoding-bom-vs-decl.xml` | Strict `warning` |
-| HTTP charset vs BOM conflict | `encoding-charset-conflict.xml` | `ENCODING_CONFLICT` info |
+| BOM-prefixed UTF-8 | `corpus/encoding/utf8-bom.xml` | Passes; no `ENCODING_*` finding |
+| Declared UTF-8, no BOM | `corpus/encoding/declared-utf8-no-bom.xml` | Passes |
+| Declared ISO-8859-1, no BOM | `corpus/encoding/declared-iso8859-no-bom.xml` | Passes; the declaration is the only signal |
+| Neither BOM nor declaration | `corpus/encoding/no-encoding.xml` | Passes; UTF-8 default |
+| BOM vs XML declaration conflict | `corpus/encoding/bom-conflict.xml` | `ENCODING_BOM_DECLARATION_CONFLICT` — `info` in `non-strict`, elevated to `warning` in `strict`; fires in both modes |
+| UTF-16 LE with BOM | `corpus/encoding/utf16-le-bom.xml` | Classed `sitemapr_xml_parse_error` — a documented limitation, not a finding |
+
+**Not expressible as a corpus fixture: HTTP charset vs BOM/declaration
+conflict.** `ENCODING_CONFLICT` requires a response `Content-Type` charset that
+disagrees with the document's own signals, and the corpus harness drives every
+file through `validate_sitemap()` on a *local path*. A local file has no
+response, so `http_charset` is always `NA` there (see `encoding_findings()` in
+`R/encoding-facts.R`) and neither HTTP leg of the conflict predicate can fire.
+The scenario is covered by mocked-response tests instead — `test-encoding-facts.R`
+("an HTTP charset disagreeing with the declaration fires") and
+`test-protocol-validate.R` ("an HTTP-charset disagreement is the general
+ENCODING_CONFLICT") — so it is exempt from the §2 one-fixture-per-scenario rule.
 
 ### 2.8 Compression and archive scenarios
 
