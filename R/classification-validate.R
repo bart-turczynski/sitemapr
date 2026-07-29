@@ -294,9 +294,40 @@ validate_classification <- function(meta, base) {
   do.call(rbind, out)
 }
 
+# Split a normalized encoding label into its family and its byte-order suffix.
+# Only UTF-16 and UTF-32 have a byte-order-neutral family name: XML 1.0 §4.3.3
+# requires such an entity to begin with a byte-order mark, and it is the MARK,
+# not the declaration, that fixes the byte order. `utf16` therefore names the
+# family with the order left open (`order = NA`), while `utf16le` pins it. Every
+# other label is its own family with no suffix, so `utf8` never splits.
+encoding_family <- function(x) {
+  if (is.na(x)) {
+    return(list(family = NA_character_, order = NA_character_))
+  }
+  base <- sub("(le|be)$", "", x)
+  if (!base %in% c("utf16", "utf32")) {
+    return(list(family = x, order = NA_character_))
+  }
+  order <- substring(x, nchar(base) + 1L)
+  list(family = base, order = if (nzchar(order)) order else NA_character_)
+}
+
 # TRUE when two normalized encoding labels are both present and disagree.
+# The comparison is family-aware rather than string-equal: a byte-order-neutral
+# label and a specific one from the same family (`utf16` vs `utf16le`) name the
+# same encoding at different specificity and are COMPATIBLE, so the canonical
+# `encoding="UTF-16"`-plus-BOM spelling is not reported as a conflict. Two
+# different specific orders (`utf16be` against a `utf16le` mark) still disagree.
 encoding_conflict <- function(a, b) {
-  !is.na(a) && !is.na(b) && a != b
+  if (anyNA(c(a, b)) || identical(a, b)) {
+    return(FALSE)
+  }
+  fa <- encoding_family(a)
+  fb <- encoding_family(b)
+  if (!identical(fa$family, fb$family)) {
+    return(TRUE)
+  }
+  !anyNA(c(fa$order, fb$order))
 }
 
 # The resolved encoding by priority BOM > XML declaration > HTTP charset >

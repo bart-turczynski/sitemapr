@@ -178,6 +178,25 @@ test_that("a BOM/declaration conflict fires from validate_sitemap()", {
   )
 })
 
+test_that("the canonical UTF-16 spelling fires nothing (SITE-zarjabyz)", {
+  # encoding="UTF-16" plus a UTF-16 BOM is the conformant spelling of a UTF-16
+  # entity, and it used to raise ENCODING_BOM_DECLARATION_CONFLICT end to end.
+  # Built here rather than added under fixtures/corpus/, which is
+  # byte-identical to the sibling port's fixtures/ and must not diverge
+  # unilaterally; the want is recorded on SITE-ppojfsed.
+  path <- withr::local_tempfile(fileext = ".xml")
+  doc <- enc_urlset("<?xml version=\"1.0\" encoding=\"UTF-16\"?>")
+  utf16 <- iconv(doc, "UTF-8", "UTF-16LE", toRaw = TRUE)[[1]]
+  writeBin(c(as.raw(c(0xFF, 0xFE)), utf16), path)
+
+  expect_identical(nrow(suppressWarnings(validate_sitemap(path))), 0L)
+  # The document still decodes: the fix removes a finding, not a capability.
+  expect_identical(
+    suppressWarnings(read_sitemap(path))$loc,
+    "https://example.com/a"
+  )
+})
+
 test_that("agreeing encoding signals produce no finding", {
   for (name in c(
     "utf8-bom.xml",

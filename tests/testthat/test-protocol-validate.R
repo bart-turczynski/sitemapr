@@ -1836,6 +1836,80 @@ test_that("equivalent encoding spellings do not conflict", {
   expect_identical(nrow(out), 0L)
 })
 
+# --- SITE-zarjabyz: the comparison is family-aware ------------------------
+
+test_that("a byte-order-neutral declaration matches either UTF-16 BOM", {
+  # XML 1.0 §4.3.3: a UTF-16 entity must begin with a BOM, and it is the MARK,
+  # not the declaration, that fixes the byte order. encoding="UTF-16" plus a
+  # UTF-16 BOM is therefore the canonical form, not a conflict.
+  for (bom in c("UTF-16LE", "UTF-16BE")) {
+    out <- validate_encoding(
+      source_meta(bom_encoding = bom, declared_encoding = "UTF-16"),
+      base
+    )
+    expect_identical(nrow(out), 0L)
+  }
+})
+
+test_that("a byte-order-specific declaration still conflicts with the BOM", {
+  out <- validate_encoding(
+    source_meta(bom_encoding = "UTF-16LE", declared_encoding = "UTF-16BE"),
+    base
+  )
+  expect_identical(out$code, "ENCODING_BOM_DECLARATION_CONFLICT")
+})
+
+test_that("UTF-32 compares on the same terms as UTF-16", {
+  neutral <- validate_encoding(
+    source_meta(bom_encoding = "UTF-32LE", declared_encoding = "UTF-32"),
+    base
+  )
+  expect_identical(nrow(neutral), 0L)
+  crossed <- validate_encoding(
+    source_meta(bom_encoding = "UTF-32LE", declared_encoding = "UTF-32BE"),
+    base
+  )
+  expect_identical(crossed$code, "ENCODING_BOM_DECLARATION_CONFLICT")
+})
+
+test_that("the HTTP-charset arm is family-aware too", {
+  ok <- validate_encoding(
+    source_meta(bom_encoding = "UTF-16LE", http_charset = "UTF-16"),
+    base
+  )
+  expect_identical(nrow(ok), 0L)
+  crossed <- validate_encoding(
+    source_meta(bom_encoding = "UTF-16LE", http_charset = "UTF-16BE"),
+    base
+  )
+  expect_identical(crossed$code, "ENCODING_CONFLICT")
+})
+
+test_that("a compatible declaration leaves the resolved encoding alone", {
+  # Only the finding goes away; the BOM still wins the resolution cascade, so
+  # the resolved label keeps naming the byte order the document actually has.
+  meta <- source_meta(bom_encoding = "UTF-16LE", declared_encoding = "UTF-16")
+  expect_identical(
+    resolve_encoding(
+      norm_encoding(meta$bom_encoding),
+      norm_encoding(meta$declared_encoding),
+      NA_character_,
+      meta
+    ),
+    "UTF-16LE"
+  )
+})
+
+test_that("only UTF-16/UTF-32 labels split off a byte-order suffix", {
+  # Guard against over-widening: an unrelated label that happens to end in
+  # "le"/"be" is its own family and must not compare equal to its stem.
+  expect_identical(encoding_family("utf8")$family, "utf8")
+  expect_true(is.na(encoding_family("utf8")$order))
+  expect_identical(encoding_family("shiftjisbe")$family, "shiftjisbe")
+  expect_true(encoding_conflict("shiftjis", "shiftjisbe"))
+  expect_true(is.na(encoding_family(NA_character_)$family))
+})
+
 test_that("a single encoding signal never conflicts", {
   out <- validate_encoding(source_meta(declared_encoding = "UTF-8"), base)
   expect_identical(nrow(out), 0L)
