@@ -1074,6 +1074,10 @@ a.smr-url:hover{text-decoration:underline;}
 .smr-prov-exec{border:1px solid var(--accent2);color:var(--accent2);}
 .smr-prov-diag{border:1px dashed var(--muted);color:var(--muted);
   font-style:italic;}
+/* passed checks: the count is the headline, the enumeration is on demand */
+.smr-checks>summary{cursor:pointer;font-weight:600;font-size:.9rem;
+  padding:6px 0;color:#16a34a;}
+.smr-checks>summary:hover{text-decoration:underline;}
 .smr-ok-note{display:inline-block;padding:4px 12px;
   background:rgba(22,163,74,.12);
   color:#16a34a;border-radius:4px;font-weight:600;}
@@ -1189,6 +1193,7 @@ report_render_html <- function(source_label, urls, findings, mode, title) {
     report_url_tree(urls),
     report_severity_dashboard(findings),
     report_findings_section(findings),
+    report_checks_section(urls, sources, findings),
     report_url_table(urls),
     htmltools::tags$footer(
       class = "smr-footer",
@@ -1317,8 +1322,17 @@ report_return <- function(html, output) {
 #' `lastmod`/`priority`/`changefreq` presence), `lastmod` coverage cards with a
 #' by-month histogram, a collapsible URL folder tree grouped by path segment, a
 #' severity dashboard, the findings grouped by validation layer (deduplicated by
-#' code, with evidence excerpts), and a searchable, sortable, CSV-exportable URL
-#' table.
+#' code, with evidence excerpts), the checks that ran and passed, and a
+#' searchable, sortable, CSV-exportable URL table.
+#'
+#' One section reads the run rather than the findings. The **Checks** section is
+#' driven by the finding-code registry: it enumerates the checks this package
+#' actually implements, marks those that ran and did not fire as passed, and
+#' names the layers the run did not exercise as neither passed nor failed — so
+#' an empty findings table can be told apart from a validation that never ran.
+#' A layer counts as having run only on positive evidence, which understates
+#' rather than overstates: `check_robots = TRUE` leaves no trace when nothing is
+#' disallowed, so a clean robots run reads as "not exercised".
 #'
 #' The output is entirely self-contained: all CSS, JavaScript (search, sort,
 #' CSV export, tree toggle, and a light/dark theme toggle), and data are

@@ -1,0 +1,246 @@
+# Unit tests for the report's checks section (R/report-checks.R).
+#
+# The section's whole value is that it may not overstate: a check reported as
+# passed must be one this port implements AND one whose layer demonstrably ran.
+# These tests pin both halves — the eligibility filter and the per-layer
+# evidence rules, including the layers that are deliberately understated.
+
+layer_ran <- function(urls, sources, findings) {
+  sitemapr_test_call("report_layer_ran", urls, sources, findings)
+}
+
+check_states <- function(urls, sources, findings) {
+  sitemapr_test_call("report_check_states", urls, sources, findings)
+}
+
+no_findings <- function() {
+  sitemapr_test_call("empty_findings_contract")
+}
+
+# ---- per-layer run evidence --------------------------------------------------
+
+test_that("the evidence vector covers every layer the assembler can emit", {
+  # Lockstep guard: report_check_states() indexes this vector by the registry's
+  # `layer` column, so a layer missing here would subscript with NA rather than
+  # mislabel silently -- but a layer whose evidence rule was never written is a
+  # gap either way.
+  ran <- layer_ran(report_urls_fixture(character(0)), NULL, no_findings())
+  expect_named(ran, sitemapr_test_ns$findings_layer_order)
+})
+
+test_that("a local single-file run proves only what it exercised", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture(
+    "/tmp/sitemap.xml",
+    "/tmp/sitemap.xml",
+    "xml-urlset"
+  )
+  sources$status <- NA_integer_
+  ran <- layer_ran(urls, sources, no_findings())
+
+  expect_true(ran[["classification"]]) # bytes were sniffed
+  expect_true(ran[["schema"]]) # a urlset root is XSD-validated
+  expect_true(ran[["protocol"]]) # rows exist, so they were checked
+  expect_true(ran[["report"]]) # the cap runs at every assembly
+  expect_false(ran[["fetch"]]) # no HTTP status and no error class
+  expect_false(ran[["decompression"]]) # nothing was inflated
+  expect_false(ran[["index-expansion"]]) # not an index
+  expect_false(ran[["page"]]) # no page_coverage attribute
+  expect_false(ran[["robots"]]) # leaves no trace when clean
+})
+
+test_that("an HTTP status or a recorded error class proves a fetch", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  fetched <- report_sources_fixture(
+    "https://ex.com/s.xml",
+    "https://ex.com/s.xml",
+    "xml-urlset"
+  )
+  expect_true(layer_ran(urls, fetched, no_findings())[["fetch"]])
+
+  failed <- fetched
+  failed$status <- NA_integer_
+  failed$error_class <- "sitemapr_fetch_failed"
+  ran <- layer_ran(urls, failed, no_findings())
+  expect_true(ran[["fetch"]])
+  # A source that never parsed reached neither the sniffer nor the XSD.
+  expect_false(ran[["classification"]])
+  expect_false(ran[["schema"]])
+})
+
+test_that("gzip proves decompression but leaves the inner root unproven", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture("/tmp/s.xml.gz", "/tmp/s.xml.gz", "gzip")
+  ran <- layer_ran(urls, sources, no_findings())
+
+  expect_true(ran[["decompression"]])
+  # The source record keeps the OUTER format, so nothing here proves the
+  # inflated document was schema-validated. Understating is the safe direction.
+  expect_false(ran[["schema"]])
+  # URL rows still prove the protocol layer ran over them.
+  expect_true(ran[["protocol"]])
+})
+
+test_that("a sitemapindex root proves index expansion", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture(
+    c("https://ex.com/i.xml", "https://ex.com/c.xml"),
+    c("https://ex.com/i.xml", "https://ex.com/c.xml"),
+    c("xml-sitemapindex", "xml-urlset")
+  )
+  ran <- layer_ran(urls, sources, no_findings())
+
+  expect_true(ran[["index-expansion"]])
+  expect_true(ran[["schema"]])
+})
+
+test_that("the page_coverage attribute is what proves page inspection ran", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  findings <- no_findings()
+  expect_false(layer_ran(urls, NULL, findings)[["page"]])
+
+  attr(findings, "page_coverage") <- list(schema_version = "1", selected = 1L)
+  expect_true(layer_ran(urls, NULL, findings)[["page"]])
+})
+
+test_that("a fired finding proves its own layer ran", {
+  # The only way a clean robots run can be recognised: check_robots = TRUE
+  # records nothing when every URL is allowed.
+  urls <- report_urls_fixture("https://ex.com/a")
+  findings <- report_findings_fixture(
+    "ROBOTS_DISALLOWED",
+    "warning",
+    "robots"
+  )
+  expect_true(layer_ran(urls, NULL, findings)[["robots"]])
+})
+
+test_that("a NULL sources attribute proves nothing rather than erroring", {
+  urls <- report_urls_fixture(character(0))
+  ran <- layer_ran(urls, NULL, no_findings())
+
+  expect_false(ran[["fetch"]])
+  expect_false(ran[["classification"]])
+  expect_false(ran[["protocol"]])
+})
+
+# ---- per-code outcome --------------------------------------------------------
+
+test_that("states are one of fired/passed/not-run, and only for active codes", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture("/tmp/s.xml", "/tmp/s.xml", "xml-urlset")
+  findings <- report_findings_fixture(
+    "PROTOCOL_URL_FRAGMENT",
+    "warning",
+    "protocol"
+  )
+  states <- check_states(urls, sources, findings)
+
+  active <- sitemapr_test_call("findings_active_codes")
+  expect_equal(nrow(states), nrow(active))
+  expect_true(all(states$state %in% c("fired", "passed", "not-run")))
+  expect_equal(
+    states$state[states$code == "PROTOCOL_URL_FRAGMENT"],
+    "fired"
+  )
+  # A protocol sibling that did not fire passed; a page check never ran.
+  expect_equal(
+    states$state[states$code == "PROTOCOL_URL_USERINFO"],
+    "passed"
+  )
+  expect_equal(
+    states$state[states$code == "PAGE_CANONICAL_MISSING"],
+    "not-run"
+  )
+  # Rows read in pipeline order, not registry order.
+  expect_equal(
+    unique(states$layer),
+    sitemapr_test_ns$report_layer_order[
+      sitemapr_test_ns$report_layer_order %in% states$layer
+    ]
+  )
+})
+
+test_that("a validator-only code never appears as a passed check", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture("/tmp/s.xml", "/tmp/s.xml", "xml-urlset")
+  states <- check_states(urls, sources, no_findings())
+
+  reg <- sitemapr_test_call("findings_registry")
+  # INPUT_INVALID is the sibling's; this port has no input-layer emitter at all.
+  expect_equal(reg$status[reg$code == "INPUT_INVALID"], "validator-only")
+  expect_false("INPUT_INVALID" %in% states$code)
+})
+
+# ---- rendering --------------------------------------------------------------
+
+test_that("a clean local run reports what passed and what was not exercised", {
+  html <- render_string(core_fixture())
+
+  expect_match(html, "<h2>Checks</h2>", fixed = TRUE)
+  expect_match(html, "checks passed", fixed = TRUE)
+  expect_match(html, "0 reported an issue", fixed = TRUE)
+  # The layers that were not exercised are named, so the omission is explicit.
+  expect_match(html, "Not exercised", fixed = TRUE)
+  expect_match(html, "neither passed nor failed", fixed = TRUE)
+  # An active code from a layer that ran is enumerated...
+  expect_match(html, "PROTOCOL_URL_USERINFO", fixed = TRUE)
+  # ...and one from a layer that did not is never called passed.
+  passed_block <- sub("^.*<details class=\"smr-checks\">", "", html)
+  passed_block <- sub("</details>.*$", "", passed_block)
+  expect_no_match(passed_block, "PAGE_CANONICAL_MISSING", fixed = TRUE)
+})
+
+test_that("a fired code is counted as reported, not as passed", {
+  findings <- validate_sitemap(findings_fixture())
+  expect_true("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% findings$code)
+
+  html <- render_string(findings_fixture())
+  expect_match(html, "reported an issue", fixed = TRUE)
+  passed_block <- sub("^.*<details class=\"smr-checks\">", "", html)
+  passed_block <- sub("</details>.*$", "", passed_block)
+  expect_no_match(passed_block, "PROTOCOL_PRIORITY_OUT_OF_RANGE", fixed = TRUE)
+})
+
+test_that("the singular passed-check label and an all-unknown run render", {
+  # Nothing parsed and no rows: only the always-on report-layer cap can be
+  # reported as passed, which also exercises the singular label.
+  urls <- report_urls_fixture(character(0))
+  html <- render_string("nothing", urls = urls, findings = no_findings())
+
+  expect_match(html, "1 check passed", fixed = TRUE)
+  expect_match(html, "REPORT_TRUNCATED", fixed = TRUE)
+})
+
+test_that("with nothing left to report as passed the table is omitted", {
+  # The report-layer cap is the last check standing when no source parsed; fire
+  # it and the passed set is empty, so the collapsible table must disappear
+  # rather than render an empty shell.
+  urls <- report_urls_fixture(character(0))
+  findings <- report_findings_fixture("REPORT_TRUNCATED", "info", "report")
+  html <- render_string("truncated", urls = urls, findings = findings)
+
+  expect_match(html, "<h2>Checks</h2>", fixed = TRUE)
+  # The class name still appears in the inlined CSS; the element must not.
+  expect_no_match(html, "<details class=\"smr-checks\">", fixed = TRUE)
+  expect_match(html, "Not exercised", fixed = TRUE)
+})
+
+test_that("a run that exercises every layer has no not-exercised note", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture(
+    c("https://ex.com/i.xml", "https://ex.com/c.xml.gz"),
+    c("https://ex.com/i.xml", "https://ex.com/c.xml.gz"),
+    c("xml-sitemapindex", "gzip")
+  )
+  attr(urls, "sources") <- sources
+  findings <- report_findings_fixture(
+    c("ROBOTS_DISALLOWED", "PAGE_CANONICAL_MISSING"),
+    c("warning", "warning"),
+    c("robots", "page")
+  )
+  html <- render_string("full", urls = urls, findings = findings)
+
+  expect_match(html, "checks passed", fixed = TRUE)
+  expect_no_match(html, "Not exercised", fixed = TRUE)
+})

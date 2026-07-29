@@ -32,6 +32,37 @@ if (!file.exists(registry_path)) {
 
 reg <- utils::read.csv(registry_path, stringsAsFactors = FALSE, na.strings = "")
 
+# The registry has to be readable at RUN time too (the report's passed-checks
+# table reads it), and `docs/` is .Rbuildignore'd — so the same file ships at
+# inst/findings-registry.csv and is read from there through system.file()
+# (R/findings-registry.R). Assert the two copies are byte-identical: that is what
+# makes the duplication safe. The docs copy stays the cross-port artifact.
+shipped_path <- "inst/findings-registry.csv"
+if (!file.exists(shipped_path)) {
+  stop(
+    sprintf(
+      "%s not found: the registry must also ship for run-time reads.",
+      shipped_path
+    ),
+    call. = FALSE
+  )
+}
+if (
+  !identical(
+    readBin(registry_path, "raw", file.size(registry_path)),
+    readBin(shipped_path, "raw", file.size(shipped_path))
+  )
+) {
+  stop(
+    sprintf(
+      "%s and %s differ; copy the docs registry over the shipped one.",
+      registry_path,
+      shipped_path
+    ),
+    call. = FALSE
+  )
+}
+
 expected_cols <- c(
   "code",
   "severity",

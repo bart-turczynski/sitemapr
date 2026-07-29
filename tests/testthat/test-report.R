@@ -6,55 +6,10 @@
 # (grepl on section markers, class/id names, and CSS/JS hooks) rather than
 # brittle full-HTML snapshots.
 
-# A fixture with several path-bearing URLs (drives the tree + URL table); a
-# fixture that produces findings; and a valid index.
-core_fixture <- function() {
-  test_path("fixtures", "corpus", "xml", "valid-core.xml")
-}
-findings_fixture <- function() {
-  test_path("fixtures", "priority-out-of-range.xml")
-}
-
-report_urls_fixture <- function(loc, source_sitemap = loc, lastmod = NA) {
-  lastmod <- if (length(lastmod) == 0L) {
-    as.POSIXct(character(), tz = "UTC")
-  } else {
-    as.POSIXct(lastmod, tz = "UTC")
-  }
-  tibble::tibble(
-    loc = loc,
-    lastmod = lastmod,
-    changefreq = NA_character_,
-    priority = NA_real_,
-    images = rep(list(NULL), length(loc)),
-    video = rep(list(NULL), length(loc)),
-    news = rep(list(NULL), length(loc)),
-    alternates = rep(list(NULL), length(loc)),
-    source_sitemap = source_sitemap
-  )
-}
-
-report_sources_fixture <- function(requested_url, final_url, format) {
-  tibble::tibble(
-    requested_url = requested_url,
-    final_url = final_url,
-    status = rep(200L, length(requested_url)),
-    redirect_chain = rep("", length(requested_url)),
-    content_type = rep("application/xml", length(requested_url)),
-    charset = rep(NA_character_, length(requested_url)),
-    bytes = seq_along(requested_url) * 1024,
-    timing = seq_along(requested_url) / 10,
-    error_class = rep(NA_character_, length(requested_url)),
-    format = format,
-    root = rep(NA_character_, length(requested_url)),
-    namespaces = rep("", length(requested_url)),
-    profile_id = rep(NA_character_, length(requested_url))
-  )
-}
-
-render_string <- function(...) {
-  as.character(report_sitemap(...))
-}
+# The fixture paths (`core_fixture()`, `findings_fixture()`), the tibble
+# builders (`report_urls_fixture()`, `report_sources_fixture()`) and
+# `render_string()` live in helper-report.R, shared with test-report-checks.R
+# and test-report-recommendations.R.
 
 # ---- return / write contract -------------------------------------------------
 
