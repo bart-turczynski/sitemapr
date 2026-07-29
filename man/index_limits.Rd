@@ -7,8 +7,8 @@
 index_limits(
   max_depth = getOption("sitemapr.max_index_depth", 3L),
   max_children = getOption("sitemapr.max_index_children", 50000L),
-  max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", Inf),
-  max_total_urls = getOption("sitemapr.max_total_urls", Inf)
+  max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", 50000L),
+  max_total_urls = getOption("sitemapr.max_total_urls", 2.5e+07)
 )
 }
 \arguments{
@@ -23,13 +23,14 @@ sitemap-protocol per-index entry limit).}
 
 \item{max_total_sitemaps}{Maximum number of child sitemaps fetched across the
 entire traversal (numeric). Resolves from the argument, then
-\code{getOption("sitemapr.max_total_sitemaps")}, then the default of \code{Inf} (no
-aggregate bound). Kept numeric so \code{Inf} is representable.}
+\code{getOption("sitemapr.max_total_sitemaps")}, then the default of 50 000 (the
+sitemap-protocol per-index entry limit, reused as the traversal-wide
+ceiling). Kept numeric so \code{Inf} is representable.}
 
 \item{max_total_urls}{Maximum number of URL rows gathered across the entire
 traversal (numeric). Resolves from the argument, then
-\code{getOption("sitemapr.max_total_urls")}, then the default of \code{Inf} (no
-aggregate bound). Kept numeric so \code{Inf} is representable.}
+\code{getOption("sitemapr.max_total_urls")}, then the default of 25 000 000.
+Kept numeric so \code{Inf} is representable.}
 }
 \value{
 A named list of limits with coerced types.
@@ -50,9 +51,12 @@ entries beyond the cap are dropped (an \code{INDEX_CHILD_COUNT_EXCEEDED} event).
 budgets spanning the whole recursive expansion: the first caps how many child
 sitemaps are fetched in total (an \code{INDEX_TOTAL_SITEMAPS_EXCEEDED} event), the
 second caps how many URL rows are gathered in total (an
-\code{INDEX_TOTAL_URLS_EXCEEDED} event). Both default to \code{Inf} (no aggregate
-bound), preserving the historical behavior; when a budget is reached the
-traversal stops and returns the accumulated PARTIAL result.
+\code{INDEX_TOTAL_URLS_EXCEEDED} event). Both are FINITE by default — 50 000 child
+sitemaps and 25 000 000 URL rows, the ceilings a traversal of protocol-legal
+sitemaps cannot exceed in practice — so an embedding caller is never exposed
+to an unbounded traversal over a pathological index graph. Pass \code{Inf}
+explicitly to opt back out. When a budget is reached the traversal stops and
+returns the accumulated PARTIAL result.
 }
 \examples{
 index_limits()

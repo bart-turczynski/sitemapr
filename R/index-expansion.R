@@ -38,9 +38,12 @@
 #' budgets spanning the whole recursive expansion: the first caps how many child
 #' sitemaps are fetched in total (an `INDEX_TOTAL_SITEMAPS_EXCEEDED` event), the
 #' second caps how many URL rows are gathered in total (an
-#' `INDEX_TOTAL_URLS_EXCEEDED` event). Both default to `Inf` (no aggregate
-#' bound), preserving the historical behavior; when a budget is reached the
-#' traversal stops and returns the accumulated PARTIAL result.
+#' `INDEX_TOTAL_URLS_EXCEEDED` event). Both are FINITE by default — 50 000 child
+#' sitemaps and 25 000 000 URL rows, the ceilings a traversal of protocol-legal
+#' sitemaps cannot exceed in practice — so an embedding caller is never exposed
+#' to an unbounded traversal over a pathological index graph. Pass `Inf`
+#' explicitly to opt back out. When a budget is reached the traversal stops and
+#' returns the accumulated PARTIAL result.
 #'
 #' @param max_depth Maximum recursion depth below the root index (integer).
 #'   Resolves from the argument, then `getOption("sitemapr.max_index_depth")`,
@@ -51,12 +54,13 @@
 #'   sitemap-protocol per-index entry limit).
 #' @param max_total_sitemaps Maximum number of child sitemaps fetched across the
 #'   entire traversal (numeric). Resolves from the argument, then
-#'   `getOption("sitemapr.max_total_sitemaps")`, then the default of `Inf` (no
-#'   aggregate bound). Kept numeric so `Inf` is representable.
+#'   `getOption("sitemapr.max_total_sitemaps")`, then the default of 50 000 (the
+#'   sitemap-protocol per-index entry limit, reused as the traversal-wide
+#'   ceiling). Kept numeric so `Inf` is representable.
 #' @param max_total_urls Maximum number of URL rows gathered across the entire
 #'   traversal (numeric). Resolves from the argument, then
-#'   `getOption("sitemapr.max_total_urls")`, then the default of `Inf` (no
-#'   aggregate bound). Kept numeric so `Inf` is representable.
+#'   `getOption("sitemapr.max_total_urls")`, then the default of 25 000 000.
+#'   Kept numeric so `Inf` is representable.
 #' @return A named list of limits with coerced types.
 #' @seealso [fetch_limits()] and [discovery_limits()] for the other bound
 #'   constructors, and [read_sitemap()] which accepts `index_limits`.
@@ -68,8 +72,8 @@
 index_limits <- function(
   max_depth = getOption("sitemapr.max_index_depth", 3L),
   max_children = getOption("sitemapr.max_index_children", 50000L),
-  max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", Inf),
-  max_total_urls = getOption("sitemapr.max_total_urls", Inf)
+  max_total_sitemaps = getOption("sitemapr.max_total_sitemaps", 50000L),
+  max_total_urls = getOption("sitemapr.max_total_urls", 25e6)
 ) {
   check_limit(max_depth, "max_depth")
   check_limit(max_children, "max_children")

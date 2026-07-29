@@ -52,6 +52,18 @@ related W3C and RFC standards.
   paths; results are deduped and capped. `sitemap_tree_from_bytes()` classifies
   an already-fetched document.
 
+## Resource bounds
+
+* The traversal-wide aggregate budgets in `index_limits()` are now **finite by
+  default**: `max_total_sitemaps` is 50 000 (was `Inf`) and `max_total_urls` is
+  25 000 000 (was `Inf`). Only `max_depth` and the per-index `max_children` were
+  bounded before, so a pathological index graph could drive an unbounded
+  traversal in an embedding caller. Both ceilings sit above what a traversal of
+  protocol-legal sitemaps reaches in practice, and reaching one stops the
+  traversal and returns the accumulated partial result with an
+  `INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED` finding. Pass
+  `Inf` explicitly, or set `options(sitemapr.max_total_sitemaps = Inf)`, to keep
+  the previous unbounded behavior.
 ## Network safety
 
 * SSRF guard blocks requests to private, loopback, link-local, and

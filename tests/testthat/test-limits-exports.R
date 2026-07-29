@@ -36,7 +36,7 @@ test_that("fetch_limits() preserves its list shape and coerced types", {
   expect_identical(lim$max_bytes, 524288000L)
 })
 
-test_that("index_limits() preserves its list shape, Inf budgets, and types", {
+test_that("index_limits() keeps its list shape, finite budgets, types", {
   withr::local_options(list(
     sitemapr.max_index_depth = NULL,
     sitemapr.max_index_children = NULL,
@@ -52,8 +52,8 @@ test_that("index_limits() preserves its list shape, Inf budgets, and types", {
   )
   expect_identical(lim$max_depth, 3L)
   expect_identical(lim$max_children, 50000L)
-  expect_identical(lim$max_total_sitemaps, Inf)
-  expect_identical(lim$max_total_urls, Inf)
+  expect_identical(lim$max_total_sitemaps, 50000)
+  expect_identical(lim$max_total_urls, 25e6)
   expect_type(lim$max_total_sitemaps, "double")
 })
 

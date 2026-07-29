@@ -296,7 +296,7 @@ test_that("an index with no children yields an empty tree", {
   expect_identical(nrow(res$rows), 0L)
 })
 
-test_that("index_limits() defaults to no aggregate budget (Inf)", {
+test_that("index_limits() defaults to finite aggregate budgets", {
   withr::local_options(list(
     sitemapr.max_total_sitemaps = NULL,
     sitemapr.max_total_urls = NULL
@@ -304,10 +304,23 @@ test_that("index_limits() defaults to no aggregate budget (Inf)", {
 
   lim <- index_limits()
 
-  expect_identical(lim$max_total_sitemaps, Inf)
-  expect_identical(lim$max_total_urls, Inf)
+  expect_identical(lim$max_total_sitemaps, 50000)
+  expect_identical(lim$max_total_urls, 25e6)
+  # Kept double so a caller can still opt back out with Inf.
   expect_type(lim$max_total_sitemaps, "double")
   expect_type(lim$max_total_urls, "double")
+})
+
+test_that("index_limits() still accepts Inf to opt out of the budgets", {
+  withr::local_options(list(
+    sitemapr.max_total_sitemaps = NULL,
+    sitemapr.max_total_urls = NULL
+  ))
+
+  lim <- index_limits(max_total_sitemaps = Inf, max_total_urls = Inf)
+
+  expect_identical(lim$max_total_sitemaps, Inf)
+  expect_identical(lim$max_total_urls, Inf)
 })
 
 test_that("max_total_sitemaps stops at the exact total with a partial result", {
@@ -647,6 +660,31 @@ test_that("dispatch stops at the remaining sitemap-count budget", {
     acc
   )
   expect_identical(ls(acc$fetch_cache), "https://example.com/c1.xml")
+})
+
+test_that("an Inf sitemap budget dispatches the whole batch", {
+  # The budgets are finite by default (SITE-wlmodqza), so the opt-out path is
+  # only reachable when a caller passes Inf: `remaining` is then non-finite and
+  # falls back to the batch size rather than truncating the dispatch.
+  local_index_server(list(
+    "https://example.com/c1.xml" = urlset_xml("https://example.com/a"),
+    "https://example.com/c2.xml" = urlset_xml("https://example.com/b")
+  ))
+  acc <- ix_prefetch_acc(total = 4L)
+  prefetch_index_children(
+    c("https://example.com/c1.xml", "https://example.com/c2.xml"),
+    c("k1", "k2"),
+    1L,
+    "ua",
+    index_limits(max_total_sitemaps = Inf),
+    fetch_limits(),
+    request_policy(),
+    acc
+  )
+  expect_setequal(
+    ls(acc$fetch_cache),
+    c("https://example.com/c1.xml", "https://example.com/c2.xml")
+  )
 })
 
 test_that("a leaf reference with no fetch record reports NA", {
