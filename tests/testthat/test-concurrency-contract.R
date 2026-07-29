@@ -12,8 +12,14 @@
 #
 # Seams (helper-concurrency.R): permute_completion_order() forces child fetches
 # to COMPLETE in a caller-chosen order; local_inflight_probe() records the peak
-# concurrent in-flight fetches; the sequential expand_index() result is the
-# REFERENCE oracle, asserted identical() to the concurrent output.
+# DISPATCH WIDTH handed to the worker pool; the sequential expand_index() result
+# is the REFERENCE oracle, asserted identical() to the concurrent output.
+#
+# What the probe can and cannot prove: responses here are mocked, so nothing in
+# this file overlaps in wall-clock terms and no test in it can demonstrate real
+# concurrency. The probe bounds the cap and the single-dispatch test below
+# guards the structure; actual overlap is evidenced out-of-band by benchmarking
+# against a server that counts its own concurrency (SITE-hxzmvlkn).
 
 test_that("concurrent output is byte-identical to sequential (rows/tree)", {
   # Build one index over several same-host leaves whose bodies differ, so row
@@ -67,8 +73,8 @@ test_that("output is stable across every permuted child completion order", {
 })
 
 test_that("the global worker cap (max_active) is never exceeded", {
-  # A probe records the number of fetches simultaneously in flight. With
-  # max_active = 2 over many children, the observed peak must never exceed 2.
+  # A probe records the number of requests handed to the pool at once. With
+  # max_active = 2 over many children, that width must never exceed 2.
   root <- "https://example.com/sitemap.xml"
   map <- list()
   for (i in seq_len(8L)) {
@@ -272,8 +278,9 @@ test_that("sitemap_tree paces all phases against one shared bucket", {
 test_that("read_sitemap(max_active=) engages the scheduler, output unchanged", {
   # The user-facing knob (ADR-008 §1): read_sitemap()'s top-level max_active is
   # folded into the policy and reaches expand_index()'s scheduler. Proven two
-  # ways: the in-flight probe records >1 concurrent fetch, and the URL rows are
-  # byte-identical to the sequential default (max_active omitted).
+  # ways: the probe records a dispatch width >1, so the children reached the
+  # pool together rather than one at a time, and the URL rows are byte-identical
+  # to the sequential default (max_active omitted).
   root <- "https://example.com/sitemap.xml"
   children <- list(
     "https://example.com/child-1.xml" = urlset_xml("https://example.com/a"),
@@ -306,4 +313,243 @@ test_that("read_sitemap(max_active=) engages the scheduler, output unchanged", {
 
   expect_gt(probe$peak_inflight(), 1L)
   expect_identical(strip_meta(concurrent), strip_meta(sequential))
+})
+
+# ---- concurrent dispatch (SITE-hxzmvlkn) ------------------------------------
+#
+# The scheduler used to WINDOW a sequential for-loop over fetch_source(): the
+# worker cap was honoured trivially because the in-flight count was always 1.
+# These tests pin the structure that a windowed sequential loop cannot satisfy,
+# and cover the failure branches of the batch path, which no longer share
+# fetch_source()'s abort handling.
+
+test_that("a batch reaches the worker pool in one parallel dispatch", {
+  # Regression guard: all eight children must be handed to
+  # req_perform_parallel() TOGETHER, in a single call, under the worker cap.
+  # A sequential loop (or a windowed one) produces eight calls, or one per
+  # window, never one call carrying eight requests.
+  seen <- new.env(parent = emptyenv())
+  seen$calls <- list()
+  testthat::local_mocked_bindings(
+    req_perform_parallel = function(reqs, ..., max_active = 10) {
+      seen$calls[[length(seen$calls) + 1L]] <- list(
+        n = length(reqs),
+        max_active = max_active
+      )
+      lapply(reqs, function(req) {
+        httr2::response(
+          status_code = 200L,
+          url = req$url,
+          headers = list("Content-Type" = "application/xml"),
+          body = charToRaw(urlset_xml("https://example.com/p"))
+        )
+      })
+    },
+    .package = "httr2"
+  )
+
+  urls <- sprintf("https://example.com/child-%d.xml", seq_len(8L))
+  records <- fetch_batch_follow(
+    urls = urls,
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 4L
+  )
+
+  expect_length(seen$calls, 1L)
+  expect_identical(seen$calls[[1]]$n, 8L)
+  expect_identical(seen$calls[[1]]$max_active, 4L)
+  expect_length(records, 8L)
+  expect_identical(records[[1]]$requested_url, urls[[1]])
+})
+
+test_that("records come back in catalog order, not completion order", {
+  # The pool may complete in any order; fetch_batch_follow() builds every
+  # record only once all URLs are terminal, walking them in catalog order. A
+  # mock that returns its responses REVERSED must not disturb that.
+  testthat::local_mocked_bindings(
+    req_perform_parallel = function(reqs, ..., max_active = 10) {
+      rev(lapply(rev(reqs), function(req) {
+        httr2::response(
+          status_code = 200L,
+          url = req$url,
+          headers = list("Content-Type" = "application/xml"),
+          body = charToRaw(urlset_xml("https://example.com/p"))
+        )
+      }))
+    },
+    .package = "httr2"
+  )
+
+  urls <- sprintf("https://example.com/child-%d.xml", seq_len(4L))
+  records <- fetch_batch_follow(
+    urls = urls,
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 4L
+  )
+
+  expect_identical(
+    vapply(records, function(r) r$requested_url, character(1)),
+    urls
+  )
+})
+
+test_that("an SSRF-blocked child retires alone, siblings still fetched", {
+  # The guard runs before every hop. In a batch its abort must retire only the
+  # blocked child -- it must not tear down the whole dispatch.
+  local_index_server(list(
+    "https://example.com/ok.xml" = urlset_xml("https://example.com/a")
+  ))
+
+  records <- fetch_batch_follow(
+    urls = c("http://127.0.0.1/blocked.xml", "https://example.com/ok.xml"),
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_null(records[[1]])
+  expect_identical(records[[2]]$status, 200L)
+})
+
+test_that("a batch of only blocked children dispatches nothing", {
+  # Every pending URL fails its guard, so the round has no request to send and
+  # the loop must terminate rather than spin.
+  records <- fetch_batch_follow(
+    urls = c("http://127.0.0.1/a.xml", "http://127.0.0.1/b.xml"),
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_length(records, 2L)
+  expect_true(all(vapply(records, is.null, logical(1))))
+})
+
+test_that("a redirect is followed across rounds, chain recorded", {
+  # Redirects advance one hop per round, so the per-hop guard still precedes
+  # every request. The terminal record reports the final URL and the chain.
+  local_index_server(list(
+    "https://example.com/final.xml" = urlset_xml("https://example.com/a")
+  ))
+  hops <- new.env(parent = emptyenv())
+  hops$n <- 0L
+  httr2::local_mocked_responses(function(req) {
+    if (grepl("start", req$url, fixed = TRUE)) {
+      hops$n <- hops$n + 1L
+      return(httr2::response(
+        status_code = 301L,
+        url = req$url,
+        headers = list(Location = "https://example.com/final.xml")
+      ))
+    }
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "application/xml"),
+      body = charToRaw(urlset_xml("https://example.com/a"))
+    )
+  })
+
+  records <- fetch_batch_follow(
+    urls = "https://example.com/start.xml",
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_identical(hops$n, 1L)
+  expect_identical(records[[1]]$status, 200L)
+  expect_identical(records[[1]]$final_url, "https://example.com/final.xml")
+  expect_true(
+    "https://example.com/start.xml" %in% records[[1]]$redirect_chain[[1]]
+  )
+})
+
+test_that("a redirect loop is retired at the redirect limit", {
+  # Exceeding max_redirects aborts in the sequential path; in the batch path it
+  # retires that URL with no record, which the caller reads as unfetchable.
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 302L,
+      url = req$url,
+      headers = list(Location = "https://example.com/next.xml")
+    )
+  })
+
+  records <- fetch_batch_follow(
+    urls = "https://example.com/start.xml",
+    limits = fetch_limits(max_redirects = 2L),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_null(records[[1]])
+})
+
+test_that("a transport failure retires its URL without a record", {
+  # on_error = "continue" hands back a condition instead of a response.
+  testthat::local_mocked_bindings(
+    req_perform_parallel = function(reqs, ..., max_active = 10) {
+      list(rlang::catch_cnd(rlang::abort("boom", class = "httr2_failure")))
+    },
+    .package = "httr2"
+  )
+
+  records <- fetch_batch_follow(
+    urls = "https://example.com/child.xml",
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_null(records[[1]])
+})
+
+test_that("a body over the safety ceiling retires its URL alone", {
+  # read_capped_body() aborts; that abort must not escape the batch and kill
+  # the sibling children with it.
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "application/xml"),
+      body = charToRaw(strrep("x", 4096L))
+    )
+  })
+
+  records <- fetch_batch_follow(
+    urls = c("https://example.com/big.xml", "https://example.com/also.xml"),
+    limits = fetch_limits(max_bytes = 16L),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  )
+
+  expect_true(all(vapply(records, is.null, logical(1))))
+})
+
+test_that("a response with no body yields an empty-bodied record", {
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(status_code = 204L, url = req$url)
+  })
+
+  records <- suppressWarnings(fetch_batch_follow(
+    urls = "https://example.com/child.xml",
+    limits = fetch_limits(),
+    user_agent = default_user_agent(),
+    ssrf_guard = TRUE,
+    max_active = 2L
+  ))
+
+  expect_identical(records[[1]]$status, 204L)
+  expect_identical(records[[1]]$bytes, 0L)
 })

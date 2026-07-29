@@ -401,9 +401,19 @@ completion_order <- function(n) {
   c(perm, setdiff(seq_len(n), perm))
 }
 
-# Report a concurrent in-flight batch size to an active in-flight probe (the
+# Report a dispatch width to an active in-flight probe (the
 # `local_inflight_probe()` test seam), recording the running peak so a test can
 # assert the global worker cap is never exceeded. A no-op when no probe is set.
+#
+# `n` is the number of requests handed to `httr2::req_perform_parallel()` in
+# one round, already clamped to `max_active`; the pool keeps itself saturated,
+# so that is the count simultaneously in flight. This is an upper bound the
+# scheduler asserts, NOT an observation made from outside the process -- it
+# cannot by itself prove that requests overlap. Before the concurrent
+# dispatcher landed this same probe reported the intended WINDOW size while
+# nothing overlapped at all, which made an overlap assertion pass on a fully
+# sequential path; real overlap is evidenced by wall-clock benchmarking against
+# a server that counts its own concurrency (SITE-hxzmvlkn).
 inflight_probe_note <- function(n) {
   probe <- getOption("sitemapr.inflight_probe", NULL)
   if (is.null(probe)) {
@@ -439,11 +449,17 @@ child_fetch_cached <- function(child_url, user_agent, net_limits, policy, acc) {
 }
 
 # Fetch a batch of child URLs into `acc$fetch_cache`, bounded by the worker cap.
-# The batch is fetched in the caller-chosen completion order (identity in
-# production; permuted by the test seam), in windows of at most `max_active`, so
-# the number simultaneously in flight never exceeds the cap. Each fetch rides
-# the shared throttle and the full SSRF/redirect-safe `fetch_source()` path
-# unchanged; a fetch that aborts is cached as a NULL record (unfetchable).
+# The batch is handed to `fetch_batch_follow()`, which dispatches the children
+# through `httr2::req_perform_parallel()` under the global `max_active` cap, so
+# up to `max_active` requests are genuinely in flight at once. Each hop still
+# rides the shared throttle and the full per-hop SSRF/redirect-safe path; a
+# child that aborts is cached as a NULL record (unfetchable), exactly as the
+# sequential path's caught abort was.
+#
+# `urls` is reordered by the completion-order seam before dispatch, so a test
+# can force children to be requested (and therefore to complete) in a permuted
+# order and prove the committed output is unchanged. Cache keys are the URLs
+# themselves, so the cache the commit loop reads is order-independent.
 fetch_batch_into_cache <- function(
   urls,
   max_active,
@@ -457,27 +473,17 @@ fetch_batch_into_cache <- function(
     return(invisible())
   }
   ordered <- urls[completion_order(n)]
-  window <- max(1L, as.integer(max_active))
-  start <- 1L
-  while (start <= n) {
-    stop <- min(start + window - 1L, n)
-    batch <- ordered[start:stop]
-    inflight_probe_note(length(batch))
-    for (url in batch) {
-      acc$fetch_cache[[url]] <- list(
-        crec = tryCatch(
-          fetch_source(
-            url,
-            user_agent = user_agent,
-            limits = net_limits,
-            policy = policy,
-            throttle_state = acc$throttle_state
-          ),
-          error = function(e) NULL
-        )
-      )
-    }
-    start <- stop + 1L
+  records <- fetch_batch_follow(
+    urls = ordered,
+    limits = net_limits,
+    user_agent = user_agent,
+    ssrf_guard = TRUE,
+    policy = policy,
+    throttle_state = acc$throttle_state,
+    max_active = max_active
+  )
+  for (k in seq_along(ordered)) {
+    acc$fetch_cache[[ordered[[k]]]] <- list(crec = records[[k]])
   }
   invisible()
 }

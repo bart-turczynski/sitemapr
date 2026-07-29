@@ -728,6 +728,19 @@ fetch_perform_one <- function(
   policy = request_policy(),
   throttle_state = NULL
 ) {
+  req <- fetch_build_request(url, limits, user_agent, policy)
+  # Pace this hop against its host bucket (after the SSRF guard ran in the
+  # caller and after our transport controls above); a NULL state is a no-op.
+  throttle_before_request(throttle_state, url)
+  httr2::req_perform(req)
+}
+
+# Assemble one hop's request WITHOUT performing it. Split out of
+# `fetch_perform_one()` so the sequential path and the bounded-concurrency
+# batch path (`fetch_batch_follow()`) build byte-identical requests from one
+# definition -- a request that carried different transport controls depending
+# on which scheduler dispatched it would break the ADR-008 §0 invariant.
+fetch_build_request <- function(url, limits, user_agent, policy) {
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
   # Caller-supplied customization (after the SSRF guard, before our own
@@ -742,11 +755,7 @@ fetch_perform_one <- function(
   # guard on each Location.
   req <- httr2::req_options(req, followlocation = 0L, maxredirs = 0L)
   # Let the caller decide what a non-2xx status means; do not abort on it here.
-  req <- httr2::req_error(req, is_error = function(resp) FALSE)
-  # Pace this hop against its host bucket (after the SSRF guard ran in the
-  # caller and after our transport controls above); a NULL state is a no-op.
-  throttle_before_request(throttle_state, url)
-  httr2::req_perform(req)
+  httr2::req_error(req, is_error = function(resp) FALSE)
 }
 
 fetch_source_input <- function(url, scheme_inferred) {
@@ -1053,6 +1062,189 @@ fetch_follow <- function(
     elapsed <- as.numeric(difftime(Sys.time(), start, units = "secs"))
     return(fetch_terminal_record(resp, url, redirect_chain, body, elapsed))
   }
+}
+
+# ---- bounded-concurrency batch fetch (ADR-008 §2) ---------------------------
+#
+# ADDITIVE parallel sibling of fetch_follow(). fetch_source()/fetch_follow()
+# are FROZEN; this path reuses their ADR-003 primitives (fetch_hop_ssrf_guard,
+# fetch_build_request, fetch_redirect_target, read_capped_body,
+# fetch_terminal_record) instead of reimplementing them, so a hop dispatched by
+# the worker pool is indistinguishable from a hop dispatched sequentially.
+#
+# Redirects are followed in ROUNDS: every still-active URL is guarded, all of
+# their current hops go to httr2::req_perform_parallel() together, then each
+# result advances one hop. The per-hop SSRF guard therefore still runs before
+# every request (ADR-003) and concurrency never lets a redirect skip a check.
+#
+# Determinism (ADR-008 §0): responses are collected during the rounds but NO
+# record is built until every URL is terminal. Records are then assembled in
+# CATALOG order, so both the returned list and the `sitemapr_http_error`
+# warnings a non-2xx emits are ordered exactly as the sequential path orders
+# them, whatever order the pool completed in.
+#
+# Scope: for `scheme_inferred = FALSE` callers only. There is no https->http
+# connection-failure fallback here because that fallback fires only for an
+# INFERRED scheme (`fetch_connection_failure()`); a transport failure yields
+# NULL instead, which is exactly what the sequential path's abort already
+# becomes at every batch call site. Returns a list parallel to `urls`: a
+# one-row source_metadata() record, or NULL where the sequential path would
+# have aborted (SSRF block, redirect limit, transport failure, body ceiling).
+fetch_batch_follow <- function(
+  urls,
+  limits,
+  user_agent,
+  ssrf_guard,
+  policy = request_policy(),
+  throttle_state = NULL,
+  max_active = 1L
+) {
+  cap <- max(1L, as.integer(max_active))
+  states <- lapply(urls, fetch_batch_state_new)
+  repeat {
+    pending <- which(!vapply(states, `[[`, logical(1), "done"))
+    if (length(pending) == 0L) {
+      break
+    }
+    round <- fetch_batch_round(
+      states,
+      pending,
+      limits,
+      user_agent,
+      ssrf_guard,
+      policy,
+      throttle_state
+    )
+    states <- round$states
+    # Every pending URL failed its guard: they are all terminal now, so the
+    # next pass finds nothing pending and breaks. No request to dispatch.
+    if (length(round$reqs) == 0L) {
+      next
+    }
+    inflight_probe_note(min(length(round$reqs), cap))
+    resps <- httr2::req_perform_parallel(
+      round$reqs,
+      on_error = "continue",
+      progress = FALSE,
+      max_active = cap
+    )
+    states <- fetch_batch_advance(states, round$idx, resps, limits)
+  }
+  lapply(states, fetch_batch_record, limits)
+}
+
+# Per-URL scheduler state. `current_url` walks the redirect chain while `url`
+# stays the originally requested URL (what the record reports).
+fetch_batch_state_new <- function(url) {
+  list(
+    url = url,
+    current_url = url,
+    chain = character(0),
+    hops = 0L,
+    start = Sys.time(),
+    resp = NULL,
+    done = FALSE
+  )
+}
+
+# Guard and build one round's requests, in catalog order. A URL whose hop the
+# SSRF guard rejects is retired immediately with no response, so it never
+# reaches the pool -- the guard still precedes every network call.
+fetch_batch_round <- function(
+  states,
+  pending,
+  limits,
+  user_agent,
+  ssrf_guard,
+  policy,
+  throttle_state
+) {
+  reqs <- list()
+  idx <- integer(0)
+  for (i in pending) {
+    url <- states[[i]]$current_url
+    if (!fetch_batch_guard_ok(url, ssrf_guard)) {
+      states[[i]]$done <- TRUE
+      next
+    }
+    req <- fetch_build_request(url, limits, user_agent, policy)
+    # Same ordering the sequential path uses: guard, transport controls, then
+    # pace against the host bucket immediately before dispatch. Pacing runs
+    # per request here, so the throttle still bounds per-host RATE while the
+    # pool bounds concurrency (ADR-008 §2). A NULL state is a no-op.
+    throttle_before_request(throttle_state, url)
+    idx <- c(idx, i)
+    reqs[[length(reqs) + 1L]] <- req
+  }
+  list(states = states, reqs = reqs, idx = idx)
+}
+
+# TRUE when the hop may proceed. The guard's abort is converted to a flag so
+# one blocked child retires alone instead of tearing down the whole batch.
+fetch_batch_guard_ok <- function(url, ssrf_guard) {
+  tryCatch(
+    {
+      fetch_hop_ssrf_guard(url, ssrf_guard)
+      TRUE
+    },
+    sitemapr_ssrf_blocked = function(cnd) FALSE
+  )
+}
+
+# Fold one round's responses back into their states, by dispatch position.
+fetch_batch_advance <- function(states, idx, resps, limits) {
+  for (k in seq_along(idx)) {
+    i <- idx[[k]]
+    states[[i]] <- fetch_batch_step(states[[i]], resps[[k]], limits)
+  }
+  states
+}
+
+# Advance one URL by a single hop. `on_error = "continue"` hands back a
+# condition rather than a response for a transport failure, which retires the
+# URL with no record; a redirect resolves the next hop under the redirect
+# budget; anything else is terminal.
+fetch_batch_step <- function(state, resp, limits) {
+  if (!inherits(resp, "httr2_response")) {
+    state$done <- TRUE
+    return(state)
+  }
+  next_url <- fetch_redirect_target(resp, state$current_url)
+  if (is.na(next_url)) {
+    state$resp <- resp
+    state$done <- TRUE
+    return(state)
+  }
+  state$hops <- state$hops + 1L
+  if (state$hops > limits$max_redirects) {
+    state$done <- TRUE
+    return(state)
+  }
+  state$chain <- c(state$chain, state$current_url)
+  state$current_url <- next_url
+  state
+}
+
+# Build one terminal record, or NULL when the URL never reached a terminal
+# response. Reading the body can abort on the safety ceiling; that abort is
+# caught here so it retires this URL only, matching the sequential path where
+# the caller's own tryCatch turns the same abort into an unfetchable child.
+fetch_batch_record <- function(state, limits) {
+  if (is.null(state$resp)) {
+    return(NULL)
+  }
+  tryCatch(
+    {
+      body <- if (httr2::resp_has_body(state$resp)) {
+        read_capped_body(httr2::resp_body_raw(state$resp), limits$max_bytes)
+      } else {
+        raw()
+      }
+      elapsed <- as.numeric(difftime(Sys.time(), state$start, units = "secs"))
+      fetch_terminal_record(state$resp, state$url, state$chain, body, elapsed)
+    },
+    error = function(cnd) NULL
+  )
 }
 
 # ---- page-inspection capture loop (Layer E, Contract A) ----------------------
