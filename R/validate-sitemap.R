@@ -56,9 +56,11 @@ validation_source_bytes <- function(
   policy
 ) {
   if (is_local) {
+    # A local file has no response, so it carries no HTTP charset signal.
     return(list(
       bytes = readBin(target, what = "raw", n = file.info(target)$size),
-      final_url = NA_character_
+      final_url = NA_character_,
+      charset = NA_character_
     ))
   }
 
@@ -80,7 +82,11 @@ validation_source_bytes <- function(
       status = rec$status
     )
   }
-  list(bytes = attr(rec, "body"), final_url = rec$final_url)
+  list(
+    bytes = attr(rec, "body"),
+    final_url = rec$final_url,
+    charset = rec$charset[[1L]]
+  )
 }
 
 validation_archive_source <- function(target, bytes, final_url, base) {
@@ -94,7 +100,13 @@ validation_archive_source <- function(target, bytes, final_url, base) {
   )
 }
 
-validation_document_source <- function(bytes, fmt, final_url, base) {
+validation_document_source <- function(
+  bytes,
+  fmt,
+  final_url,
+  base,
+  charset = NA_character_
+) {
   list(
     kind = "document",
     bytes = bytes,
@@ -102,7 +114,8 @@ validation_document_source <- function(bytes, fmt, final_url, base) {
     byte_size = as.numeric(length(bytes)),
     final_url = final_url,
     base = base,
-    fetched_at = NA # TODO(layer-f-encoding) + no fetch-timestamp in source_meta
+    charset = charset,
+    fetched_at = NA # source_metadata() carries no fetch timestamp
   )
 }
 
@@ -144,7 +157,7 @@ resolve_validation_source <- function(x, user_agent, limits, policy) {
     fmt <- sniff_format(bytes)
   }
 
-  validation_document_source(bytes, fmt, final_url, base)
+  validation_document_source(bytes, fmt, final_url, base, source$charset)
 }
 
 archive_gzip_error_part <- function(cnd, src) {
@@ -823,6 +836,13 @@ validate_sitemap_source <- function(
     validate_xml_parts(src, user_agent, limits, index_limits, policy, ruleset)
   }
 
+  # The encoding signals (§3) are read from the source BYTES and are likewise
+  # independent of how the document parsed, so they are appended once here for
+  # the same reason: wiring them into the per-format branches would reach only
+  # the branches that build a source_meta() today (unsupported root, HTML
+  # masquerade, feed children) and would miss the ordinary urlset entirely.
+  parts <- append_encoding_part(parts, src)
+
   # The document-level robots check (§0.6) is independent of how the document
   # parsed — a sitemap at a Disallow-ed path is a defect whether it is a valid
   # urlset, an HTML masquerade or a corrupt gzip — so it is appended once here
@@ -837,6 +857,22 @@ validate_sitemap_source <- function(
   )
 
   assemble_findings(parts, mode, ruleset)
+}
+
+# Append the encoding-conflict part for a resolved source. Only a "document"
+# source has bytes to read: the malformed-gzip branch never inflated any, and an
+# archive's encoding is a per-member property outside this document-level
+# contract.
+append_encoding_part <- function(parts, src) {
+  if (!identical(src$kind, "document")) {
+    return(parts)
+  }
+  parts[[length(parts) + 1L]] <- encoding_findings(
+    src$bytes,
+    src$charset,
+    src$base
+  )
+  parts
 }
 
 # Append the document-level robots part for the source's own url, or leave

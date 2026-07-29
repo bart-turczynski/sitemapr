@@ -2,7 +2,7 @@ compressed/invalid.gz	UNSUPPORTED_MALFORMED_GZIP
 compressed/invalid.tar.gz	PROTOCOL_URL_NOT_ABSOLUTE
 compressed/valid.tar.gz	<none>
 compressed/valid.xml.gz	<none>
-encoding/bom-conflict.xml	<none>
+encoding/bom-conflict.xml	ENCODING_BOM_DECLARATION_CONFLICT
 encoding/declared-iso8859-no-bom.xml	<none>
 encoding/declared-utf8-no-bom.xml	<none>
 encoding/no-encoding.xml	<none>

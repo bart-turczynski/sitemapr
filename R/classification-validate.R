@@ -22,10 +22,13 @@
 # The producers do not re-sniff or re-parse: they read a `source_meta` object
 # (see `source_meta()`) that the caller — Layer B classification today, Layer F
 # `validate_sitemap()` once it exists — fills from the already-computed
-# classification. Until Layer F lands, `validate_protocol()` is the interim
-# assembler that surfaces these diagnostics alongside its protocol findings
-# (its `source_meta` argument); the cucumber feature wiring is deferred to
-# Layer F (SITE-ymzvnlpr) per the slice convention.
+# classification. The encoding fields are filled from the source bytes and the
+# HTTP response by R/encoding-facts.R, which `validate_sitemap()` and
+# `audit_sitemap()` call once per document source. Until Layer F lands,
+# `validate_protocol()` is the interim assembler that surfaces these diagnostics
+# alongside its protocol findings (its `source_meta` argument); the cucumber
+# feature wiring is deferred to Layer F (SITE-ymzvnlpr) per the slice
+# convention.
 
 # Construct the classification-layer findings tibble. Same column contract as
 # `protocol_findings()` / `schema_findings()`, but `layer = "classification"`.

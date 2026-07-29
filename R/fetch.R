@@ -948,8 +948,14 @@ fetch_terminal_record <- function(resp, url, redirect_chain, body, elapsed) {
     httr2::resp_content_type(resp),
     error = function(e) NA_character_
   )
+  # The charset the response ACTUALLY named, not httr2's resolved encoding:
+  # `resp_encoding()` falls back to "UTF-8" when the header omits the parameter
+  # (and even when there is no Content-Type at all), which would make every
+  # response assert a charset it never sent. The encoding-conflict diagnostics
+  # (R/encoding-facts.R) compare this against the BOM and the XML declaration,
+  # so a fabricated signal there is a fabricated finding.
   charset <- tryCatch(
-    httr2::resp_encoding(resp),
+    content_type_charset(httr2::resp_header(resp, "Content-Type")),
     error = function(e) NA_character_
   )
   is_2xx <- status >= 200L && status < 300L

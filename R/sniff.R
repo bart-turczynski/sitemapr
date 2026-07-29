@@ -96,7 +96,10 @@ sniff_is_text <- function(bytes) {
 # From the leading bytes (BOM already stripped), produce a short lowercase ASCII
 # preview string suitable for markup probing. Non-ASCII bytes are dropped; this
 # is only used to look for "<", element names, and HTML keywords, all ASCII.
-sniff_markup_preview <- function(bytes, max_bytes = 4096L) {
+# Dropping them also strips the interleaved NULs of UTF-16-encoded markup, so
+# its ASCII skeleton still previews. `lower = FALSE` keeps the source's own case
+# for callers that quote what they read (R/encoding-facts.R).
+sniff_markup_preview <- function(bytes, max_bytes = 4096L, lower = TRUE) {
   take <- min(length(bytes), max_bytes)
   if (take == 0L) {
     return("")
@@ -106,7 +109,8 @@ sniff_markup_preview <- function(bytes, max_bytes = 4096L) {
   if (length(ascii) == 0L) {
     return("")
   }
-  tolower(rawToChar(as.raw(ascii)))
+  preview <- rawToChar(as.raw(ascii))
+  if (lower) tolower(preview) else preview
 }
 
 # Strip a single `<! ... >` declaration (e.g. `<!DOCTYPE ...>`) from the front

@@ -381,6 +381,17 @@ audit_findings_projection <- function(artifact, mode) {
     "document" = audit_findings_document(artifact),
     list(validate_failure_finding(artifact$source, artifact$cnd))
   )
+  # Mirrors append_encoding_part() on the validate path: the encoding signals
+  # come from the bytes, so they are appended once per document artifact rather
+  # than inside the per-format branches. The HTTP charset rides on the shared
+  # root_meta record (NA for a local file, which has no response).
+  if (identical(artifact$kind, "document")) {
+    parts[[length(parts) + 1L]] <- encoding_findings(
+      artifact$bytes,
+      artifact$root_meta$charset[[1L]],
+      artifact$base
+    )
+  }
   assemble_findings(parts, mode)
 }
 
