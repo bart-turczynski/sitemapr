@@ -71,3 +71,74 @@ test_that("non-raw input is coerced before decompression", {
     charToRaw("coerce me")
   )
 })
+
+# ---- inflated-size ceiling (decompression bomb) ------------------------------
+
+# 64 MB of zeros compresses to a few hundred KB: a real expansion ratio,
+# cheap to build, and small enough that the un-bounded path stays survivable
+# if this ever regresses.
+bomb_stream <- function(n = 64L * 1024L^2) {
+  tf <- withr::local_tempfile(fileext = ".gz")
+  con <- gzfile(tf, "wb")
+  writeBin(raw(n), con)
+  close(con)
+  readBin(tf, what = "raw", n = file.info(tf)$size)
+}
+
+test_that("a stream inflating past the ceiling raises sitemapr_body_ceiling", {
+  gz <- bomb_stream()
+  expect_lt(length(gz), 1024L^2) # the point: tiny compressed, huge inflated
+  expect_error(
+    gzip_decompress(gz, max_bytes = 1024L^2),
+    class = "sitemapr_body_ceiling"
+  )
+})
+
+test_that("the ceiling condition carries the limit and the bytes counted", {
+  cnd <- rlang::catch_cnd(gzip_decompress(bomb_stream(), max_bytes = 1024L^2))
+  expect_identical(cnd$max_bytes, 1024^2)
+  expect_gt(cnd$bytes_read, 1024^2)
+  # Counted while streaming, so the abort fires near the ceiling rather than
+  # after the whole 64 MB has been materialised.
+  expect_lt(cnd$bytes_read, 2 * 1024^2)
+})
+
+test_that("a stream within the ceiling is returned unchanged", {
+  payload <- strrep("https://example.com/p\n", 100L)
+  expect_identical(
+    gzip_decompress(gzip_stream(payload), max_bytes = 1024L^2),
+    charToRaw(payload)
+  )
+})
+
+test_that("the ceiling defaults to the sitemapr.max_decompressed option", {
+  withr::local_options(sitemapr.max_decompressed = 1024L)
+  expect_error(
+    gzip_decompress(bomb_stream()),
+    class = "sitemapr_body_ceiling"
+  )
+  withr::local_options(sitemapr.max_decompressed = 200 * 1024^2)
+  expect_silent(gzip_decompress(gzip_stream("small")))
+})
+
+test_that("an over-ceiling zlib stream is caught after the fact", {
+  # `gzcon()` passes a bare zlib stream through unchanged, so it cannot be
+  # measured up front; the ceiling holds as a returned-size invariant instead.
+  # No production path reaches this shape — every caller sniffs for 1f 8b.
+  zlib <- memCompress(charToRaw(strrep("z", 4096L)), type = "gzip")
+  expect_error(
+    gzip_decompress(zlib, max_bytes = 1024L),
+    class = "sitemapr_body_ceiling"
+  )
+  expect_length(gzip_decompress(zlib, max_bytes = 1024L^2), 4096L)
+})
+
+test_that("a corrupt stream raises a decompression error, not a ceiling", {
+  # The guard cannot detect damage (gzcon returns short data silently), so the
+  # corrupt-stream contract must survive the guard running first.
+  garbage <- as.raw(c(0x1F, 0x8B, 0x08, 0x00, 0x99, 0x42, 0x17))
+  expect_error(
+    gzip_decompress(garbage, max_bytes = 1L),
+    class = "sitemapr_decompression_error"
+  )
+})

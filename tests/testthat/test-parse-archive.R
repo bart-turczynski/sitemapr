@@ -225,6 +225,44 @@ test_that("exceeding the decompressed limit raises sitemapr_archive_limit", {
   )
 })
 
+test_that("the decompressed limit stops the bomb before it is materialised", {
+  # A 64 MB tar of zeros compresses to a few hundred KB. With a 1 MB ceiling
+  # the extractor must reject it, and the generic `sitemapr_body_ceiling` the
+  # decompressor raises must surface as this slice's own condition.
+  path <- withr::local_tempfile(fileext = ".tar.gz")
+  con <- gzfile(path, "wb")
+  writeBin(raw(64L * 1024L^2), con)
+  close(con)
+
+  cnd <- rlang::catch_cnd(
+    parse_sitemap_archive(
+      path,
+      limits = archive_limits(max_decompressed_bytes = 1024^2)
+    )
+  )
+  expect_s3_class(cnd, "sitemapr_archive_limit")
+  expect_false(inherits(cnd, "sitemapr_body_ceiling"))
+  expect_identical(cnd$limit, "decompressed_bytes")
+})
+
+test_that("an inner .gz member is bounded by the decompressed limit", {
+  inner <- withr::local_tempfile(fileext = ".gz")
+  con <- gzfile(inner, "wb")
+  writeBin(charToRaw(strrep("https://example.com/padding-entry\n", 2e5L)), con)
+  close(con)
+  gz_member <- readBin(inner, what = "raw", n = file.info(inner)$size)
+
+  expect_error(
+    archive_parse_member(
+      gz_member,
+      "big.txt.gz",
+      "ref",
+      limits = archive_limits(max_decompressed_bytes = 1024L)
+    ),
+    class = "sitemapr_body_ceiling"
+  )
+})
+
 # ---- empty & malformed -------------------------------------------------------
 
 test_that("an archive with no regular files raises sitemapr_empty_archive", {

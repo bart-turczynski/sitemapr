@@ -202,14 +202,24 @@ member_skip_reason <- function(ext, fmt) {
 # member is decompressed once before classification. Returns
 # list(rows = <tibble or NULL>, reason = <NULL when parsed, else why it was
 # skipped>).
-archive_parse_member <- function(content, name, source_ref) {
+archive_parse_member <- function(
+  content,
+  name,
+  source_ref,
+  limits = archive_limits()
+) {
   if (is.null(content) || length(content) == 0L) {
     return(list(rows = NULL, reason = "empty member"))
   }
 
   display_name <- name
   if (identical(sniff_format(content), "gzip")) {
-    content <- gzip_decompress(content)
+    # A member may itself be a bomb, so it carries the same inflated-size
+    # ceiling as the outer archive stream.
+    content <- gzip_decompress(
+      content,
+      max_bytes = limits$max_decompressed_bytes
+    )
     display_name <- sub("\\.gz$", "", name, ignore.case = TRUE)
   }
 
@@ -272,21 +282,25 @@ read_archive_bytes <- function(path, limits) {
   }
 
   gz <- readBin(path, what = "raw", n = size_on_disk)
-  tar_bytes <- gzip_decompress(gz)
 
-  if (length(tar_bytes) > limits$max_decompressed_bytes) {
-    rlang::abort(
-      sprintf(
-        "Decompressed size %.0f bytes exceeds the limit of %.0f bytes.",
-        length(tar_bytes),
-        limits$max_decompressed_bytes
-      ),
-      class = "sitemapr_archive_limit",
-      limit = "decompressed_bytes"
-    )
-  }
+  # The bound is enforced DURING inflation (R/decompress.R) rather than on the
+  # inflated result, so an archive bomb is rejected before its tar stream is
+  # materialised. The generic ceiling condition is re-raised as the archive's
+  # own so this slice's contract is unchanged.
+  tryCatch(
+    gzip_decompress(gz, max_bytes = limits$max_decompressed_bytes),
+    sitemapr_body_ceiling = function(cnd) {
+      archive_abort_decompressed(limits$max_decompressed_bytes)
+    }
+  )
+}
 
-  tar_bytes
+archive_abort_decompressed <- function(limit) {
+  rlang::abort(
+    sprintf("Decompressed size exceeds the limit of %.0f bytes.", limit),
+    class = "sitemapr_archive_limit",
+    limit = "decompressed_bytes"
+  )
 }
 
 archive_unsafe_problem <- function(member_ref, name) {
@@ -301,20 +315,22 @@ archive_unsafe_problem <- function(member_ref, name) {
   )
 }
 
-archive_member_result <- function(entry, source_ref) {
+archive_member_result <- function(entry, source_ref, limits) {
   member_ref <- sprintf("%s#archive-member:%s", source_ref, entry$name)
   if (tar_is_unsafe_name(entry$name)) {
     return(list(problem = archive_unsafe_problem(member_ref, entry$name)))
   }
 
-  member <- archive_parse_member(entry$content, entry$name, member_ref)
+  member <- archive_parse_member(entry$content, entry$name, member_ref, limits)
   if (is.null(member$rows)) {
-    return(list(problem = parse_problems(
-      severity = "info",
-      category = "classification",
-      subject_ref = member_ref,
-      message = sprintf("Skipped %s: %s.", entry$name, member$reason)
-    )))
+    return(list(
+      problem = parse_problems(
+        severity = "info",
+        category = "classification",
+        subject_ref = member_ref,
+        message = sprintf("Skipped %s: %s.", entry$name, member$reason)
+      )
+    ))
   }
 
   list(rows = member$rows)
@@ -362,7 +378,7 @@ parse_sitemap_archive <- function(
     file_count <- file_count + 1L
     archive_check_file_count(file_count, limits)
 
-    result <- archive_member_result(e, source_ref)
+    result <- archive_member_result(e, source_ref, limits)
     if (!is.null(result$problem)) {
       problem_parts[[length(problem_parts) + 1L]] <- result$problem
     } else {
