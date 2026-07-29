@@ -471,3 +471,148 @@ test_that("an explicit urls/findings still wins over a supplied audit", {
 test_that("a feed source gets its own format label", {
   expect_identical(report_format_label("feed"), "RSS/Atom")
 })
+
+# ---- remediation_hint / context / ruleset / provenance (SITE-vivdhofe) -------
+
+# One assembled finding, optionally carrying the producer columns the renderer
+# had been dropping. `ruleset = NULL` yields the schema-v1 baseline shape.
+viv_row <- function(spec = NULL, ...) {
+  f <- protocol_findings(
+    code = "PROTOCOL_URL_OUT_OF_SCOPE",
+    severity = "warning",
+    subject_type = "entry",
+    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    message = "a finding",
+    evidence = list(finding_evidence(excerpt = "<loc>x</loc>")),
+    is_strict_only = FALSE
+  )
+  extra <- list(...)
+  for (nm in names(extra)) {
+    f[[nm]] <- extra[[nm]]
+  }
+  out <- assemble_findings(list(f), "strict", ruleset = spec)
+  as.character(report_finding_row(list(row = out[1, ], count = 1L)))
+}
+
+viv_spec <- function(engine = "google") {
+  findings_ruleset_spec(engine, ruleset_context())
+}
+
+test_that("a baseline (schema v1) run renders without the additive blocks", {
+  html <- viv_row()
+
+  # The four additive columns are absent entirely on baseline; the renderer
+  # must tolerate that rather than erroring or emitting empty furniture.
+  expect_false(grepl("smr-badge", html, fixed = TRUE))
+  expect_false(grepl("smr-context", html, fixed = TRUE))
+  expect_false(grepl("smr-hint", html, fixed = TRUE))
+  # The pre-existing cells are untouched.
+  expect_match(html, "PROTOCOL_URL_OUT_OF_SCOPE", fixed = TRUE)
+  expect_match(html, "smr-evidence", fixed = TRUE)
+})
+
+test_that("a remediation hint renders on a baseline run too", {
+  # remediation_hint is pinned column 10 of schema v1, not one of the additive
+  # four, so it must render with no engine overlay in play.
+  html <- viv_row(remediation_hint = "unblock the URL in robots.txt")
+
+  expect_match(html, "smr-hint", fixed = TRUE)
+  expect_match(html, "unblock the URL in robots.txt", fixed = TRUE)
+})
+
+test_that("an all-NA remediation hint emits nothing", {
+  expect_false(grepl(
+    "smr-hint",
+    viv_row(remediation_hint = NA_character_),
+    fixed = TRUE
+  ))
+  expect_false(grepl("smr-hint", viv_row(remediation_hint = ""), fixed = TRUE))
+})
+
+test_that("the ruleset badge shows the engine and its revision", {
+  html <- viv_row(viv_spec("google"))
+
+  expect_match(html, "smr-ruleset", fixed = TRUE)
+  expect_match(html, "google @ ", fixed = TRUE)
+  expect_match(html, ruleset_revision("google"), fixed = TRUE)
+})
+
+test_that("executable and diagnostic provenance are visually distinct", {
+  exec <- viv_row(viv_spec(), provenance = "documented")
+  diag <- viv_row(viv_spec(), provenance = "documentation_gap")
+
+  expect_match(exec, "smr-prov-exec", fixed = TRUE)
+  expect_false(grepl("smr-prov-diag", exec, fixed = TRUE))
+
+  expect_match(diag, "smr-prov-diag", fixed = TRUE)
+  expect_false(grepl("smr-prov-exec", diag, fixed = TRUE))
+  # ADR-009 0: a diagnostic finding must not read as a hard verdict, so the
+  # distinction survives for a reader who never sees the colour.
+  expect_match(diag, "(diagnostic)", fixed = TRUE)
+  expect_match(diag, "never fails under this ruleset", fixed = TRUE)
+})
+
+test_that("every documented provenance value classifies", {
+  executable <- c("documented", "inherited_protocol", "application_choice")
+  diagnostic <- c(
+    "inferred",
+    "documentation_gap",
+    "documentation_conflict",
+    "advisory"
+  )
+  for (p in executable) {
+    expect_match(viv_row(viv_spec(), provenance = p), "smr-prov-exec", info = p)
+  }
+  for (p in diagnostic) {
+    expect_match(viv_row(viv_spec(), provenance = p), "smr-prov-diag", info = p)
+  }
+})
+
+test_that("the context block lists every field and collapses by default", {
+  html <- viv_row(
+    viv_spec(),
+    context = list(list(status_code = 404L, page_outcome = "usable_body"))
+  )
+
+  expect_match(html, "<details", fixed = TRUE)
+  expect_match(html, "smr-context", fixed = TRUE)
+  expect_match(html, "status_code", fixed = TRUE)
+  expect_match(html, "404", fixed = TRUE)
+  expect_match(html, "page_outcome", fixed = TRUE)
+  expect_match(html, "usable_body", fixed = TRUE)
+  # The ruleset context is merged in by the stamp, so the count covers both.
+  expect_match(html, "context (6 fields)", fixed = TRUE)
+})
+
+test_that("context values render for vectors and empty entries alike", {
+  expect_identical(report_context_value(c("a", "b")), "a, b")
+  expect_identical(report_context_value(NULL), "--")
+  expect_identical(report_context_value(character(0)), "--")
+})
+
+test_that("an unnamed or empty context emits no block", {
+  expect_null(report_context_block(NULL))
+  expect_null(report_context_block(list()))
+  expect_null(report_context_block(list("unnamed")))
+})
+
+test_that("a ruleset with no published revision still badges", {
+  # ruleset_revision() can be NA for an overlay with no published revision;
+  # the badge then names the engine alone rather than "engine @ NA".
+  html <- as.character(report_ruleset_badge("google", NA_character_))
+
+  expect_match(html, "smr-ruleset", fixed = TRUE)
+  expect_match(html, ">google<", fixed = TRUE)
+  expect_false(grepl("@", html, fixed = TRUE))
+  expect_null(report_ruleset_badge(NA_character_, "2026-07-16"))
+  expect_null(report_ruleset_badge(NULL, "2026-07-16"))
+})
+
+test_that("a context whose names are all blank emits no block", {
+  expect_null(report_context_block(stats::setNames(list(1L), "")))
+})
+
+test_that("a missing provenance emits no badge", {
+  expect_null(report_provenance_badge(NULL))
+  expect_null(report_provenance_badge(NA_character_))
+})

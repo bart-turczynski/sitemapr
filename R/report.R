@@ -541,6 +541,120 @@ report_finding_samples <- function(sub, sev_rank) {
   samples[ord]
 }
 
+# One optional cell of a single-row findings tibble. The four ADR-009 additive
+# columns are absent entirely on a baseline run (`findings_ruleset_spec()`
+# returns NULL for sitemaps.org), so every reader must tolerate schema v1 and
+# v2 alike. `remediation_hint` is NOT one of these -- it is pinned column 10 of
+# schema v1 and always present -- but reading it this way costs nothing.
+report_opt_cell <- function(r, name) {
+  col <- r[[name]]
+  if (is.null(col)) {
+    return(NULL)
+  }
+  col[[1]]
+}
+
+# The executable provenance classes (findings-contract.md "Provenance
+# vocabulary"). These may drive an engine-specific validity failure; the
+# diagnostic classes (`inferred`, `documentation_gap`, `documentation_conflict`,
+# `advisory`) only annotate and never produce a hard failure under their
+# ruleset. ADR-009 0 forbids a diagnostic-tagged cell from driving a verdict, so
+# the report must not let one read like an executable finding.
+report_provenance_executable <- c(
+  "documented",
+  "inherited_protocol",
+  "application_choice"
+)
+
+report_provenance_badge <- function(prov) {
+  if (is.null(prov) || is.na(prov)) {
+    return(NULL)
+  }
+  executable <- prov %in% report_provenance_executable
+  htmltools::tags$span(
+    class = paste0(
+      "smr-badge smr-prov smr-prov-",
+      if (executable) "exec" else "diag"
+    ),
+    # The title carries the distinction in text, so it survives for a reader
+    # who never sees the colour (screen reader, printed report).
+    title = if (executable) {
+      "Executable provenance: this finding may drive a validity failure."
+    } else {
+      "Diagnostic provenance: annotates only, never fails under this ruleset."
+    },
+    if (executable) prov else paste0(prov, " (diagnostic)")
+  )
+}
+
+# The engine overlay a finding was produced under, with the ruleset's published
+# revision. Absent on a baseline run.
+report_ruleset_badge <- function(ruleset, revision) {
+  if (is.null(ruleset) || is.na(ruleset)) {
+    return(NULL)
+  }
+  label <- if (is.null(revision) || is.na(revision)) {
+    ruleset
+  } else {
+    paste0(ruleset, " @ ", revision)
+  }
+  htmltools::tags$span(class = "smr-badge smr-ruleset", label)
+}
+
+# The producer's remediation hint. The robots-by-noindex trap synthesis
+# (R/page-robots-trap.R) exists to compute these, so dropping them wasted the
+# most expensive per-finding text the pipeline produces.
+report_hint_block <- function(hint) {
+  if (is.null(hint) || is.na(hint) || !nzchar(hint)) {
+    return(NULL)
+  }
+  htmltools::tags$div(
+    class = "smr-hint",
+    htmltools::tags$span(class = "smr-hint-label", "Fix"),
+    hint
+  )
+}
+
+# Render one context value, which may be a scalar, a vector, or NULL.
+report_context_value <- function(v) {
+  if (is.null(v) || length(v) == 0L) {
+    return("--")
+  }
+  toString(format(v))
+}
+
+# The per-finding `context` payload, collapsed by default: it is diagnostic
+# detail (page outcome, status, hop count, canonical facts, plus the ruleset
+# context under an overlay), useful when chasing one finding and noise when
+# scanning the table.
+report_context_block <- function(ctx) {
+  if (is.null(ctx) || length(ctx) == 0L || is.null(names(ctx))) {
+    return(NULL)
+  }
+  keys <- names(ctx)
+  keys <- keys[nzchar(keys)]
+  if (length(keys) == 0L) {
+    return(NULL)
+  }
+  htmltools::tags$details(
+    class = "smr-context",
+    htmltools::tags$summary(sprintf(
+      "context (%d field%s)",
+      length(keys),
+      if (length(keys) != 1L) "s" else ""
+    )),
+    htmltools::tags$dl(
+      class = "smr-context-list",
+      lapply(keys, function(k) {
+        htmltools::tagList(
+          htmltools::tags$dt(k),
+          htmltools::tags$dd(report_context_value(ctx[[k]]))
+        )
+      })
+    )
+  )
+}
+
 report_finding_row <- function(sample) {
   r <- sample$row
   sev <- r$severity
@@ -561,7 +675,12 @@ report_finding_row <- function(sample) {
           format(sample$count, big.mark = ","),
           " total"
         )
-      )
+      ),
+      report_ruleset_badge(
+        report_opt_cell(r, "ruleset"),
+        report_opt_cell(r, "ruleset_revision")
+      ),
+      report_provenance_badge(report_opt_cell(r, "provenance"))
     ),
     htmltools::tags$td(
       class = "smr-subject",
@@ -570,7 +689,9 @@ report_finding_row <- function(sample) {
     ),
     htmltools::tags$td(
       r$message,
-      report_evidence_block(ev)
+      report_evidence_block(ev),
+      report_hint_block(report_opt_cell(r, "remediation_hint")),
+      report_context_block(report_opt_cell(r, "context"))
     )
   )
 }
@@ -879,6 +1000,22 @@ a.smr-url:hover{text-decoration:underline;}
   border-radius:3px;
   font-family:monospace;font-size:.8rem;white-space:pre-wrap;
   word-break:break-all;}
+.smr-hint{margin-top:6px;padding:6px 10px;border-radius:4px;font-size:.85rem;
+  background:rgba(59,130,246,.10);border-left:3px solid var(--accent2);}
+.smr-hint-label{font-weight:600;text-transform:uppercase;font-size:.7rem;
+  letter-spacing:.04em;color:var(--accent2);margin-right:6px;}
+.smr-context{margin-top:6px;font-size:.8rem;}
+.smr-context summary{cursor:pointer;color:var(--muted);}
+.smr-context-list{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;
+  margin:6px 0 0;padding:6px 10px;background:var(--code);border-radius:3px;}
+.smr-context-list dt{font-family:monospace;color:var(--muted);}
+.smr-context-list dd{margin:0;word-break:break-word;}
+.smr-ruleset{font-family:monospace;}
+/* Executable vs diagnostic provenance (ADR-009 0): a diagnostic finding may
+   never read as a hard verdict, so it is muted and dashed, not solid. */
+.smr-prov-exec{border:1px solid var(--accent2);color:var(--accent2);}
+.smr-prov-diag{border:1px dashed var(--muted);color:var(--muted);
+  font-style:italic;}
 .smr-ok-note{display:inline-block;padding:4px 12px;
   background:rgba(22,163,74,.12);
   color:#16a34a;border-radius:4px;font-weight:600;}

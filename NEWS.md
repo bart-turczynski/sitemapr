@@ -73,6 +73,18 @@ related W3C and RFC standards.
 * Robots findings are built in one vectorized pass instead of one tibble per
   URL, which dominated the cost of a high-cardinality robots result.
 
+## Reporting
+
+* `report_sitemap()` now renders four per-finding columns it previously
+  computed and dropped: the producer's `remediation_hint` (as a "Fix" line —
+  the robots-by-`noindex` trap synthesis exists to produce these), the
+  `context` payload (as a collapsible block), and the `ruleset` /
+  `ruleset_revision` and `provenance` of a finding produced under an engine
+  overlay (as badges). Executable and diagnostic provenance are visually
+  distinct, so a `documentation_gap` or `advisory` finding cannot read as a
+  hard verdict (ADR-009). Baseline runs carry none of the additive columns and
+  render exactly as before.
+
 ## Network safety
 
 * SSRF guard blocks requests to private, loopback, link-local, and

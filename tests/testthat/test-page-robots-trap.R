@@ -357,3 +357,22 @@ test_that("a finding whose context carries no loc is left alone", {
   expect_false("remediation_hint" %in% names(out))
   expect_identical(nrow(out), nrow(findings))
 })
+
+# ---- the hint reaches the rendered report (SITE-vivdhofe) --------------------
+
+test_that("the trap's remediation hint reaches the rendered report", {
+  # The synthesis exists to produce this hint, and report_sitemap() used to
+  # drop it. Drive the real producer rather than a literal, so the chain
+  # producer -> assembler -> renderer is what is under test.
+  skip_if_not_installed("robotstxtr")
+  findings <- page_noindex_attach_trap(prt_findings(), prt_facts(), "google")
+  hint <- findings$remediation_hint[!is.na(findings$remediation_hint)]
+  expect_gt(length(hint), 0L)
+
+  out <- assemble_findings(list(findings), "strict")
+  row <- out[!is.na(out$remediation_hint), ][1, ]
+  html <- as.character(report_finding_row(list(row = row, count = 1L)))
+
+  expect_match(html, "smr-hint", fixed = TRUE)
+  expect_match(html, hint[[1]], fixed = TRUE)
+})
