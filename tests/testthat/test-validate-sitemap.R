@@ -416,7 +416,18 @@ test_that("an over-budget sitemap total yields INDEX_TOTAL_SITEMAPS_EXCEEDED", {
   expect_true("INDEX_TOTAL_SITEMAPS_EXCEEDED" %in% out$code)
   row <- out[out$code == "INDEX_TOTAL_SITEMAPS_EXCEEDED", ]
   expect_identical(row$layer, "index-expansion")
-  expect_true(all(row$severity == "error"))
+  # Caller-configured truncation, not a document defect: info, report-scoped,
+  # and anchored to the traversal root rather than to whichever child was in
+  # hand when the budget ran out (SITE-ppojfsed).
+  expect_true(all(row$severity == "info"))
+  expect_true(all(row$subject_type == "report"))
+  expect_identical(
+    row$subject_ref,
+    "sitemap://example.com/root.xml#report:traversal-budget"
+  )
+  expect_false(any(grepl("#index-child:", row$subject_ref, fixed = TRUE)))
+  # The child is not lost — it survives as evidence.
+  expect_true(nzchar(row$evidence[[1]]$excerpt))
 })
 
 test_that("an over-budget URL total yields INDEX_TOTAL_URLS_EXCEEDED", {
@@ -440,7 +451,54 @@ test_that("an over-budget URL total yields INDEX_TOTAL_URLS_EXCEEDED", {
   expect_true("INDEX_TOTAL_URLS_EXCEEDED" %in% out$code)
   row <- out[out$code == "INDEX_TOTAL_URLS_EXCEEDED", ]
   expect_identical(row$layer, "index-expansion")
-  expect_true(all(row$severity == "error"))
+  expect_true(all(row$severity == "info"))
+  expect_true(all(row$subject_type == "report"))
+  expect_identical(
+    row$subject_ref,
+    "sitemap://example.com/root.xml#report:traversal-budget"
+  )
+  expect_false(any(grepl("#index-child:", row$subject_ref, fixed = TRUE)))
+})
+
+test_that("a budget event and a per-child event stay separately scoped", {
+  # The mapper splits on code, so the two subject scopes must coexist in ONE
+  # run: a nested-index child earns a per-child finding while the budget stops
+  # traversal. Before SITE-ppojfsed both rows were subject_type "index-child"
+  # with a child ref, so a consumer could not tell the accusation from the
+  # truncation notice.
+  root <- "https://example.com/root.xml"
+  nested <- "https://example.com/n.xml"
+  b <- "https://example.com/b.xml"
+  leaf <- "https://example.com/leaf.xml"
+  map <- list()
+  map[[root]] <- index_body(nested, b)
+  map[[nested]] <- index_body(leaf)
+  map[[leaf]] <- urlset_body("https://example.com/p1")
+  map[[b]] <- urlset_body("https://example.com/p2")
+
+  httr2::local_mocked_responses(mock_by_url(map))
+  out <- validate_sitemap(
+    root,
+    index_limits = sitemapr_test_call("index_limits", max_total_sitemaps = 1)
+  )
+
+  # Both events are present — without this the test could pass vacuously.
+  expect_true("SITEMAP_INDEX_NESTED" %in% out$code)
+  expect_true("INDEX_TOTAL_SITEMAPS_EXCEEDED" %in% out$code)
+
+  child <- out[out$code == "SITEMAP_INDEX_NESTED", ]
+  expect_identical(child$subject_type, "index-child")
+  expect_identical(
+    child$subject_ref,
+    "sitemap://example.com/root.xml#index-child:https://example.com/n.xml"
+  )
+
+  budget <- out[out$code == "INDEX_TOTAL_SITEMAPS_EXCEEDED", ]
+  expect_identical(budget$subject_type, "report")
+  expect_identical(
+    budget$subject_ref,
+    "sitemap://example.com/root.xml#report:traversal-budget"
+  )
 })
 
 test_that("a LOCAL index still reports its own bad lastmod values", {

@@ -120,7 +120,7 @@ All **soft** (protocol/extension conformance findings; reading continues):
 | `<news:news>` per file | 1,000 | Google | `PROTOCOL_NEWS_COUNT_EXCEEDED` |
 | `<video:tag>` per video | 32 | Google | covered by `PROTOCOL_VIDEO_FIELD_INVALID` |
 
-### Axis 3 — aggregate traversal (documented for v1, not built yet)
+### Axis 3 — aggregate traversal
 
 When an index is "uncollapsed," the protocol's theoretical maximum is enormous:
 50,000 sitemaps × 50,000 URLs = **2.5 billion URLs per index**, and ~2.5 trillion
@@ -134,17 +134,25 @@ never materialized together. On top of that sits a configurable **traversal
 budget** (max child sitemaps / max total URLs per call); crossing it yields a
 **partial result + finding**, consistent with Axis 1's graceful degradation.
 
+Crossing a budget is caller-configured truncation, **not** a document defect, so
+the finding is `info` at `subject_type = "report"` — the same shape as the other
+truncation codes — and is **not** anchored to whichever child happened to be in
+hand when the budget ran out. That child travels as `evidence`.
+
 | Bound | Value | Kind |
 |---|---|---|
 | Sitemap-index recursion depth | 3 | hard — `INDEX_DEPTH_EXCEEDED` |
 | Discovery candidates evaluated | 25 | hard — candidate rejected |
 | Submitted-list input size | 10 | hard — input-layer cap |
-| Aggregate traversal budget (child sitemaps / total URLs) | **documented only for v1** | future |
+| Aggregate traversal budget (child sitemaps / total URLs) | `Inf` (opt-in) | soft — `INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED` |
 
-> The aggregate budget is **documented, not scaffolded**, for v1 — there is no
-> traversal code to enforce it in yet. The 2.5 B/2.5 T corpus figure is recorded
-> as the known upper bound that will eventually force URL storage to spill to
-> disk rather than stay in memory (a later-segment concern).
+> The aggregate budget is **enforced** (`max_total_sitemaps` /
+> `max_total_urls`, both defaulting to `Inf`, so it is opt-in): the sitemap
+> count is checked before fetching one more child, and the URL budget leaves a
+> breaching leaf out **whole** rather than partially, keeping the partial result
+> internally consistent. The 2.5 B/2.5 T corpus figure is recorded as the known
+> upper bound that will eventually force URL storage to spill to disk rather
+> than stay in memory (a later-segment concern).
 
 ### Transport limits (not a content axis)
 

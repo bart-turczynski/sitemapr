@@ -274,17 +274,47 @@ index_problem_code <- function(category, message) {
   NA_character_
 }
 
+# The aggregate traversal budgets (sitemap-spec.md §2, Axis 3). Unlike every
+# other INDEX_* event these describe the WHOLE run rather than any one child:
+# they fire when a caller-configured budget (`max_total_sitemaps` /
+# `max_total_urls`, both defaulting to Inf) stops the traversal, yielding a
+# partial result. That is operational truncation, not a document defect, so they
+# are report-scoped and `info` — matching sitemapr's other truncation codes
+# (REPORT_TRUNCATED, INSPECTION_*_CAP_HIT) rather than the conformance codes.
+index_budget_codes <- c(
+  "INDEX_TOTAL_SITEMAPS_EXCEEDED",
+  "INDEX_TOTAL_URLS_EXCEEDED"
+)
+
 # Contract severity for an INDEX_* code: nesting is a warning (still expanded),
-# the cycle / depth-cap / count-cap events are errors (sitemap-spec.md §8).
+# the aggregate-budget events are info (see above), and the cycle / depth-cap /
+# count-cap events are errors (sitemap-spec.md §8).
 index_code_severity <- function(code) {
-  if (identical(code, "SITEMAP_INDEX_NESTED")) "warning" else "error"
+  if (identical(code, "SITEMAP_INDEX_NESTED")) {
+    return("warning")
+  }
+  if (code %in% index_budget_codes) {
+    return("info")
+  }
+  "error"
+}
+
+# The run-level subject_ref for a traversal-budget event: the traversal root
+# with a `#report:<scope>` fragment (findings-contract.md). Deliberately NOT
+# anchored to a child — the budget belongs to the call, and anchoring it to
+# whichever child happened to be in hand when it ran out reads as an accusation
+# against an innocent document. The child is kept as evidence instead.
+index_budget_subject_ref <- function(base) {
+  protocol_ref_fragment(base, "#report:traversal-budget")
 }
 
 # Build a contract-shaped (8-column) index-expansion findings tibble from the
-# `problems` table `expand_index()` records. `layer = "index-expansion"`,
-# `subject_type = "index-child"`; the problem's subject_ref (a child/index URL)
-# becomes the finding's `#index-child:<url>` ref. Non-traversal problems are
-# skipped. Returns a zero-row tibble when there is nothing to map.
+# `problems` table `expand_index()` records. `layer = "index-expansion"` for all
+# of them; the per-child events take `subject_type = "index-child"` and turn the
+# problem's subject_ref (a child/index URL) into a `#index-child:<url>` ref,
+# while the aggregate-budget events are report-scoped (see
+# `index_budget_codes`). Non-traversal problems are skipped. Returns a zero-row
+# tibble when there is nothing to map.
 index_findings_from_problems <- function(problems, base) {
   if (is.null(problems) || nrow(problems) == 0L) {
     return(empty_index_findings())
@@ -295,14 +325,19 @@ index_findings_from_problems <- function(problems, base) {
     if (is.na(code)) {
       next
     }
+    is_budget <- code %in% index_budget_codes
     out[[length(out) + 1L]] <- index_findings(
       code = code,
       severity = index_code_severity(code),
-      subject_type = "index-child",
-      subject_ref = protocol_ref_fragment(
-        base,
-        paste0("#index-child:", problems$subject_ref[i])
-      ),
+      subject_type = if (is_budget) "report" else "index-child",
+      subject_ref = if (is_budget) {
+        index_budget_subject_ref(base)
+      } else {
+        protocol_ref_fragment(
+          base,
+          paste0("#index-child:", problems$subject_ref[i])
+        )
+      },
       message = problems$message[i],
       evidence = list(finding_evidence(excerpt = problems$subject_ref[i])),
       is_strict_only = FALSE

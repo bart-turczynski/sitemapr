@@ -85,6 +85,15 @@ Fragments (present when the finding is scoped below document level):
 | `#archive-member:<path>` | A file path within a `.tar.gz` archive |
 | `#line:<n>` | A specific line in a text sitemap |
 | `#page-url:<url>` | An advertised page URL being tested (the `page-url` subject) |
+| `#report:<scope>` | A run-level event scoped to the whole call, not to anything inside the document (the `report` subject) |
+
+A `report`-subject finding still anchors to the traversal root so the run is
+identifiable, but takes a `#report:<scope>` fragment rather than pointing at a
+document member. The aggregate traversal budgets
+(`INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED`) use
+`#report:traversal-budget`. Anchoring a run-level event to whichever child was
+in hand when a budget ran out would read as an accusation against a document
+that is not at fault; the child URL is carried as `evidence` instead.
 
 The `page`/`robots` layers use the `page-url` subject to scope a finding to one
 advertised page URL. Its `subject_ref` anchors to the sitemap that advertised
@@ -460,7 +469,17 @@ alignment is mechanical.
 - Subject types use sitemapr's vocabulary. The validator's `job` subject maps to
   `report`; its `sitemap`/`sitemap-index` map to `document`/`index-child`;
   `url-entry` → `entry`; `text-line` → `entry` (with a `#line:` ref);
-  `archive-entry` → `archive-member`.
+  `archive-entry` → `archive-member`; `schema-profile` → `document`.
+  Measured against this mapping, 75 of the 82 comparable rows agree. The
+  remaining divergences are deliberate on sitemapr's side and a conformance
+  harness must not expect subject equality on them: `SCHEMA_INVALID` varies by
+  emission (`field` for a located element, `document` for a document-generic
+  failure — the CSV records `field` as its base); `UNSUPPORTED_ROOT` is `source`
+  because at classification time the bytes are not yet known to be a sitemap,
+  uniformly with the other eight classification-layer codes; and
+  `PROTOCOL_URL_INVALID_ESCAPE` / `PROTOCOL_DUPLICATE_LOC` point at the
+  offending `entry` where the validator points at the document, which is
+  strictly more precise.
 
 ### Row status semantics (`status` column)
 - `active` — emitted by the sitemapr pipeline today (72 codes). Three of them —

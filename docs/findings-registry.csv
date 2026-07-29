@@ -58,8 +58,8 @@ INDEX_DEPTH_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_DEPTH
 SITEMAP_INDEX_NESTED,warning,index-expansion,index-child,FALSE,active,,SITEMAP_INDEX_NESTED,baseline
 INDEX_CHILD_COUNT_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_CHILD_COUNT_EXCEEDED,baseline
 INDEX_CHILD_OUT_OF_SCOPE,warning,index-expansion,index-child,FALSE,active,,,baseline
-INDEX_TOTAL_SITEMAPS_EXCEEDED,error,index-expansion,index-child,FALSE,active,done,INDEX_TOTAL_SITEMAP_LIMIT,baseline
-INDEX_TOTAL_URLS_EXCEEDED,error,index-expansion,index-child,FALSE,active,done,INDEX_TOTAL_URL_LIMIT,baseline
+INDEX_TOTAL_SITEMAPS_EXCEEDED,info,index-expansion,report,FALSE,active,done,INDEX_TOTAL_SITEMAP_LIMIT,baseline
+INDEX_TOTAL_URLS_EXCEEDED,info,index-expansion,report,FALSE,active,done,INDEX_TOTAL_URL_LIMIT,baseline
 INDEX_TOO_MANY_CHILDREN,warning,index-expansion,index-child,FALSE,validator-only,,INDEX_TOO_MANY_CHILDREN,baseline
 INDEX_TOO_MANY_INDEXES,warning,index-expansion,report,FALSE,validator-only,,INDEX_TOO_MANY_INDEXES,baseline
 HREFLANG_FORMAT_INVALID,error,protocol,entry,FALSE,active,,HREFLANG_FORMAT_INVALID,baseline
