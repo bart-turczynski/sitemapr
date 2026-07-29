@@ -569,6 +569,84 @@ test_that("priority at the [0,1] bounds and absent priority are accepted", {
   expect_false("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% out$code)
 })
 
+test_that("an unparseable priority also produces the code (SITE-prnqukft)", {
+  out <- validate_protocol(
+    sitemap_rows(loc = "https://example.com/a", priority = "high"),
+    sitemap_url = sm_url
+  )
+  pri <- out[out$code == "PROTOCOL_PRIORITY_OUT_OF_RANGE", ]
+  expect_identical(nrow(pri), 1L)
+  expect_identical(pri$severity, "error")
+  expect_identical(pri$subject_ref, paste0(base, "#entry:1"))
+  expect_identical(
+    pri$message,
+    "<priority> 'high' is not a number in the permitted range [0.0, 1.0]."
+  )
+  expect_identical(pri$evidence[[1]]$excerpt, "high")
+})
+
+test_that("the out-of-range message is unchanged by the unparseable branch", {
+  out <- validate_protocol(
+    sitemap_rows(loc = "https://example.com/a", priority = "1.5"),
+    sitemap_url = sm_url
+  )
+  pri <- out[out$code == "PROTOCOL_PRIORITY_OUT_OF_RANGE", ]
+  expect_identical(
+    pri$message,
+    "<priority> 1.5 is outside the permitted range [0.0, 1.0]."
+  )
+})
+
+test_that("an empty or whitespace-only priority stays silent", {
+  # The parser normalizes both to NA (ADR-004), so presence is read off the
+  # RAW column: NA means absent, and absent is not a violation. This is what
+  # keeps the fix from firing on every priority-less entry.
+  out <- validate_protocol(
+    sitemap_rows(
+      loc = c("https://example.com/a", "https://example.com/b"),
+      priority = c(NA_character_, NA_character_)
+    ),
+    sitemap_url = sm_url
+  )
+  expect_false("PROTOCOL_PRIORITY_OUT_OF_RANGE" %in% out$code)
+})
+
+test_that("priority now matches its sibling bounded fields end to end", {
+  # The point of SITE-prnqukft: one bad value in each of the three fields must
+  # produce BOTH a schema-layer and a protocol-layer finding. Before the fix
+  # priority produced only SCHEMA_INVALID.
+  doc <- function(inner) {
+    charToRaw(sprintf(
+      paste0(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+        "<url><loc>https://example.com/a</loc>%s</url>\n</urlset>\n"
+      ),
+      inner
+    ))
+  }
+  codes <- function(inner) {
+    path <- withr::local_tempfile(
+      fileext = ".xml",
+      .local_envir = parent.frame()
+    )
+    writeBin(doc(inner), path)
+    sort(unique(suppressWarnings(validate_sitemap(path))$code))
+  }
+  expect_identical(
+    codes("<priority>high</priority>"),
+    c("PROTOCOL_PRIORITY_OUT_OF_RANGE", "SCHEMA_INVALID")
+  )
+  expect_identical(
+    codes("<changefreq>often</changefreq>"),
+    c("PROTOCOL_CHANGEFREQ_INVALID", "SCHEMA_INVALID")
+  )
+  expect_identical(
+    codes("<lastmod>not-a-date</lastmod>"),
+    c("PROTOCOL_LASTMOD_INVALID", "SCHEMA_INVALID")
+  )
+})
+
 # --- changefreq ------------------------------------------------------------
 
 test_that("an out-of-enum changefreq produces PROTOCOL_CHANGEFREQ_INVALID", {

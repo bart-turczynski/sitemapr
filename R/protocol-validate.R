@@ -353,22 +353,47 @@ validate_doc_size <- function(byte_size, base, limit) {
   )
 }
 
+# The message for one bad `<priority>`: a present value that will not parse as
+# a number reads differently from one that parses but lands outside the range.
+priority_message <- function(shown, parsed) {
+  if (is.na(parsed)) {
+    return(sprintf(
+      "<priority> '%s' is not a number in the permitted range [0.0, 1.0].",
+      shown
+    ))
+  }
+  sprintf("<priority> %s is outside the permitted range [0.0, 1.0].", shown)
+}
+
+# A PRESENT `<priority>` that will not parse as a number is as much a value
+# violation as one outside [0.0, 1.0], and shares its code — the registry maps
+# PROTOCOL_PRIORITY_OUT_OF_RANGE to the sibling port's PROTO_PRIORITY_INVALID,
+# which fires on `Number.isNaN(numVal) || numVal < 0 || numVal > 1`, so the two
+# ports agree on the code and only the message differs.
+#
+# Presence is read off the RAW column, not the coerced numeric: the parser
+# already normalizes an absent, empty, or whitespace-only element to NA
+# (ADR-004), so a non-NA raw string with an NA numeric is unambiguously
+# "present but not a number". Guarding on the numeric alone — the old
+# `!is.na(pri)` — collapsed those two cases and made `priority` the only
+# bounded field with no protocol-layer message, while `changefreq` and
+# `lastmod` each produced one alongside the generic SCHEMA_INVALID
+# (SITE-prnqukft).
 validate_priority_values <- function(rows, base) {
   out <- list()
-  pri <- suppressWarnings(as.numeric(rows$priority))
-  bad_pri <- which(!is.na(pri) & (pri < 0 | pri > 1))
+  raw <- as.character(rows$priority)
+  pri <- suppressWarnings(as.numeric(raw))
+  bad_pri <- which(!is.na(raw) & (is.na(pri) | pri < 0 | pri > 1))
   for (j in bad_pri) {
+    shown <- trimws(raw[j])
     out[[length(out) + 1L]] <- protocol_url_finding(
       "PROTOCOL_PRIORITY_OUT_OF_RANGE",
       "error",
       "entry",
       base,
       j,
-      trimws(as.character(rows$priority[j])),
-      sprintf(
-        "<priority> %s is outside the permitted range [0.0, 1.0].",
-        trimws(as.character(rows$priority[j]))
-      )
+      shown,
+      priority_message(shown, pri[j])
     )
   }
   out
