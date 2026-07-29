@@ -476,6 +476,97 @@ test_that("a LOCAL index still reports its own bad lastmod values", {
   )
 })
 
+# A sitemap index IS a sitemap document, so the same <loc> value must earn the
+# same protocol codes whether it is listed as an index child or as a page
+# (SITE-dcbsvpjf). Document-level, so it exercises the real wiring rather than
+# the shared helper both paths already delegate to.
+vs_loc_doc <- function(locs, kind) {
+  entries <- if (identical(kind, "index")) {
+    paste0("<sitemap><loc>", locs, "</loc></sitemap>", collapse = "")
+  } else {
+    paste0("<url><loc>", locs, "</loc></url>", collapse = "")
+  }
+  root <- if (identical(kind, "index")) "sitemapindex" else "urlset"
+  paste0(
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<",
+    root,
+    ' xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    entries,
+    "</",
+    root,
+    ">"
+  )
+}
+
+vs_loc_codes <- function(locs, kind) {
+  path <- withr::local_tempfile(fileext = ".xml")
+  writeLines(vs_loc_doc(locs, kind), path)
+  out <- suppressWarnings(validate_sitemap(path))
+  keep <- startsWith(out$code, "PROTOCOL_URL_") |
+    out$code == "PROTOCOL_DUPLICATE_LOC"
+  sort(out$code[keep])
+}
+
+test_that("an index child <loc> earns the same codes as a page <loc>", {
+  cases <- list(
+    fragment = "https://example.com/c.xml#s",
+    userinfo = "https://u:p@example.com/c.xml",
+    space = "https://example.com/a b.xml",
+    bad_escape = "https://example.com/a%zz.xml",
+    other_scheme = "ftp://example.com/c.xml",
+    relative = "/child.xml",
+    too_long = paste0("https://example.com/", strrep("a", 2100), ".xml"),
+    duplicate = rep("https://example.com/d.xml", 2),
+    equivalent = c("https://example.com/e.xml", "https://EXAMPLE.com/e.xml")
+  )
+  for (nm in names(cases)) {
+    idx <- vs_loc_codes(cases[[nm]], "index")
+    url <- vs_loc_codes(cases[[nm]], "urlset")
+    expect_identical(idx, url, info = nm)
+    # Guard against agreeing at zero findings, which would pass vacuously.
+    expect_gt(length(idx), 0L)
+  }
+})
+
+test_that("a clean index child earns no <loc> findings", {
+  expect_identical(
+    vs_loc_codes("https://example.com/c.xml", "index"),
+    character(0)
+  )
+})
+
+test_that("a duplicate child is reported BEFORE expansion dedupes it", {
+  # dedup_and_cap_children() repairs a repeated child silently, so the finding
+  # has to be produced from the pre-dedup child table. This pins both halves at
+  # once: the duplicate is still fetched exactly once AND it is still reported.
+  root <- "https://example.com/sitemap.xml"
+  dup <- "https://example.com/dup.xml"
+  other <- "https://example.com/other.xml"
+  index_body <- vs_loc_doc(c(dup, dup, other), "index")
+  leaf <- vs_loc_doc("https://example.com/page", "urlset")
+
+  tracker <- new.env(parent = emptyenv())
+  tracker$urls <- character(0)
+  httr2::local_mocked_responses(function(req) {
+    tracker$urls <- c(tracker$urls, req$url)
+    body <- if (identical(req$url, root)) index_body else leaf
+    httr2::response(
+      status_code = 200,
+      url = req$url,
+      headers = list("Content-Type" = "application/xml; charset=UTF-8"),
+      body = charToRaw(body)
+    )
+  })
+
+  out <- suppressWarnings(validate_sitemap(root))
+
+  expect_identical(sum(tracker$urls == dup), 1L)
+  row <- out[out$code == "PROTOCOL_DUPLICATE_LOC", ]
+  expect_identical(nrow(row), 1L)
+  expect_match(row$subject_ref, "#index-child:https://example\\.com/dup\\.xml$")
+})
+
 # --- Internal helper guards (empty/NULL inputs) ----------------------------
 # These map/feed helpers are only reached with non-empty inputs by the public
 # entry point, but each documents an empty-input contract (a zero-row tibble /

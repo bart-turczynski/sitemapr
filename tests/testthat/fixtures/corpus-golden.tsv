@@ -39,10 +39,10 @@ xml/html-as-sitemap.html	UNSUPPORTED_HTML_MASQUERADE
 xml/image-duplicate-locs.xml	PROTOCOL_DUPLICATE_LOC
 xml/image-missing-loc.xml	SCHEMA_INVALID
 xml/index-empty.xml	SCHEMA_INVALID
-xml/index-invalid-child-urls.xml	SCHEMA_INVALID
-xml/index-mixed-valid-invalid.xml	PROTOCOL_LASTMOD_INVALID SCHEMA_INVALID
+xml/index-invalid-child-urls.xml	PROTOCOL_URL_NOT_ABSOLUTE SCHEMA_INVALID
+xml/index-mixed-valid-invalid.xml	PROTOCOL_DUPLICATE_LOC PROTOCOL_LASTMOD_INVALID SCHEMA_INVALID
 xml/index-nested.xml	<none>
-xml/index-self-reference.xml	<none>
+xml/index-self-reference.xml	PROTOCOL_DUPLICATE_LOC
 xml/index-single-child.xml	<none>
 xml/lastmod-date-only.xml	PROTOCOL_LASTMOD_DATE_ONLY
 xml/lastmod-datetime.xml	<none>

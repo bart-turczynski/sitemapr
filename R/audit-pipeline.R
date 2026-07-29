@@ -473,21 +473,23 @@ audit_validate_xml_parts <- function(artifact) {
   }
 
   # sitemapindex. A local index has no origin URL, so children are never
-  # fetched — but its own <lastmod> values are document-local and stay
-  # reportable either way (matching validate_index_parts()).
-  lastmod_part <- validate_index_lastmod(
-    parse_sitemapindex(xml2::xml_root(doc)),
-    artifact$base
+  # fetched — but its own <lastmod> and <loc> values are document-local and
+  # stay reportable either way (matching validate_index_parts()). The <loc>
+  # pass reads the PRE-dedup child table, as it does there.
+  children <- parse_sitemapindex(xml2::xml_root(doc))
+  local_parts <- list(
+    validate_index_lastmod(children, artifact$base),
+    validate_index_locs(children, artifact$base)
   )
   if (is.null(artifact$ex)) {
-    return(list(schema, lastmod_part))
+    return(c(list(schema), local_parts))
   }
 
   ex <- artifact$ex
-  parts <- list(
-    schema,
-    lastmod_part,
-    index_findings_from_problems(ex$problems, artifact$base)
+  parts <- c(
+    list(schema),
+    local_parts,
+    list(index_findings_from_problems(ex$problems, artifact$base))
   )
   feeds <- index_feed_children(ex$problems)
   if (length(feeds) > 0L) {

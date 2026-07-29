@@ -467,10 +467,16 @@ validate_index_parts <- function(
 ) {
   children <- parse_sitemapindex(xml2::xml_root(doc))
 
-  # Index-entry <lastmod> is document-local, so it is judged before the
-  # expansion gate below: a local index has no origin to fetch children from,
-  # but its own <lastmod> values are right here and stay reportable.
-  parts <- list(schema, validate_index_lastmod(children, src$base))
+  # Index-entry <lastmod> and <loc> are document-local, so they are judged
+  # before the expansion gate below: a local index has no origin to fetch
+  # children from, but its own field values are right here and stay reportable.
+  # The <loc> pass also runs pre-dedup, so a child listed twice is reported
+  # before expansion silently collapses it.
+  parts <- list(
+    schema,
+    validate_index_lastmod(children, src$base),
+    validate_index_locs(children, src$base, ruleset)
+  )
   if (is.na(src$final_url)) {
     return(parts)
   }

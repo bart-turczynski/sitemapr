@@ -782,6 +782,103 @@ test_that("index and urlset agree on the same lastmod values", {
   expect_setequal(idx$severity, url$severity)
 })
 
+# ---- index-entry <loc> protocol rules (SITE-dcbsvpjf) ------------------------
+
+# A sitemap index IS a sitemap document, so its child <loc> values carry the
+# same protocol constraints as a urlset's. Before this, only the XSD's
+# maxLength 2048 reached them; fragment/userinfo/escaping/scheme and duplicates
+# were all silent.
+
+test_that("an index child <loc> gets the per-loc protocol rules", {
+  out <- validate_index_locs(
+    index_children(
+      c("https://example.com/a.xml", "https://example.com/b.xml#part"),
+      c(NA_character_, NA_character_)
+    ),
+    base
+  )
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "PROTOCOL_URL_FRAGMENT")
+  expect_identical(out$layer, "protocol")
+  # Named by child, matching the index-entry lastmod refs, not by ordinal.
+  expect_identical(
+    out$subject_ref,
+    paste0(base, "#index-child:https://example.com/b.xml#part")
+  )
+})
+
+test_that("a duplicate index child is reported, not silently deduped", {
+  dup <- "https://example.com/d.xml"
+  out <- validate_index_locs(
+    index_children(c(dup, dup), c(NA_character_, NA_character_)),
+    base
+  )
+  expect_identical(out$code, "PROTOCOL_DUPLICATE_LOC")
+  expect_identical(out$severity, "warning")
+  expect_identical(out$subject_ref, paste0(base, "#index-child:", dup))
+})
+
+test_that("index children that differ only canonically are EQUIVALENT", {
+  out <- validate_index_locs(
+    index_children(
+      c("https://example.com/e.xml", "https://EXAMPLE.com/e.xml"),
+      c(NA_character_, NA_character_)
+    ),
+    base
+  )
+  expect_identical(out$code, "PROTOCOL_URL_EQUIVALENT")
+})
+
+test_that("a clean index child produces nothing", {
+  out <- validate_index_locs(
+    index_children("https://example.com/a.xml", NA_character_),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+  expect_named(out, names(empty_protocol_findings()))
+})
+
+test_that("an index with no children produces no <loc> findings", {
+  out <- validate_index_locs(
+    index_children(character(0), character(0)),
+    base
+  )
+  expect_identical(nrow(out), 0L)
+})
+
+test_that("index-child <loc> scope is never judged on the page-scope axis", {
+  # sitemap-spec 12.2b (index-child scope, INDEX_CHILD_OUT_OF_SCOPE) is a
+  # SEPARATE axis from 12.2 (page scope, PROTOCOL_URL_OUT_OF_SCOPE) and the two
+  # are never collapsed. validate_index_locs() passes sitemap_url = NA, which
+  # makes the page-scope evaluator inert by construction.
+  out <- validate_index_locs(
+    index_children("https://elsewhere.example.org/c.xml", NA_character_),
+    base,
+    ruleset = findings_ruleset_spec("google", ruleset_context())
+  )
+  expect_false("PROTOCOL_URL_OUT_OF_SCOPE" %in% out$code)
+})
+
+test_that("index-child refs are remapped by position, not by parsing", {
+  # index_child_refs() rebuilds the mapping the same way protocol_url_finding()
+  # composes a ref, so the two cannot drift. A ref with no matching child
+  # position yields NA rather than a silently wrong child.
+  locs <- c("https://example.com/a.xml", "https://example.com/b.xml")
+  out <- index_child_refs(
+    paste0(base, c("#entry:2", "#entry:1", "#entry:9")),
+    locs,
+    base
+  )
+  expect_identical(
+    out,
+    c(
+      paste0(base, "#index-child:", locs[[2L]]),
+      paste0(base, "#index-child:", locs[[1L]]),
+      NA_character_
+    )
+  )
+})
+
 test_that("a datetime lastmod without a timezone is invalid", {
   out <- validate_protocol(
     rows_with_lastmod("https://example.com/a", "2004-12-23T18:00:15"),

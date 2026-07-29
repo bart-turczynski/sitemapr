@@ -592,6 +592,50 @@ index_lastmod_finding <- function(
   )
 }
 
+# The full `<loc>` rule set applied to a sitemap index's CHILD locs. A sitemap
+# index IS a sitemap document, so its `<loc>` values carry the same protocol
+# constraints as a urlset's, and `validate_loc_urls()` is reused wholesale
+# rather than restated. Purely document-local, like validate_index_lastmod():
+# the values are in the index itself, so this runs whether or not children are
+# ever fetched. Two deliberate departures from the urlset call:
+#
+#   * `sitemap_url` is NA, which makes `loc_out_of_scope()` inert by
+#     construction (`loc_scope_self()` yields an NA authority). Index-child
+#     scope is the SEPARATE sitemap-spec §12.2b axis owned by
+#     `index_child_scope_findings()` (INDEX_CHILD_OUT_OF_SCOPE) and is never
+#     collapsed into the §12.2 page-scope axis.
+#   * refs are re-anchored onto `#index-child:<url>`, matching
+#     `validate_index_lastmod()`, so a finding names the offending child rather
+#     than an entry ordinal.
+#
+# Runs on the PRE-dedup child table, so a child listed twice is reported
+# (PROTOCOL_DUPLICATE_LOC) before `dedup_and_cap_children()` repairs it.
+validate_index_locs <- function(children, base, ruleset = NULL) {
+  if (is.null(children) || nrow(children) == 0L) {
+    return(empty_protocol_findings())
+  }
+  out <- validate_loc_urls(
+    children,
+    sitemap_url = NA_character_,
+    base = base,
+    ruleset = ruleset
+  )
+  if (nrow(out) == 0L) {
+    return(out)
+  }
+  out$subject_ref <- index_child_refs(out$subject_ref, children$loc, base)
+  out
+}
+
+# Re-anchor `#entry:<i>` refs onto their child `<loc>`. Built as a total lookup
+# over every child position rather than parsed back out of the ref string, so
+# the mapping cannot drift from how `protocol_url_finding()` composes a ref.
+index_child_refs <- function(refs, locs, base) {
+  from <- protocol_ref_fragment(base, paste0("#entry:", seq_along(locs)))
+  to <- protocol_ref_fragment(base, paste0("#index-child:", locs))
+  to[match(refs, from)]
+}
+
 # Corpus-level lastmod-honesty heuristics (sitemap-spec.md §4.1). These scan
 # ALL dated entries of one sitemap, so they are document-level, not per-entry.
 # `fetched_at` is the sitemap's fetch/generation time (NA skips the
