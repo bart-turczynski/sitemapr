@@ -2073,7 +2073,7 @@ validate_text_protocol <- function(
   if (!nzchar(s)) {
     return(empty_protocol_findings())
   }
-  lines <- strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
+  lines <- split_lines(s)
   trimmed <- trimws(lines)
   blank <- !nzchar(trimmed)
 

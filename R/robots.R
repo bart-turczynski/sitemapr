@@ -40,7 +40,7 @@ robots_is_http_url <- function(url) {
 # whose value is not an absolute http(s) URL is skipped with a warning (never an
 # error), so a single malformed line cannot fail discovery.
 parse_robots_sitemaps <- function(text) {
-  lines <- strsplit(text, "\r\n|\r|\n", perl = TRUE)[[1L]]
+  lines <- split_lines(text)
   pat <- "(?i)^\\s*site-?map\\s*:\\s*(\\S.*?)\\s*$"
   hits <- grepl(pat, lines, perl = TRUE)
   if (!any(hits)) {

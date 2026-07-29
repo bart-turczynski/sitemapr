@@ -86,6 +86,21 @@ text_as_string <- function(x) {
   s
 }
 
+# Split a document into lines on LF, CRLF, or a lone CR. The one place the
+# line-ending rule is spelled out; every caller that needs lines uses this.
+#
+# Deliberately NOT `perl = TRUE`. PCRE is pathologically slow on this pattern:
+# on a 50,000-line document the same split costs ~17s under PCRE and ~0.06s
+# under the default TRE engine, a ~290x difference that dominated the whole
+# text-validation path (SITE-hwemiqne). The pattern is a plain alternation of
+# literals with no PCRE-only syntax, so the two engines agree on it by
+# construction -- verified identical over line-ending, whitespace, multibyte
+# UTF-8, latin1 and invalid-UTF-8 inputs, not assumed. `useBytes` does not
+# recover the cost, which rules out an encoding-conversion explanation.
+split_lines <- function(s) {
+  strsplit(s, "\r\n|\r|\n")[[1L]]
+}
+
 #' Parse a text sitemap document into rows
 #'
 #' Splits the document into lines, drops blank/whitespace-only lines, trims the
@@ -102,7 +117,7 @@ text_as_string <- function(x) {
 #' @noRd
 parse_sitemap_text <- function(x, source_sitemap = NA_character_) {
   s <- text_as_string(x)
-  lines <- strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
+  lines <- split_lines(s)
   lines <- trimws(lines)
   locs <- lines[nzchar(lines)]
 

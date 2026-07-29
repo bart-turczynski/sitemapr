@@ -103,7 +103,7 @@ probe_text_url_count <- function(bytes) {
     return(NA_integer_)
   }
   s <- text_as_string(bytes)
-  lines <- trimws(strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]])
+  lines <- trimws(split_lines(s))
   as.integer(sum(nzchar(lines)))
 }
 

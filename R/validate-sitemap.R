@@ -825,7 +825,7 @@ validate_sitemap_source <- function(
     text <- text_as_string(src$bytes)
     append_robots_part(
       list(validate_text_protocol(text, src$base)),
-      strsplit(text, "\r\n|\r|\n", perl = TRUE)[[1L]],
+      split_lines(text),
       src$robots_ua,
       src$base,
       src$page_sink

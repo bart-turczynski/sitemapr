@@ -121,3 +121,57 @@ test_that("source_sitemap provenance is written to every row", {
   )
   expect_identical(rows$source_sitemap, rep("submitted-directly", 2L))
 })
+
+# --- SITE-hwemiqne: the shared line splitter ---------------------------------
+
+test_that("split_lines() separates on LF, CRLF and lone CR alike", {
+  expect_identical(split_lines("a\nb"), c("a", "b"))
+  expect_identical(split_lines("a\r\nb"), c("a", "b"))
+  expect_identical(split_lines("a\rb"), c("a", "b"))
+  expect_identical(split_lines("a\r\nb\rc\nd"), c("a", "b", "c", "d"))
+})
+
+test_that("split_lines() preserves empty and edge-position lines", {
+  expect_identical(split_lines(""), character(0))
+  expect_identical(split_lines("a\n\nb"), c("a", "", "b"))
+  expect_identical(split_lines("\na"), c("", "a"))
+  # A trailing separator does NOT yield a trailing empty element.
+  expect_identical(split_lines("a\nb\n"), c("a", "b"))
+  expect_identical(split_lines("abc"), "abc")
+})
+
+test_that("split_lines() agrees with the PCRE engine it replaced", {
+  # The perl = TRUE form was ~290x slower on large documents but must remain
+  # behaviourally identical: the pattern is a plain alternation of literals
+  # with no PCRE-only syntax. Asserted over the awkward inputs rather than
+  # assumed, including non-ASCII text, so the swap is not a silent behaviour
+  # change.
+  inputs <- c(
+    "",
+    "\n",
+    "a\r\nb\rc\nd",
+    "a\n\nb",
+    "a\r\rb",
+    "  a  \n  b  ",
+    "a\tb\nc",
+    "\u00e9\u4e2d\u6587\na\u00e1b",
+    "abc",
+    "a\nb\n"
+  )
+  for (s in inputs) {
+    expect_identical(
+      split_lines(s),
+      strsplit(s, "\r\n|\r|\n", perl = TRUE)[[1L]]
+    )
+  }
+})
+
+test_that("a large text document splits without the PCRE cliff", {
+  # Regression guard for the hot path: 50k lines took ~17s per split under
+  # PCRE. Timing is machine-dependent, so this asserts a generous ceiling that
+  # only a return to the quadratic engine could breach.
+  s <- paste(sprintf("https://example.com/p%d", 1:50000), collapse = "\n")
+  elapsed <- system.time(lines <- split_lines(s))[["elapsed"]]
+  expect_length(lines, 50000L)
+  expect_lt(elapsed, 5)
+})
