@@ -107,7 +107,12 @@ discover_robots_sitemaps <- function(
   if (is.null(body) || length(body) == 0L) {
     return(character(0))
   }
-  text <- rawToChar(body)
-  Encoding(text) <- "UTF-8"
+  # Best-effort decode: a binary or otherwise undecodable body carries no
+  # recoverable directive, so it degrades to "none found" like every other
+  # failure in this function rather than aborting the caller's tree walk.
+  text <- decode_text_or_null(body)
+  if (is.null(text)) {
+    return(character(0))
+  }
   parse_robots_sitemaps(text)
 }

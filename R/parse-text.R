@@ -86,6 +86,23 @@ text_as_string <- function(x) {
   s
 }
 
+# Best-effort counterpart to `text_as_string()`: decode fetched bytes as UTF-8
+# text, or return NULL when they are not decodable text at all. Same BOM strip
+# and same decode rules; only the failure mode differs.
+#
+# For callers whose contract is best-effort rather than all-or-nothing --
+# robots.txt discovery, where a 404, an SSRF block and a transport failure all
+# already degrade to "no directives found". A bare `rawToChar()` there raised
+# `embedded nul in string` on any binary body and aborted the whole tree walk
+# (SITE-udiqjraa); undecodable bytes carry no recoverable `Sitemap:` directive,
+# which is a NULL, not an error.
+decode_text_or_null <- function(bytes) {
+  tryCatch(
+    text_as_string(bytes),
+    sitemapr_text_parse_error = function(cnd) NULL
+  )
+}
+
 # Split a document into lines on LF, CRLF, or a lone CR. The one place the
 # line-ending rule is spelled out; every caller that needs lines uses this.
 #

@@ -134,6 +134,86 @@ test_that("discover_robots_sitemaps returns empty for an empty robots body", {
   expect_identical(discover_robots_sitemaps("https://ex.com"), character(0))
 })
 
+# ---- SITE-udiqjraa: an undecodable robots.txt body degrades ------------------
+
+# A 200 text/plain response whose body is binary: ZIP magic, then a NUL
+# followed by a non-NUL, which is exactly what makes rawToChar() raise.
+binary_robots_mock <- function(req) {
+  httr2::response(
+    status_code = 200L,
+    url = req$url,
+    headers = list("Content-Type" = "text/plain"),
+    body = as.raw(c(0x50, 0x4B, 0x03, 0x04, 0x00, 0x61, 0x00, 0x61))
+  )
+}
+
+test_that("a binary robots.txt body yields no directives, not an error", {
+  # Regression: this raised a bare simpleError ("embedded nul in string"),
+  # which violates the classed-conditions contract and aborted the caller.
+  httr2::local_mocked_responses(binary_robots_mock)
+  expect_no_error(out <- discover_robots_sitemaps("https://ex.com"))
+  expect_identical(out, character(0))
+})
+
+test_that("sitemap_tree completes over an origin with a binary robots.txt", {
+  # The public entry point is where the bare error used to surface. Discovery
+  # must fall back to the guessed catalog paths rather than abort the walk.
+  httr2::local_mocked_responses(binary_robots_mock)
+  expect_no_error(tree <- sitemap_tree("https://ex.com"))
+  expect_gt(nrow(tree), 0L)
+})
+
+test_that("a UTF-16 robots.txt degrades rather than aborting", {
+  # The other realistic NUL-bearing body: a mis-encoded robots.txt. Its BOM is
+  # not UTF-8, so the decode is refused and no directive is recoverable.
+  httr2::local_mocked_responses(function(req) {
+    utf16 <- iconv(
+      "Sitemap: https://ex.com/a.xml",
+      "UTF-8",
+      "UTF-16LE",
+      toRaw = TRUE
+    )[[1L]]
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "text/plain"),
+      body = c(as.raw(c(0xFF, 0xFE)), utf16)
+    )
+  })
+  expect_identical(discover_robots_sitemaps("https://ex.com"), character(0))
+})
+
+test_that("a UTF-8 BOM does not hide a first-line Sitemap directive", {
+  # Sharing text_as_string()'s BOM strip fixes this too: U+FEFF is not
+  # whitespace, so a bare decode left it glued to the directive name.
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list("Content-Type" = "text/plain"),
+      body = c(
+        as.raw(c(0xEF, 0xBB, 0xBF)),
+        charToRaw("Sitemap: https://ex.com/a.xml")
+      )
+    )
+  })
+  expect_identical(
+    discover_robots_sitemaps("https://ex.com"),
+    "https://ex.com/a.xml"
+  )
+})
+
+test_that("decode_text_or_null degrades where text_as_string aborts", {
+  expect_identical(decode_text_or_null(charToRaw("ok")), "ok")
+  expect_null(decode_text_or_null(as.raw(c(0x00, 0x61))))
+  expect_null(decode_text_or_null(as.raw(c(0xFF, 0xFE, 0x61, 0x00))))
+  # The strict sibling still aborts on the same bytes, classed.
+  expect_error(
+    text_as_string(as.raw(c(0x00, 0x61))),
+    class = "sitemapr_text_parse_error"
+  )
+})
+
 # ---- sitemap_tree() integration ---------------------------------------------
 
 test_that("sitemap_tree surfaces a non-catalog sitemap listed in robots.txt", {
