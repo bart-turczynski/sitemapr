@@ -239,6 +239,55 @@ test_that("a Link segment with no bracketed URI is skipped", {
   )
 })
 
+test_that("a canonical declared alongside another rel token is honored", {
+  # Regression: `rel` was substring-matched, so a valid canonical declaration
+  # only counted when `canonical` came FIRST. RFC 8288 3.3 makes the token
+  # order insignificant, and dropping the target manufactures a
+  # PAGE_CANONICAL_MISSING on a page that declares one.
+  for (rel in c("canonical alternate", "alternate canonical")) {
+    header <- sprintf("<https://example.com/c>; rel=\"%s\"", rel)
+    expect_identical(
+      page_link_header_canonicals(list(Link = header)),
+      "https://example.com/c"
+    )
+  }
+
+  art <- pc_art(
+    headers = list(
+      "Content-Type" = "text/html",
+      Link = "<https://example.com/a>; rel=\"alternate canonical\""
+    )
+  )
+  expect_identical(page_canonical_extract(art)$status, "observed")
+  # It agrees with the advertised loc, so no finding — not a false MISSING.
+  expect_identical(nrow(page_canonical_findings(pc_run(art))), 0L)
+})
+
+test_that("a canonical-prefixed relation type does not invent a target", {
+  # Regression: the trailing `"?` was optional and nothing anchored the token's
+  # end, so `rel="canonical-ish"` was read as a canonical declaration and
+  # produced a PAGE_CANONICAL_MISMATCH pointing at an unrelated link.
+  header <- "<https://example.com/unrelated>; rel=\"canonical-ish\""
+  expect_length(page_link_header_canonicals(list(Link = header)), 0L)
+
+  art <- pc_art(headers = list("Content-Type" = "text/html", Link = header))
+  expect_identical(page_canonical_extract(art)$status, "absent")
+  out <- page_canonical_findings(pc_run(art))
+  expect_identical(out$code, "PAGE_CANONICAL_MISSING")
+})
+
+test_that("every link-value of a multi-value Link header is consulted", {
+  header <- paste(
+    "<https://example.com/feed>; rel=\"alternate\"",
+    "<https://example.com/c>; rel=\"canonical\"",
+    sep = ", "
+  )
+  expect_identical(
+    page_link_header_canonicals(list(Link = header)),
+    "https://example.com/c"
+  )
+})
+
 # ---- head parsing edges ------------------------------------------------------
 
 test_that("an absent or unparseable body yields no canonical targets", {

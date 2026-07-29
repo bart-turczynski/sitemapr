@@ -72,33 +72,17 @@ page_canonical_resolve <- function(raw, base) {
   out
 }
 
-# Raw canonical targets declared in the `Link` response header(s). Each header
-# value is a comma-separated list of `<uri>; param=value; ...` link-values;
-# keep the uri of every link-value whose `rel` parameter is `canonical`
-# (case-insensitive, quoted or bare). Repeated headers are all consulted
-# (page_header_values preserves them).
+# Raw canonical targets declared in the `Link` response header(s): the URI of
+# every link-value whose `rel` includes the `canonical` relation type. Parsing
+# is delegated to the shared RFC 8288 parser (R/page-link-header.R), which reads
+# `rel` as the whitespace-separated token LIST it is — so an order-swapped
+# `rel="alternate canonical"` counts, and a merely canonical-PREFIXED type
+# (`rel="canonical-ish"`) does not invent a target. Repeated headers are all
+# consulted.
 page_link_header_canonicals <- function(headers) {
-  values <- page_header_values(headers, "Link")
-  if (length(values) == 0L) {
-    return(character(0))
-  }
-  # Split on commas that separate link-values (a comma preceding the next
-  # `<uri>`), then keep the `<uri>` of any segment whose params carry
-  # rel=canonical.
-  segments <- unlist(strsplit(toString(values), ",(?=\\s*<)", perl = TRUE))
-  out <- character(0)
-  for (seg in segments) {
-    m <- regmatches(seg, regexec("^\\s*<([^>]*)>(.*)$", seg))[[1L]]
-    if (length(m) < 3L) {
-      next
-    }
-    uri <- m[[2L]]
-    params <- m[[3L]]
-    if (grepl("rel\\s*=\\s*\"?canonical\"?", params, ignore.case = TRUE)) {
-      out <- c(out, trimws(uri))
-    }
-  }
-  out
+  entries <- page_link_header_entries(headers)
+  keep <- vapply(entries, page_link_has_rel, logical(1), rel = "canonical")
+  vapply(entries[keep], function(e) e$uri, character(1))
 }
 
 # Raw canonical targets + the effective base declared in the HTML head:
