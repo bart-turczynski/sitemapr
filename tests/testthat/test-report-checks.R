@@ -104,8 +104,6 @@ test_that("the page_coverage attribute is what proves page inspection ran", {
 })
 
 test_that("a fired finding proves its own layer ran", {
-  # The only way a clean robots run can be recognised: check_robots = TRUE
-  # records nothing when every URL is allowed.
   urls <- report_urls_fixture("https://ex.com/a")
   findings <- report_findings_fixture(
     "ROBOTS_DISALLOWED",
@@ -113,6 +111,62 @@ test_that("a fired finding proves its own layer ran", {
     "robots"
   )
   expect_true(layer_ran(urls, NULL, findings)[["robots"]])
+})
+
+test_that("the run manifest proves a clean robots run ran (SITE-ysoqjxpm)", {
+  # check_robots = TRUE emits nothing when every URL is allowed, so the stamp is
+  # the only evidence that distinguishes it from a skipped check.
+  urls <- report_urls_fixture("https://ex.com/a")
+  findings <- no_findings()
+  expect_false(layer_ran(urls, NULL, findings)[["robots"]])
+
+  attr(findings, "layers_run") <- "robots"
+  expect_true(layer_ran(urls, NULL, findings)[["robots"]])
+})
+
+test_that("the manifest proves schema for a source whose format hides it", {
+  # A gzip source records the outer format, so the inference cannot see that the
+  # inflated document was schema-validated.
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture(
+    "https://ex.com/s.xml.gz",
+    "https://ex.com/s.xml.gz",
+    "gzip"
+  )
+  findings <- no_findings()
+  expect_false(layer_ran(urls, sources, findings)[["schema"]])
+
+  attr(findings, "layers_run") <- "schema"
+  expect_true(layer_ran(urls, sources, findings)[["schema"]])
+})
+
+test_that("the manifest only adds evidence and never widens the table", {
+  urls <- report_urls_fixture("https://ex.com/a")
+  findings <- no_findings()
+  attr(findings, "layers_run") <- c("robots", "not-a-layer")
+  ran <- layer_ran(urls, NULL, findings)
+
+  expect_named(ran, report_layer_order)
+  expect_true(ran[["robots"]])
+  # An unstamped layer is untouched by the union.
+  expect_false(ran[["discovery"]])
+})
+
+test_that("a clean robots run reports its checks as passed, not not-run", {
+  # The end-to-end statement of the fix, at the level the report renders.
+  urls <- report_urls_fixture("https://ex.com/a")
+  sources <- report_sources_fixture("/tmp/s.xml", "/tmp/s.xml", "xml-urlset")
+  findings <- no_findings()
+
+  before <- report_check_states(urls, sources, findings)
+  robots_before <- before$state[before$layer == "robots"]
+  expect_true(all(robots_before == "not-run"))
+
+  attr(findings, "layers_run") <- "robots"
+  after <- report_check_states(urls, sources, findings)
+  robots_after <- after$state[after$layer == "robots"]
+  expect_gt(length(robots_after), 0L)
+  expect_true(all(robots_after == "passed"))
 })
 
 test_that("a NULL sources attribute proves nothing rather than erroring", {

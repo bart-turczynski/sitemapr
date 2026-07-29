@@ -370,6 +370,11 @@ audit_read_document <- function(artifact) {
 # validate_sitemap_source(), reusing the shared bytes and the single
 # expand_index() result instead of re-fetching/re-parsing.
 audit_findings_projection <- function(artifact, mode) {
+  # The run manifest rides the artifact here exactly as it rides `src` on the
+  # validate path (R/layers-run.R). audit_sitemap() has no `check_robots` and no
+  # `inspect_pages`, so `schema` is the only layer this branch can record.
+  layer_sink <- layer_sink_new()
+  artifact$layer_sink <- layer_sink
   parts <- switch(
     artifact$kind,
     "malformed-gzip" = list(decompression_source_finding(
@@ -396,7 +401,7 @@ audit_findings_projection <- function(artifact, mode) {
       artifact$base
     )
   }
-  assemble_findings(parts, mode)
+  layer_sink_stamp(assemble_findings(parts, mode), layer_sink)
 }
 
 audit_findings_document <- function(artifact) {
@@ -456,6 +461,10 @@ audit_validate_xml_parts <- function(artifact) {
     )))
   }
 
+  # Mirrors the layer-manifest record in validate_xml_parts(): same point, same
+  # reason. Without it the audit projection would silently keep understating the
+  # schema layer for a gzip source (R/layers-run.R).
+  layer_sink_record(artifact$layer_sink, "schema")
   schema <- validate_schema(doc, artifact$base)
 
   if (identical(root, "urlset")) {

@@ -107,7 +107,15 @@ raises a classed error condition. When \code{inspect_pages = TRUE}, the tibble
 additionally carries a \code{page_coverage} attribute (\code{attr(x, "page_coverage")}) — a versioned, batch-wide named list reporting what the
 run covered (\code{eligible}, \code{deduplicated}, \code{selected}, \code{attempted},
 \code{completed}, \code{partial}, and which caps bit) so a sampled or capped run is
-never misread as clean; it is absent when \code{inspect_pages = FALSE}.
+never misread as clean; it is absent when \code{inspect_pages = FALSE}. The
+tibble may also carry a \code{layers_run} attribute (\code{attr(x, "layers_run")}) —
+a character vector naming validation layers this run exercised whose
+execution the result cannot otherwise evidence, so that
+\code{\link[=report_sitemap]{report_sitemap()}} can tell "ran and found nothing" from "never ran". It
+records \code{"robots"} for \code{check_robots = TRUE} (a clean robots run emits no
+findings) and \code{"schema"} when XSD validation ran on the parsed document. It
+is a run manifest and not part of the row contract: treat it as advisory,
+present only when there was something to record.
 }
 \description{
 The public validation entry point. Reads one or more sitemap sources —

@@ -459,6 +459,11 @@ validate_xml_parts <- function(
     ))
   }
 
+  # Reached only for a supported root, and `src$bytes` are already inflated
+  # here, so this is the one point that knows the schema layer ran on THIS
+  # document. The source record keeps the outer format ("gzip"), which is why
+  # the report cannot work it out afterwards.
+  layer_sink_record(src$layer_sink, "schema")
   schema <- validate_schema(doc, src$base)
 
   if (identical(root, "urlset")) {
@@ -864,6 +869,12 @@ validate_sitemap_source <- function(
   # locs into it via append_robots_part (NULL = page inspection off).
   src$robots_ua <- robots_ua
   src$page_sink <- page_sink
+  # The run manifest rides along the same way (R/layers-run.R): the branches
+  # record the layers they exercise, and the stamp is attached to this source's
+  # contract below. Always created — recording is cheap and the stamp is omitted
+  # when nothing was recorded.
+  layer_sink <- layer_sink_new()
+  src$layer_sink <- layer_sink
 
   parts <- if (identical(src$kind, "malformed-gzip")) {
     list(decompression_source_finding(
@@ -912,8 +923,14 @@ validate_sitemap_source <- function(
     robots_ua,
     src$base
   )
+  # That call is unconditional whenever `robots_ua` is set, so a non-NULL UA is
+  # itself proof the robots layer ran — which is the only evidence a clean run
+  # (every advertised URL allowed) ever produces.
+  if (!is.null(robots_ua)) {
+    layer_sink_record(layer_sink, "robots")
+  }
 
-  assemble_findings(parts, mode, ruleset)
+  layer_sink_stamp(assemble_findings(parts, mode, ruleset), layer_sink)
 }
 
 # Append the encoding-conflict part for a resolved source. Only a "document"
@@ -951,9 +968,17 @@ append_robots_sitemap_part <- function(parts, sitemap_url, robots_ua, base) {
 # engine `ruleset` is active, so the column set widens to match; the baseline
 # (`ruleset = NULL`) path keeps the pinned ten columns unchanged.
 combine_findings_contracts <- function(parts, ruleset = NULL) {
+  # Unioned from the UNFILTERED parts, and before the re-impose below: the
+  # zero-row drop that follows would discard the stamp of a source that ran a
+  # layer cleanly, which is precisely the run this manifest exists to describe.
+  # A layer one source exercised was exercised by the call as a whole.
+  layers_run <- findings_layers_run_union(parts)
   parts <- parts[vapply(parts, nrow, integer(1L)) > 0L]
   if (length(parts) == 0L) {
-    return(findings_stamp_ruleset(empty_findings_contract(), ruleset))
+    return(findings_stamp_layers(
+      findings_stamp_ruleset(empty_findings_contract(), ruleset),
+      layers_run
+    ))
   }
   findings <- do.call(rbind, parts)
   findings <- findings_dedup(findings)
@@ -963,7 +988,8 @@ combine_findings_contracts <- function(parts, ruleset = NULL) {
     cols <- c(cols, findings_additive_cols())
   }
   findings <- findings[, cols, drop = FALSE]
-  tibble::new_tibble(findings, nrow = nrow(findings))
+  out <- tibble::new_tibble(findings, nrow = nrow(findings))
+  findings_stamp_layers(out, layers_run)
 }
 
 # Validate multiple normalized source records, converting source-level failures
@@ -1107,7 +1133,15 @@ findings_ruleset_spec <- function(sitemap_ruleset, context) {
 #'   "page_coverage")`) — a versioned, batch-wide named list reporting what the
 #'   run covered (`eligible`, `deduplicated`, `selected`, `attempted`,
 #'   `completed`, `partial`, and which caps bit) so a sampled or capped run is
-#'   never misread as clean; it is absent when `inspect_pages = FALSE`.
+#'   never misread as clean; it is absent when `inspect_pages = FALSE`. The
+#'   tibble may also carry a `layers_run` attribute (`attr(x, "layers_run")`) —
+#'   a character vector naming validation layers this run exercised whose
+#'   execution the result cannot otherwise evidence, so that
+#'   [report_sitemap()] can tell "ran and found nothing" from "never ran". It
+#'   records `"robots"` for `check_robots = TRUE` (a clean robots run emits no
+#'   findings) and `"schema"` when XSD validation ran on the parsed document. It
+#'   is a run manifest and not part of the row contract: treat it as advisory,
+#'   present only when there was something to record.
 #' @export
 #' @examples
 #' xml <- paste0(

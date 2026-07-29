@@ -26,13 +26,20 @@
 # Per-layer run evidence: a named logical over `report_layer_order`, TRUE only
 # where the run demonstrably exercised that layer.
 #
-# Deliberate understatements, each unavoidable with the evidence at hand:
+# Three independent sources of positive evidence, unioned: the inference below,
+# the run manifest a validate/audit call stamps on the findings tibble
+# (`attr(x, "layers_run")`, R/layers-run.R), and the fired findings. The
+# inference alone cannot prove two cases, which is why the manifest exists:
 #   * `robots` — `check_robots = TRUE` leaves NO trace when every URL is
-#     allowed, so a clean robots run is indistinguishable from a skipped one. It
-#     can only be proven by a robots finding.
-#   * `schema` / `protocol` for a gzip or tar payload — the source record keeps
-#     the OUTER format, so the inner document's root is unknown here. URL rows
-#     still prove the protocol layer ran; schema validation stays unproven.
+#     allowed, so a clean robots run is indistinguishable from a skipped one.
+#   * `schema` for a gzip payload — the source record keeps the OUTER format, so
+#     the inner document's root is unknown here.
+# The manifest is optional: a findings tibble without one (an older result, or a
+# hand-built tibble) falls back to the inference unchanged.
+#
+# One understatement remains by design: a `.tar.gz` reports `schema = FALSE`,
+# and that is correct rather than conservative — the archive path reaches no
+# `validate_schema()` call at all.
 report_layer_ran <- function(urls, sources, findings) {
   if (is.null(sources)) {
     sources <- empty_source_metadata()
@@ -65,14 +72,18 @@ report_layer_ran <- function(urls, sources, findings) {
     # Page inspection stamps its batch-wide coverage; the attribute is absent
     # exactly when `inspect_pages = FALSE` (validate_sitemap() Value).
     page = !is.null(attr(findings, "page_coverage")),
+    # Nothing in the result proves this one; it comes from the run manifest (or
+    # from a fired robots finding) below.
     robots = FALSE,
     # The per-code cap that emits REPORT_TRUNCATED runs at every assembly.
     report = TRUE
   )
+  # What the run itself recorded. Only ever adds evidence — an unrecognised
+  # layer name is ignored rather than widening the table.
+  ran[names(ran) %in% findings_layers_run(findings)] <- TRUE
   # A finding is proof its own layer ran, whatever the evidence above concluded.
-  # This is what makes `robots` reachable, and it keeps the table
-  # self-consistent: a layer can never show a fired code while claiming it did
-  # not run.
+  # It keeps the table self-consistent: a layer can never show a fired code
+  # while claiming it did not run.
   ran[names(ran) %in% findings$layer] <- TRUE
   ran[report_layer_order]
 }
