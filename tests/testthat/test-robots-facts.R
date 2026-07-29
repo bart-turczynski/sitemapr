@@ -219,21 +219,56 @@ test_that("findings derived from facts equal the pre-refactor findings", {
     robotstxtr::allowed_by_robots_url(locs, user_agent = "*", ssrf_guard = TRUE)
   )
   res <- old_decisions$results
+  # The per-row builders are inlined here on purpose. SITE-wlmodqza replaced
+  # them with one vectorized pass (~245x faster on a high-cardinality result);
+  # keeping the pre-refactor form in the test is what proves the vectorized
+  # build is byte-identical, row order and all, rather than merely equivalent.
+  old_disallowed <- function(row) {
+    robots_findings(
+      code = "ROBOTS_DISALLOWED",
+      severity = "warning",
+      subject_ref = page_url_subject_ref(base, row$url),
+      message = sprintf(
+        "Sitemap-listed URL %s is disallowed by robots.txt (matched %s '%s').",
+        row$url,
+        row$matched_rule_type,
+        row$matched_rule_value
+      ),
+      evidence = list(finding_evidence(
+        excerpt = sprintf(
+          "%s: %s",
+          row$matched_rule_type,
+          row$matched_rule_value
+        ),
+        line = row$matched_line
+      )),
+      is_strict_only = FALSE
+    )
+  }
+  old_indeterminate <- function(row) {
+    robots_findings(
+      code = "ROBOTS_INDETERMINATE",
+      severity = "info",
+      subject_ref = page_url_subject_ref(base, row$url),
+      message = sprintf(
+        paste0(
+          "robots.txt for %s could not be evaluated (fetch outcome: %s); ",
+          "allow/disallow is undetermined."
+        ),
+        row$url,
+        row$fetch_outcome
+      ),
+      evidence = list(finding_evidence(excerpt = row$fetch_outcome)),
+      is_strict_only = FALSE
+    )
+  }
   parts <- list()
   for (i in seq_len(nrow(res))) {
     row <- res[i, , drop = FALSE]
     if (isFALSE(row$allowed)) {
-      parts[[length(parts) + 1L]] <- robots_disallowed_finding(
-        base,
-        row$url,
-        row
-      )
+      parts[[length(parts) + 1L]] <- old_disallowed(row)
     } else if (is.na(row$allowed)) {
-      parts[[length(parts) + 1L]] <- robots_indeterminate_finding(
-        base,
-        row$url,
-        row
-      )
+      parts[[length(parts) + 1L]] <- old_indeterminate(row)
     }
   }
   old <- do.call(rbind, parts)

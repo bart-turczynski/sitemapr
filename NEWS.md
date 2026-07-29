@@ -64,6 +64,15 @@ related W3C and RFC standards.
   `INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED` finding. Pass
   `Inf` explicitly, or set `options(sitemapr.max_total_sitemaps = Inf)`, to keep
   the previous unbounded behavior.
+* Each finding code now contributes at most 100 individual rows to an assembled
+  report; the remainder are accounted for in a single report-scoped
+  `REPORT_TRUNCATED` row naming each capped code and its omitted count. A
+  blanket `Disallow: /` over a 50 000-URL sitemap previously produced 50 000
+  near-identical `ROBOTS_DISALLOWED` rows. Configure with
+  `options(sitemapr.max_findings_per_code = )`; `Inf` opts out.
+* Robots findings are built in one vectorized pass instead of one tibble per
+  URL, which dominated the cost of a high-cardinality robots result.
+
 ## Network safety
 
 * SSRF guard blocks requests to private, loopback, link-local, and

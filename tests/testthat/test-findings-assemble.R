@@ -602,3 +602,127 @@ test_that("defaults are byte-identical whether or not a producer opts in", {
   )
   expect_identical(plain, opted)
 })
+
+# ---- per-code finding cap (SITE-wlmodqza) ------------------------------------
+
+# `n` synthetic robots findings under one code, one per distinct URL, matching
+# the shape a blanket `Disallow: /` produces over a large sitemap.
+cap_part <- function(n, code = "ROBOTS_DISALLOWED", severity = "warning") {
+  loc <- sprintf("https://e.com/p/%04d", seq_len(n))
+  robots_findings(
+    code = rep(code, n),
+    severity = rep(severity, n),
+    subject_ref = paste0("sitemap://e.com/s.xml#page-url:", loc),
+    message = paste("disallowed:", loc),
+    evidence = lapply(loc, function(u) finding_evidence(excerpt = u)),
+    is_strict_only = rep(FALSE, n)
+  )
+}
+
+test_that("a code under the cap is untouched and adds no rollup", {
+  out <- assemble_findings(list(cap_part(100L)), "strict")
+
+  expect_identical(nrow(out), 100L)
+  expect_false("REPORT_TRUNCATED" %in% out$code)
+})
+
+test_that("a code over the cap keeps 100 rows plus one rollup", {
+  out <- assemble_findings(list(cap_part(5000L)), "strict")
+
+  expect_identical(nrow(out), 101L)
+  expect_identical(sum(out$code == "ROBOTS_DISALLOWED"), 100L)
+
+  roll <- out[out$code == "REPORT_TRUNCATED", ]
+  expect_identical(nrow(roll), 1L)
+  expect_identical(roll$severity, "info")
+  expect_identical(roll$layer, "report")
+  expect_identical(roll$subject_type, "report")
+  expect_identical(roll$subject_ref, "#report:finding-cap")
+  expect_false(roll$is_strict_only)
+  # The omitted count must be exact, and name the code it belongs to.
+  expect_match(roll$message, "4900 row(s) omitted", fixed = TRUE)
+  expect_match(roll$message, "ROBOTS_DISALLOWED: 4900", fixed = TRUE)
+})
+
+test_that("the cap is per code, not per report", {
+  out <- assemble_findings(
+    list(cap_part(300L), cap_part(250L, "ROBOTS_INDETERMINATE", "info")),
+    "strict"
+  )
+
+  expect_identical(sum(out$code == "ROBOTS_DISALLOWED"), 100L)
+  expect_identical(sum(out$code == "ROBOTS_INDETERMINATE"), 100L)
+  # One rollup for the whole report, accounting for both codes.
+  roll <- out[out$code == "REPORT_TRUNCATED", ]
+  expect_identical(nrow(roll), 1L)
+  expect_match(roll$message, "2 finding code(s)", fixed = TRUE)
+  expect_match(roll$message, "350 row(s) omitted", fixed = TRUE)
+  expect_match(roll$message, "ROBOTS_DISALLOWED: 200", fixed = TRUE)
+  expect_match(roll$message, "ROBOTS_INDETERMINATE: 150", fixed = TRUE)
+})
+
+test_that("the surviving rows are the first in contract order, and stable", {
+  out <- assemble_findings(list(cap_part(5000L)), "strict")
+  kept <- out$subject_ref[out$code == "ROBOTS_DISALLOWED"]
+
+  expect_identical(kept, sort(kept))
+  # Deterministic across runs: same input, same survivors.
+  again <- assemble_findings(list(cap_part(5000L)), "strict")
+  expect_identical(out, again)
+})
+
+test_that("the rollup sorts last and leaves the contract shape intact", {
+  out <- assemble_findings(list(cap_part(5000L)), "strict")
+
+  expect_named(out, contract_cols)
+  # layer "report" ranks last, so the rollup is the final row.
+  expect_identical(out$code[nrow(out)], "REPORT_TRUNCATED")
+})
+
+test_that("Inf opts out of the cap entirely", {
+  withr::local_options(list(sitemapr.max_findings_per_code = Inf))
+  out <- assemble_findings(list(cap_part(500L)), "strict")
+
+  expect_identical(nrow(out), 500L)
+  expect_false("REPORT_TRUNCATED" %in% out$code)
+})
+
+test_that("the cap is configurable via option", {
+  withr::local_options(list(sitemapr.max_findings_per_code = 10L))
+  out <- assemble_findings(list(cap_part(50L)), "strict")
+
+  expect_identical(sum(out$code == "ROBOTS_DISALLOWED"), 10L)
+  expect_match(
+    out$message[out$code == "REPORT_TRUNCATED"],
+    "40 row(s) omitted",
+    fixed = TRUE
+  )
+})
+
+test_that("the rollup carries the additive columns under a ruleset overlay", {
+  spec <- findings_ruleset_spec("google", ruleset_context())
+  out <- assemble_findings(list(cap_part(200L)), "strict", ruleset = spec)
+
+  roll <- out[out$code == "REPORT_TRUNCATED", ]
+  expect_identical(nrow(roll), 1L)
+  expect_true(all(findings_additive_cols() %in% names(out)))
+})
+
+test_that("the rollup pads producer-supplied context and provenance", {
+  # When a producer opts into the optional columns every part is padded, so the
+  # rollup row must carry them too or the rbind would not match by name.
+  n <- 150L
+  part <- cap_part(n)
+  part$context <- rep(list(list(status_code = 404L)), n)
+  part$provenance <- rep("fetched", n)
+  part$remediation_hint <- rep("unblock the URL", n)
+
+  out <- assemble_findings(list(part), "strict")
+
+  roll <- out[out$code == "REPORT_TRUNCATED", ]
+  expect_identical(nrow(roll), 1L)
+  # The rollup is not attributed to any producer's context or provenance.
+  expect_true(is.na(roll$remediation_hint))
+  expect_identical(sum(out$code == "ROBOTS_DISALLOWED"), 100L)
+  expect_match(roll$message, "50 row(s) omitted", fixed = TRUE)
+})

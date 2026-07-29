@@ -361,6 +361,83 @@ findings_sort <- function(findings) {
   findings[ord, , drop = FALSE]
 }
 
+# Per-code ceiling on INDIVIDUAL findings in one assembled report. A blanket
+# `Disallow: /` over a 50 000-URL sitemap yields one ROBOTS_DISALLOWED row per
+# URL: a report nobody can read, however fast it was produced. Each code
+# contributes at most this many rows plus one rollup accounting for the rest.
+# Resolves from `getOption("sitemapr.max_findings_per_code")`; `Inf` opts out.
+findings_per_code_cap <- function() {
+  getOption("sitemapr.max_findings_per_code", 100L)
+}
+
+# Within-group occurrence number for each row, in the row order given (so a
+# sorted input yields the contract-order rank). Grouped over the ~95 registry
+# codes, not over rows, so the loop is bounded by the vocabulary.
+findings_code_rank <- function(code) {
+  rank <- integer(length(code))
+  for (idx in split(seq_along(code), code)) {
+    rank[idx] <- seq_along(idx)
+  }
+  rank
+}
+
+# The single report-scoped row accounting for every capped-away finding. Built
+# from a surviving row so the column set (including any additive/producer
+# columns) matches by construction. Truncation is operational, not a document
+# defect, so this is `info` and report-scoped — the same treatment the aggregate
+# traversal budgets get (`index_budget_codes`, R/validate-sitemap.R).
+findings_truncation_row <- function(template, omitted, cap) {
+  detail <- paste0(names(omitted), ": ", as.integer(omitted))
+  row <- template[1L, , drop = FALSE]
+  row$code <- "REPORT_TRUNCATED"
+  row$severity <- "info"
+  row$layer <- "report"
+  row$subject_type <- "report"
+  row$subject_ref <- protocol_ref_fragment(NA_character_, "#report:finding-cap")
+  row$message <- sprintf(
+    paste0(
+      "Report truncated: %d finding code(s) exceeded the per-code cap of %s ",
+      "individual rows; %d row(s) omitted (%s). Counts are complete; the ",
+      "individual rows are not."
+    ),
+    length(omitted),
+    format(cap),
+    sum(as.integer(omitted)),
+    paste(detail, collapse = "; ")
+  )
+  row$evidence <- list(finding_evidence(
+    excerpt = paste(detail, collapse = "; ")
+  ))
+  row$is_strict_only <- FALSE
+  if (!is.null(row[["remediation_hint"]])) {
+    row$remediation_hint <- NA_character_
+  }
+  if (!is.null(row[["context"]])) {
+    row$context <- vector("list", 1L)
+  }
+  if (!is.null(row[["provenance"]])) {
+    row$provenance <- NA_character_
+  }
+  row
+}
+
+# Apply the per-code cap, accounting for the omissions in one REPORT_TRUNCATED
+# row. Expects `findings` already sorted, so the survivors are the first `cap`
+# in contract order and the choice is deterministic across runs. Re-sorts only
+# when a rollup is actually appended, leaving the uncapped path untouched.
+findings_cap_per_code <- function(findings, cap = findings_per_code_cap()) {
+  if (!is.finite(cap) || nrow(findings) == 0L) {
+    return(findings)
+  }
+  keep <- findings_code_rank(findings$code) <= cap
+  if (all(keep)) {
+    return(findings)
+  }
+  omitted <- table(findings$code[!keep])
+  kept <- findings[keep, , drop = FALSE]
+  findings_sort(rbind(kept, findings_truncation_row(kept, omitted, cap)))
+}
+
 #' Assemble producer finding tibbles into the final contract tibble (Layer F)
 #'
 #' The deterministic, side-effect-free assembler core. Row-binds the
@@ -411,6 +488,7 @@ assemble_findings <- function(parts, mode, ruleset = NULL) {
 
   findings <- findings_dedup(findings)
   findings <- findings_sort(findings)
+  findings <- findings_cap_per_code(findings)
 
   # Capture the row-aligned producer-supplied context / provenance BEFORE the
   # 10-column re-impose drops them; they feed the stamp's per-finding merge /

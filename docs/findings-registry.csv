@@ -86,7 +86,7 @@ PAGE_HREFLANG_MISMATCH,warning,page,page-url,FALSE,active,,PAGE_HREFLANG_MISMATC
 ROBOTS_DISALLOWED,warning,robots,page-url,FALSE,active,,ROBOTS_DISALLOWED,baseline
 ROBOTS_INDETERMINATE,info,robots,page-url,FALSE,active,done,ROBOTS_INDETERMINATE,baseline
 ROBOTS_SITEMAP_DISALLOWED,warning,robots,source,FALSE,active,done,ROBOTS_SITEMAP_DISALLOWED,baseline
-REPORT_TRUNCATED,info,report,report,FALSE,validator-only,,REPORT_TRUNCATED,baseline
+REPORT_TRUNCATED,info,report,report,FALSE,active,done,REPORT_TRUNCATED,baseline
 INSPECTION_FULL_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_FULL_CAP_HIT,baseline
 INSPECTION_SAMPLE_CAP_HIT,info,report,report,FALSE,validator-only,,INSPECTION_SAMPLE_CAP_HIT,baseline
 PROTOCOL_URL_DECODED_TOO_LONG,error,protocol,entry,FALSE,active,,,yandex

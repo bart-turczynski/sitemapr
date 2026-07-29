@@ -435,3 +435,50 @@ test_that("the document check stays off on a default call", {
   )
   expect_identical(sum(f$code == "ROBOTS_SITEMAP_DISALLOWED"), 0L)
 })
+
+# ---- vectorized derivation column fallback (SITE-wlmodqza) -------------------
+
+test_that("a results table missing a branch's columns reads as NA", {
+  # The per-row builders only touched a column inside the branch that needed
+  # it, so a table carrying one branch's columns was valid. The vectorized
+  # pass reads every column, so the absent ones must fall back to NA rather
+  # than error.
+  rows <- data.frame(
+    url = c("https://e.com/a", "https://e.com/b"),
+    stringsAsFactors = FALSE
+  )
+
+  expect_identical(
+    robots_result_col(rows, "fetch_outcome"),
+    c(NA_character_, NA_character_)
+  )
+  expect_identical(
+    robots_result_col(rows, "matched_line", NA_integer_),
+    c(NA_integer_, NA_integer_)
+  )
+  # A present column is returned untouched.
+  rows$fetch_outcome <- c("timeout", "ok")
+  expect_identical(robots_result_col(rows, "fetch_outcome"), c("timeout", "ok"))
+})
+
+test_that("indeterminate-only results derive without matcher columns", {
+  facts <- list(
+    urls = "https://e.com/a",
+    decision = "undetermined",
+    legacy = list(
+      results = data.frame(
+        url = "https://e.com/a",
+        allowed = NA,
+        fetch_outcome = "timeout",
+        stringsAsFactors = FALSE
+      )
+    )
+  )
+
+  out <- robots_findings_from_facts(facts, base = "sitemap://s.xml")
+
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$code, "ROBOTS_INDETERMINATE")
+  expect_identical(out$severity, "info")
+  expect_match(out$message, "fetch outcome: timeout", fixed = TRUE)
+})

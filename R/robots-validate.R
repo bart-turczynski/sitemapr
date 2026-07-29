@@ -194,50 +194,43 @@ robots_testable_locs <- function(locs) {
   unique(locs[loc_absoluteness(locs) == "http(s)"])
 }
 
-# One ROBOTS_DISALLOWED finding for a disallowed URL. Evidence carries the
-# matcher's matched robots.txt rule: the `type: value` snippet in `excerpt`
-# (e.g. `disallow: /private`) and the one-based `matched_line` in `line`.
-robots_disallowed_finding <- function(base, loc, res_row) {
-  robots_findings(
-    code = "ROBOTS_DISALLOWED",
-    severity = "warning",
-    subject_ref = page_url_subject_ref(base, loc),
-    message = sprintf(
-      "Sitemap-listed URL %s is disallowed by robots.txt (matched %s '%s').",
-      loc,
-      res_row$matched_rule_type,
-      res_row$matched_rule_value
-    ),
-    evidence = list(finding_evidence(
-      excerpt = sprintf(
-        "%s: %s",
-        res_row$matched_rule_type,
-        res_row$matched_rule_value
-      ),
-      line = res_row$matched_line
-    )),
-    is_strict_only = FALSE
+# One column of the legacy results table, recycled to `nrow` when the column is
+# absent. The per-row builders this replaced only ever touched a column inside
+# the branch that needed it, so a results table carrying just one branch's
+# columns stayed valid; reading every column in one vectorized pass would break
+# that unless a missing column reads as NA.
+robots_result_col <- function(rows, name, default = NA_character_) {
+  col <- rows[[name]]
+  if (is.null(col)) {
+    return(rep(default, nrow(rows)))
+  }
+  col
+}
+
+# The ROBOTS_DISALLOWED message for a vector of disallowed URLs. Evidence
+# carries the matcher's matched robots.txt rule: the `type: value` snippet in
+# `excerpt` (e.g. `disallow: /private`) and the one-based `matched_line` in
+# `line`. Vectorized over rows — see `robots_findings_from_facts()`.
+robots_disallowed_messages <- function(loc, rows) {
+  sprintf(
+    "Sitemap-listed URL %s is disallowed by robots.txt (matched %s '%s').",
+    loc,
+    robots_result_col(rows, "matched_rule_type"),
+    robots_result_col(rows, "matched_rule_value")
   )
 }
 
-# One ROBOTS_INDETERMINATE finding for a URL whose robots.txt could not be
-# evaluated (a 5xx/timeout/network/TLS failure or an SSRF block: `allowed` is
-# NA). Evidence records the robotstxtr fetch outcome in `excerpt`.
-robots_indeterminate_finding <- function(base, loc, res_row) {
-  robots_findings(
-    code = "ROBOTS_INDETERMINATE",
-    severity = "info",
-    subject_ref = page_url_subject_ref(base, loc),
-    message = sprintf(
-      paste0(
-        "robots.txt for %s could not be evaluated (fetch outcome: %s); ",
-        "allow/disallow is undetermined."
-      ),
-      loc,
-      res_row$fetch_outcome
+# The ROBOTS_INDETERMINATE message for a vector of URLs whose robots.txt could
+# not be evaluated (a 5xx/timeout/network/TLS failure or an SSRF block:
+# `allowed` is NA). Evidence records the robotstxtr fetch outcome in `excerpt`.
+robots_indeterminate_messages <- function(loc, rows) {
+  sprintf(
+    paste0(
+      "robots.txt for %s could not be evaluated (fetch outcome: %s); ",
+      "allow/disallow is undetermined."
     ),
-    evidence = list(finding_evidence(excerpt = res_row$fetch_outcome)),
-    is_strict_only = FALSE
+    loc,
+    robots_result_col(rows, "fetch_outcome")
   )
 }
 
@@ -443,19 +436,47 @@ robots_findings_from_facts <- function(facts, base = NA_character_) {
   }
   results <- facts$legacy$results
 
-  out <- list()
-  for (i in seq_len(nrow(results))) {
-    row <- results[i, , drop = FALSE]
-    loc <- row$url
-    if (isFALSE(row$allowed)) {
-      out[[length(out) + 1L]] <- robots_disallowed_finding(base, loc, row)
-    } else if (is.na(row$allowed)) {
-      out[[length(out) + 1L]] <- robots_indeterminate_finding(base, loc, row)
-    }
-  }
-
-  if (length(out) == 0L) {
+  # Built in ONE vectorized pass rather than one tibble per row. Under a blanket
+  # `Disallow: /` over a 50 000-URL sitemap the per-row form spent ~32s, 95% of
+  # it constructing 50 000 single-row tibbles (the trailing rbind was only 5%),
+  # so the fix is vectorizing the build, not the accumulator (SITE-wlmodqza).
+  # Row order is preserved, so the disallowed/indeterminate interleave matches
+  # the results table exactly.
+  allowed <- results$allowed
+  emit <- which(is.na(allowed) | !allowed)
+  if (length(emit) == 0L) {
     return(empty_robots_findings())
   }
-  do.call(rbind, out)
+  rows <- results[emit, , drop = FALSE]
+  loc <- rows$url
+  is_dis <- !is.na(rows$allowed)
+
+  robots_findings(
+    code = ifelse(is_dis, "ROBOTS_DISALLOWED", "ROBOTS_INDETERMINATE"),
+    severity = ifelse(is_dis, "warning", "info"),
+    subject_ref = page_url_subject_ref(base, loc),
+    message = ifelse(
+      is_dis,
+      robots_disallowed_messages(loc, rows),
+      robots_indeterminate_messages(loc, rows)
+    ),
+    evidence = unname(Map(
+      function(excerpt, line) finding_evidence(excerpt = excerpt, line = line),
+      ifelse(
+        is_dis,
+        sprintf(
+          "%s: %s",
+          robots_result_col(rows, "matched_rule_type"),
+          robots_result_col(rows, "matched_rule_value")
+        ),
+        robots_result_col(rows, "fetch_outcome")
+      ),
+      ifelse(
+        is_dis,
+        robots_result_col(rows, "matched_line", NA_integer_),
+        NA_integer_
+      )
+    )),
+    is_strict_only = rep(FALSE, length(emit))
+  )
 }
