@@ -127,6 +127,39 @@ if (!all(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)) {
   )
 }
 
+# validator_code is the cross-port join key: it must be INJECTIVE where present.
+# Two sitemapr codes sharing one target silently collapses a genuine
+# classification difference into apparent agreement, which is worse for a
+# conformance harness than no mapping at all. Two such collapses shipped
+# undetected (ENCODING_BOM_DECLARATION_CONFLICT + ENCODING_CONFLICT, and
+# UNSUPPORTED_MALFORMED_ARCHIVE + UNSUPPORTED_MALFORMED_GZIP) precisely because
+# nothing checked this. A blank validator_code means "not comparable" and is
+# exempt — several codes legitimately have no counterpart.
+mapped <- reg$validator_code[!is.na(reg$validator_code)]
+if (anyDuplicated(mapped)) {
+  collapsed <- unique(mapped[duplicated(mapped)])
+  add(
+    "validator_code must be unique where present (join collapse): %s",
+    paste(
+      vapply(
+        collapsed,
+        function(v) {
+          sprintf(
+            "%s <- {%s}",
+            v,
+            paste(
+              reg$code[!is.na(reg$validator_code) & reg$validator_code == v],
+              collapse = ", "
+            )
+          )
+        },
+        character(1)
+      ),
+      collapse = "; "
+    )
+  )
+}
+
 # Drift: emitted literals vs active-status codes. Finding codes carry
 # distinctive layer-oriented prefixes; match those as double-quoted literals in
 # R/ source. Keep this prefix set in sync when a new code family is introduced.
