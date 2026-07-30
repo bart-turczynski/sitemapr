@@ -32,10 +32,25 @@ profiles; none is copied or adapted from an upstream corpus.
 
 The `corpus/` subdirectory is the fixture set imported wholesale from the
 sibling **sitemap-validator** project (SITE-uivyzfhe) to broaden coverage and
-serve as a shared golden reference across the two ports. The files are
-byte-identical to sitemap-validator's `fixtures/` tree, preserving its layout
-(`xml/`, `text/`, `hreflang/`, `encoding/`, `compressed/`) and names so the same
-inputs can be run through both implementations and their outcomes compared.
+serve as a shared golden reference across the two ports. It preserves that
+project's layout (`xml/`, `text/`, `hreflang/`, `encoding/`, `compressed/`) and
+names so the same inputs can be run through both implementations and their
+outcomes compared.
+
+The trees are **intended** to stay byte-identical, and no file here may be
+added, removed, or edited without the same change on the sibling side — a
+one-sided file is not a comparison, it is two unrelated tests. As audited on
+2026-07-30 (SITE-bqooxeze) that intent has already slipped three times, all of
+them from this side:
+
+| Path | State |
+|---|---|
+| `xml/unsupported-root.xml` | content differs; rewritten here from `<rss>` to `<catalog>` at 8d5bf83 when feeds became parseable, never mirrored |
+| `xml/video-no-player-or-content-loc.xml` | sitemapr only, added at 64e4119 (SITE-ciedgveo) |
+| `xml/valid-pagemap.xml` | sibling only, never imported here |
+
+79 of the 80 paths are shared and 78 of those are byte-identical. Reconciling
+the three is tracked cross-repo; until then those rows are not comparisons.
 
 Both projects are authored by the same maintainer; every corpus fixture is
 clean-room synthetic `example.com` content reproducing no third-party document,
@@ -43,9 +58,16 @@ and is likewise covered by the package license (MIT). The `compressed/` archives
 were built from the same synthetic sources.
 
 `tests/testthat/test-corpus-fixtures.R` drives every corpus fixture through
-`validate_sitemap()` and snapshots the per-fixture finding codes (or the classed
+`validate_sitemap()` and pins the per-fixture finding codes (or the classed
 `sitemapr_*` error, for documented limitations: corrupt/tar archives, UTF-16,
-malformed/empty XML) as `_snaps/corpus-fixtures.md` — the golden map.
+malformed/empty XML) in `corpus-golden.tsv` — the golden map. A committed plain
+file, not a testthat snapshot, because `_snaps/` is gitignored here.
+
+`corpus-cases-golden.tsv` beside it pins the **parameterized** cases: the same
+fixture bytes driven with a lowered limit or a served response, reaching rules
+that no fixture file can express. Those rows are sitemapr-only by construction
+and are deliberately kept out of `corpus-golden.tsv`, which is the cross-port
+artifact.
 
 sitemap-validator also ships a ~52 MB "kitchen-sink" generator that emits one
 document exercising every protocol/hreflang code. It is *not* imported: it

@@ -1,0 +1,8 @@
+text/valid.txt#max_url_count=1	PROTOCOL_URL_COUNT_EXCEEDED
+xml/valid-core.xml#max_url_count=1	PROTOCOL_URL_COUNT_EXCEEDED
+compressed/valid.xml.gz#max_uncompressed_bytes=100	PROTOCOL_SIZE_EXCEEDED
+compressed/valid.tar.gz#archive.max_decompressed=100	!sitemapr_archive_limit
+xml/valid-index.xml#served max_total_sitemaps=2	INDEX_TOTAL_SITEMAPS_EXCEEDED
+xml/valid-index.xml#served max_total_urls=1	INDEX_TOTAL_URLS_EXCEEDED
+encoding/declared-utf8-no-bom.xml#served charset=ISO-8859-1	ENCODING_CONFLICT ENCODING_NOT_UTF8
+encoding/no-encoding.xml#served charset=ISO-8859-1	ENCODING_NOT_UTF8

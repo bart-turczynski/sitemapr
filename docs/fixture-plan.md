@@ -249,6 +249,41 @@ These harnesses are **not** `testthat` tests. They run in CI outside
 - Golden output: `tests/testthat/goldens/parity-sv/` — one JSON per fixture.
 - `sitemap-validator` is a CI-only Node tool; never a package dependency.
 
+### 3.2a What the shared corpus can and cannot express
+
+Audited on 2026-07-30 (SITE-bqooxeze). `test-corpus-fixtures.R` drives every
+shared fixture through `validate_sitemap()` **as a local file**. A local file has
+no response, so `charset` and `content_type` are always `NA`: everything keyed
+off response headers is outside the shared corpus *by construction*, and no
+fixture file can change that. Limit-driven rules are the same shape — they need a
+parameter, not a bigger document.
+
+The harness therefore has a second layer of **parameterized cases** (same
+fixture bytes, plus per-case options, `validate_sitemap()` arguments, and
+optionally a served response), pinned separately in `corpus-cases-golden.tsv`
+because they are sitemapr-only and are not cross-port claims.
+
+Seven behaviours were wanted as corpus rows. Their disposition:
+
+| # | Want | Disposition |
+|---|---|---|
+| 1 | Text duplicates (`PROTOCOL_DUPLICATE_LOC` on a byte-identical repeat) | **Out of scope.** Needs fixture *content* no text fixture has. A new shared file requires sibling agreement; behaviour stays pinned in `test-protocol-validate.R` (SITE-lcmvzpel) |
+| 2 | Text URL-count cap | **Case row.** `text/valid.txt` with `max_url_count = 1` |
+| 3 | Unparseable `priority` | **Out of scope.** `xml/priority-out-of-range.xml` is out-of-range, not unparseable; needs a new shared file (SITE-prnqukft pinned it locally) |
+| 4 | Binary input | **Out of scope.** No corpus file is a binary blob; needs a new shared file |
+| 5 | A real UTF-16 document | **Out of scope.** `encoding/utf16-le-bom.xml` is a UTF-16LE BOM over an ASCII body declaring UTF-8 — genuinely malformed, and its golden row is correct as-is. A real one is built in `test-encoding-facts.R` (SITE-zarjabyz, SITE-kqnnnvyr) |
+| 6 | Decompression bomb | **Case rows.** Lowering the inflated-size ceiling over the real 280-byte `compressed/valid.xml.gz` reaches the same guard a committed expansion blob would — no blob fighting the 5 MB commit hook, and no generated-fixture convention the sibling never agreed to. The `.tar.gz` ceiling is a second case (it raises a classed condition rather than reporting a finding) |
+| 7 | Aggregate traversal budgets | **Case rows.** Both need the index **served**: a local index is never traversed, so `INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED` cannot trip from a file at any limit |
+
+Four of the seven are shared-fixture-content wants and stay out until the corpus
+divergence is reconciled with the sibling (see `fixtures/COPYRIGHTS`). Adding
+files unilaterally is what caused that divergence in the first place.
+
+A registered case must **change** the plain-file outcome for the same fixture;
+the harness asserts it. A case whose parameter makes no difference would still
+pass its golden while testing nothing, and one such case (an *agreeing* response
+charset) was caught and dropped by that guard rather than committed.
+
 ### 3.3 Memory bound harness
 
 - Fixture: a generated spec-max file (50 000 URLs, ~50 MB uncompressed).
