@@ -43,6 +43,38 @@ related W3C and RFC standards.
 * RSS/Atom feeds are detected and reported as an unsupported-feed finding rather
   than misparsed.
 
+## Page and robots checking (Layer E)
+
+* `validate_sitemap()` and `validate_sitemaps()` gained `check_robots`, an
+  opt-in check of whether the advertised URLs are crawlable under the target
+  host's `robots.txt`. `robots_user_agent` selects the group to match against
+  (`"*"`, the catch-all, by default; or a token such as `"Googlebot"`). Three
+  `robots`-layer codes ship with it: `ROBOTS_DISALLOWED`,
+  `ROBOTS_SITEMAP_DISALLOWED`, and `ROBOTS_INDETERMINATE` for the case where
+  the fetch could not establish an answer either way.
+* `inspect_pages` opts into per-URL page inspection: a deduplicated,
+  deterministically sampled, budgeted set of the advertised pages is fetched
+  and each is checked for its transport outcome, its canonical, its
+  `noindex` signals, and its hreflang reciprocity. Eleven `page`-layer codes
+  ship with it — `PAGE_FETCH_FAILED`, `PAGE_SSRF_BLOCKED`,
+  `PAGE_STATUS_ERROR`, `PAGE_STATUS_REDIRECT`, `PAGE_REDIRECT_CHAIN`,
+  `PAGE_CANONICAL_MISMATCH`, `PAGE_CANONICAL_MISSING`,
+  `PAGE_CANONICAL_RELATIVE`, `PAGE_META_ROBOTS_NOINDEX`,
+  `PAGE_XROBOTSTAG_NOINDEX`, and `PAGE_HREFLANG_MISMATCH`.
+* `page_mode` chooses `"sample"` (the default, inspecting `page_sample`
+  deduplicated URLs picked by a stable hash order so re-runs pick the same set)
+  or `"full"`. `page_budget` caps the run's pages, requests, aggregate bytes,
+  per-page body size, and wall time; `page_user_agent` sets the UA the
+  inspector sends.
+* **Network expansion is never implicit.** Both checks default to `FALSE`, and
+  with them off the result is byte-identical to a call without them — the
+  pinned ten-column findings surface and no extra attributes.
+* A run with `inspect_pages = TRUE` carries a `page_coverage` attribute
+  (`attr(x, "page_coverage")`): a versioned, batch-wide report of what was
+  actually covered (`eligible`, `deduplicated`, `selected`, `attempted`,
+  `completed`, `partial`, and which caps bit), so a sampled or budget-capped
+  run can never be misread as a clean bill of health for the whole corpus.
+
 ## Discovery
 
 * `sitemap_tree()` discovers a site's sitemaps from a root URL, returning a
@@ -51,6 +83,13 @@ related W3C and RFC standards.
   seed entry points, and an ordered catalog of generic and CMS-oriented guessed
   paths; results are deduped and capped. `sitemap_tree_from_bytes()` classifies
   an already-fetched document.
+* `probe_url()` inspects a single URL **without resolving it** — it reports
+  what the URL is (a sitemap, an index, a feed, `robots.txt`, an HTML page, or
+  an error state) and never expands an index or fetches a child; for an index it
+  counts the direct `<sitemap>` children by parsing locally. It is the
+  diagnostic counterpart to `read_sitemap()`: probe to diagnose, read to
+  resolve. A fetch or parse failure is reported in the returned
+  `sitemapr_probe` record rather than raised, so only invalid input errors.
 
 ## Resource bounds
 
@@ -96,6 +135,15 @@ related W3C and RFC standards.
   `discovery_provenance`, `property_scope`, and structured
   `authority_evidence`). Context is per source: a sitemap-index child inherits
   nothing implicitly.
+* `gsc_submission()` and `robots_cross_submission()` are construction-time
+  presets over `ruleset_context()` for the two common cases, each bundling the
+  axes its channel implies: a verified Search Console submission
+  (`submission_channel = "search_console_api"` plus the verified property), and
+  a sitemap both discovered through and trusted via a target host's
+  `robots.txt` (which keeps the discovery and authority senses distinct and
+  sets no `property_scope`, that trust being blanket rather than
+  property-bound). Every axis stays independently overridable via
+  `ruleset_context()`.
 * `ruleset_revision()` returns a ruleset's published revision string, so a
   cross-repo consumer can pin against a known version of the rules.
 * Three engine-specific finding codes ship with the surface, all Yandex and all
@@ -118,6 +166,35 @@ related W3C and RFC standards.
   distinct, so a `documentation_gap` or `advisory` finding cannot read as a
   hard verdict (ADR-009). Baseline runs carry none of the additive columns and
   render exactly as before.
+* A new **Checks** section enumerates the checks the run performed with their
+  outcome — passed, reported an issue, or not exercised by this run. A clean
+  report previously said only "No issues found.", which cannot distinguish
+  "checked and found nothing" from "never checked at all". The enumeration is
+  driven by the findings registry rather than a hand-kept list, so it cannot
+  drift from the shipped codes, and two rules keep it from overstating: only
+  `active` codes are eligible, so a code this port does not implement can never
+  be reported as passed; and a layer counts as run only on **positive
+  evidence** of its execution. Anything unproven is reported as not exercised
+  — the table deliberately understates rather than advertise a check that may
+  not have run.
+* A new **Recommendations** section makes the report prescriptive rather than
+  purely diagnostic: absent `lastmod`, a majority-stale `lastmod` corpus,
+  `priority` and `changefreq` the major engines ignore, and the 50 000-URL /
+  50 MB / 50 000-child bounds as a document approaches them. Every input was
+  already computed for another section, so nothing re-parses or re-fetches.
+  Each recommendation carries exactly one provenance tag for the fact it rests
+  on, and where sitemapr chose the trigger point rather than citing a source,
+  the rendered prose says so instead of presenting a product decision as
+  documented authority.
+* The findings tibble may carry a `layers_run` attribute
+  (`attr(x, "layers_run")`) — a run manifest naming layers a call exercised
+  whose execution the rows cannot otherwise evidence, which is what lets the
+  Checks section tell "ran and found nothing" from "never ran". It records
+  `"robots"` for `check_robots = TRUE`, since a run where every URL is allowed
+  emits no findings at all, and `"schema"` when XSD validation ran on the
+  parsed document — so a gzip-compressed sitemap no longer reports schema
+  validation as unexercised when it did run. It is advisory and not part of the
+  row contract, and is present only when there was something to record.
 
 ## Network safety
 
