@@ -115,7 +115,11 @@ decompression_member_finding <- function(
 # is recovered from it for the evidence excerpt. Warning-severity problems
 # (path-traversal rejections) are a distinct concern and are not mapped here.
 # Returns a (possibly empty) decompression-findings tibble.
-decompression_findings_from_problems <- function(problems) { # nolint
+# Block-scoped rather than a trailing `# nolint`: air relocates an end-of-line
+# comment after `{` onto its own line, which silently detaches the suppression
+# from the name it covers.
+# nolint start: object_length_linter.
+decompression_findings_from_problems <- function(problems) {
   if (is.null(problems) || nrow(problems) == 0L) {
     return(empty_decompression_findings())
   }
@@ -134,3 +138,4 @@ decompression_findings_from_problems <- function(problems) { # nolint
     is_strict_only = rep(FALSE, nrow(info))
   )
 }
+# nolint end

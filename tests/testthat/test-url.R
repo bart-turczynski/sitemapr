@@ -12,7 +12,9 @@ test_that("parse_url_adapter preserves rurl's empty-input schema", {
 })
 
 test_that("parse_url_adapter maps an IRI path to its percent-encoded URI", {
-  parsed <- sitemapr_test_ns$parse_url_adapter("https://example.com/パス?q=テスト")
+  parsed <- sitemapr_test_ns$parse_url_adapter(
+    "https://example.com/パス?q=テスト"
+  )
   expect_identical(parsed$path, "/%E3%83%91%E3%82%B9")
   expect_identical(parsed$query, "q=%E3%83%86%E3%82%B9%E3%83%88")
 })

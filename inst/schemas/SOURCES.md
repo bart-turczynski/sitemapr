@@ -44,4 +44,3 @@ column links the public spec each schema implements.
   longer published upstream and is intentionally not modeled.
 - All schemas are XSD 1.0 (libxml2 / `xml2::xml_validate`). XSD 1.1 is out of
   scope (ADR-001); rules beyond XSD 1.0 live in Layer D.
-

@@ -191,8 +191,13 @@ fetch_candidate <- function(
 # Build the robots.txt `Sitemap:` candidate frame for a normalized origin, in
 # the same column shape as `discovery_candidates()` plus a `provenance` column.
 # Returns a 0-row frame when robots discovery is off or yields no directives.
-robots_candidates <- function(origin, user_agent, net_limits, policy,
-                              throttle_state = NULL) {
+robots_candidates <- function(
+  origin,
+  user_agent,
+  net_limits,
+  policy,
+  throttle_state = NULL
+) {
   urls <- discover_robots_sitemaps(
     origin,
     user_agent = user_agent,
