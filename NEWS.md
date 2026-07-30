@@ -144,6 +144,14 @@ related W3C and RFC standards.
   sets no `property_scope`, that trust being blanket rather than
   property-bound). Every axis stays independently overridable via
   `ruleset_context()`.
+* `ENCODING_NOT_UTF8` (`error`) reports a sitemap that is not the UTF-8 the
+  protocol requires, and `ENCODING_BOM_DETECTED` (`info`) reports a leading
+  byte-order mark of any kind. The UTF-8 check reads the highest-priority
+  encoding *signal* — a non-UTF-8 BOM, then a non-UTF-8 XML-declaration label,
+  then the HTTP charset, then bytes that do not decode — rather than testing the
+  bytes alone, which cannot see a UTF-16 document at all. A UTF-16 sitemap is
+  read correctly and now also reported as non-conformant; reading a document is
+  not the same as approving it.
 * `ruleset_revision()` returns a ruleset's published revision string, so a
   cross-repo consumer can pin against a known version of the rules.
 * `sitemap_contract()` publishes the rest of what ADR-009 §7 requires: the

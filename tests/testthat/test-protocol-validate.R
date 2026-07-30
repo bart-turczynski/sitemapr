@@ -1968,11 +1968,19 @@ test_that("diagnostics co-exist with protocol findings over real rows", {
 
 # --- D.6 classification diagnostics: encoding conflicts --------------------
 
+# The conflict rows only. `validate_encoding()` also produces the UTF-8
+# conformance and BOM-presence codes, which are about the document rather than
+# about two signals disagreeing and are covered in test-encoding-facts.R. These
+# tests are about the CONFLICT predicate, so they look at nothing else — a
+# non-UTF-8 BOM necessarily accompanies most conflict cases and would otherwise
+# be asserted over and over here for no gain.
+enc_conflicts <- function(out) out[endsWith(out$code, "CONFLICT"), ]
+
 test_that("BOM vs XML declaration is the specialised conflict (info)", {
-  out <- validate_encoding(
+  out <- enc_conflicts(validate_encoding(
     source_meta(bom_encoding = "UTF-8", declared_encoding = "UTF-16"),
     base
-  )
+  ))
   expect_identical(out$code, "ENCODING_BOM_DECLARATION_CONFLICT")
   expect_identical(out$severity, "info")
   expect_false(out$is_strict_only)
@@ -1980,23 +1988,23 @@ test_that("BOM vs XML declaration is the specialised conflict (info)", {
 })
 
 test_that("an HTTP-charset disagreement is the general ENCODING_CONFLICT", {
-  out <- validate_encoding(
+  out <- enc_conflicts(validate_encoding(
     source_meta(declared_encoding = "UTF-8", http_charset = "ISO-8859-1"),
     base
-  )
+  ))
   expect_identical(out$code, "ENCODING_CONFLICT")
   expect_identical(out$severity, "info")
 })
 
 test_that("a three-way mismatch emits both encoding findings", {
-  out <- validate_encoding(
+  out <- enc_conflicts(validate_encoding(
     source_meta(
       bom_encoding = "UTF-16",
       declared_encoding = "UTF-8",
       http_charset = "UTF-8"
     ),
     base
-  )
+  ))
   expect_setequal(
     out$code,
     c("ENCODING_BOM_DECLARATION_CONFLICT", "ENCODING_CONFLICT")
@@ -2012,7 +2020,9 @@ test_that("equivalent encoding spellings do not conflict", {
     ),
     base
   )
-  expect_identical(nrow(out), 0L)
+  # All three agree AND all three are UTF-8, so nothing at all is reported
+  # except the mark's own presence.
+  expect_identical(out$code, "ENCODING_BOM_DETECTED")
 })
 
 # --- SITE-zarjabyz: the comparison is family-aware ------------------------
@@ -2026,15 +2036,15 @@ test_that("a byte-order-neutral declaration matches either UTF-16 BOM", {
       source_meta(bom_encoding = bom, declared_encoding = "UTF-16"),
       base
     )
-    expect_identical(nrow(out), 0L)
+    expect_identical(nrow(enc_conflicts(out)), 0L)
   }
 })
 
 test_that("a byte-order-specific declaration still conflicts with the BOM", {
-  out <- validate_encoding(
+  out <- enc_conflicts(validate_encoding(
     source_meta(bom_encoding = "UTF-16LE", declared_encoding = "UTF-16BE"),
     base
-  )
+  ))
   expect_identical(out$code, "ENCODING_BOM_DECLARATION_CONFLICT")
 })
 
@@ -2043,11 +2053,11 @@ test_that("UTF-32 compares on the same terms as UTF-16", {
     source_meta(bom_encoding = "UTF-32LE", declared_encoding = "UTF-32"),
     base
   )
-  expect_identical(nrow(neutral), 0L)
-  crossed <- validate_encoding(
+  expect_identical(nrow(enc_conflicts(neutral)), 0L)
+  crossed <- enc_conflicts(validate_encoding(
     source_meta(bom_encoding = "UTF-32LE", declared_encoding = "UTF-32BE"),
     base
-  )
+  ))
   expect_identical(crossed$code, "ENCODING_BOM_DECLARATION_CONFLICT")
 })
 
@@ -2056,11 +2066,11 @@ test_that("the HTTP-charset arm is family-aware too", {
     source_meta(bom_encoding = "UTF-16LE", http_charset = "UTF-16"),
     base
   )
-  expect_identical(nrow(ok), 0L)
-  crossed <- validate_encoding(
+  expect_identical(nrow(enc_conflicts(ok)), 0L)
+  crossed <- enc_conflicts(validate_encoding(
     source_meta(bom_encoding = "UTF-16LE", http_charset = "UTF-16BE"),
     base
-  )
+  ))
   expect_identical(crossed$code, "ENCODING_CONFLICT")
 })
 

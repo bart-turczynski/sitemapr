@@ -78,6 +78,11 @@ empty_classification_findings <- function() {
 #'   by the byte-order mark, the XML declaration's `encoding=`, and the HTTP
 #'   `Content-Type` charset respectively; `NA` when that signal is absent. Drive
 #'   the `ENCODING_*` conflict checks.
+#' @param bytes_valid_utf8 `TRUE`/`FALSE` when the source bytes have been tested
+#'   for UTF-8 validity, `NA` when they have not. The last tier of the
+#'   `ENCODING_NOT_UTF8` cascade, reached only when no encoding signal is
+#'   present: bytes that no signal declares are still not UTF-8 if they do not
+#'   decode as UTF-8.
 #' @return A named list with the fields above.
 #' @keywords internal
 #' @noRd
@@ -87,7 +92,8 @@ source_meta <- function(
   feed_children = character(0),
   bom_encoding = NA_character_,
   declared_encoding = NA_character_,
-  http_charset = NA_character_
+  http_charset = NA_character_,
+  bytes_valid_utf8 = NA
 ) {
   list(
     unsupported_root = as.character(unsupported_root),
@@ -95,7 +101,8 @@ source_meta <- function(
     feed_children = as.character(feed_children),
     bom_encoding = as.character(bom_encoding),
     declared_encoding = as.character(declared_encoding),
-    http_charset = as.character(http_charset)
+    http_charset = as.character(http_charset),
+    bytes_valid_utf8 = as.logical(bytes_valid_utf8)
   )
 }
 
@@ -344,6 +351,53 @@ resolve_encoding <- function(bom, decl, http, meta) {
   }
 }
 
+# Why the source is NOT the UTF-8 the protocol requires, or NA when it is.
+#
+# sitemaps.org requires the sitemap FILE to be UTF-8 (sitemap-spec.md §12.5
+# baseline, from §2/§4/§7). A UTF-16 document that libxml2 decodes perfectly
+# still violates that rule, which is why this is a separate check from the
+# parse: reading a document successfully is not the same as it being conformant.
+#
+# The cascade mirrors the sibling's `getNonUtf8XmlReason()`
+# (src/lib/services/parsing/utf8.ts) tier for tier so the two ports agree on
+# this input, which is the whole point of activating the code (SITE-kqnnnvyr):
+#
+#   1. a BOM that is not the UTF-8 BOM
+#   2. an XML declaration whose `encoding=` label is not UTF-8
+#   3. bytes that do not decode as UTF-8
+#
+# Deliberately a LABEL test, not a byte test, for tiers 1-2. A pure byte test
+# cannot see this at all: a UTF-16LE document of ASCII text is bytes below 0x80
+# interleaved with NULs, and every one of those is a valid UTF-8 sequence
+# (U+0000 included), so strict UTF-8 decoding accepts it. Only the declaration
+# and the mark say what the document claims to be. Conversely the label test
+# fires on a declared `ISO-8859-1` file whose bytes happen to be pure ASCII --
+# which is correct and is what the sibling does too (`isUtf8EncodingLabel()`
+# normalises the label and compares, it does not test the bytes).
+#
+# sitemapr checks one signal the sibling does not: the HTTP `Content-Type`
+# charset (tier 3 below the declaration). That follows sitemapr's own documented
+# resolution priority (§3 / §11.6) and is a superset, not a disagreement -- and
+# it is unobservable in the shared fixture corpus, whose cases are local files
+# with no response at all.
+encoding_not_utf8_reason <- function(bom, decl, http, meta) {
+  norm <- c(bom, decl, http)
+  spelling <- c(meta$bom_encoding, meta$declared_encoding, meta$http_charset)
+  template <- c(
+    "the byte-order mark indicates %s",
+    "the XML declaration specifies encoding=\"%s\"",
+    "the HTTP Content-Type charset is %s"
+  )
+  hit <- which(!is.na(norm) & norm != "utf8")
+  if (length(hit) > 0L) {
+    return(sprintf(template[[hit[[1L]]]], spelling[[hit[[1L]]]]))
+  }
+  if (identical(meta$bytes_valid_utf8, FALSE)) {
+    return("the content bytes are not valid UTF-8")
+  }
+  NA_character_
+}
+
 encoding_bom_decl_message <- function(meta, resolution) {
   sprintf(
     paste0(
@@ -389,6 +443,29 @@ validate_encoding <- function(meta, base) {
   out <- list()
 
   resolution <- resolve_encoding(bom, decl, http, meta)
+
+  not_utf8 <- encoding_not_utf8_reason(bom, decl, http, meta)
+  if (!is.na(not_utf8)) {
+    out[[length(out) + 1L]] <- classification_source_finding(
+      "ENCODING_NOT_UTF8",
+      base,
+      sprintf(
+        "Sitemap file is not UTF-8 encoded: %s. The protocol requires UTF-8.",
+        not_utf8
+      ),
+      excerpt = resolution
+    )
+  }
+
+  if (!is.na(bom)) {
+    out[[length(out) + 1L]] <- classification_source_finding(
+      "ENCODING_BOM_DETECTED",
+      base,
+      sprintf("Byte-order mark (BOM) detected: %s.", meta$bom_encoding),
+      excerpt = meta$bom_encoding,
+      severity = "info"
+    )
+  }
 
   if (encoding_conflict(bom, decl)) {
     out[[length(out) + 1L]] <- classification_source_finding(

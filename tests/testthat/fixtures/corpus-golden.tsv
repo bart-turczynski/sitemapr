@@ -2,12 +2,12 @@ compressed/invalid.gz	UNSUPPORTED_MALFORMED_GZIP
 compressed/invalid.tar.gz	PROTOCOL_URL_NOT_ABSOLUTE
 compressed/valid.tar.gz	<none>
 compressed/valid.xml.gz	<none>
-encoding/bom-conflict.xml	ENCODING_BOM_DECLARATION_CONFLICT
-encoding/declared-iso8859-no-bom.xml	<none>
+encoding/bom-conflict.xml	ENCODING_BOM_DECLARATION_CONFLICT ENCODING_BOM_DETECTED ENCODING_NOT_UTF8
+encoding/declared-iso8859-no-bom.xml	ENCODING_NOT_UTF8
 encoding/declared-utf8-no-bom.xml	<none>
 encoding/no-encoding.xml	<none>
 encoding/utf16-le-bom.xml	!sitemapr_xml_parse_error
-encoding/utf8-bom.xml	<none>
+encoding/utf8-bom.xml	ENCODING_BOM_DETECTED
 hreflang/duplicate-tokens.xml	HREFLANG_DUPLICATE HREFLANG_XDEFAULT_MISSING
 hreflang/empty-hreflang-value.xml	HREFLANG_FORMAT_INVALID HREFLANG_XDEFAULT_MISSING
 hreflang/missing-attrs.xml	HREFLANG_LINK_ATTR_INVALID HREFLANG_MISSING_SELF_REFERENCE HREFLANG_XDEFAULT_MISSING SCHEMA_INVALID
@@ -24,7 +24,7 @@ text/long-urls.txt	PROTOCOL_TEXT_URL_TOO_LONG
 text/mac-line-endings.txt	<none>
 text/mixed-schemes-and-query.txt	<none>
 text/trailing-whitespace.txt	<none>
-text/utf8-bom.txt	<none>
+text/utf8-bom.txt	ENCODING_BOM_DETECTED
 text/valid.txt	<none>
 text/windows-line-endings.txt	<none>
 xml/bad-namespace.xml	SCHEMA_UNKNOWN_NAMESPACE

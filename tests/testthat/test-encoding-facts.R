@@ -178,7 +178,7 @@ test_that("a BOM/declaration conflict fires from validate_sitemap()", {
   )
 })
 
-test_that("the canonical UTF-16 spelling fires nothing (SITE-zarjabyz)", {
+test_that("the canonical UTF-16 spelling fires no conflict (SITE-zarjabyz)", {
   # encoding="UTF-16" plus a UTF-16 BOM is the conformant spelling of a UTF-16
   # entity, and it used to raise ENCODING_BOM_DECLARATION_CONFLICT end to end.
   # Built here rather than added under fixtures/corpus/, which is
@@ -188,25 +188,84 @@ test_that("the canonical UTF-16 spelling fires nothing (SITE-zarjabyz)", {
   doc <- enc_urlset("<?xml version=\"1.0\" encoding=\"UTF-16\"?>")
   utf16 <- iconv(doc, "UTF-8", "UTF-16LE", toRaw = TRUE)[[1]]
   writeBin(c(as.raw(c(0xFF, 0xFE)), utf16), path)
+  out <- suppressWarnings(validate_sitemap(path))
 
-  expect_identical(nrow(suppressWarnings(validate_sitemap(path))), 0L)
-  # The document still decodes: the fix removes a finding, not a capability.
+  # zarjabyz's claim, unchanged: the two signals AGREE, so there is no conflict.
+  expect_false("ENCODING_BOM_DECLARATION_CONFLICT" %in% out$code)
+  # What it is NOT is UTF-8, which the protocol requires (SITE-kqnnnvyr). The
+  # two statements are compatible: a conformantly-declared UTF-16 document is
+  # still a non-conformant sitemap.
+  expect_identical(
+    sort(out$code),
+    c("ENCODING_BOM_DETECTED", "ENCODING_NOT_UTF8")
+  )
+  expect_identical(out$severity[out$code == "ENCODING_NOT_UTF8"], "error")
+  # The document still decodes: these findings judge it, they do not reject it.
   expect_identical(
     suppressWarnings(read_sitemap(path))$loc,
     "https://example.com/a"
   )
 })
 
-test_that("agreeing encoding signals produce no finding", {
-  for (name in c(
-    "utf8-bom.xml",
-    "declared-utf8-no-bom.xml",
-    "declared-iso8859-no-bom.xml",
-    "no-encoding.xml"
-  )) {
+test_that("a source with no encoding signal at all produces no finding", {
+  for (name in c("declared-utf8-no-bom.xml", "no-encoding.xml")) {
     out <- suppressWarnings(validate_sitemap(enc_fixture(name)))
     expect_false(any(startsWith(out$code, "ENCODING_")), info = name)
   }
+})
+
+test_that("a UTF-8 BOM is reported but is not a UTF-8 violation", {
+  # ENCODING_BOM_DETECTED is a fact, not a fault: a UTF-8 BOM is tolerated
+  # (sitemap-spec.md §12.5), so it must not drag ENCODING_NOT_UTF8 along.
+  out <- suppressWarnings(validate_sitemap(enc_fixture("utf8-bom.xml")))
+
+  expect_identical(out$code, "ENCODING_BOM_DETECTED")
+  expect_identical(out$severity, "info")
+})
+
+test_that("a non-UTF-8 declaration is a violation even with ASCII bytes", {
+  # declared-iso8859-no-bom.xml declares ISO-8859-1 over bytes that are pure
+  # ASCII. The rule is a LABEL test, so it fires — matching the sibling's
+  # isUtf8EncodingLabel() tier, which also does not look at the bytes.
+  out <- suppressWarnings(
+    validate_sitemap(enc_fixture("declared-iso8859-no-bom.xml"))
+  )
+
+  expect_identical(out$code, "ENCODING_NOT_UTF8")
+  expect_identical(out$severity, "error")
+  expect_match(out$message, "ISO-8859-1", fixed = TRUE)
+})
+
+test_that("the cascade reports the highest-priority signal that offends", {
+  # bom-conflict.xml is a UTF-8 BOM over a declared ISO-8859-1. The BOM is
+  # clean, so the reason names the DECLARATION, not the mark.
+  out <- suppressWarnings(validate_sitemap(enc_fixture("bom-conflict.xml")))
+  msg <- out$message[out$code == "ENCODING_NOT_UTF8"]
+
+  expect_match(msg, "XML declaration", fixed = TRUE)
+  expect_no_match(msg, "byte-order mark", fixed = TRUE)
+})
+
+test_that("bytes that decode as UTF-8 are not flagged on the byte tier", {
+  expect_true(sitemapr_test_call("bytes_are_valid_utf8", charToRaw("héllo")))
+  expect_false(
+    sitemapr_test_call("bytes_are_valid_utf8", as.raw(c(0x68, 0xFF, 0x69)))
+  )
+  # A NUL is valid UTF-8 and is stripped before the test rather than raising.
+  expect_true(
+    sitemapr_test_call("bytes_are_valid_utf8", as.raw(c(0x3C, 0x00, 0x3F)))
+  )
+  expect_identical(sitemapr_test_call("bytes_are_valid_utf8", "not raw"), NA)
+})
+
+test_that("invalid bytes with no declared encoding reach the byte tier", {
+  # The only route to the last tier: no BOM, no declaration, no charset, so the
+  # resolution defaults to UTF-8 and only the bytes can contradict it.
+  meta <- sitemapr_test_call("source_meta", bytes_valid_utf8 = FALSE)
+  out <- sitemapr_test_call("validate_encoding", meta, "sitemap://s.xml")
+
+  expect_identical(out$code, "ENCODING_NOT_UTF8")
+  expect_match(out$message, "content bytes are not valid UTF-8", fixed = TRUE)
 })
 
 test_that("an HTTP charset disagreeing with the declaration fires", {
@@ -214,15 +273,26 @@ test_that("an HTTP charset disagreeing with the declaration fires", {
     enc_urlset("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"),
     "application/xml; charset=UTF-8"
   )
-  expect_identical(out$code, "ENCODING_CONFLICT")
-  expect_identical(out$severity, "info")
-  expect_match(out$message, "HTTP charset=UTF-8", fixed = TRUE)
+  row <- out[out$code == "ENCODING_CONFLICT", ]
+
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$severity, "info")
+  expect_match(row$message, "HTTP charset=UTF-8", fixed = TRUE)
+  # The declaration is also a UTF-8 violation in its own right; the conflict
+  # and the violation are separate claims about the same document.
+  expect_true("ENCODING_NOT_UTF8" %in% out$code)
 })
 
 test_that("a response naming no charset invents no conflict", {
   body <- enc_urlset("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>")
-  expect_identical(nrow(enc_validate_url(body, "application/xml")), 0L)
-  expect_identical(nrow(enc_validate_url(body, NA_character_)), 0L)
+
+  for (ct in list("application/xml", NA_character_)) {
+    out <- enc_validate_url(body, ct)
+    # No charset means no second signal, so no conflict is manufactured. The
+    # declaration's own ISO-8859-1 violation still stands on its own.
+    expect_false("ENCODING_CONFLICT" %in% out$code)
+    expect_identical(out$code, "ENCODING_NOT_UTF8")
+  }
 })
 
 test_that("the audit projection produces the same encoding findings", {
