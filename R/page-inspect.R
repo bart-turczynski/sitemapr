@@ -114,6 +114,18 @@ page_inspection_select <- function(keys, sample_size, mode) {
 # stops the run. A cap is only ever consulted while a selected key still remains
 # to fetch, so exhausting the selection naturally (nothing left) never records a
 # cap -- a fully-covered run is not "partial". Returns NA when no cap bit.
+#
+# This pre-fetch check on CUMULATIVE state is why the loop below is sequential
+# and stays that way (ADR-008 amendment, SITE-rjhmkqnd). `max_pages` and
+# `max_requests` are counts and could be reserved before dispatch the way
+# ADR-008 §3 reserves the traversal budgets; `max_bytes` and `max_seconds`
+# cannot, because a page's byte cost is known only after it is fetched. Under
+# concurrency the byte/time caps would therefore cut the sample at a different
+# point -- and since PAGE_* findings are emitted per sampled URL, the findings
+# tibble itself would depend on completion order. Over-fetching a wave and
+# discarding the excess would restore that determinism while still issuing the
+# discarded requests against the inspected site, which is what these budgets
+# exist to bound. Sequential is the deliberate choice, not unfinished work.
 page_inspection_cap_hit <- function(st, budget, clock, start) {
   if (st$attempted >= budget$max_pages) {
     return("max_pages")
