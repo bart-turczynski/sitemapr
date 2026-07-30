@@ -336,7 +336,9 @@ test_that("read_sitemap threads the policy to the root and index children", {
   child <- "https://example.com/child.xml"
   index_xml <- paste0(
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    "<sitemap><loc>", child, "</loc></sitemap></sitemapindex>"
+    "<sitemap><loc>",
+    child,
+    "</loc></sitemap></sitemapindex>"
   )
   httr2::local_mocked_responses(mock_by_url(setNames(
     list(index_xml, urlset_xml("https://a/1")),

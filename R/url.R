@@ -64,8 +64,16 @@ parse_url_adapter <- function(urls) {
 # domain_ascii/unicode, tld_ascii/unicode, clean_url) without breaking the
 # fast/slow rbind. rurl must supply every name listed here.
 url_adapter_cols <- c(
-  "original_url", "scheme", "host", "port", "path", "query",
-  "fragment", "user", "is_ip_host", "parse_status"
+  "original_url",
+  "scheme",
+  "host",
+  "port",
+  "path",
+  "query",
+  "fragment",
+  "user",
+  "is_ip_host",
+  "parse_status"
 )
 
 # The pinned rurl call (canonicalization options sitemapr relies on), projected
@@ -150,9 +158,7 @@ url_fast_query <- function(u) {
   has_q <- grepl("?", u, fixed = TRUE)
   query <- rep(NA_character_, length(u))
   query[has_q] <- sub("^[^?]*\\?([^#]*).*$", "\\1", u[has_q])
-  invalid <- has_q & (
-    is.na(query) | !nzchar(query) | !url_query_is_noop(query)
-  )
+  invalid <- has_q & (is.na(query) | !nzchar(query) | !url_query_is_noop(query))
   list(
     query = query,
     valid = !invalid

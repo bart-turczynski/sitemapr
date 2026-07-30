@@ -156,9 +156,15 @@ test_that("an arbitrary multi-extension wrapper validates a real document", {
   schema <- xml2::read_xml(res$schema_path)
   # A urlset mixing core + image + news markup validates against one wrapper.
   ok <- xml2::read_xml(paste0(
-    "<urlset xmlns=\"", core_ns, "\"",
-    " xmlns:image=\"", image_ns, "\"",
-    " xmlns:news=\"", news_ns, "\">",
+    "<urlset xmlns=\"",
+    core_ns,
+    "\"",
+    " xmlns:image=\"",
+    image_ns,
+    "\"",
+    " xmlns:news=\"",
+    news_ns,
+    "\">",
     "<url><loc>https://example.com/a</loc>",
     "<image:image><image:loc>https://example.com/i.jpg</image:loc>",
     "</image:image>",
