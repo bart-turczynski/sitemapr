@@ -8,10 +8,16 @@
 # The disable toggle (`ssrf_guard = FALSE`) is the CALLER's responsibility; the
 # matcher below always evaluates and is independently testable. The reason codes
 # returned are machine-readable and stable:
-#   "loopback", "private", "link-local", "cloud-metadata", "unspecified",
-#   "ipv4-mapped", "ipv4-translated", "ipv4-compatible", "nat64", "6to4",
-#   "teredo", "isatap", "malformed-address", "numeric-literal", "scheme";
-#   NA when allowed.
+#   "loopback", "private", "link-local", "cloud-metadata", "shared",
+#   "unspecified", "this-network", "ipv4-mapped", "ipv4-translated",
+#   "ipv4-compatible", "nat64", "6to4", "teredo", "isatap",
+#   "malformed-address", "numeric-literal", "scheme"; NA when allowed.
+#
+# "shared" and "this-network" replaced two inherited misnomers: CGNAT space was
+# reported as "cloud-metadata", and all of 0.0.0.0/8 as "unspecified" when only
+# 0.0.0.0/32 is. Neither the blocked set nor the posture changed — both blocks
+# stay blocked — only the label. Corrected here rather than propagated into
+# ssrfr, whose spec §5.2 names both as misnomers to fix deliberately.
 #
 # IPv6->IPv4 embedding (ADR-003 §1). Several IPv6 spellings embed a 32-bit IPv4
 # address; left undecoded each is a bypass of the IPv4 range checks. We decode
@@ -78,18 +84,26 @@ ssrf_in_cidr <- function(n, base, bits) {
   n >= base_num & n < (base_num + size)
 }
 
-# The ADR-003 blocked IPv4 CIDR matrix as a (base, bits, reason) table; ranges
-# are mutually disjoint so first-match order is immaterial. Kept as data so the
-# whole matrix is reviewable in one place. The 169.254.0.0/16 link-local block
-# is handled separately because one address inside it (the cloud-metadata
-# endpoint) maps to a distinct reason.
+# The ADR-003 blocked IPv4 CIDR matrix as a (base, bits, reason) table. Kept as
+# data so the whole matrix is reviewable in one place. The 169.254.0.0/16
+# link-local block is handled separately because one address inside it (the
+# cloud-metadata endpoint) maps to a distinct reason.
+#
+# Every pair here is disjoint EXCEPT the two 0.0.0.0 rows, which are nested, so
+# first match wins and the /32 must precede the /8. Do not reorder them.
 ssrf_ipv4_blocked <- list(
   list(base = "127.0.0.0", bits = 8L, reason = "loopback"),
   list(base = "10.0.0.0", bits = 8L, reason = "private"),
   list(base = "172.16.0.0", bits = 12L, reason = "private"),
   list(base = "192.168.0.0", bits = 16L, reason = "private"),
-  list(base = "100.64.0.0", bits = 10L, reason = "cloud-metadata"),
-  list(base = "0.0.0.0", bits = 8L, reason = "unspecified")
+  # 100.64.0.0/10 is RFC 6598 Shared Address Space (carrier-grade NAT), not a
+  # metadata range — it merely contains one provider's endpoint. Still blocked;
+  # only the label was wrong (SITE-ghazltut).
+  list(base = "100.64.0.0", bits = 10L, reason = "shared"),
+  # Only 0.0.0.0/32 is the unspecified address (RFC 1122 §3.2.1.3). The rest of
+  # 0.0.0.0/8 is "this network" (RFC 791 §3.2). Both blocked, distinctly named.
+  list(base = "0.0.0.0", bits = 32L, reason = "unspecified"),
+  list(base = "0.0.0.0", bits = 8L, reason = "this-network")
 )
 
 ssrf_classify_ipv4 <- function(s) {
@@ -140,6 +154,16 @@ ssrf_fold_ipv4_tail <- function(low) {
 # on ":". Returns NULL when "::" appears more than once, when expansion cannot
 # reach 8 hextets, or when a fully-written literal does not have 8 groups.
 ssrf_expand_zero_run <- function(low) {
+  # `strsplit()` KEEPS a leading empty field but DROPS a trailing one, so a
+  # literal ending in a single ":" would lose it before the arity is counted and
+  # read as the address without it ("1:2:3:4:5:6:7:8:" as eight groups, "::1:"
+  # as "::1"). A single leading or trailing ":" not part of a "::" run is
+  # malformed, so refuse it structurally before anything counts groups
+  # (SITE-hnbuabqb; a trailing "." is deliberately NOT treated this way — see
+  # `ssrf_is_dotted_quad()`).
+  if (grepl("^:[^:]", low) || grepl("[^:]:$", low)) {
+    return(NULL)
+  }
   if (!grepl("::", low, fixed = TRUE)) {
     groups <- strsplit(low, ":", fixed = TRUE)[[1L]]
     return(if (length(groups) == 8L) groups else NULL)

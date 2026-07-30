@@ -48,9 +48,16 @@ any of the following:
 - **Loopback:** `127.0.0.0/8` (IPv4), `::1` (IPv6)
 - **RFC-1918 private ranges:** `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
 - **Link-local:** `169.254.0.0/16` (IPv4), `fe80::/10` (IPv6)
-- **Cloud metadata:** `100.64.0.0/10` (CGNAT), and well-known metadata
-  hostnames (`169.254.169.254`, `metadata.google.internal`, `fd00:ec2::254`)
-- **Unspecified:** `0.0.0.0/8` (IPv4), `::` (IPv6)
+- **Cloud metadata:** well-known metadata endpoints — `169.254.169.254`,
+  `metadata.google.internal`, `fd00:ec2::254`
+- **Shared address space:** `100.64.0.0/10` (CGNAT, RFC 6598). Blocked, but
+  reported as `shared`, not `cloud-metadata`: it is not a metadata range, it
+  merely contains one provider's endpoint (SITE-ghazltut).
+- **Unspecified:** `0.0.0.0/32` (IPv4, RFC 1122 §3.2.1.3), `::` (IPv6)
+- **This network:** the rest of `0.0.0.0/8` (IPv4, RFC 791 §3.2), reported as
+  `this-network`. Blocked exactly as before; the previous single `/8` row
+  reported all of it as `unspecified`, which is correct for one address in
+  16,777,216 (SITE-ghazltut).
 - **IPv6→IPv4 embedding prefixes:** every IPv6 spelling that embeds a 32-bit
   IPv4 address is decoded and the embedded address re-checked against the IPv4
   ranges above (a *public* embedded address is still allowed). Covered forms:
