@@ -103,9 +103,19 @@ test_that("cloud metadata endpoint 169.254.169.254 is rejected (feature)", {
   expect_identical(res$reason, "cloud-metadata")
 })
 
-test_that("CGNAT 100.64.0.0/10 is rejected as cloud-metadata", {
-  expect_identical(guard("http://100.64.0.1/")$reason, "cloud-metadata")
-  expect_identical(guard("http://100.127.255.255/")$reason, "cloud-metadata")
+test_that("CGNAT 100.64.0.0/10 is rejected as shared, not cloud-metadata", {
+  # SITE-ghazltut. 100.64.0.0/10 is RFC 6598 Shared Address Space (CGNAT); it
+  # is not a metadata range, it merely contains one provider's endpoint. It was
+  # reported as "cloud-metadata", so a caller keying off that code
+  # misattributed every CGNAT address it saw. Still blocked — only the label
+  # changed.
+  expect_identical(guard("http://100.64.0.1/")$reason, "shared")
+  expect_identical(guard("http://100.127.255.255/")$reason, "shared")
+  # Boundaries: the block is /10, so 100.128.0.0 is outside it and allowed.
+  classify <- sitemapr_test_ns$ssrf_classify_ipv4
+  expect_identical(classify("100.64.0.0"), "shared")
+  expect_true(is.na(classify("100.128.0.1")))
+  expect_true(is.na(classify("100.63.255.255")))
 })
 
 test_that("metadata.google.internal hostname is rejected", {
@@ -142,10 +152,25 @@ test_that("every spelling of the AWS IPv6 metadata prefix is blocked", {
 
 # ---- unspecified -------------------------------------------------------------
 
-test_that("unspecified IPv4 0.0.0.0/8 is rejected", {
+test_that("unspecified IPv4 0.0.0.0 is rejected as unspecified", {
   res <- guard("http://0.0.0.0/")
   expect_false(res$allowed)
   expect_identical(res$reason, "unspecified")
+})
+
+test_that("0.0.0.0/8 above the unspecified address is this-network", {
+  # SITE-ghazltut. Only 0.0.0.0/32 is the unspecified address (RFC 1122
+  # §3.2.1.3); the rest of 0.0.0.0/8 is "this network" (RFC 791 §3.2). The old
+  # single /8 row labelled all 16,777,216 addresses "unspecified", correct for
+  # exactly one of them. Both remain blocked.
+  classify <- sitemapr_test_ns$ssrf_classify_ipv4
+  expect_identical(classify("0.0.0.0"), "unspecified")
+  expect_identical(classify("0.0.0.1"), "this-network")
+  expect_identical(classify("0.1.2.3"), "this-network")
+  expect_identical(classify("0.255.255.255"), "this-network")
+  expect_false(guard("http://0.1.2.3/")$allowed)
+  # 1.0.0.0 is the first address outside the /8 and is allowed.
+  expect_true(is.na(classify("1.0.0.0")))
 })
 
 test_that("unspecified IPv6 :: is rejected", {
@@ -508,6 +533,49 @@ test_that("a malformed IPv6 literal is refused, not allowed", {
 test_that("well-formed IPv6 literals are unaffected by the fail-closed rule", {
   res <- sitemapr_test_ns$ssrf_check(host = "[2606:2800::]", scheme = "https")
   expect_true(res$allowed)
+})
+
+test_that("a trailing single colon does not read as the address without it", {
+  # SITE-hnbuabqb. strsplit() KEEPS a leading empty field but DROPS a trailing
+  # one, so the arity check counted "1:2:3:4:5:6:7:8:" as eight groups and
+  # "::1:" as "::1". The guard resolved each to an address and so read "X:" as
+  # "X" — over-accepting a spelling rather than under-blocking a range, but the
+  # documented malformed-address invariant did not hold. Of seven parsers raddr
+  # compares, none reads these as addresses.
+  classify <- sitemapr_test_ns$ssrf_classify_ipv6
+  expect_identical(classify("::1:"), "malformed-address")
+  expect_identical(classify("::ffff:"), "malformed-address")
+  expect_identical(classify("1:2:3:4:5:6:7:8:"), "malformed-address")
+  # ::ffff: previously decoded on through the embedding path to 0.0.255.255.
+  expect_identical(
+    sitemapr_test_ns$ssrf_check(host = "[::ffff:]", scheme = "https")$reason,
+    "malformed-address"
+  )
+  # The hextets helper is the site of the fix; NULL is the refusal signal.
+  expect_null(sitemapr_test_ns$ssrf_expand_zero_run("::1:"))
+  expect_null(sitemapr_test_ns$ssrf_expand_zero_run("1:2:3:4:5:6:7:8:"))
+})
+
+test_that("the leading-colon and trailing-'::' cases keep refusing", {
+  # These were already correct and must stay so: the leading empty field pushes
+  # the count to 9, and a trailing "::" leaves fill == 0.
+  expect_null(sitemapr_test_ns$ssrf_expand_zero_run(":1:2:3:4:5:6:7:8"))
+  expect_null(sitemapr_test_ns$ssrf_expand_zero_run("1:2:3:4:5:6:7:8::"))
+})
+
+test_that("a trailing '::' run and the bare '::' still expand", {
+  # The fix rejects a lone trailing ":", so guard the spellings that must live.
+  expand <- sitemapr_test_ns$ssrf_expand_zero_run
+  expect_identical(expand("::"), rep("0", 8L))
+  expect_identical(
+    expand("fe80::1"),
+    c("fe80", "0", "0", "0", "0", "0", "0", "1")
+  )
+  expect_length(expand("1:2:3:4:5:6:7:8"), 8L)
+  expect_identical(
+    sitemapr_test_ns$ssrf_classify_ipv6("::"),
+    "unspecified"
+  )
 })
 
 # ---- embedding decoder does not over-block normal IPv6 -----------------------
