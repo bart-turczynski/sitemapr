@@ -58,12 +58,24 @@ could instead use a fixture.
 
 ## 2. In-tree fixture corpus (CRAN-safe, offline)
 
-Every scenario in this section must have at least one fixture file in
-`tests/testthat/fixtures/` and at least one `testthat` test asserting the
-expected output or condition. The one exception is a scenario that depends on
-HTTP response metadata, which a local fixture file cannot carry: those are
-covered by mocked-response tests and are called out explicitly where they
-appear (see §2.7).
+Every scenario in this section must have at least one `testthat` test asserting
+the expected output or condition. Most also have a committed fixture file under
+`tests/testthat/fixtures/`, and the Fixture column names it — as a path relative
+to that directory when the file lives in a subdirectory such as `corpus/`.
+
+Some scenarios cannot be expressed as a committed file, and for those the
+Fixture column says how the input is built instead and the row names the test
+that covers it. There are three reasons this happens, and a row states which
+one applies:
+
+- **`in-memory`** — the input is a value, not a document: the rule under test
+  takes parsed rows or a URL string, so writing a file would only add a parse
+  step. Most of §2.2's URL rules are like this.
+- **`synthetic`** — a committed file would have to be pathologically large (the
+  repository's pre-commit guard rejects blobs over 5 MB, and CRAN caps package
+  size), or a limit is lowered in the test so a small input crosses it.
+- **mocked response** — the scenario depends on HTTP response metadata, which no
+  local file can carry. Called out explicitly where it appears (see §2.7).
 
 ### 2.1 Standards-baseline scenarios
 
@@ -73,8 +85,8 @@ appear (see §2.7).
 | Maximal field set (all optional fields) | `valid-full-fields.xml` | All columns populated |
 | Valid sitemapindex | `valid-index.xml` | Tree with parent→child |
 | Text sitemap | `valid-text.txt` | Parse succeeds |
-| Gzip-compressed XML | `valid.xml.gz` | Transparent decompression |
-| Local `.tar.gz` archive | `valid.tar.gz` | Bounded extraction |
+| Gzip-compressed XML | `corpus/compressed/valid.xml.gz` | Transparent decompression |
+| Local `.tar.gz` archive | `corpus/compressed/valid.tar.gz` | Bounded extraction |
 
 ### 2.2 URL and IRI scenarios
 
@@ -82,25 +94,25 @@ appear (see §2.7).
 |---|---|---|
 | Unicode path (IRI → URI mapping) | `url-iri-path.xml` | `PROTOCOL_URL_NOT_ESCAPED` info; identity key uses URI form |
 | Char illegal in URI and IRI (`{` `}`) | `url-unescaped-illegal.xml` | `PROTOCOL_URL_NOT_ESCAPED` warning |
-| Punycode/IDNA host | `url-idna-host.xml` | Host lowercased, IDNA applied |
-| Default port stripped (`:80` / `:443`) | `url-default-port.xml` | Port absent from identity key |
+| Punycode/IDNA host | in-memory | Host lowercased, IDNA applied — `test-input.R` ("unicode host is normalized via IDNA, original retained") and `test-url.R` ("parse_url_adapter emits Punycode host for Unicode input") |
+| Default port stripped (`:80` / `:443`) | in-memory | Port absent from identity key — `test-url.R` ("build_loc_key collapses the scheme's default port to identity"); a *non*-default port is retained, and a mismatched `http:443` is not collapsed |
 | Byte-identical `loc` repeat | `urlset-duplicate-loc.xml` | `PROTOCOL_DUPLICATE_LOC` warning |
 | Canonically equal `loc`, differing bytes (`:443` vs default) | in-memory | `PROTOCOL_URL_EQUIVALENT` warning |
 | Fragment in `loc` | `url-fragment.xml` | `PROTOCOL_URL_FRAGMENT` info |
-| Userinfo in `loc` | `url-userinfo.xml` | `PROTOCOL_URL_USERINFO` info |
+| Userinfo in `loc` | in-memory | `PROTOCOL_URL_USERINFO` info — `test-protocol-validate.R` ("userinfo produces an info PROTOCOL_URL_USERINFO") |
 | Relative `loc` | `url-relative.xml` | `PROTOCOL_URL_NOT_ABSOLUTE` |
 | Non-http(s) scheme in `loc` | `url-non-https.xml` | `PROTOCOL_URL_NOT_ABSOLUTE` |
-| `loc` out of scope | `url-out-of-scope.xml` | `PROTOCOL_URL_OUT_OF_SCOPE` |
+| `loc` out of scope | in-memory | `PROTOCOL_URL_OUT_OF_SCOPE` — `test-protocol-validate.R` ("a different-host loc produces PROTOCOL_URL_OUT_OF_SCOPE", plus the above-directory, in-scope and unknown-sitemap-URL cases) |
 | Invalid percent-encoding | `url-invalid-escape.xml` | `PROTOCOL_URL_INVALID_ESCAPE` |
 
 ### 2.3 Date-Time scenarios
 
 | Scenario | Fixture | Expected behavior |
 |---|---|---|
-| Full datetime with timezone | `lastmod-datetime-tz.xml` | Valid POSIXct |
+| Full datetime with timezone | in-memory | Valid POSIXct, no finding (executed: `2024-01-01T12:00:00+02:00` yields no findings and a `POSIXct` `lastmod`). A datetime *without* a timezone is invalid — `test-protocol-validate.R` ("a datetime lastmod without a timezone is invalid") |
 | Date-only `lastmod` | `lastmod-date-only.xml` | Valid; strict `info` |
 | Invalid `lastmod` value | `lastmod-invalid.xml` | `PROTOCOL_LASTMOD_INVALID` |
-| Future `lastmod` | `lastmod-future.xml` | Passes (no future-date rule in v1) |
+| Future `lastmod` | in-memory | Passes; there is no future-date rule in v1 (executed: `2099-01-01T12:00:00+00:00` yields no findings). Use a **full datetime** to test this: a date-only future value such as `2099-01-01` fires strict-only `PROTOCOL_LASTMOD_DATE_ONLY` from the row above, which would read as a future-date rule that does not exist |
 
 ### 2.4 Field value scenarios
 
@@ -108,7 +120,7 @@ appear (see §2.7).
 |---|---|---|
 | `priority` = 0.0 and 1.0 | `priority-boundary.xml` | Valid |
 | `priority` out of range | `priority-out-of-range.xml` | `PROTOCOL_PRIORITY_OUT_OF_RANGE` |
-| Valid `changefreq` values | `changefreq-valid.xml` | All enum values accepted |
+| Valid `changefreq` values | in-memory | All seven enum values accepted, no findings — `test-protocol-validate.R` ("every valid changefreq enum value is accepted"). The enum is case-sensitive: `Daily` is invalid |
 | Invalid `changefreq` value | `changefreq-invalid.xml` | `PROTOCOL_CHANGEFREQ_INVALID` |
 
 ### 2.5 Mixed-namespace and extension scenarios
@@ -120,8 +132,8 @@ appear (see §2.7).
 | Video extension only | `ns-video.xml` | Layer C validates; video list-column populated |
 | Hreflang only | `ns-hreflang.xml` | Layer C validates; alternates populated |
 | All four extensions | `ns-all-four.xml` | Runtime-generated mixed profile validates |
-| Image > 1000 per page | `ns-image-count.xml` | `PROTOCOL_IMAGE_COUNT_EXCEEDED` |
-| Broken video field | `ns-video-invalid.xml` | `PROTOCOL_VIDEO_FIELD_INVALID` |
+| Image > 1000 per page | synthetic (1 001 images built in the test) | `PROTOCOL_IMAGE_COUNT_EXCEEDED` — `test-protocol-validate.R` ("more than 1000 images per URL is PROTOCOL_IMAGE_COUNT_EXCEEDED"); the cap is configurable via `limits`, so a committed 1 001-image document is unnecessary |
+| Broken video field | `ns-video-invalid-in-mixed.xml` | `PROTOCOL_VIDEO_FIELD_INVALID` (executed: the file also yields `SCHEMA_INVALID` and two `HREFLANG_*` findings, being a mixed-namespace document). The individual video rules — neither `player_loc` nor `content_loc`, the 32-tag cap, over-long description, bad enum value — are covered in-memory in `test-protocol-validate.R` |
 | Unknown namespace (not imported) | `ns-unknown.xml` | `SCHEMA_UNKNOWN_NAMESPACE` |
 
 ### 2.6 Hreflang scenarios
@@ -164,12 +176,12 @@ ENCODING_CONFLICT") — so it is exempt from the §2 one-fixture-per-scenario ru
 
 | Scenario | Fixture | Expected behavior |
 |---|---|---|
-| Valid gzip (`.xml.gz`) | `valid.xml.gz` | Transparent decompression |
-| Valid gzip (`.txt.gz`) | `valid.txt.gz` | Text sitemap after decompression |
-| Malformed gzip | `malformed.xml.gz` | `UNSUPPORTED_MALFORMED_GZIP` |
-| `.tar.gz` within size limit | `valid.tar.gz` | Bounded extraction; correct rows |
-| `.tar.gz` exceeding file count | `too-many-files.tar.gz` | Count cap enforced |
-| Path-traversal in archive | `path-traversal.tar.gz` | Rejected entry; error finding |
+| Valid gzip (`.xml.gz`) | `corpus/compressed/valid.xml.gz` | Transparent decompression |
+| Valid gzip (`.txt.gz`) | in-memory (built with `gzfile()`) | Text sitemap after decompression — `test-decompress.R` ("a gzipped text sitemap parses identically to the uncompressed one") |
+| Malformed gzip | `corpus/compressed/invalid.gz` | `UNSUPPORTED_MALFORMED_GZIP`, pinned in `fixtures/corpus-golden.tsv` |
+| `.tar.gz` within size limit | `corpus/compressed/valid.tar.gz` | Bounded extraction; correct rows |
+| `.tar.gz` exceeding file count | synthetic (three members, `archive_limits(max_file_count = 2L)`) | **Raises** classed `sitemapr_archive_limit` — it is not a quietly enforced cap — `test-parse-archive.R` ("exceeding the file-count limit raises sitemapr_archive_limit"). The on-disk and decompressed ceilings raise the same class |
+| Path-traversal in archive | synthetic (a `../evil.xml` member written in the test) | The unsafe entry is rejected with a **`warning` problem** (not an error finding) and is never parsed, while the archive's safe members still contribute rows — `test-parse-archive.R` ("a path-traversal member is rejected with a warning problem"). Absolute and drive-letter member names are unsafe the same way |
 
 ### 2.9 Index recursion scenarios
 
@@ -180,7 +192,7 @@ ENCODING_CONFLICT") — so it is exempt from the §2 one-fixture-per-scenario ru
 | Self-referential index | `index-self-ref.xml` | `INDEX_CYCLE_DETECTED` |
 | A → B → A cycle | `index-cycle-ab.xml` | `INDEX_CYCLE_DETECTED` |
 | Max depth exceeded | `index-deep.xml` | `INDEX_DEPTH_EXCEEDED` |
-| Child count at cap | `index-at-cap.xml` | Last child included |
+| Child count at cap | covered by the over-cap case below | The cap is inclusive: the child *at* the cap is included. Proven by the over-cap test, which declares three children under `max_children = 2L` and asserts exactly two were fetched — `test-index-expansion.R` ("the per-index child-count cap truncates and records one event"). No separate at-cap fixture is needed |
 | Child count exceeding cap | `index-over-cap.xml` | `INDEX_CHILD_COUNT_EXCEEDED` |
 
 ### 2.10 HTML masquerade and unsupported inputs
@@ -190,8 +202,8 @@ ENCODING_CONFLICT") — so it is exempt from the §2 one-fixture-per-scenario ru
 | HTML page at sitemap URL | `html-masquerade.html` | `UNSUPPORTED_HTML_MASQUERADE` |
 | Unsupported root element | `unsupported-root.xml` | `UNSUPPORTED_ROOT` |
 | Sitemap index child → RSS feed | `index-rss-child.xml` | `UNSUPPORTED_FEED` |
-| Truncated / incomplete XML document | `truncated.xml` | Malformed XML → `SCHEMA_INVALID`; never silently parsed. (A mid-stream *stall* is a fetch timeout → `sitemapr_timeout`, not a truncation condition — see `scenario-fixture-map.md`.) |
-| Oversized sitemap (> 50 MB uncompressed) | `oversize.xml.gz` | `PROTOCOL_SIZE_EXCEEDED` finding; body still parsed so other findings surface |
+| Truncated / incomplete XML document | in-memory | **Raises** classed `sitemapr_xml_parse_error` — a condition, *not* a `SCHEMA_INVALID` finding (executed: an unclosed `<urlset>` raises). Truncation raises for every container: a truncated gzip stream raises `sitemapr_decompression_error` (`test-decompress.R`) and a truncated tar body raises `sitemapr_malformed_archive` (`test-parse-archive.R`). Never silently parsed either way. For a document that parses but violates the schema, see `schema-invalid-urlset.xml`. (A mid-stream *stall* is a fetch timeout → `sitemapr_timeout`, not a truncation condition — see `scenario-fixture-map.md`.) |
+| Oversized sitemap (> 50 MB uncompressed) | synthetic (`byte_size` passed to `validate_protocol()` directly) | `PROTOCOL_SIZE_EXCEEDED`, `error`, `subject_type` `document`; body still parsed so other findings surface — `test-protocol-validate.R` ("an oversized document produces PROTOCOL_SIZE_EXCEEDED"). No file is committed because a >50 MB document exceeds both the 5 MB pre-commit blob guard and CRAN's package-size limit. A gzip fixture *would* work for a top-level document — the source records the **decompressed** length (executed: a `.xml.gz` of 90 962 uncompressed bytes compressing to 5 282 records `byte_size` 90 963) — but not for a sitemap-index child, where `index_source_byte_size()` returns `NA` because the recorded size is the compressed transfer size |
 | Body over 500 MB safety ceiling | synthetic (ceiling lowered in test) | `FETCH_BODY_CEILING_EXCEEDED` (`fatal`); `sitemapr_body_ceiling` condition in parse APIs; partial result |
 
 ### 2.11 Text sitemap scenarios
@@ -201,7 +213,7 @@ ENCODING_CONFLICT") — so it is exempt from the §2 one-fixture-per-scenario ru
 | Valid text sitemap | `valid-text.txt` | Rows with `loc`; other cols `NA` |
 | Blank lines in text sitemap | `text-blank-lines.txt` | Strict `info`; silent in non-strict |
 | URL > 2048 chars | `text-long-url.txt` | `PROTOCOL_TEXT_URL_TOO_LONG` |
-| Non-http(s) line | `text-non-https.txt` | `PROTOCOL_URL_NOT_ABSOLUTE` |
+| Non-http(s) line | `corpus/text/invalid-urls.txt` | `PROTOCOL_URL_NOT_ABSOLUTE`, pinned in `fixtures/corpus-golden.tsv` |
 
 ### 2.12 Determinism (SPEC §29.3)
 
