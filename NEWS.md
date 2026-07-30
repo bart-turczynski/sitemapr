@@ -146,6 +146,13 @@ related W3C and RFC standards.
   `ruleset_context()`.
 * `ruleset_revision()` returns a ruleset's published revision string, so a
   cross-repo consumer can pin against a known version of the rules.
+* `sitemap_contract()` publishes the rest of what ADR-009 §7 requires: the
+  findings-contract generation this build speaks, the dated revision of
+  `findings-registry.csv`, and the **supported sibling-version ranges** for
+  `sitemap-validator` and `robotstxtr`. The `sibling_versions` map has the same
+  shape the two sibling repos already publish, so all three are read the same
+  way. Editing the registry without advancing its published revision fails the
+  verify gate, so the revision cannot go stale.
 * Three engine-specific finding codes ship with the surface, all Yandex and all
   emitted only under that overlay: `PROTOCOL_URL_DECODED_TOO_LONG` (the decoded
   whole-URL length limit, distinct from the 2 048-character raw

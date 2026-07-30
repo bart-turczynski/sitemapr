@@ -521,11 +521,10 @@ Backwards compatibility is preserved **by construction** (ADR-009 §5):
   `sitemap-validator` adopts the additive `ruleset` column and any engine codes on
   its own version cadence. A shared-artifact shape change (the new CSV column) is
   coordinated, not silent. ADR-009 §7 obliges each repo to publish both its
-  schema/ruleset revisions **and** its supported sibling-version ranges. Only the
-  first half is met today: `ruleset_revision()` publishes a dated revision per
-  ruleset, and **no sibling-version range is published anywhere yet**
-  (SITE-xptyuczr). Until it is, cross-port pinning is by revision string and
-  agreement, not by a machine-readable range.
+  schema/ruleset revisions **and** its supported sibling-version ranges. Both
+  halves are met: `ruleset_revision()` publishes a dated revision per ruleset,
+  and `sitemap_contract()` publishes the contract identity and the range map —
+  see [Published contract identity](#published-contract-identity).
 
 ---
 
@@ -537,6 +536,46 @@ their finding codes comparable. **sitemapr's names are canonical**; the
 validator aligns to them (see the tracking issues in each repo). The
 `validator_code` column records the validator's *current* spelling so the
 alignment is mechanical.
+
+### Published contract identity
+
+ADR-009 §7 requires each repo in the three-way contract to publish its
+schema/ruleset revisions **and** the sibling-version ranges it is known to work
+against. sitemapr publishes both through one exported accessor,
+`sitemap_contract()`:
+
+| Field | Value at this revision | Meaning |
+|---|---|---|
+| `contract_id` | `sitemapr.findings/v2` | Findings-contract generation |
+| `contract_version` | `2` | The ten pinned columns plus the ADR-009 additive ruleset fields |
+| `legacy_contract_version` | `1` | The ten pinned columns alone |
+| `registry_revision` | `2026-07-29` | Revision of `findings-registry.csv` |
+| `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
+| `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.2.0, < 0.3.0` | Ranges this build is known to work against |
+
+Three decisions are embedded in that table and are the contract, not incidental:
+
+1. **One combined revision, not one per artifact.** The registry, the column
+   set, and the ruleset set have never moved independently — every change so far
+   was a coordinated cross-port event — so publishing three separately advancing
+   revisions would only create three chances to disagree. The per-ruleset map is
+   nested inside the single identity rather than versioned beside it.
+2. **The shape is the siblings' shape, not a third dialect.** `sibling_versions`
+   is a named map of package → comma-separated range expression, matching
+   robotstxtr's `robots_engine_contract_v1()$sibling_versions` and
+   `sitemap-validator`'s `SIBLING_VERSIONS`. Those two repos already published
+   ranges in this form; sitemapr was the one that did not, so it adopts theirs.
+3. **robotstxtr publishes its own table and appears in sitemapr's.** It is not
+   folded into sitemapr's as a subordinate: it owns robots.txt behavior
+   (ADR-009 §7) and declares its own ranges. sitemapr lists the robotstxtr range
+   it consumes, and robotstxtr lists sitemapr — the two declarations are
+   reciprocal, and each repo remains the authority on its own.
+
+`registry_revision` is a value a sibling pins against, so it must not be allowed
+to go stale. `tools/check-findings-registry.R` compares the committed CSV's md5
+against `findings_registry_digest()`: editing the registry without advancing both
+the revision and the digest fails the verify gate. A revision string nobody is
+obliged to maintain is worse than publishing none.
 
 ### Naming conventions (canonical)
 - **Protocol semantic codes** use the `PROTOCOL_` prefix (not the validator's

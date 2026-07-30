@@ -65,6 +65,32 @@ if (
   )
 }
 
+# The PUBLISHED revision must describe the registry that is actually committed.
+# `sitemap_contract()$registry_revision` is what a sibling port pins against
+# (ADR-009 §7), so a registry edit that leaves the revision string behind
+# publishes a stale identity. The digest pairs the two: change the CSV and this
+# fails until both `findings_registry_revision()` and
+# `findings_registry_digest()` are updated together. Sourced rather than
+# imported so the guard runs without installing the package.
+source("R/contract-version.R")
+actual_digest <- unname(tools::md5sum(registry_path))
+if (!identical(actual_digest, findings_registry_digest())) {
+  stop(
+    sprintf(
+      paste0(
+        "%s changed (md5 %s) but R/contract-version.R still publishes digest ",
+        "%s for revision %s. Bump findings_registry_revision() to today and ",
+        "set findings_registry_digest() to the new md5."
+      ),
+      registry_path,
+      actual_digest,
+      findings_registry_digest(),
+      findings_registry_revision()
+    ),
+    call. = FALSE
+  )
+}
+
 expected_cols <- c(
   "code",
   "severity",
