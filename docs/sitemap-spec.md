@@ -187,6 +187,17 @@ naming the conflicting signals and the chosen resolution; the **BOM-vs-XML-decl*
 pair — and only that pair — elevates to `warning` in strict mode
 (`ENCODING_BOM_DECLARATION_CONFLICT`).
 
+Conflict resolution is a separate question from CONFORMANCE. Whatever the
+signals resolve to, the protocol requires the file itself to be UTF-8 (§12.5
+baseline, from §2/§4/§7), so the first signal in that same priority order that
+names a non-UTF-8 encoding emits `ENCODING_NOT_UTF8` (`error`) — and a leading
+mark of any kind emits `ENCODING_BOM_DETECTED` (`info`), which is a fact rather
+than a fault: a UTF-8 BOM is tolerated (§12.5). A UTF-16 document declared as
+`encoding="UTF-16"` is thus fully self-consistent (no conflict) and still
+non-conformant (`ENCODING_NOT_UTF8`). Reading a document successfully is not the
+same as the document being conformant: sitemapr parses UTF-16 correctly and
+reports it anyway.
+
 ---
 
 ## 4. Core field semantics

@@ -17,8 +17,8 @@ UNSUPPORTED_FEED,error,classification,index-child,FALSE,active,,,baseline
 UNSUPPORTED_FORMAT,error,classification,source,FALSE,validator-only,,UNSUPPORTED_FORMAT,baseline
 ENCODING_CONFLICT,info,classification,source,FALSE,active,,ENCODING_CONFLICT,baseline
 ENCODING_BOM_DECLARATION_CONFLICT,info,classification,source,FALSE,active,,ENCODING_BOM_DECLARATION_CONFLICT,baseline
-ENCODING_BOM_DETECTED,info,classification,source,FALSE,validator-only,,ENCODING_BOM_DETECTED,baseline
-ENCODING_NOT_UTF8,error,classification,source,FALSE,validator-only,,ENCODING_NOT_UTF8,baseline
+ENCODING_BOM_DETECTED,info,classification,source,FALSE,active,done,ENCODING_BOM_DETECTED,baseline
+ENCODING_NOT_UTF8,error,classification,source,FALSE,active,done,ENCODING_NOT_UTF8,baseline
 UNSUPPORTED_MALFORMED_GZIP,error,decompression,source,FALSE,active,,UNSUPPORTED_MALFORMED_GZIP,baseline
 UNSUPPORTED_MALFORMED_ARCHIVE,error,decompression,archive-member,FALSE,active,,UNSUPPORTED_MALFORMED_ARCHIVE,baseline
 DECOMPRESS_TOO_MANY_FILES,error,decompression,source,FALSE,active,,DECOMPRESS_TOO_MANY_FILES,baseline

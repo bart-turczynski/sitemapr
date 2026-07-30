@@ -166,8 +166,26 @@ encoding_findings <- function(bytes, http_charset, base) {
     source_meta(
       bom_encoding = bom_encoding_of(bytes),
       declared_encoding = declared_xml_encoding(bytes),
-      http_charset = http_charset
+      http_charset = http_charset,
+      bytes_valid_utf8 = bytes_are_valid_utf8(bytes)
     ),
     base
   )
+}
+
+# Whether the source bytes decode as UTF-8, or NA when there are no bytes to
+# judge. The last tier of the `ENCODING_NOT_UTF8` cascade, which only matters
+# for a source that declares no encoding at all.
+#
+# NUL bytes are dropped before the test. `iconv()` raises on an embedded NUL
+# rather than judging it, and dropping them cannot change the verdict: a NUL is
+# itself a valid UTF-8 sequence (U+0000) and can never appear INSIDE a
+# multi-byte one, whose continuation bytes are all 0x80-0xBF. So removing a NUL
+# only splices together sequences that were already independent.
+bytes_are_valid_utf8 <- function(bytes) {
+  if (!is.raw(bytes)) {
+    return(NA)
+  }
+  bytes <- bytes[bytes != as.raw(0L)]
+  !is.na(iconv(list(bytes), "UTF-8", "UTF-8"))
 }

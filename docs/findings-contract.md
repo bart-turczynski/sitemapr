@@ -549,7 +549,7 @@ against. sitemapr publishes both through one exported accessor,
 | `contract_id` | `sitemapr.findings/v2` | Findings-contract generation |
 | `contract_version` | `2` | The ten pinned columns plus the ADR-009 additive ruleset fields |
 | `legacy_contract_version` | `1` | The ten pinned columns alone |
-| `registry_revision` | `2026-07-29` | Revision of `findings-registry.csv` |
+| `registry_revision` | `2026-07-30` | Revision of `findings-registry.csv` |
 | `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
 | `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.2.0, < 0.3.0` | Ranges this build is known to work against |
 
@@ -603,17 +603,54 @@ obliged to maintain is worse than publishing none.
   offending `entry` where the validator points at the document, which is
   strictly more precise.
 
+### Encoding codes: what agrees and what does not
+
+`ENCODING_NOT_UTF8` and `ENCODING_BOM_DETECTED` are emitted by both ports.
+`ENCODING_NOT_UTF8` follows the sibling's `getNonUtf8XmlReason()` cascade tier
+for tier — a non-UTF-8 BOM, then a non-UTF-8 XML-declaration **label**, then
+bytes that do not decode — so the two agree on the case that motivated it.
+
+It is a **label** test, not a byte test, and that is deliberate on both sides. A
+byte test cannot see a UTF-16 sitemap at all: UTF-16LE ASCII text is bytes below
+`0x80` interleaved with NULs, every one of which is a valid UTF-8 sequence
+(`U+0000` included). Only the mark and the declaration state what the document
+claims to be. The same rule fires on a file declaring `ISO-8859-1` whose bytes
+happen to be pure ASCII, which is correct: the declaration is part of the
+document and it is wrong.
+
+A conformantly-spelled UTF-16 document therefore produces `ENCODING_NOT_UTF8`
+**and no** `ENCODING_BOM_DECLARATION_CONFLICT` — the mark and the declaration
+agree with each other, and both disagree with the protocol. Those are two
+separate claims, not a contradiction.
+
+Two asymmetries are known and deliberate:
+
+- **HTTP charset tier (sitemapr only).** sitemapr also consults the response
+  `Content-Type` charset, below the declaration, following its own documented
+  resolution priority (§3 / §11.6). The sibling's cascade stops at the
+  declaration. This is unobservable in the shared fixture corpus, whose cases
+  are local files with no response at all.
+- **`ENCODING_BOM_DETECTED` on text sitemaps (sitemapr only).** The sibling
+  emits this code from `validateXmlProtocol()` and so reports a BOM only on the
+  XML path; its text path calls `getNonUtf8TextReason()`, which yields
+  `ENCODING_NOT_UTF8` and nothing else. sitemapr's classification layer runs
+  once per source and is deliberately format-agnostic, so it reports the BOM on
+  both paths. Making it branch on format to match would put format knowledge
+  into a layer that has none, to reproduce what looks like an omission rather
+  than a decision. Consequence: `text/utf8-bom.txt` is **not** a golden join
+  row (SMV-tracked).
+
 ### Row status semantics (`status` column)
 
 Two values occur in the registry today, across 94 rows:
 
-- `active` — emitted by the sitemapr pipeline today (**74 codes**). Some fire
+- `active` — emitted by the sitemapr pipeline today (**76 codes**). Some fire
   only under an opt-in: the three `ROBOTS_*` codes need
   `check_robots = TRUE`, the eleven `PAGE_*` codes need `inspect_pages = TRUE`,
   and the three `ruleset = yandex` codes need that overlay selected. "Active"
   means an emitter exists and is reachable, not that a default call produces it.
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
-  yet (**20 codes**); carried so the contract is complete and to guide future
+  yet (**18 codes**); carried so the contract is complete and to guide future
   adoption.
 
 `status` has **two consumers**, which is why a row's value is load-bearing
