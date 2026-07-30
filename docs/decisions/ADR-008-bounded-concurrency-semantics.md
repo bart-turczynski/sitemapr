@@ -1,6 +1,7 @@
 # ADR-008: Deterministic bounded-concurrency semantics for child fetches
 
-- Status: Accepted
+- Status: Accepted; amended 2026-07-30 (page inspection stays sequential — see
+  the amendment at the end)
 - Date: 2026-07-11
 - Deciders: Bart Turczyński
 - Related: `docs/decisions/ADR-003-network-safety-policy.md`
@@ -238,3 +239,85 @@ abstraction** that:
 When SITE-tktfxoxe lands, it deletes the `skip()` guards in
 `tests/testthat/test-concurrency-contract.R` and implements against those
 assertions.
+
+---
+
+## Amendment (2026-07-30, SITE-rjhmkqnd): page inspection stays sequential
+
+`page_inspection_run()` (`R/page-inspect.R`) is the one remaining sequential
+fetch loop after SITE-hxzmvlkn made index-expansion child prefetch genuinely
+concurrent. Making it concurrent too is **not** a mechanical repeat of that
+change, and this amendment settles that it is not going to be done as one.
+
+### The asymmetry
+
+§3 enforces budgets by **reserving before dispatch**. That works for a
+count-based budget: a sitemap-count slot can be claimed before the request goes
+out. Page inspection's loop is `check-cap → fetch → tally`, and
+`page_inspection_cap_hit()` breaks on four **cumulative** quantities:
+`max_pages`, `max_requests`, `max_bytes`, `max_seconds`.
+
+The first two are counts and are reservable exactly as §3 describes. The other
+two are not, and cannot be made so: the byte cost of a page is known only once
+it has been fetched, and elapsed time is not ownable in advance at all. So
+dispatching a batch concurrently changes **which pages are sampled** when a byte
+or time cap trips mid-batch.
+
+### Must the sample be deterministic? Yes — and for a stronger reason
+
+Not merely by symmetry with index expansion. The sample **is** the finding set:
+`PAGE_*` findings are emitted per sampled URL, so a sample that depends on
+completion order makes the findings tibble depend on completion order. That
+breaks the reproducible-audit property §0 exists to protect, and it breaks it at
+the level of the findings contract rather than of a scheduling detail.
+
+### Both routes to determinism under concurrency fail
+
+**Over-fetch and discard.** Dispatch a wave, tally it, then keep only the prefix
+sequential mode would have kept. The output is byte-identical — and the design is
+still wrong. The discarded fetches are *real requests against a third-party
+site*: `st$requests` counts `length(art$hops)` and those hops happened.
+`max_requests` and `max_bytes` are **politeness budgets bounding impact on the
+site being inspected**, not bookkeeping about how much data is retained.
+Over-fetching preserves the reported number while breaking the thing the number
+is for. A slow inspection is a better failure than a rude one.
+
+**Bounded waves, cut on wave boundaries.** No waste, but the truncation point
+moves: the sample, and therefore the findings, differ from sequential. §0 already
+classifies this — "any behaviour the scheduler cannot make byte-identical to
+sequential mode is out of scope for opt-in concurrency and must instead be an
+explicit, separately-flagged behaviour change."
+
+### Decision
+
+Page inspection **remains sequential**. This is an amendment to ADR-008, not a
+successor to it: §0's own escape clause already governs the case, so no new
+contract is being written — what is being recorded is that the case falls
+outside, deliberately.
+
+Nothing regresses. `page_inspection_run()` threads no `max_active` and exposes
+no concurrency knob, so unlike index expansion there is no public concurrency
+contract left unsatisfied.
+
+### Consequence, accepted
+
+Inspecting N pages costs N round trips. That is a real latency cost on the
+default `max_pages = 50` sample, and it is accepted: the alternative trades a
+politeness guarantee for latency.
+
+### If it is ever taken up, the shape is already constrained
+
+A future concurrent page-inspection design does not get to re-open the questions
+above. It must:
+
+- gate dispatch on the **reservable** count budgets (`max_pages`,
+  `max_requests`) exactly as §3 does;
+- check `max_bytes` / `max_seconds` at **wave boundaries**, accepting an
+  overshoot bounded by `(wave size − 1) × page_body_cap` — statable only because
+  `page_fetch_terminal()` truncates every page at `page_body_cap`;
+- ship **opt-in and default-off**, as a documented cap-semantics change, since
+  its output is by construction not byte-identical to sequential; and
+- build a **batch sibling of the page capture loop**. `fetch_batch_follow()`
+  cannot be reused: it implements `fetch_follow()`'s contract, while page
+  inspection uses the Layer E Contract A capture loop, which records every hop
+  and truncates-and-retains the body at `page_body_cap`.

@@ -65,7 +65,12 @@ related W3C and RFC standards.
   deduplicated URLs picked by a stable hash order so re-runs pick the same set)
   or `"full"`. `page_budget` caps the run's pages, requests, aggregate bytes,
   per-page body size, and wall time; `page_user_agent` sets the UA the
-  inspector sends.
+  inspector sends. Page inspection fetches **sequentially** and `max_active`
+  does not apply to it. That is deliberate, not an unfinished half of the
+  concurrency work: its byte and time caps cannot be reserved before dispatch,
+  so a concurrent run would either sample a different set of pages — changing
+  the findings — or issue requests it then discards, against the very site the
+  budgets exist to be polite to. Recorded as an amendment to ADR-008.
 * **Network expansion is never implicit.** Both checks default to `FALSE`, and
   with them off the result is byte-identical to a call without them — the
   pinned ten-column findings surface and no extra attributes.
