@@ -29,7 +29,7 @@ test_that("a fully reciprocal, self-referencing cluster yields no findings", {
       )
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_identical(nrow(f), 0L)
 })
 
@@ -53,12 +53,12 @@ test_that("a URL missing its self-reference is flagged", {
       )
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_identical(codes_of(f), "HREFLANG_MISSING_SELF_REFERENCE")
   expect_identical(f$severity, "warning")
   expect_identical(f$layer, "protocol")
   expect_identical(f$subject_type, "document")
-  expect_identical(f$subject_ref, "sitemap://a.com/s.xml")
+  expect_identical(f$subject_ref, "https://a.com/s.xml")
   expect_true(grepl("https://a.com/en", f$message[[1L]], fixed = TRUE))
   expect_identical(f$evidence[[1L]]$excerpt, "https://a.com/en")
 })
@@ -75,7 +75,7 @@ test_that("a one-way internal alternate is flagged as non-reciprocal", {
       list(mk_link("de", "https://a.com/b"))
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_identical(codes_of(f), "HREFLANG_NON_RECIPROCAL")
   expect_true(grepl("reciprocal", f$message[[1L]], fixed = TRUE))
   expect_identical(
@@ -94,7 +94,7 @@ test_that("an external alternate target is not a false non-reciprocity", {
       mk_link("de", "https://other.com/de")
     ))
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_identical(nrow(f), 0L)
 })
 
@@ -113,7 +113,7 @@ test_that("conflicting language tokens for one target are flagged", {
       )
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_identical(codes_of(f), "HREFLANG_INCONSISTENT_LANGUAGE")
   expect_true(grepl("https://a.com/target", f$message[[1L]], fixed = TRUE))
   expect_true(grepl("'en'", f$message[[1L]], fixed = TRUE))
@@ -135,7 +135,7 @@ test_that("a pure casing difference is not a language conflict", {
       )
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_false("HREFLANG_INCONSISTENT_LANGUAGE" %in% f$code)
 })
 
@@ -151,10 +151,10 @@ test_that("findings are invariant to input row order", {
   )
   rows <- mk_rows(loc, alternates)
   perm <- c(3L, 1L, 2L)
-  f1 <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f1 <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   f2 <- validate_hreflang_graph(
     mk_rows(loc[perm], alternates[perm]),
-    base = "sitemap://a.com/s.xml"
+    base = "https://a.com/s.xml"
   )
   expect_identical(f1, f2)
   # It exercises all three codes at once.
@@ -176,7 +176,7 @@ test_that("the producer emits the contract-shaped producer columns", {
       list(mk_link("de", "https://a.com/b"))
     )
   )
-  f <- validate_hreflang_graph(rows, base = "sitemap://a.com/s.xml")
+  f <- validate_hreflang_graph(rows, base = "https://a.com/s.xml")
   expect_named(
     f,
     c(

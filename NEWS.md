@@ -144,6 +144,16 @@ related W3C and RFC standards.
   sets no `property_scope`, that trust being blanket rather than
   property-bound). Every axis stays independently overridable via
   `ruleset_context()`.
+* **Breaking:** the `subject_ref` grammar changed. A ref now keeps the
+  document's own scheme (`https://example.com/s.xml`, not
+  `sitemap://example.com/s.xml`), every URL or path inside a fragment is
+  percent-encoded, and `#index-child` carries a one-based ordinal alongside the
+  child URL (`#index-child:3:https%3A%2F%2F…`). The old form collapsed `http`
+  and `https` documents onto one ref, could not be parsed back apart when a
+  child URL contained a `#`, and could not tell two duplicate children apart.
+  Refs are composed, never parsed, by this package; a consumer holding persisted
+  reports in the old form has to migrate them, and the two forms are
+  distinguishable because only the old one begins `sitemap://`.
 * `ENCODING_NOT_UTF8` (`error`) reports a sitemap that is not the UTF-8 the
   protocol requires, and `ENCODING_BOM_DETECTED` (`info`) reports a leading
   byte-order mark of any kind. The UTF-8 check reads the highest-priority

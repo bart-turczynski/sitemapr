@@ -119,23 +119,97 @@ protocol_ref_fragment <- function(base, fragment) {
   paste0(base, fragment)
 }
 
-# The page-url subject_ref for a per-URL finding: the advertising sitemap's base
-# with a `#page-url:<loc>` fragment (findings-contract.md "Subject ref format"),
-# so the finding stays anchored to the document that advertised the page. Shared
-# by every layer that reports against a listed URL (page and robots alike), so
-# the fragment format has one definition.
-page_url_subject_ref <- function(base, loc) {
-  protocol_ref_fragment(base, paste0("#page-url:", loc))
+# The RFC 3986 §2.3 unreserved set: the only bytes a ref payload keeps as-is.
+ref_unreserved_chars <- c(
+  LETTERS,
+  letters,
+  as.character(0:9),
+  "-",
+  ".",
+  "_",
+  "~"
+)
+
+# Percent-encode one fragment PAYLOAD (findings-contract.md "Subject ref
+# format"). Everything outside the unreserved set becomes `%XX` over the UTF-8
+# bytes, uppercase hex per RFC 3986 §2.1.
+#
+# This is what makes a ref parseable back into (base, kind, payload). An
+# unencoded payload could not be: a `<loc>` may itself contain `#` (and `:`, and
+# `/`), so a raw child URL inside a fragment left the ref ambiguous -- that was
+# defect 2 of SITE-koqdjmte. After encoding, the payload contains no delimiter
+# the grammar uses, so splitting on the first `#` then the first `:` is exact.
+#
+# Vectorized over `x`; `NA` in -> `NA` out. Note the encoding is applied even
+# when it is a no-op (an XML element name, an ASCII path) so the RULE has one
+# definition and no call site has to decide whether its payload "needs" it.
+ref_encode_payload <- function(x) {
+  vapply(x, ref_encode_one, character(1L), USE.NAMES = FALSE)
 }
 
-# The document-level subject_ref base for a sitemap URL: `sitemap://` + the URL
-# with its scheme stripped (the findings-contract authority form, e.g.
-# `sitemap://example.com/sitemap.xml`). `NA` in -> `NA` out (fragment-only ref).
+ref_encode_one <- function(s) {
+  if (is.na(s)) {
+    return(NA_character_)
+  }
+  bytes <- charToRaw(enc2utf8(s))
+  chars <- rawToChar(bytes, multiple = TRUE)
+  keep <- chars %in% ref_unreserved_chars
+  chars[!keep] <- sprintf("%%%02X", as.integer(bytes[!keep]))
+  paste(chars, collapse = "")
+}
+
+# The page-url subject_ref for a per-URL finding: the advertising sitemap's base
+# with a `#page-url:<encoded-loc>` fragment (findings-contract.md "Subject ref
+# format"), so the finding stays anchored to the document that advertised the
+# page. Shared by every layer that reports against a listed URL (page and robots
+# alike), so the fragment format has one definition.
+page_url_subject_ref <- function(base, loc) {
+  protocol_ref_fragment(base, paste0("#page-url:", ref_encode_payload(loc)))
+}
+
+# The index-child subject_ref for a finding about a child `<loc>` of a sitemap
+# index: `#index-child:<ordinal>:<encoded-child-url>`. ONE definition, used by
+# every layer that reports against a child (protocol, classification,
+# index-expansion), so the grammar cannot drift between them.
+#
+# `ordinal` is the child's ONE-BASED position in the document named by `base`.
+# It exists because a child URL alone cannot address a duplicate occurrence: an
+# index that lists the same `<loc>` twice draws two findings, and without the
+# ordinal both carried the same ref (defect 3 of SITE-koqdjmte).
+#
+# `NA` renders as `-`, meaning "position within this document not established".
+# That is not laziness: the traversal problems table records a child that may
+# sit arbitrarily deep BELOW `base` (the traversal root), so its position *in
+# the base document* does not exist to be recorded. A fixed-arity `-` says so
+# explicitly rather than silently emitting a shorter ref that a parser would
+# then have to guess at.
+index_child_subject_ref <- function(base, ordinal, loc) {
+  n <- ifelse(is.na(ordinal), "-", as.character(ordinal))
+  protocol_ref_fragment(
+    base,
+    paste0("#index-child:", n, ":", ref_encode_payload(loc))
+  )
+}
+
+# The document-level subject_ref base for a sitemap URL: the URL itself, with
+# its ACTUAL scheme (findings-contract.md "Subject ref format"), e.g.
+# `https://example.com/sitemap.xml`. `NA` in -> `NA` out (fragment-only ref).
+#
+# The scheme is preserved rather than replaced by a `sitemap://` authority
+# form, which was defect 1 of SITE-koqdjmte: stripping it collapsed
+# `http://example.com/s.xml` and `https://example.com/s.xml` onto one ref, so
+# two genuinely different documents shared one identity.
+#
+# A local filesystem path has no scheme and is used verbatim. It is
+# deliberately NOT dressed up as `file://`: a relative path has no correct
+# authority form, and an absolute one would make the ref machine-dependent.
+# Local input is not part of the cross-port join, so an opaque base is the
+# honest representation.
 sitemap_subject_ref <- function(sitemap_url) {
   if (is.null(sitemap_url) || is.na(sitemap_url) || !nzchar(sitemap_url)) {
     return(NA_character_)
   }
-  paste0("sitemap://", sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", sitemap_url))
+  sitemap_url
 }
 
 # Classify a raw `<loc>` string's absoluteness from the ORIGINAL text, never the
@@ -227,7 +301,7 @@ protocol_url_finding <- function(
 }
 
 # One document-level finding row (`subject_type = "document"`, the unfragmented
-# `sitemap://…` base). Used by the count/size and corpus-level lastmod rules.
+# unfragmented sitemap-URL base). Used by the count/size and lastmod rules.
 protocol_document_finding <- function(
   code,
   severity,
@@ -528,8 +602,8 @@ validate_field_values <- function(rows, base) {
 # Takes the `parse_sitemapindex()` child table (faithful raw `lastmod` since
 # ADR-004 was applied to the index path). Purely document-local — the values are
 # in the index itself — so this runs whether or not children are ever fetched.
-# Refs use the documented `#index-child:<url>` fragment (findings-contract.md),
-# which names the offending child rather than an ordinal.
+# Refs use the documented `#index-child:<n>:<url>` fragment
+# (findings-contract.md), which names the offending child AND its position.
 validate_index_lastmod <- function(children, base) {
   lm <- children$lastmod
   cls <- classify_lastmod(lm)
@@ -540,6 +614,7 @@ validate_index_lastmod <- function(children, base) {
       "PROTOCOL_LASTMOD_INVALID",
       "error",
       base,
+      j,
       children$loc[[j]],
       lm[[j]],
       sprintf(
@@ -553,6 +628,7 @@ validate_index_lastmod <- function(children, base) {
       "PROTOCOL_LASTMOD_DATE_ONLY",
       "info",
       base,
+      j,
       children$loc[[j]],
       lm[[j]],
       sprintf(
@@ -576,6 +652,7 @@ index_lastmod_finding <- function(
   code,
   severity,
   base,
+  ordinal,
   loc,
   raw,
   message,
@@ -585,7 +662,7 @@ index_lastmod_finding <- function(
     code = code,
     severity = severity,
     subject_type = "entry",
-    subject_ref = protocol_ref_fragment(base, paste0("#index-child:", loc)),
+    subject_ref = index_child_subject_ref(base, ordinal, loc),
     message = message,
     evidence = list(finding_evidence(excerpt = as.character(raw))),
     is_strict_only = is_strict_only
@@ -604,9 +681,9 @@ index_lastmod_finding <- function(
 #     scope is the SEPARATE sitemap-spec §12.2b axis owned by
 #     `index_child_scope_findings()` (INDEX_CHILD_OUT_OF_SCOPE) and is never
 #     collapsed into the §12.2 page-scope axis.
-#   * refs are re-anchored onto `#index-child:<url>`, matching
-#     `validate_index_lastmod()`, so a finding names the offending child rather
-#     than an entry ordinal.
+#   * refs are re-anchored onto `#index-child:<n>:<url>`, matching
+#     `validate_index_lastmod()`, so a finding names the offending child as well
+#     as its position.
 #
 # Runs on the PRE-dedup child table, so a child listed twice is reported
 # (PROTOCOL_DUPLICATE_LOC) before `dedup_and_cap_children()` repairs it.
@@ -630,9 +707,12 @@ validate_index_locs <- function(children, base, ruleset = NULL) {
 # Re-anchor `#entry:<i>` refs onto their child `<loc>`. Built as a total lookup
 # over every child position rather than parsed back out of the ref string, so
 # the mapping cannot drift from how `protocol_url_finding()` composes a ref.
+# The entry ordinal IS the child's position, so it carries straight over into
+# the index-child fragment rather than being discarded.
 index_child_refs <- function(refs, locs, base) {
-  from <- protocol_ref_fragment(base, paste0("#entry:", seq_along(locs)))
-  to <- protocol_ref_fragment(base, paste0("#index-child:", locs))
+  i <- seq_along(locs)
+  from <- protocol_ref_fragment(base, paste0("#entry:", i))
+  to <- index_child_subject_ref(base, i, locs)
   to[match(refs, from)]
 }
 
@@ -2059,7 +2139,7 @@ protocol_text_finding <- function(
 #'
 #' @param text The raw text-sitemap document: a character string/vector or raw
 #'   bytes (decoded as UTF-8), the same input `parse_sitemap_text()` accepts.
-#' @param subject_ref The document-level `sitemap://…` base for each finding's
+#' @param subject_ref The document-level sitemap-URL base for each finding's
 #'   `subject_ref`. `NA` yields fragment-only refs.
 #' @param limits Layer D limit thresholds; see `protocol_limits()`. Only
 #'   `max_url_count` applies to the text format.
@@ -2251,7 +2331,7 @@ validate_text_protocol <- function(
 #'   strings (ADR-004), so format rules read the original text directly.
 #' @param sitemap_url The sitemap's own absolute URL, used for same-origin scope
 #'   comparison. `NA` skips the scope check.
-#' @param subject_ref The document-level `sitemap://…` base for each finding's
+#' @param subject_ref The document-level sitemap-URL base for each finding's
 #'   `subject_ref`; defaults to the authority form derived from `sitemap_url`.
 #'   `NA` yields fragment-only refs.
 #' @param byte_size The uncompressed byte count of the source document, for the

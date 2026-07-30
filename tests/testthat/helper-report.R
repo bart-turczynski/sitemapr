@@ -65,7 +65,7 @@ report_findings_fixture <- function(code, severity, layer) {
     severity = severity,
     layer = layer,
     subject_type = rep("document", n),
-    subject_ref = rep("sitemap://fixture", n),
+    subject_ref = rep("https://fixture", n),
     message = paste0(code, " fired."),
     evidence = rep(list(sitemapr_test_ns$finding_evidence()), n),
     mode = rep("strict", n),

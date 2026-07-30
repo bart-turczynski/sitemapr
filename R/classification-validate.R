@@ -121,7 +121,7 @@ norm_encoding <- function(x) {
 }
 
 # One source-level classification finding (`subject_type = "source"`, the
-# unfragmented `sitemap://…` base).
+# unfragmented sitemap-URL base).
 classification_source_finding <- function(
   code,
   base,
@@ -142,16 +142,24 @@ classification_source_finding <- function(
 }
 
 # One index-child classification finding, scoped to a child `<loc>` via the
-# `#index-child:<url>` subject_ref fragment (findings-contract.md).
-classification_child_finding <- function(code, base, child_url, message) {
+# `#index-child:<n>:<url>` subject_ref fragment (findings-contract.md).
+#
+# `ordinal` is NA here by default and renders as `-`: these findings are derived
+# from the traversal problems table (`index_feed_children()`), which records a
+# child URL without its position in any particular index -- and the child may
+# sit below `base` rather than directly in it. See `index_child_subject_ref()`.
+classification_child_finding <- function(
+  code,
+  base,
+  child_url,
+  message,
+  ordinal = NA_integer_
+) {
   classification_findings(
     code = code,
     severity = "error",
     subject_type = "index-child",
-    subject_ref = protocol_ref_fragment(
-      base,
-      paste0("#index-child:", child_url)
-    ),
+    subject_ref = index_child_subject_ref(base, ordinal, child_url),
     message = message,
     evidence = list(finding_evidence(excerpt = child_url)),
     is_strict_only = FALSE

@@ -323,10 +323,12 @@ index_budget_subject_ref <- function(base) {
 # Build a contract-shaped (8-column) index-expansion findings tibble from the
 # `problems` table `expand_index()` records. `layer = "index-expansion"` for all
 # of them; the per-child events take `subject_type = "index-child"` and turn the
-# problem's subject_ref (a child/index URL) into a `#index-child:<url>` ref,
-# while the aggregate-budget events are report-scoped (see
-# `index_budget_codes`). Non-traversal problems are skipped. Returns a zero-row
-# tibble when there is nothing to map.
+# problem's subject_ref (a child/index URL) into a `#index-child:-:<url>` ref
+# (the ordinal is `-` because the child may sit arbitrarily deep below `base`,
+# so its position in the base document does not exist), while the
+# aggregate-budget events are report-scoped (see `index_budget_codes`).
+# Non-traversal problems are skipped. Returns a zero-row tibble when there is
+# nothing to map.
 index_findings_from_problems <- function(problems, base) {
   if (is.null(problems) || nrow(problems) == 0L) {
     return(empty_index_findings())
@@ -345,10 +347,7 @@ index_findings_from_problems <- function(problems, base) {
       subject_ref = if (is_budget) {
         index_budget_subject_ref(base)
       } else {
-        protocol_ref_fragment(
-          base,
-          paste0("#index-child:", problems$subject_ref[i])
-        )
+        index_child_subject_ref(base, NA_integer_, problems$subject_ref[i])
       },
       message = problems$message[i],
       evidence = list(finding_evidence(excerpt = problems$subject_ref[i])),

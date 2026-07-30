@@ -61,7 +61,7 @@ empty_decompression_findings <- function() {
 }
 
 # One source-level decompression finding (`subject_type = "source"`, the
-# unfragmented `sitemap://…` base) — used for the whole-source failures
+# unfragmented sitemap-URL base) — used for the whole-source failures
 # (a malformed gzip stream, the archive file-count cap).
 decompression_source_finding <- function(
   code,
@@ -94,7 +94,10 @@ decompression_member_finding <- function(
   ref <- if (is.na(member_path)) {
     if (is.null(base)) NA_character_ else base
   } else {
-    protocol_ref_fragment(base, paste0("#archive-member:", member_path))
+    protocol_ref_fragment(
+      base,
+      paste0("#archive-member:", ref_encode_payload(member_path))
+    )
   }
   decompression_findings(
     code = code,

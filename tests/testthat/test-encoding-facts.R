@@ -262,7 +262,7 @@ test_that("invalid bytes with no declared encoding reach the byte tier", {
   # The only route to the last tier: no BOM, no declaration, no charset, so the
   # resolution defaults to UTF-8 and only the bytes can contradict it.
   meta <- sitemapr_test_call("source_meta", bytes_valid_utf8 = FALSE)
-  out <- sitemapr_test_call("validate_encoding", meta, "sitemap://s.xml")
+  out <- sitemapr_test_call("validate_encoding", meta, "https://s.xml")
 
   expect_identical(out$code, "ENCODING_NOT_UTF8")
   expect_match(out$message, "content bytes are not valid UTF-8", fixed = TRUE)

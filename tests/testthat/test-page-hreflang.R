@@ -222,7 +222,7 @@ test_that("disagreeing non-empty sets emit PAGE_HREFLANG_MISMATCH (warning)", {
   expect_identical(out$severity, "warning")
   expect_match(
     out$subject_ref,
-    "#page-url:https://example.com/a",
+    "#page-url:https%3A%2F%2Fexample.com%2Fa",
     fixed = TRUE
   )
 })

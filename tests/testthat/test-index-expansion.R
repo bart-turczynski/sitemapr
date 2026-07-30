@@ -488,7 +488,7 @@ test_that("stream_emit_leaf wraps a callback error with leaf context", {
 # same-or-lower-directory dimension. Emitted only under an engine overlay.
 
 idx_deep <- "https://example.com/deep/sitemap-index.xml"
-idx_base <- "sitemap://example.com/deep/sitemap-index.xml"
+idx_base <- "https://example.com/deep/sitemap-index.xml"
 
 test_that("index_child_out_of_scope flags a cross-site child (google)", {
   google_spec <- findings_ruleset_spec("google", ruleset_context())

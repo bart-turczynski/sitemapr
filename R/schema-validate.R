@@ -137,7 +137,7 @@ schema_invalid_row <- function(err, subject_ref) {
       subject_type = "field",
       subject_ref = schema_ref_fragment(
         subject_ref,
-        paste0("#field:", el_local)
+        paste0("#field:", ref_encode_payload(el_local))
       ),
       message = sprintf(
         "Element <%s> in the %s namespace scope failed XSD schema validation.",
@@ -201,7 +201,7 @@ schema_invalid_findings <- function(errors, subject_ref) {
 #'
 #' @param doc A parsed `xml2` document (parse it with the XXE-safe
 #'   `read_sitemap_xml()`; external entities are never expanded).
-#' @param subject_ref Stable `sitemap://…` reference for the document, used as
+#' @param subject_ref Stable reference for the document (its URL), used as
 #'   the base of each finding's `subject_ref`. `NA` yields fragment-only refs.
 #' @param schemas_dir,cache,dir Forwarded to `schema_profile()` (bundled-schema
 #'   directory, the runtime-wrapper cache, and the wrapper output directory).

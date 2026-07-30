@@ -184,15 +184,15 @@ test_that("a URL advertised by several sitemaps anchors one finding each", {
   run <- pf_run(list(art))
   subjects <- list(
     loc = c("https://example.com/a", "https://example.com/a"),
-    base = c("sitemap://one.example/s.xml", "sitemap://two.example/s.xml")
+    base = c("https://one.example/s.xml", "https://two.example/s.xml")
   )
   f <- page_transport_findings(run, subjects = subjects)
   expect_identical(nrow(f), 2L)
   expect_setequal(
     f$subject_ref,
     c(
-      "sitemap://one.example/s.xml#page-url:https://example.com/a",
-      "sitemap://two.example/s.xml#page-url:https://example.com/a"
+      "https://one.example/s.xml#page-url:https%3A%2F%2Fexample.com%2Fa",
+      "https://two.example/s.xml#page-url:https%3A%2F%2Fexample.com%2Fa"
     )
   )
 })
@@ -304,7 +304,7 @@ test_that("inspect_pages = TRUE fetches, stamps coverage, emits page rows", {
   # Anchored to the advertising sitemap's page-url subject_ref.
   expect_match(
     page_rows$subject_ref,
-    "#page-url:https://example.com/a",
+    "#page-url:https%3A%2F%2Fexample.com%2Fa",
     fixed = TRUE
   )
   # Still the pinned ten columns (coverage rides an attribute, not a column).
@@ -367,7 +367,7 @@ test_that("transport findings skip runs and subjects with no artifact", {
     run,
     subjects = list(
       loc = c("https://example.com/never-fetched", loc),
-      base = c("sitemap://example.com/s.xml", "sitemap://example.com/s.xml")
+      base = c("https://example.com/s.xml", "https://example.com/s.xml")
     )
   )
   # The unfetched subject drops out; the fetched one still reports.

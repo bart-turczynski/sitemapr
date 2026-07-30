@@ -426,7 +426,7 @@ test_that("an over-budget sitemap total yields INDEX_TOTAL_SITEMAPS_EXCEEDED", {
   expect_true(all(row$subject_type == "report"))
   expect_identical(
     row$subject_ref,
-    "sitemap://example.com/root.xml#report:traversal-budget"
+    "https://example.com/root.xml#report:traversal-budget"
   )
   expect_false(any(grepl("#index-child:", row$subject_ref, fixed = TRUE)))
   # The child is not lost — it survives as evidence.
@@ -458,7 +458,7 @@ test_that("an over-budget URL total yields INDEX_TOTAL_URLS_EXCEEDED", {
   expect_true(all(row$subject_type == "report"))
   expect_identical(
     row$subject_ref,
-    "sitemap://example.com/root.xml#report:traversal-budget"
+    "https://example.com/root.xml#report:traversal-budget"
   )
   expect_false(any(grepl("#index-child:", row$subject_ref, fixed = TRUE)))
 })
@@ -493,14 +493,17 @@ test_that("a budget event and a per-child event stay separately scoped", {
   expect_identical(child$subject_type, "index-child")
   expect_identical(
     child$subject_ref,
-    "sitemap://example.com/root.xml#index-child:https://example.com/n.xml"
+    paste0(
+      "https://example.com/root.xml",
+      "#index-child:-:https%3A%2F%2Fexample.com%2Fn.xml"
+    )
   )
 
   budget <- out[out$code == "INDEX_TOTAL_SITEMAPS_EXCEEDED", ]
   expect_identical(budget$subject_type, "report")
   expect_identical(
     budget$subject_ref,
-    "sitemap://example.com/root.xml#report:traversal-budget"
+    "https://example.com/root.xml#report:traversal-budget"
   )
 })
 
@@ -527,13 +530,16 @@ test_that("a LOCAL index still reports its own bad lastmod values", {
 
   bad <- out[out$code == "PROTOCOL_LASTMOD_INVALID", ]
   expect_identical(nrow(bad), 1L)
-  expect_match(bad$subject_ref, "#index-child:https://example\\.com/a\\.xml$")
+  expect_match(
+    bad$subject_ref,
+    "#index-child:1:https%3A%2F%2Fexample\\.com%2Fa\\.xml$"
+  )
 
   dateonly <- out[out$code == "PROTOCOL_LASTMOD_DATE_ONLY", ]
   expect_identical(nrow(dateonly), 1L)
   expect_match(
     dateonly$subject_ref,
-    "#index-child:https://example\\.com/b\\.xml$"
+    "#index-child:2:https%3A%2F%2Fexample\\.com%2Fb\\.xml$"
   )
 })
 
@@ -625,7 +631,10 @@ test_that("a duplicate child is reported BEFORE expansion dedupes it", {
   expect_identical(sum(tracker$urls == dup), 1L)
   row <- out[out$code == "PROTOCOL_DUPLICATE_LOC", ]
   expect_identical(nrow(row), 1L)
-  expect_match(row$subject_ref, "#index-child:https://example\\.com/dup\\.xml$")
+  expect_match(
+    row$subject_ref,
+    "#index-child:2:https%3A%2F%2Fexample\\.com%2Fdup\\.xml$"
+  )
 })
 
 # --- Internal helper guards (empty/NULL inputs) ----------------------------
@@ -634,7 +643,7 @@ test_that("a duplicate child is reported BEFORE expansion dedupes it", {
 # an empty character vector). Exercise that guard directly.
 
 test_that("index_findings_from_problems is an empty tibble for no problems", {
-  base <- "sitemap://example.com/sitemap.xml"
+  base <- "https://example.com/sitemap.xml"
   empty_probs <- tibble::tibble(
     category = character(0),
     message = character(0),
@@ -682,7 +691,7 @@ test_that("validation_target handles a raw character target", {
 test_that("archive gzip errors are mapped inside archive validation", {
   src <- list(
     path = fixture("valid-minimal.xml"),
-    base = "sitemap://archive.tar.gz",
+    base = "https://archive.tar.gz",
     final_url = NA_character_,
     byte_size = 10,
     fetched_at = NA
@@ -705,7 +714,7 @@ test_that("archive byte limits re-propagate instead of mapping to findings", {
     list(message = "archive byte limit", call = NULL, limit = "byte_count"),
     class = c("sitemapr_archive_limit", "error", "condition")
   )
-  src <- list(base = "sitemap://archive.tar.gz")
+  src <- list(base = "https://archive.tar.gz")
 
   expect_error(
     sitemapr_test_ns$archive_limit_part(cnd, src),
@@ -756,7 +765,7 @@ test_that("decompression member findings scope archive members by fragment", {
   out <- sitemapr_test_call(
     "decompression_member_finding",
     code = "DECOMPRESS_NOT_SITEMAP",
-    base = "sitemap://archive.tar.gz",
+    base = "https://archive.tar.gz",
     message = "Skipped archive member.",
     member_path = "README.md"
   )
@@ -764,7 +773,7 @@ test_that("decompression member findings scope archive members by fragment", {
   expect_identical(out$subject_type, "archive-member")
   expect_identical(
     out$subject_ref,
-    "sitemap://archive.tar.gz#archive-member:README.md"
+    "https://archive.tar.gz#archive-member:README.md"
   )
   expect_identical(out$evidence[[1L]]$excerpt, "README.md")
 })
@@ -773,7 +782,7 @@ test_that("warning archive problems are not decompression findings", {
   problems <- sitemapr_test_ns$parse_problems(
     severity = "warning",
     category = "archive",
-    subject_ref = "sitemap://archive.tar.gz#archive-member:../evil.xml",
+    subject_ref = "https://archive.tar.gz#archive-member:../evil.xml",
     message = "Skipped unsafe archive member."
   )
 
@@ -1045,7 +1054,7 @@ test_that("a byte size is withheld when it would not be the protocol's", {
 })
 
 test_that("index_protocol_parts is empty without rows", {
-  expect_identical(index_protocol_parts(NULL, NULL, "sitemap://x"), list())
+  expect_identical(index_protocol_parts(NULL, NULL, "https://x"), list())
 })
 
 test_that("rows with no known source sitemap validate against the fallback", {
@@ -1053,7 +1062,7 @@ test_that("rows with no known source sitemap validate against the fallback", {
     loc = "https://example.com/a",
     source_sitemap = NA_character_
   )
-  parts <- index_protocol_parts(rows, NULL, "sitemap://example.com/s.xml")
+  parts <- index_protocol_parts(rows, NULL, "https://example.com/s.xml")
   # One ungrouped protocol part, anchored on the fallback base.
   expect_length(parts, 1L)
 })
@@ -1062,13 +1071,13 @@ test_that("the page sink is inert when absent or given nothing", {
   expect_null(page_sink_robots_facts(NULL))
   sink <- new.env(parent = emptyenv())
   # Blank and NA locs are dropped, leaving nothing to record.
-  expect_null(page_sink_add(sink, c(NA, ""), "sitemap://example.com/s.xml"))
+  expect_null(page_sink_add(sink, c(NA, ""), "https://example.com/s.xml"))
   expect_null(sink$loc)
 })
 
 test_that("a source without alternates contributes one NULL per loc", {
   sink <- new.env(parent = emptyenv())
-  page_sink_add(sink, "https://example.com/a", "sitemap://example.com/s.xml")
+  page_sink_add(sink, "https://example.com/a", "https://example.com/s.xml")
   expect_length(sink$alt, 1L)
   expect_null(sink$alt[[1L]])
 })

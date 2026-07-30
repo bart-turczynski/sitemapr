@@ -149,11 +149,7 @@ index_child_scope_findings <- function(index_url, child_locs, base, ruleset) {
     code = rep("INDEX_CHILD_OUT_OF_SCOPE", length(hits)),
     severity = rep("warning", length(hits)),
     subject_type = rep("index-child", length(hits)),
-    subject_ref = vapply(
-      urls,
-      function(u) protocol_ref_fragment(base, paste0("#index-child:", u)),
-      character(1)
-    ),
+    subject_ref = index_child_subject_ref(base, hits, urls),
     message = sprintf(
       "Child sitemap %s is outside the index's child scope (%s; spec 12.2b).",
       urls,
