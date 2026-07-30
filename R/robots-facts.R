@@ -179,6 +179,28 @@ robots_decision_trichotomy <- function(results, evidence) {
   out
 }
 
+# Signal that the robots engine failed outright, so the robots layer is skipped
+# while every other layer proceeds. Deliberately a classed WARNING rather than a
+# finding: like the missing-sibling degrade in `resolve_robots_ua()`, an engine
+# that errors on a body it should have decoded is a setup fact about the user's
+# installed robotstxtr, not a diagnostic about the sitemap. The engine's own
+# message is quoted so the cause stays diagnosable, and the install hint names
+# the upgrade that fixes it.
+robots_engine_failed_warn <- function(cnd) {
+  rlang::warn(
+    sprintf(
+      paste0(
+        "robots allow/disallow check skipped: the 'robotstxtr' engine failed ",
+        "to evaluate robots.txt (%s). Upgrade it with %s."
+      ),
+      conditionMessage(cnd),
+      robotstxtr_install_hint()
+    ),
+    class = "sitemapr_robots_engine_failed",
+    parent = cnd
+  )
+}
+
 # The facts producer. Evaluates every testable advertised loc ONCE through the
 # v1 engine contract and returns the consultable object. `legacy` is the
 # Google-bounded legacy view the findings derive from; it is NULL for a
@@ -192,13 +214,35 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
   # robotstxtr fails loudly here rather than erroring on a missing field.
   robotstxtr_engine_contract()
 
-  decisions <- robotstxtr::robots_evaluate_url_v1(
-    testable,
-    robots_product_token = context$product_token,
-    robots_policy_ruleset = context$policy_ruleset,
-    matcher_backend = context$matcher_backend,
-    ssrf_guard = TRUE
+  # The engine reports every EXPECTED robots failure as data — a `fetch_outcome`
+  # of missing/timeout/ssrf_blocked, with `allowed` NA — so a bare R error out
+  # of the v1 call is by definition unforeseen. An old wholesale-installed
+  # sibling aborts here on a robots.txt carrying a NUL byte ("embedded nul in
+  # string", a plain `simpleError` from `rawToChar()`); one malformed robots.txt
+  # on a crawled origin would otherwise abort the whole validation run.
+  #
+  # Degrade rather than propagate, and report it the way a missing sibling is
+  # already reported (`resolve_robots_ua()`): a classed warning, because an
+  # engine that cannot decode a body is a fact about the INSTALLED ENGINE, not a
+  # finding about the sitemap. Fixed upstream, so a current robotstxtr never
+  # trips this — but robotstxtr is Suggests and installed wholesale, so a
+  # version pin cannot repair an already-installed build (SITE-wgifofwc).
+  decisions <- tryCatch(
+    robotstxtr::robots_evaluate_url_v1(
+      testable,
+      robots_product_token = context$product_token,
+      robots_policy_ruleset = context$policy_ruleset,
+      matcher_backend = context$matcher_backend,
+      ssrf_guard = TRUE
+    ),
+    error = function(cnd) {
+      robots_engine_failed_warn(cnd)
+      NULL
+    }
   )
+  if (is.null(decisions)) {
+    return(robots_facts_empty(context))
+  }
   legacy <- if (robots_context_is_legacy(context)) {
     robotstxtr::as_legacy_robots_decisions_v1(decisions)
   } else {

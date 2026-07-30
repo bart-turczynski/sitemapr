@@ -482,3 +482,78 @@ test_that("indeterminate-only results derive without matcher columns", {
   expect_identical(out$severity, "info")
   expect_match(out$message, "fetch outcome: timeout", fixed = TRUE)
 })
+
+# --- The engine-failure degrade (SITE-wgifofwc) ------------------------------
+#
+# A robots.txt carrying a NUL byte makes an old wholesale-installed robotstxtr
+# abort in rawToChar(). One malformed robots.txt on a crawled origin must not
+# abort the whole validation run, so the robots layer degrades and every other
+# layer proceeds. Fixed upstream, but robotstxtr is Suggests and installed
+# wholesale, so an already-installed build cannot be repaired by a version pin.
+mock_sitemap_and_nul_robots <- function(req) {
+  path <- httr2::url_parse(req$url)$path
+  if (identical(basename(path), "robots.txt")) {
+    return(httr2::response(
+      status_code = 200L,
+      url = req$url,
+      headers = list(`content-type` = "text/plain"),
+      body = c(
+        charToRaw("User-agent: *\n"),
+        as.raw(0),
+        charToRaw("Disallow: /tmp\n")
+      )
+    ))
+  }
+  # A relative <loc>, so the non-robots layers have something to report: a run
+  # that yields their findings proves it continued past the robots degrade
+  # rather than merely returning early with an empty tibble.
+  httr2::response(
+    status_code = 200L,
+    url = req$url,
+    headers = list(`content-type` = "application/xml"),
+    body = charToRaw(paste0(
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      "<url><loc>not-a-url</loc></url></urlset>"
+    ))
+  )
+}
+
+test_that("a NUL-bearing robots.txt degrades instead of aborting the run", {
+  skip_if_not_installed("robotstxtr")
+  run <- function() {
+    httr2::with_mocked_responses(
+      mock_sitemap_and_nul_robots,
+      validate_sitemap(
+        "https://nul.example/sitemap.xml",
+        mode = "non-strict",
+        check_robots = TRUE
+      )
+    )
+  }
+
+  # The engine's abort surfaces as a classed warning, not an error.
+  expect_warning(f <- run(), class = "sitemapr_robots_engine_failed")
+
+  # Validation still completed, and the other layers still reported.
+  expect_s3_class(f, "tbl_df")
+  expect_identical(
+    sort(f$code),
+    c("PROTOCOL_URL_NOT_ABSOLUTE", "SCHEMA_INVALID")
+  )
+  # The robots layer contributed nothing rather than a half-decided verdict.
+  expect_false(any(startsWith(f$code, "ROBOTS_")))
+})
+
+test_that("the engine-failure warning quotes the cause and the upgrade hint", {
+  skip_if_not_installed("robotstxtr")
+  cnd <- simpleError("embedded nul in string: 'User-agent: *'")
+
+  w <- tryCatch(
+    robots_engine_failed_warn(cnd),
+    warning = function(w) w
+  )
+
+  expect_s3_class(w, "sitemapr_robots_engine_failed")
+  expect_match(conditionMessage(w), "embedded nul in string", fixed = TRUE)
+  expect_match(conditionMessage(w), "pak::pak(", fixed = TRUE)
+})
