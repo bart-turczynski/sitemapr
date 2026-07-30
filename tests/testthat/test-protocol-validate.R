@@ -5,7 +5,7 @@
 # validate_sitemap() exists (architecture.md §3; repo convention, mirroring the
 # schema slice's S6.6 decision).
 
-base <- "sitemap://example.com/sitemap.xml"
+base <- "https://example.com/sitemap.xml"
 sm_url <- "https://example.com/sitemap.xml"
 
 rows_for <- function(loc) sitemap_rows(loc = loc)
@@ -718,10 +718,12 @@ test_that("an invalid index-entry lastmod produces LASTMOD_INVALID", {
   expect_identical(out$code, "PROTOCOL_LASTMOD_INVALID")
   expect_identical(out$severity, "error")
   expect_identical(out$layer, "protocol")
-  # Named by child, not by ordinal: the ref says WHICH sitemap is wrong.
+  # Named by child AND by position: the ref says WHICH sitemap is wrong and
+  # where it sits, so a repeated child is still addressable. The URL payload is
+  # percent-encoded, which is what makes the ref parseable back apart.
   expect_identical(
     out$subject_ref,
-    paste0(base, "#index-child:https://example.com/b.xml")
+    paste0(base, "#index-child:2:https%3A%2F%2Fexample.com%2Fb.xml")
   )
   expect_identical(out$evidence[[1L]]$excerpt, "not-a-date")
 })
@@ -800,10 +802,12 @@ test_that("an index child <loc> gets the per-loc protocol rules", {
   expect_identical(nrow(out), 1L)
   expect_identical(out$code, "PROTOCOL_URL_FRAGMENT")
   expect_identical(out$layer, "protocol")
-  # Named by child, matching the index-entry lastmod refs, not by ordinal.
+  # The child URL itself contains a `#`. Encoded as %23 it can no longer be
+  # mistaken for the ref's own fragment delimiter — the defect the encoding rule
+  # exists to fix.
   expect_identical(
     out$subject_ref,
-    paste0(base, "#index-child:https://example.com/b.xml#part")
+    paste0(base, "#index-child:2:https%3A%2F%2Fexample.com%2Fb.xml%23part")
   )
 })
 
@@ -815,7 +819,13 @@ test_that("a duplicate index child is reported, not silently deduped", {
   )
   expect_identical(out$code, "PROTOCOL_DUPLICATE_LOC")
   expect_identical(out$severity, "warning")
-  expect_identical(out$subject_ref, paste0(base, "#index-child:", dup))
+  # The ordinal is what makes this addressable at all: both occurrences carry
+  # the same child URL, so a URL-only ref could not say which one is the repeat.
+  # This finding is about the SECOND occurrence.
+  expect_identical(
+    out$subject_ref,
+    paste0(base, "#index-child:2:", ref_encode_payload(dup))
+  )
 })
 
 test_that("index children that differ only canonically are EQUIVALENT", {
@@ -869,11 +879,13 @@ test_that("index-child refs are remapped by position, not by parsing", {
     locs,
     base
   )
+  # The entry ordinal carries over into the index-child fragment rather than
+  # being discarded: entry 2 becomes index-child 2.
   expect_identical(
     out,
     c(
-      paste0(base, "#index-child:", locs[[2L]]),
-      paste0(base, "#index-child:", locs[[1L]]),
+      paste0(base, "#index-child:2:", ref_encode_payload(locs[[2L]])),
+      paste0(base, "#index-child:1:", ref_encode_payload(locs[[1L]])),
       NA_character_
     )
   )
@@ -1922,9 +1934,12 @@ test_that("feed children each yield an index-child UNSUPPORTED_FEED", {
   uf <- out[out$code == "UNSUPPORTED_FEED", ]
   expect_identical(nrow(uf), 2L)
   expect_true(all(uf$subject_type == "index-child"))
+  # Ordinal `-`: these come from the traversal problems table, which records a
+  # child that may sit arbitrarily deep BELOW `base`, so its position in the
+  # base document does not exist to be recorded.
   expect_identical(
     uf$subject_ref,
-    paste0(base, "#index-child:", children)
+    paste0(base, "#index-child:-:", ref_encode_payload(children))
   )
 })
 
@@ -2174,5 +2189,105 @@ test_that("a verified property set with no scope covers nothing", {
   expect_identical(
     loc_authority_covers(spec, c("https://a.example", "https://b.example")),
     c(FALSE, FALSE)
+  )
+})
+
+# --- SITE-koqdjmte: the subject_ref grammar --------------------------------
+
+test_that("the base keeps the document's actual scheme", {
+  # Defect 1 of the old grammar: it stripped the scheme, so an http and an
+  # https document collapsed onto one ref — two documents, one identity.
+  http <- sitemap_subject_ref("http://example.com/s.xml")
+  https <- sitemap_subject_ref("https://example.com/s.xml")
+
+  expect_identical(http, "http://example.com/s.xml")
+  expect_identical(https, "https://example.com/s.xml")
+  expect_false(identical(http, https))
+})
+
+test_that("a local path is used verbatim as the base", {
+  # Not dressed up as file://: a relative path has no correct authority form and
+  # an absolute one would make the ref machine-dependent.
+  expect_identical(
+    sitemap_subject_ref("/var/tmp/sitemap.xml"),
+    "/var/tmp/sitemap.xml"
+  )
+  expect_identical(sitemap_subject_ref("a/b/sitemap.xml"), "a/b/sitemap.xml")
+})
+
+test_that("an absent base stays NA", {
+  expect_identical(sitemap_subject_ref(NA_character_), NA_character_)
+  expect_identical(sitemap_subject_ref(""), NA_character_)
+  expect_identical(sitemap_subject_ref(NULL), NA_character_)
+})
+
+test_that("payload encoding keeps only the unreserved set", {
+  expect_identical(ref_encode_payload("abcXYZ090-._~"), "abcXYZ090-._~")
+  expect_identical(
+    ref_encode_payload("https://a.example/p?q=1&r=2#f"),
+    "https%3A%2F%2Fa.example%2Fp%3Fq%3D1%26r%3D2%23f"
+  )
+  # Uppercase hex per RFC 3986 §2.1, over UTF-8 bytes for a non-ASCII payload.
+  expect_identical(ref_encode_payload("café"), "caf%C3%A9")
+  expect_identical(ref_encode_payload(" "), "%20")
+})
+
+test_that("payload encoding is vectorized and NA-preserving", {
+  expect_identical(
+    ref_encode_payload(c("a/b", NA_character_, "c")),
+    c("a%2Fb", NA_character_, "c")
+  )
+  expect_identical(ref_encode_payload(character(0)), character(0))
+})
+
+test_that("an already-encoded payload is encoded again, not passed through", {
+  # utils::URLencode() returns its input unchanged when it already contains a
+  # %XX, which would make encoding non-total and the ref ambiguous again. The
+  # rule here is unconditional: `%` is not unreserved, so it becomes %25.
+  expect_identical(ref_encode_payload("a%2Fb"), "a%252Fb")
+})
+
+test_that("an index-child ref carries the ordinal and the encoded child", {
+  expect_identical(
+    index_child_subject_ref("https://example.com/i.xml", 3L, "https://a/b.xml"),
+    "https://example.com/i.xml#index-child:3:https%3A%2F%2Fa%2Fb.xml"
+  )
+})
+
+test_that("two duplicate children get distinguishable refs", {
+  # Defect 3: a child URL alone cannot address which occurrence is meant.
+  dup <- "https://example.com/d.xml"
+  refs <- index_child_subject_ref("https://e/i.xml", 1:2, c(dup, dup))
+
+  expect_length(unique(refs), 2L)
+})
+
+test_that("an unestablished ordinal renders as a dash, not as blank", {
+  expect_identical(
+    index_child_subject_ref("https://e/i.xml", NA_integer_, "https://a/b.xml"),
+    "https://e/i.xml#index-child:-:https%3A%2F%2Fa%2Fb.xml"
+  )
+})
+
+test_that("a ref splits back into base, kind and payload unambiguously", {
+  # The whole point of rule 2. The child URL contains a `#` and a `:`, which
+  # under the old unencoded grammar made this ref un-parseable.
+  child <- "https://example.com/b.xml#part:2"
+  ref <- index_child_subject_ref("https://example.com/i.xml", 7L, child)
+
+  base <- sub("#.*$", "", ref)
+  fragment <- sub("^[^#]*#", "", ref)
+  parts <- strsplit(fragment, ":", fixed = TRUE)[[1L]]
+
+  expect_identical(base, "https://example.com/i.xml")
+  expect_identical(parts[[1L]], "index-child")
+  expect_identical(parts[[2L]], "7")
+  expect_length(parts, 3L)
+})
+
+test_that("a fragment-only ref survives an absent base", {
+  expect_identical(
+    index_child_subject_ref(NA_character_, 1L, "https://a/b.xml"),
+    "#index-child:1:https%3A%2F%2Fa%2Fb.xml"
   )
 })

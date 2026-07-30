@@ -4,7 +4,7 @@
 # deliberately NOT wired here — it activates in Layer F (SITE-ymzvnlpr) once
 # validate_sitemap() exists (architecture.md §3; repo convention).
 
-ref <- "sitemap://example.com/sitemap.xml"
+ref <- "https://example.com/sitemap.xml"
 
 read_fixture_doc <- function(name) {
   path <- test_path("fixtures", name)

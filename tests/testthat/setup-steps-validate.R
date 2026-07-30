@@ -224,11 +224,15 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   # ---- THEN: subject_ref + evidence -----------------------------------------
 
   then(
-    'the subject_ref value begins with "sitemap://"',
+    "the subject_ref value begins with the document's own identifier",
     function(context) {
+      # The base keeps the document's ACTUAL identifier: its URL with its own
+      # scheme for a fetched sitemap, and the path verbatim for a local file —
+      # which is what these fixtures are. Asserting a fixed "sitemap://" prefix
+      # (the old grammar) tested the wrapper rather than the anchoring.
       refs <- context$result$subject_ref
       expect_gt(length(refs), 0L)
-      expect_true(all(startsWith(refs, "sitemap://")))
+      expect_true(all(startsWith(refs, context$source)))
     }
   )
 

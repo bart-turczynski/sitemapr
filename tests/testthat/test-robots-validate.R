@@ -40,7 +40,7 @@ test_that("a disallowed URL yields a ROBOTS_DISALLOWED warning with evidence", {
   f <- with_robots(validate_robots(
     "https://disallow.example/private/page",
     user_agent = "*",
-    base = "sitemap://disallow.example/sitemap.xml"
+    base = "https://disallow.example/sitemap.xml"
   ))
 
   expect_identical(nrow(f), 1L)
@@ -51,8 +51,8 @@ test_that("a disallowed URL yields a ROBOTS_DISALLOWED warning with evidence", {
   expect_identical(
     f$subject_ref,
     paste0(
-      "sitemap://disallow.example/sitemap.xml",
-      "#page-url:https://disallow.example/private/page"
+      "https://disallow.example/sitemap.xml",
+      "#page-url:https%3A%2F%2Fdisallow.example%2Fprivate%2Fpage"
     )
   )
   # Evidence carries the matched robots.txt rule + line.
@@ -65,7 +65,7 @@ test_that("an allowed URL and a 404 (allow-all) robots.txt yield no rows", {
   f <- with_robots(validate_robots(
     c("https://allow.example/ok", "https://missing.example/anything"),
     user_agent = "*",
-    base = "sitemap://s.xml"
+    base = "https://s.xml"
   ))
   expect_identical(nrow(f), 0L)
 })
@@ -75,7 +75,7 @@ test_that("an unfetchable robots.txt yields ROBOTS_INDETERMINATE info", {
   f <- with_robots(validate_robots(
     "https://boom.example/page",
     user_agent = "*",
-    base = "sitemap://boom.example/sitemap.xml"
+    base = "https://boom.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 1L)
   expect_identical(f$code, "ROBOTS_INDETERMINATE")
@@ -89,7 +89,7 @@ test_that("non-absolute and non-http locs are skipped (not tested)", {
   f <- validate_robots(
     c("/relative/path", "ftp://host/x", "mailto:a@b.com", NA_character_, ""),
     user_agent = "*",
-    base = "sitemap://s.xml"
+    base = "https://s.xml"
   )
   expect_identical(nrow(f), 0L)
 })
@@ -102,13 +102,13 @@ test_that("duplicate locs are checked once", {
       "https://disallow.example/private/a"
     ),
     user_agent = "*",
-    base = "sitemap://disallow.example/sitemap.xml"
+    base = "https://disallow.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 1L)
 })
 
 test_that("empty loc input yields an empty findings tibble", {
-  f <- validate_robots(character(0), user_agent = "*", base = "sitemap://s.xml")
+  f <- validate_robots(character(0), user_agent = "*", base = "https://s.xml")
   expect_identical(nrow(f), 0L)
   expect_identical(f$layer, character(0))
 })
@@ -307,7 +307,7 @@ test_that("a disallowed sitemap document yields ROBOTS_SITEMAP_DISALLOWED", {
   f <- with_robots(validate_robots_sitemap(
     "https://disallow.example/private/sitemap.xml",
     user_agent = "*",
-    base = "sitemap://disallow.example/private/sitemap.xml"
+    base = "https://disallow.example/private/sitemap.xml"
   ))
 
   expect_identical(nrow(f), 1L)
@@ -318,7 +318,7 @@ test_that("a disallowed sitemap document yields ROBOTS_SITEMAP_DISALLOWED", {
   expect_identical(f$subject_type, "source")
   expect_identical(
     f$subject_ref,
-    "sitemap://disallow.example/private/sitemap.xml"
+    "https://disallow.example/private/sitemap.xml"
   )
   expect_match(f$evidence[[1L]]$excerpt, "disallow: /private")
   expect_identical(f$evidence[[1L]]$line, 2L)
@@ -329,7 +329,7 @@ test_that("an allowed sitemap document yields no row", {
   f <- with_robots(validate_robots_sitemap(
     "https://allow.example/sitemap.xml",
     user_agent = "*",
-    base = "sitemap://allow.example/sitemap.xml"
+    base = "https://allow.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 0L)
 })
@@ -340,7 +340,7 @@ test_that("an undecidable robots.txt yields no document-level row", {
   f <- with_robots(validate_robots_sitemap(
     "https://boom.example/sitemap.xml",
     user_agent = "*",
-    base = "sitemap://boom.example/sitemap.xml"
+    base = "https://boom.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 0L)
 })
@@ -351,7 +351,7 @@ test_that("a non-http(s) sitemap source is skipped (no robots.txt governs)", {
   f <- validate_robots_sitemap(
     "/var/tmp/sitemap.xml",
     user_agent = "*",
-    base = "sitemap:///var/tmp/sitemap.xml"
+    base = "/var/tmp/sitemap.xml"
   )
   expect_identical(nrow(f), 0L)
 })
@@ -380,7 +380,7 @@ test_that("a non-legacy robots context is rejected, not silently empty", {
     context = robots_context_preset("rfc9309")
   ))
   expect_error(
-    robots_sitemap_findings_from_facts(facts, base = "sitemap://s.xml"),
+    robots_sitemap_findings_from_facts(facts, base = "https://s.xml"),
     class = "sitemapr_robots_findings_unsupported"
   )
 })
@@ -420,7 +420,7 @@ test_that("validate_sitemap flags a sitemap its own robots.txt disallows", {
   expect_identical(doc$subject_type, "source")
   expect_identical(
     doc$subject_ref,
-    "sitemap://disallow.example/private/sitemap.xml"
+    "https://disallow.example/private/sitemap.xml"
   )
 })
 
@@ -475,7 +475,7 @@ test_that("indeterminate-only results derive without matcher columns", {
     )
   )
 
-  out <- robots_findings_from_facts(facts, base = "sitemap://s.xml")
+  out <- robots_findings_from_facts(facts, base = "https://s.xml")
 
   expect_identical(nrow(out), 1L)
   expect_identical(out$code, "ROBOTS_INDETERMINATE")

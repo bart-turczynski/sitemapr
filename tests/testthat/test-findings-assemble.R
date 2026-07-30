@@ -38,7 +38,7 @@ test_that("column set and types match the contract exactly", {
       code = "SCHEMA_INVALID",
       severity = "error",
       subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "bad",
       evidence = list(finding_evidence(excerpt = "x")),
       is_strict_only = FALSE
@@ -67,7 +67,7 @@ test_that("non-strict drops is_strict_only rows; strict keeps them", {
       code = "PROTOCOL_LASTMOD_DATE_ONLY",
       severity = "info",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      subject_ref = "https://e.com/s.xml#entry:1",
       message = "date-only",
       evidence = list(finding_evidence(excerpt = "2024-01-01")),
       is_strict_only = TRUE
@@ -88,7 +88,7 @@ test_that("non-strict downgrades schema error to warning; strict leaves it", {
       code = "SCHEMA_INVALID",
       severity = "error",
       subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "bad",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -105,7 +105,7 @@ test_that("strict elevates info->warning codes; non-strict keeps info", {
       code = "ENCODING_BOM_DECLARATION_CONFLICT",
       severity = "info",
       subject_type = "source",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "bom",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -114,7 +114,7 @@ test_that("strict elevates info->warning codes; non-strict keeps info", {
       code = "PROTOCOL_LASTMOD_LOOKS_GENERATED",
       severity = "info",
       subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "gen",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -137,7 +137,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       code = "PROTOCOL_URL_FRAGMENT",
       severity = "info",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:9",
+      subject_ref = "https://e.com/s.xml#entry:9",
       message = "frag",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -146,7 +146,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       code = "PROTOCOL_DUPLICATE_LOC",
       severity = "warning",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      subject_ref = "https://e.com/s.xml#entry:2",
       message = "dup",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -155,7 +155,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       code = "SCHEMA_INVALID",
       severity = "error",
       subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "schema",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -164,7 +164,7 @@ test_that("mixed-layer, mixed-severity fixture sorts in exact contract order", {
       code = "UNSUPPORTED_ROOT",
       severity = "error",
       subject_type = "source",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "root",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -198,7 +198,7 @@ test_that("severity ties break by subject_ref then code", {
       code = "PROTOCOL_URL_NO_HOST",
       severity = "error",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      subject_ref = "https://e.com/s.xml#entry:2",
       message = "b",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -207,7 +207,7 @@ test_that("severity ties break by subject_ref then code", {
       code = "PROTOCOL_URL_NOT_ABSOLUTE",
       severity = "error",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      subject_ref = "https://e.com/s.xml#entry:1",
       message = "a",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -216,7 +216,7 @@ test_that("severity ties break by subject_ref then code", {
   out <- assemble_findings(parts, "strict")
   expect_identical(
     out$subject_ref,
-    c("sitemap://e.com/s.xml#entry:1", "sitemap://e.com/s.xml#entry:2")
+    c("https://e.com/s.xml#entry:1", "https://e.com/s.xml#entry:2")
   )
 })
 
@@ -225,7 +225,7 @@ test_that("exact-duplicate rows are de-duplicated, first kept", {
     code = "PROTOCOL_URL_FRAGMENT",
     severity = "info",
     subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    subject_ref = "https://e.com/s.xml#entry:1",
     message = "frag",
     evidence = list(finding_evidence(excerpt = "a")),
     is_strict_only = FALSE
@@ -240,7 +240,7 @@ test_that("assembling the same parts twice is row-for-row identical", {
       code = "PROTOCOL_DUPLICATE_LOC",
       severity = "warning",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      subject_ref = "https://e.com/s.xml#entry:2",
       message = "dup",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -249,7 +249,7 @@ test_that("assembling the same parts twice is row-for-row identical", {
       code = "SCHEMA_INVALID",
       severity = "error",
       subject_type = "document",
-      subject_ref = "sitemap://e.com/s.xml",
+      subject_ref = "https://e.com/s.xml",
       message = "schema",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -313,7 +313,7 @@ test_that("assemble_findings stamps per-code provenance under an engine", {
       code = "PROTOCOL_URL_OUT_OF_SCOPE",
       severity = "warning",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      subject_ref = "https://e.com/s.xml#entry:1",
       message = "out of scope",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -322,7 +322,7 @@ test_that("assemble_findings stamps per-code provenance under an engine", {
       code = "PROTOCOL_DUPLICATE_LOC",
       severity = "warning",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      subject_ref = "https://e.com/s.xml#entry:2",
       message = "dup",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -404,7 +404,7 @@ test_that("NULL ruleset leaves the baseline path byte-identical", {
       code = "PROTOCOL_LASTMOD_INVALID",
       severity = "error",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      subject_ref = "https://e.com/s.xml#entry:1",
       message = "bad lastmod",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -422,7 +422,7 @@ test_that("findings_stamp_ruleset returns input unchanged for NULL", {
     code = "PROTOCOL_LASTMOD_INVALID",
     severity = "error",
     subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    subject_ref = "https://e.com/s.xml#entry:1",
     message = "bad lastmod",
     evidence = list(finding_evidence()),
     is_strict_only = FALSE
@@ -436,7 +436,7 @@ test_that("yandex overlay relabels metadata error to warning end-to-end", {
       code = "PROTOCOL_LASTMOD_INVALID",
       severity = "error",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:1",
+      subject_ref = "https://e.com/s.xml#entry:1",
       message = "bad lastmod",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -461,7 +461,7 @@ page_part <- function(code = "PROTOCOL_URL_OUT_OF_SCOPE", ...) {
     code = code,
     severity = "warning",
     subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    subject_ref = "https://e.com/s.xml#entry:1",
     message = "page finding",
     evidence = list(finding_evidence()),
     is_strict_only = FALSE
@@ -503,7 +503,7 @@ test_that("a finding with no context contribution keeps the uniform stamp", {
       code = "PROTOCOL_DUPLICATE_LOC",
       severity = "warning",
       subject_type = "entry",
-      subject_ref = "sitemap://e.com/s.xml#entry:2",
+      subject_ref = "https://e.com/s.xml#entry:2",
       message = "dup",
       evidence = list(finding_evidence()),
       is_strict_only = FALSE
@@ -584,7 +584,7 @@ test_that("defaults are byte-identical whether or not a producer opts in", {
     code = "PROTOCOL_URL_OUT_OF_SCOPE",
     severity = "warning",
     subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    subject_ref = "https://e.com/s.xml#entry:1",
     message = "page finding",
     evidence = list(finding_evidence()),
     is_strict_only = FALSE
@@ -612,7 +612,7 @@ cap_part <- function(n, code = "ROBOTS_DISALLOWED", severity = "warning") {
   robots_findings(
     code = rep(code, n),
     severity = rep(severity, n),
-    subject_ref = paste0("sitemap://e.com/s.xml#page-url:", loc),
+    subject_ref = paste0("https://e.com/s.xml#page-url:", loc),
     message = paste("disallowed:", loc),
     evidence = lapply(loc, function(u) finding_evidence(excerpt = u)),
     is_strict_only = rep(FALSE, n)

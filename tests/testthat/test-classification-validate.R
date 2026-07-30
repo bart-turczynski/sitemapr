@@ -4,7 +4,7 @@
 # that emits ENGINE_UNSUPPORTED_SITEMAP_FORMAT only under an engine that rejects
 # a parsed feed dialect). The baseline (NULL ruleset) must stay byte-identical.
 
-base <- "sitemap://example.com/feed.xml"
+base <- "https://example.com/feed.xml"
 
 spec_for <- function(engine) {
   findings_ruleset_spec(engine, ruleset_context())

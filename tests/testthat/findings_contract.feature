@@ -24,10 +24,10 @@ Feature: Stable findings output contract
     When I call validate_sitemap on the fixture
     Then every row in the layer column is one of the values in the layer vocabulary
 
-  Scenario: subject_ref follows the stable URI scheme
+  Scenario: subject_ref anchors to the document it is about
     Given fixture "urlset-duplicate-loc.xml" which produces an entry-level finding
     When I call validate_sitemap on the fixture
-    Then the subject_ref value begins with "sitemap://"
+    Then the subject_ref value begins with the document's own identifier
     And the fragment portion follows the "#entry:<n>" pattern
 
   Scenario: Evidence excerpt is capped at 500 characters for XML findings

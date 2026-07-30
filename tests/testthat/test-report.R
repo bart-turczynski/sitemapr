@@ -436,7 +436,7 @@ viv_row <- function(spec = NULL, ...) {
     code = "PROTOCOL_URL_OUT_OF_SCOPE",
     severity = "warning",
     subject_type = "entry",
-    subject_ref = "sitemap://e.com/s.xml#entry:1",
+    subject_ref = "https://e.com/s.xml#entry:1",
     message = "a finding",
     evidence = list(finding_evidence(excerpt = "<loc>x</loc>")),
     is_strict_only = FALSE
@@ -581,7 +581,7 @@ cnt_findings <- function(..., cap = NULL) {
     robots_findings(
       code = rep(p$code, p$n),
       severity = rep(p$severity, p$n),
-      subject_ref = paste0("sitemap://e.com/s.xml#page-url:", loc),
+      subject_ref = paste0("https://e.com/s.xml#page-url:", loc),
       message = paste("disallowed:", loc),
       evidence = lapply(loc, function(u) finding_evidence(excerpt = u)),
       is_strict_only = rep(FALSE, p$n)

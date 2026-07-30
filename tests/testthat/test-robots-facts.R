@@ -210,7 +210,7 @@ test_that("the facts legacy view matches the legacy facade row-for-row", {
 test_that("findings derived from facts equal the pre-refactor findings", {
   skip_if_not_installed("robotstxtr")
   locs <- rf_locs()
-  base <- "sitemap://s.example/sitemap.xml"
+  base <- "https://s.example/sitemap.xml"
 
   new <- rf_with(validate_robots(locs, user_agent = "*", base = base))
 
@@ -296,7 +296,7 @@ test_that("findings under a non-Google context are refused, not silent", {
     class = "sitemapr_robots_facts"
   )
   expect_error(
-    robots_findings_from_facts(facts, base = "sitemap://s.xml"),
+    robots_findings_from_facts(facts, base = "https://s.xml"),
     class = "sitemapr_robots_findings_unsupported"
   )
   # The decision itself stays consultable — that is the whole point of E.1b.
@@ -312,7 +312,7 @@ test_that("findings under a non-Google context are refused, not silent", {
 test_that("one evaluation serves findings AND the synthesis consult", {
   skip_if_not_installed("robotstxtr")
   facts <- rf_with(robots_evaluate_facts(rf_locs()))
-  findings <- robots_findings_from_facts(facts, base = "sitemap://s.xml")
+  findings <- robots_findings_from_facts(facts, base = "https://s.xml")
 
   # The disallowed URL produces a finding AND is consultable.
   expect_true(any(findings$code == "ROBOTS_DISALLOWED"))

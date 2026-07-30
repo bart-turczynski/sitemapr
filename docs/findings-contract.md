@@ -34,7 +34,7 @@ the `inst/` one** or the check fails.
 | `severity` | `character` | `"fatal"` / `"error"` / `"warning"` / `"info"` |
 | `layer` | `character` | Which processing layer produced this finding (see layer vocabulary). |
 | `subject_type` | `character` | What the finding refers to (`"document"`, `"entry"`, `"field"`, `"index-child"`, `"archive-member"`, `"page-url"`, `"source"`, `"report"`). |
-| `subject_ref` | `character` | Stable reference within the subject (e.g. `"sitemap://example.com/sitemap.xml"`, `"sitemap://…#entry:42"`, `"sitemap://…#field:loc"`). Never a raw integer offset; always anchored to a stable identifier. |
+| `subject_ref` | `character` | Stable reference within the subject (e.g. `"https://example.com/sitemap.xml"`, `"https://…#entry:42"`, `"https://…#field:loc"`). Never a raw integer offset; always anchored to a stable identifier. |
 | `message` | `character` | Human-readable description of the finding. Suitable for display; may change across patch releases. |
 | `evidence` | `list` | Named list: `excerpt` (character ≤ 500 chars; ≤ 200 chars for text-sitemap lines), `line` (integer or `NA`), `column` (integer or `NA`). Always a normalized snippet, never raw parser output. |
 | `mode` | `character` | The mode under which the finding was produced: `"strict"` or `"non-strict"`. |
@@ -78,23 +78,58 @@ layer.
 
 ## Subject ref format
 
-`subject_ref` values follow a stable URI-like scheme:
+A `subject_ref` names the document a finding is about, optionally followed by a
+fragment naming something inside it:
 
 ```
-sitemap://<normalized-sitemap-url>[#<fragment>]
+<sitemap-url>[#<kind>:<payload>]
 ```
+
+Three rules govern the whole grammar. They apply to **every** fragment kind, not
+case by case:
+
+1. **The base keeps the document's actual scheme.** `https://example.com/s.xml`
+   stays `https://`; an `http://` document stays `http://`. A local filesystem
+   path has no scheme and is used verbatim — deliberately not dressed up as
+   `file://`, since a relative path has no correct authority form and an absolute
+   one would make the ref machine-dependent. Local input is not part of the
+   cross-port join.
+2. **Every payload that is a URL or a path is percent-encoded**, over its UTF-8
+   bytes, keeping only the RFC 3986 §2.3 unreserved set (`A-Z a-z 0-9 - . _ ~`),
+   uppercase hex per §2.1. The encoding is applied even where it is a no-op (an
+   XML element name) so the rule has one definition and no emitter has to judge
+   whether its payload "needs" it.
+3. **Every ordinal is one-based**, counting position within the document named by
+   the base.
+
+Rule 2 is what makes a ref *parseable*. A `<loc>` may itself contain `#`, `:`, or
+`/`, so an unencoded child URL inside a fragment left `(base, kind, payload)`
+ambiguous. After encoding, no payload contains a delimiter the grammar uses, so
+splitting on the first `#` and then the first `:` is exact.
 
 Fragments (present when the finding is scoped below document level):
 
 | Fragment | Meaning |
 |---|---|
-| `#entry:<n>` | The nth URL entry (1-based) within the document |
+| `#entry:<n>` | The nth URL entry within the document |
 | `#field:<name>` | A specific element or attribute name within an entry |
-| `#index-child:<url>` | A child `<loc>` in a `sitemapindex` |
+| `#index-child:<n>:<url>` | The nth child `<loc>` in a `sitemapindex`, and which child it is |
 | `#archive-member:<path>` | A file path within a `.tar.gz` archive |
 | `#line:<n>` | A specific line in a text sitemap |
 | `#page-url:<url>` | An advertised page URL being tested (the `page-url` subject) |
 | `#report:<scope>` | A run-level event scoped to the whole call, not to anything inside the document (the `report` subject) |
+
+`#index-child` carries **both** an ordinal and the child URL. The URL alone
+cannot address a duplicate occurrence: an index that lists the same `<loc>` twice
+draws two findings, and without the ordinal both would carry one ref. The URL is
+kept alongside it because an ordinal alone is unreadable.
+
+Its ordinal renders as `-` when the child's position in the base document is not
+established. That is a real state, not a placeholder for laziness: the traversal
+problems table records a child that may sit arbitrarily deep *below* the
+traversal root, so its position *in the root document* does not exist. A
+fixed-arity `-` says so, rather than emitting a shorter ref a parser would have
+to guess at.
 
 A `report`-subject finding still anchors to the traversal root so the run is
 identifiable, but takes a `#report:<scope>` fragment rather than pointing at a
@@ -107,7 +142,7 @@ that is not at fault; the child URL is carried as `evidence` instead.
 The `page`/`robots` layers use the `page-url` subject to scope a finding to one
 advertised page URL. Its `subject_ref` anchors to the sitemap that advertised
 the URL and names the page in the fragment:
-`sitemap://<sitemap-url>#page-url:<url>`. Both layers emit it. The one exception
+`<sitemap-url>#page-url:<encoded-url>`. Both layers emit it. The one exception
 in the family is `ROBOTS_SITEMAP_DISALLOWED`, which is about the sitemap document
 rather than a URL it lists and therefore takes the `source` subject.
 
@@ -603,7 +638,44 @@ obliged to maintain is worse than publishing none.
   offending `entry` where the validator points at the document, which is
   strictly more precise.
 
-### Encoding codes: what agrees and what does not
+### Subject-ref grammar: a coordinated breaking change
+
+The grammar above **replaced** an earlier form, and the change is breaking on
+both sides of the port:
+
+```
+was   sitemap://example.com/index.xml#index-child:https://example.com/a.xml
+now   https://example.com/index.xml#index-child:3:https%3A%2F%2Fexample.com%2Fa.xml
+```
+
+The validator's own earlier form was `sitemap#index-entry:<n>` — an ordinal with
+no base and no child URL, and **zero-based**.
+
+Neither old form was adopted as-is. sitemapr's principle was right (anchor to the
+parent, identify the child semantically) but its representation had four defects,
+and adopting it unchanged would have enshrined all four across both ports:
+
+1. **Scheme collision.** The old base stripped the scheme, so
+   `http://example.com/s.xml` and `https://example.com/s.xml` produced one ref.
+   Two different documents, one identity.
+2. **Ambiguous grammar.** A raw child URL sat unencoded inside a fragment, and a
+   child URL may contain `#`.
+3. **No duplicate addressing.** A child URL alone cannot distinguish two
+   duplicate `<loc>` entries in one index — which matters directly, because
+   `PROTOCOL_DUPLICATE_LOC` fires on index children.
+4. **Index-base disagreement.** The validator counted from zero; sitemapr
+   documented one-based. Any ordinal-bearing form has to settle that.
+
+The target form fixes all four and applies the three rules uniformly rather than
+patching the index-child case alone.
+
+**Compatibility.** sitemapr never *parses* a `subject_ref` — it only composes
+them — so there is no in-process reader to keep backward compatible, and no
+compatibility shim is shipped here. A consumer holding **persisted** reports
+written in the old form has to migrate them; the two forms are distinguishable
+without ambiguity, since the old one always began `sitemap://` and the new one
+never does. The obligation for persisted validator reports sits with the sibling,
+which does store them.
 
 `ENCODING_NOT_UTF8` and `ENCODING_BOM_DETECTED` are emitted by both ports.
 `ENCODING_NOT_UTF8` follows the sibling's `getNonUtf8XmlReason()` cascade tier

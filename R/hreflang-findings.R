@@ -174,7 +174,7 @@ hreflang_inconsistent_findings <- function(graph, base) {
 #
 # @param rows A faithful row tibble with `loc` and an `alternates` list-column
 #   (as consumed by `build_hreflang_graph()`).
-# @param base The document-level `sitemap://...` subject_ref for each finding.
+# @param base The document-level subject_ref (the sitemap URL) for each finding.
 #   `NA` yields fragment-less document refs.
 # @return A findings tibble (`layer = "protocol"`, `subject_type = "document"`).
 # @keywords internal

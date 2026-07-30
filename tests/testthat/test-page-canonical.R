@@ -95,7 +95,7 @@ test_that("a canonical to a different URL emits MISMATCH (warning)", {
   expect_match(out$message, "https://example.com/other", fixed = TRUE)
   expect_match(
     out$subject_ref,
-    "#page-url:https://example.com/a",
+    "#page-url:https%3A%2F%2Fexample.com%2Fa",
     fixed = TRUE
   )
 })
