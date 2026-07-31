@@ -43,4 +43,20 @@ Every stage runs offline except `readme`: `devtools::build_readme()` installs th
 pre-commit run --all-files --hook-stage pre-push
 ```
 
+### The tracker is not in git unless it is snapshotted
+
+`.fp/` is gitignored, so the issue tracker is a local database that no commit, no clone and no bundle has ever contained — while `docs/architecture.md` and the other docs under `docs/` cite `SITE-*` ids as the evidence behind their decisions. Lose `.fp/` and every one of those citations dangles while the code survives intact. Regenerate the only copy that is in git with:
+
+```bash
+sh data-raw/snapshot-tracker.sh
+```
+
+It writes `docs/tracker-snapshot.md`, alongside the docs that cite the ids. `docs/` is committed source here — pkgdown builds into `site/` instead (`_pkgdown.yml`, gitignored at `.gitignore:38`) — so unlike a repository that publishes from `docs/`, the snapshot lands in a directory that actually reaches a commit.
+
+`fp` stays authoritative. Nothing reads the snapshot back, `fp context <id>` remains the way to read an issue, and **every run overwrites the file wholesale**, so hand-edits to it are lost.
+
+**Refresh it before taking any copy you intend to keep** — a mirror push to the `backup` remote at `~/Projects/_backups/sitemapr.git`, or a `git bundle create <path> --all`. Both exist for this repository, and a bundle taken without refreshing carries a stale copy of the only tracker reasoning in git. A snapshot that is never regenerated is worse than none, because it looks current.
+
+The script and its output live on `main`. If they are absent from the branch you are on, merge or rebase onto `main` rather than adding a second copy.
+
 @FP_AGENTS.md
