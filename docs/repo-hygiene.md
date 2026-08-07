@@ -49,14 +49,23 @@ it lets through.
 ## Running the checks locally
 
 The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
-arguments. Run it directly rather than waiting for a push or for CI:
+arguments. Run it directly rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, lint, R CMD check
-Rscript tools/verify.R --all        # everything CI runs, adding coverage and the README diff
+Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, lint, R CMD check
+Rscript tools/verify.R --all        # adds coverage and the README diff
 Rscript tools/verify.R lint check   # named stages only
 Rscript tools/verify.R --list       # list the stages
 ```
+
+`rfloor` (`tools/check-r-floor.R`) is the one stage with no counterpart in
+`R CMD check`: it walks the hard-dependency closure, takes the maximum
+`R (>= x.y)` any of them declares, and fails when `DESCRIPTION`'s own floor
+sits below it. A floor that a dependency contradicts is *uninstallable*, not
+merely untested, and `--as-cran` never cross-checks the two. It reads the
+**installed** dependency DESCRIPTIONs, so it checks this machine's versions
+rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
+offline, and enough to catch the class that shipped once already.
 
 Stages run in declared order, cheapest first, and the chain stops at the first
 failure. Because the hook and a manual run share one definition, they cannot
