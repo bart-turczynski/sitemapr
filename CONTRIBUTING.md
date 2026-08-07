@@ -9,8 +9,12 @@ Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
 Run verification:
 
 ```sh
-Rscript tools/check-docs.R && Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }' && Rscript -e 'rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
+Rscript tools/verify.R
 ```
+
+That is the same chain the pre-push hook and CI run — docs, findings registry,
+lint, `R CMD check --as-cran`. See [docs/repo-hygiene.md](docs/repo-hygiene.md)
+for the individual stages and for `--all`.
 
 ## Formatting
 
@@ -40,6 +44,7 @@ Rscript -e 'pak::pak("roxygen2@8.0.0")'
 if the installed roxygen2 differs from the pin, or if regenerating the docs
 changes any committed file under `man/` or `NAMESPACE`.
 
-Source lives in `src/`, behavior features live in `features/`, tests live in `tests/`, and durable project context lives in `docs/`.
+Source lives in `R/`, tests and their Cucumber `.feature` files live in
+`tests/testthat/`, and durable project context lives in `docs/`.
 
 Keep local-only planning state in `_scratch/`. Do not commit `_scratch/`, `.fp/`, secrets, dependency folders, build outputs, or generated caches.
