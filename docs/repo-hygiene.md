@@ -110,7 +110,7 @@ without refreshing first carries a stale copy of the only tracker reasoning in
 git and *looks* current, which is worse than having no snapshot at all — so the
 ordering is enforced by control flow rather than by this paragraph.
 
-Three properties are deliberate and worth knowing:
+Four properties are deliberate and worth knowing:
 
 - **The bundle is written before the mirror.** The bundle is local and needs no
   network; the mirror can fail. Ordering it this way means a run that ends in an
@@ -121,6 +121,17 @@ Three properties are deliberate and worth knowing:
 - **The mirror is not an archive.** `--mirror` makes the remote match this
   repository exactly, so a ref deleted here is deleted there on the next run.
   The bundles are the half that remembers.
+- **The snapshot commit is published, under a bound.** Left unpushed it strands
+  on `main`, and the next merge leaves local and `origin` diverged over a
+  generated file long after the run that caused it. Pushing it through the
+  pre-push gate would cost ~200s and buy nothing: `^docs$` is in
+  `.Rbuildignore`, so `R CMD check` never sees this file, and no other stage
+  reads it either. So the script pushes it with `--no-verify` — but *only* when
+  it is the single unpushed commit and is exactly the one the run just made. A
+  bare `--no-verify` push would carry every other unpushed commit out ungated,
+  which is the failure this bound exists to prevent. In any other state the
+  commit is left for a normal push to carry through the gate, and the script
+  says so.
 
 Re-running with nothing changed commits nothing. The snapshot header carries a
 date rather than a timestamp, so same-day re-runs are byte-identical; the first
