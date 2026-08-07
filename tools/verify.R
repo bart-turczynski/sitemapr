@@ -1,17 +1,21 @@
 # The project's verification chain, runnable locally without CI.
 #
-#   Rscript tools/verify.R              # the pre-push gate (docs+registry+lint+check)
-#   Rscript tools/verify.R --all        # everything CI runs, incl. coverage + README
-#   Rscript tools/verify.R lint check   # named stages only
-#   Rscript tools/verify.R --list       # what stages exist
+#   Rscript tools/verify.R             # the pre-push gate (the default stages)
+#   Rscript tools/verify.R --all       # adds coverage + README
+#   Rscript tools/verify.R lint check  # named stages only
+#   Rscript tools/verify.R --list      # what stages exist
 #
 # This file is the SINGLE definition of the gate: `.pre-commit-config.yaml`'s
 # pre-push `verify` hook invokes it with no arguments, so the hook and a manual
-# run can never disagree about what "verified" means. It deliberately mirrors
-# .github/workflows/verify.yml job-for-job — see `verify_stages` — so a green
-# local run predicts a green CI run. GitHub Actions is a backstop here, not the
-# primary gate: server-side branch protection is unavailable on this plan, and
-# the gate has to keep working while the remote is unreachable.
+# run can never disagree about what "verified" means.
+#
+# It is also the ONLY gate that runs at all. `origin` is GitLab and carries no
+# CI config; every workflow in `.github/workflows/` is GitHub Actions, and that
+# account is suspended, so none of them run. There is no server-side branch
+# protection behind this either. The `# CI:` comments below name each stage's
+# dormant workflow counterpart so the mirror can be restored intact — they do
+# not describe anything that currently executes. Treat a failure here as a red
+# build: nothing downstream will catch what this lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).
@@ -28,6 +32,15 @@ verify_stages <- list(
     label = "findings registry in sync",
     default = TRUE,
     run = function() source("tools/check-findings-registry.R")
+  ),
+  # CI: verify.yml job "lint", step "Declared R floor covers dependencies".
+  # Cheap, offline, and placed before lint/check because it answers a question
+  # neither of those asks: `R CMD check --as-cran` never compares DESCRIPTION's
+  # declared R floor against the floors its dependencies declare.
+  rfloor = list(
+    label = "declared R floor covers dependencies",
+    default = TRUE,
+    run = function() source("tools/check-r-floor.R")
   ),
   # CI: verify.yml job "lint", step "Lint" (LINTR_ERROR_ON_LINT=true)
   lint = list(
