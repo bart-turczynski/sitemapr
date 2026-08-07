@@ -33,12 +33,7 @@ set -eu
 
 SNAPSHOT="docs/tracker-snapshot.md"
 MIRROR_REMOTE="backup"
-
-# The remote the snapshot commit is published to. Overridable only so the
-# publish guard below can be exercised against a local remote: this repository
-# has fetch.prune=true and a background fetcher, so a hand-made
-# refs/remotes/origin/* test fixture is deleted before it can be used.
-ORIGIN_REMOTE="${BACKUP_SH_ORIGIN:-origin}"
+ORIGIN_REMOTE="origin"
 
 commit_snapshot=1
 bundle_path=""
@@ -152,6 +147,20 @@ fi
 # back of a snapshot refresh. So the push happens only when the snapshot commit
 # is the single unpushed commit and is exactly the one made above. Anything else
 # leaves it for a normal push to carry through the gate.
+#
+# HOW THE GUARD IS TESTED, and not in place. Copy this script into a throwaway
+# repository whose `origin` and `backup` are local bare repos, stub
+# data-raw/snapshot-tracker.sh to rewrite the snapshot file, and drive the five
+# states from there. It has to be a separate repository: this one sets
+# fetch.prune=true and something in the environment runs `git fetch --all`, so a
+# hand-made refs/remotes/origin/* fixture is deleted before the code can read
+# it. Running the real file elsewhere beats adding a seam to it here.
+#
+# Detached HEAD refuses like the other two refusal states, but the commit was
+# already made by then. It lands in this run's bundle (`--all` includes HEAD),
+# never reaches the mirror (--mirror pushes refs/* and it is under no ref), and
+# is orphaned by the next checkout -- after which the following run from a
+# branch re-detects the snapshot as dirty and commits it properly.
 
 publish_failed=0
 
