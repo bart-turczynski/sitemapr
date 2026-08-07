@@ -67,6 +67,12 @@ merely untested, and `--as-cran` never cross-checks the two. It reads the
 rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
 offline, and enough to catch the class that shipped once already.
 
+`lint` runs `lintr::lint_package()` **and** `lintr::lint_dir("tools")`. The
+second call is not redundant: `tools/` is `.Rbuildignore`d, so `lint_package()`
+skips it, and until SITE-pzrosmkn every script the gate is *made of* was exempt
+from the gate's own lint stage. Add a new `tools/` script and it is linted; that
+was not true before.
+
 Stages run in declared order, cheapest first, and the chain stops at the first
 failure. Because the hook and a manual run share one definition, they cannot
 disagree about what "verified" means.

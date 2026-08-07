@@ -42,15 +42,26 @@ verify_stages <- list(
     default = TRUE,
     run = function() source("tools/check-r-floor.R")
   ),
-  # CI: verify.yml job "lint", step "Lint" (LINTR_ERROR_ON_LINT=true)
+  # CI: verify.yml job "lint", step "Lint" (LINTR_ERROR_ON_LINT=true).
+  #
+  # `lint_package()` alone is NOT enough: it skips `tools/`, which is
+  # .Rbuildignore'd, so every script this gate is made of was exempt from the
+  # gate's own lint stage until SITE-pzrosmkn. `lint_dir("tools")` closes that.
+  # The two are run and reported separately because `c()` on two `lints`
+  # objects drops the class and with it the useful print method.
   lint = list(
-    label = "lintr::lint_package()",
+    label = "lintr on the package and tools/",
     default = TRUE,
     run = function() {
-      lints <- lintr::lint_package()
-      if (length(lints)) {
-        print(lints)
-        stop(sprintf("%d lint(s)", length(lints)), call. = FALSE)
+      found <- 0L
+      for (lints in list(lintr::lint_package(), lintr::lint_dir("tools"))) {
+        if (length(lints)) {
+          print(lints)
+          found <- found + length(lints)
+        }
+      }
+      if (found) {
+        stop(sprintf("%d lint(s)", found), call. = FALSE)
       }
     }
   ),

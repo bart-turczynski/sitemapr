@@ -59,8 +59,12 @@ jobs:
         run: source("tools/check-r-floor.R")
         shell: Rscript {0}
 
-      - name: Lint
-        run: lintr::lint_package()
+      # lint_package() skips tools/ (it is .Rbuildignore'd), so the scripts the
+      # gate is made of need the second call to be linted at all.
+      - name: Lint (package and tools/)
+        run: |
+          lintr::lint_package()
+          lintr::lint_dir("tools")
         shell: Rscript {0}
         env:
           LINTR_ERROR_ON_LINT: true
