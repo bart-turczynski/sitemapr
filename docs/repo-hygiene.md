@@ -37,9 +37,14 @@ destroys what they test.
 ### Pre-push verify gate
 
 On `git push`, the `verify` hook runs the project's verify command — the same
-chain CI runs. Server-side branch protection is unavailable on this GitHub plan,
-so this local pre-push gate is the stand-in for branch protection: it blocks a
-push whose tree would turn CI red.
+chain the CI workflows run.
+
+**It is currently the only gate that runs at all.** `origin` is GitLab and
+carries no CI config; every workflow in `.github/workflows/` is GitHub Actions,
+and that account is suspended, so nothing runs them. There is also no
+server-side branch protection standing behind it. Treat a red pre-push gate as a
+red build: no second opinion is coming, and nothing downstream will catch what
+it lets through.
 
 ## Running the checks locally
 
@@ -98,7 +103,7 @@ wholesale**, so hand-edits to it are lost.
 Do not run the snapshot and the copy as two steps. Use:
 
 ```bash
-sh data-raw/backup.sh                 # refresh, commit, bundle, mirror
+sh data-raw/backup.sh                 # refresh, commit, bundle, mirror, publish
 sh data-raw/backup.sh <bundle-path>   # write the bundle somewhere specific
 sh data-raw/backup.sh --no-commit     # refuse rather than commit a stale snapshot
 ```
@@ -131,7 +136,9 @@ Four properties are deliberate and worth knowing:
   bare `--no-verify` push would carry every other unpushed commit out ungated,
   which is the failure this bound exists to prevent. In any other state the
   commit is left for a normal push to carry through the gate, and the script
-  says so.
+  says so. On a detached HEAD it refuses too — the commit it already made rides
+  out in that run's bundle and is re-made by the next run from a branch, so
+  nothing is lost.
 
 Re-running with nothing changed commits nothing. The snapshot header carries a
 date rather than a timestamp, so same-day re-runs are byte-identical; the first
