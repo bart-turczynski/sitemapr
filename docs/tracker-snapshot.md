@@ -15,8 +15,6 @@ authoritative and `fp context <id>` remains the way to read an issue.
 
 SITE-notumkrs [todo] [medium] CRAN pre-submission: bump version off .9000 and remove Remotes:
 
-SITE-oungcasn [todo] [medium] backup.sh: publish the snapshot commit instead of stranding it on main
-
 SITE-cphsnvut [todo] [low] Explore hosting sitemapr as a public web API + landing page
 
 SITE-jufaqaql [todo] [low] Test engine sitemap behavior in production (Google/Bing/Yandex-prod)
@@ -216,6 +214,8 @@ SITE-klcowlkl [done] [medium] Port PAGE_CANONICAL_RELATIVE: implement the §4 re
 SITE-hnbuabqb [done] [medium] SSRF guard: strsplit() drops a trailing empty field, so the literal 'X:' reads as the address 'X'
 
 SITE-wmcovvod [done] [medium] Consolidate agent instruction files: AGENTS.md to the budget, CLAUDE.md to a single import
+
+SITE-oungcasn [done] [medium] backup.sh: publish the snapshot commit instead of stranding it on main
 
 SITE-uivyzfhe [done] [low] Import sitemap-validator's fixture corpus (78 fixtures + kitchen-sink)
 └── SITE-qlkdggkd [done] [medium] Empty hreflang value crashes validate_sitemap with a base-R error
@@ -6612,7 +6612,7 @@ Install note: used 'brew install air' (homebrew-core has air 0.10.0 = the posit-
 
 ## SITE-oungcasn: backup.sh: publish the snapshot commit instead of stranding it on main
 
-**Status:** todo
+**Status:** done
 
 ### Description
 
@@ -6631,6 +6631,46 @@ Acceptance criteria:
 - docs/repo-hygiene.md documents the exemption and its bound.
 
 Follows SITE-squcaxgh.
+
+### Comments
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+Testing the guard: this comment dirties the tracker so backup.sh produces a snapshot commit.
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+second guard test
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+publish-path test
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+refusal-path test
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+All four guard states verified end to end against an isolated throwaway remote:
+
+- in sync, snapshot is the only new commit -> PUBLISHES (ahead 1 -> 0)
+- other unpushed work present -> REFUSES with '2 unpushed commit(s)...', ahead stays 2, nothing pushed
+- no upstream ref -> REFUSES
+- detached HEAD -> shares the same guard, NOT exercised
+
+Two testing notes worth keeping:
+
+1. The guard could not be tested with a hand-made refs/remotes/origin/* ref. This repo sets fetch.prune=true and something in the environment runs 'git fetch --all', which deleted the fixture before the code read it -- twice, including inside one shell invocation. Hence the BACKUP_SH_ORIGIN seam.
+
+2. Pointing that seam at the 'backup' remote does NOT work as a fixture: the script's own mirror step pushes to backup and updates those same tracking refs, so the publish check sees ahead=0 and the test passes for the wrong reason. It needs a third, isolated remote.
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+Done in 5627310, merged to main via GitLab MR !2. Verify gate green before merge: 'verify OK: docs, registry, lint, check (210s)', Status 1 NOTE (the pre-existing URL-404 set from the GitHub suspension).
+
+All four acceptance criteria met; three of the four guard states exercised end to end against an isolated throwaway remote. Detached HEAD shares the same guard but was not exercised -- noted rather than claimed.
+
 
 
 
