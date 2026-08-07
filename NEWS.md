@@ -274,3 +274,11 @@ related W3C and RFC standards.
   control, and non-2xx error policy are re-asserted after all caller
   customization, so a policy can add headers or auth but cannot re-enable
   redirect following or defeat the SSRF re-check.
+
+## Requirements
+
+* The declared R requirement is `R (>= 4.1)`, corrected from `R (>= 4.0.0)`.
+  The old floor was never installable: `httr2`, a hard dependency, itself
+  declares `R (>= 4.1)`, so resolution failed on R 4.0 before any sitemapr code
+  ran. sitemapr's own sources use no post-4.0 syntax — the floor comes entirely
+  from the dependency chain, and no supported configuration is lost.

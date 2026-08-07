@@ -20,6 +20,10 @@ repos:
         exclude: ^tests/testthat/fixtures/corpus/
       - id: check-merge-conflict
       - id: check-yaml
+      # air.toml is the only TOML in the tree, and it drives the air-format
+      # hook below. Unparseable TOML there would otherwise reach main and
+      # surface as a formatter failure on someone else's machine.
+      - id: check-toml
       - id: mixed-line-ending
         exclude: ^tests/testthat/fixtures/corpus/
       - id: check-case-conflict
