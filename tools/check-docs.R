@@ -69,12 +69,10 @@ removed <- setdiff(names(before), names(after))
 drift <- c(changed, removed)
 if (length(drift)) {
   stop(
-    paste0(
-      "Generated docs are out of date with the roxygen comments in R/.\n",
-      "roxygen2::roxygenise() changed:\n",
-      paste0("  ", sort(drift), collapse = "\n"),
-      "\nRun devtools::document() and commit the result."
-    ),
+    "Generated docs are out of date with the roxygen comments in R/.\n",
+    "roxygen2::roxygenise() changed:\n",
+    paste0("  ", sort(drift), collapse = "\n"),
+    "\nRun devtools::document() and commit the result.",
     call. = FALSE
   )
 }

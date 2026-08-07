@@ -37,8 +37,8 @@ reg <- utils::read.csv(registry_path, stringsAsFactors = FALSE, na.strings = "")
 # The registry has to be readable at RUN time too (the report's passed-checks
 # table reads it), and `docs/` is .Rbuildignore'd — so the same file ships at
 # inst/findings-registry.csv and is read from there through system.file()
-# (R/findings-registry.R). Assert the two copies are byte-identical: that is what
-# makes the duplication safe. The docs copy stays the cross-port artifact.
+# (R/findings-registry.R). Assert the two copies are byte-identical: that is
+# what makes the duplication safe. The docs copy stays the cross-port artifact.
 shipped_path <- "inst/findings-registry.csv"
 if (!file.exists(shipped_path)) {
   stop(
@@ -106,8 +106,8 @@ if (!identical(names(reg), expected_cols)) {
   stop(
     sprintf(
       "findings-registry.csv columns drifted.\n  expected: %s\n  got:      %s",
-      paste(expected_cols, collapse = ", "),
-      paste(names(reg), collapse = ", ")
+      toString(expected_cols),
+      toString(names(reg))
     ),
     call. = FALSE
   )
@@ -148,40 +148,40 @@ vocab <- list(
   ruleset = c("baseline", "google", "bing", "yandex")
 )
 
-problems <- character(0)
-add <- function(...) problems <<- c(problems, sprintf(...))
+# Every check below appends to one list so a bad registry reports all of its
+# problems at once rather than one per run. The accumulator lives in an
+# environment because `add()` has to write to a caller's binding, and `<<-` is
+# on this project's undesirable-operator list (.lintr).
+state <- new.env(parent = emptyenv())
+state$problems <- character(0)
+add <- function(...) {
+  state$problems <- c(state$problems, sprintf(...))
+}
 
 if (anyDuplicated(reg$code)) {
   add(
     "duplicate canonical codes: %s",
-    paste(
-      reg$code[duplicated(reg$code)],
-      collapse = ", "
-    )
+    toString(reg$code[duplicated(reg$code)])
   )
 }
 for (col in names(vocab)) {
   bad <- reg$code[!reg[[col]] %in% vocab[[col]]]
   if (length(bad)) {
-    add("invalid %s value on: %s", col, paste(bad, collapse = ", "))
+    add("invalid %s value on: %s", col, toString(bad))
   }
 }
 if (!all(reg$is_strict_only %in% c("TRUE", "FALSE"))) {
   add(
     "is_strict_only must be TRUE/FALSE; offenders: %s",
-    paste(
-      reg$code[!reg$is_strict_only %in% c("TRUE", "FALSE")],
-      collapse = ", "
-    )
+    toString(reg$code[!reg$is_strict_only %in% c("TRUE", "FALSE")])
   )
 }
 reconcile_values <- c("open", "done")
 if (!all(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)) {
   add(
     "reconcile must be blank, 'open', or 'done'; offenders: %s",
-    paste(
-      reg$code[!(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)],
-      collapse = ", "
+    toString(
+      reg$code[!(is.na(reg$reconcile) | reg$reconcile %in% reconcile_values)]
     )
   )
 }
@@ -206,9 +206,8 @@ if (anyDuplicated(mapped)) {
           sprintf(
             "%s <- {%s}",
             v,
-            paste(
-              reg$code[!is.na(reg$validator_code) & reg$validator_code == v],
-              collapse = ", "
+            toString(
+              reg$code[!is.na(reg$validator_code) & reg$validator_code == v]
             )
           )
         },
@@ -234,7 +233,8 @@ src <- unlist(lapply(
 emitted <- sort(unique(gsub(
   '"',
   "",
-  unlist(regmatches(src, gregexpr(code_pattern, src)))
+  unlist(regmatches(src, gregexpr(code_pattern, src))),
+  fixed = TRUE
 )))
 active <- sort(reg$code[reg$status == "active"])
 
@@ -242,23 +242,21 @@ missing_row <- setdiff(emitted, active)
 if (length(missing_row)) {
   add(
     "emitted in R/ but not status=active in the registry: %s",
-    paste(missing_row, collapse = ", ")
+    toString(missing_row)
   )
 }
 orphan_active <- setdiff(active, emitted)
 if (length(orphan_active)) {
   add(
     "status=active in the registry but never emitted in R/: %s",
-    paste(orphan_active, collapse = ", ")
+    toString(orphan_active)
   )
 }
 
-if (length(problems)) {
+if (length(state$problems)) {
   stop(
-    paste0(
-      "findings-registry.csv is out of sync:\n",
-      paste0("  - ", problems, collapse = "\n")
-    ),
+    "findings-registry.csv is out of sync:\n",
+    paste0("  - ", state$problems, collapse = "\n"),
     call. = FALSE
   )
 }
