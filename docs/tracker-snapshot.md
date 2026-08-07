@@ -13,10 +13,6 @@ authoritative and `fp context <id>` remains the way to read an issue.
 
 ```
 
-SITE-dtohylpx [in-progress] [high] DESCRIPTION declares R (>= 4.0.0) but no CI job ever tests below oldrel-1
-
-SITE-squcaxgh [in-progress] [high] Script the snapshot-then-backup sequence so the ordering cannot be got wrong
-
 SITE-notumkrs [todo] [medium] CRAN pre-submission: bump version off .9000 and remove Remotes:
 
 SITE-cphsnvut [todo] [low] Explore hosting sitemapr as a public web API + landing page
@@ -87,6 +83,10 @@ SITE-hwemiqne [done] [high] Text line-splitting is ~270x slower than it needs to
 SITE-udiqjraa [done] [high] discover_robots_sitemaps() raises a bare base R error on a binary robots.txt body
 
 SITE-cjqsptpn [done] [high] Add check-toml to the pre-commit hooks: air.toml is unvalidated
+
+SITE-dtohylpx [done] [high] DESCRIPTION declares R (>= 4.0.0) but no CI job ever tests below oldrel-1
+
+SITE-squcaxgh [done] [high] Script the snapshot-then-backup sequence so the ordering cannot be got wrong
 
 SITE-bqzcgiog [done] [medium] Resolve non-green checks from full package QA sweep + adopt air formatter
 ├── SITE-ilmfoemu [done] [high] Wire skipped discovery.feature step against live validate_sitemap() + lift Layer F coverage
@@ -2303,7 +2303,7 @@ Gates: suite 0 failures, lint clean, coverage 100.00%, docs + registry + R CMD c
 
 ## SITE-dtohylpx: DESCRIPTION declares R (>= 4.0.0) but no CI job ever tests below oldrel-1
 
-**Status:** in-progress
+**Status:** done
 
 ### Description
 
@@ -2338,6 +2338,12 @@ Also checked our own sources for post-4.0 syntax: no native pipe (|>), no backsl
 This collapses the two options in the description. Option 1 (raise the floor) is correct and option 2 (add an R 4.0 runner) is impossible -- that job could never install deps. Raising to 4.1.0 is a correction, not a narrowing: the 4.0.x audience never existed.
 
 Note R CMD check --as-cran does not catch this; it does not cross-check declared Depends against dependency floors.
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+Done in d7fb10c, merged to main via GitLab MR !1. DESCRIPTION now declares R (>= 4.1) with a NEWS.md 'Requirements' entry recording why. Full verify gate passed on the branch: docs, registry, lint, R CMD check (222s), Status 1 NOTE (the pre-existing URL-404 set from the GitHub suspension, unchanged).
+
+Chose option 1 from the description; option 2 was impossible, since an R 4.0 CI job could never install httr2.
 
 
 
@@ -8453,7 +8459,7 @@ Done: an index referencing RSS/Atom children expands successfully; top-level fee
 
 ## SITE-squcaxgh: Script the snapshot-then-backup sequence so the ordering cannot be got wrong
 
-**Status:** in-progress
+**Status:** done
 
 ### Description
 
@@ -8471,6 +8477,30 @@ Acceptance criteria:
 - Does not require network access to succeed for the bundle path (the GitHub account suspension makes the mirror push the unreliable half).
 
 Found during the /tini instruction-file audit on 2026-08-06.
+
+### Comments
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+Script written and exercised three times. Two defects found by running it, both now fixed:
+
+1. The mirror push fired the pre-push hook, so a BACKUP was gated on the full R CMD check chain (199s). Backwards: a broken tree is exactly when the copy matters. Now --no-verify.
+2. Worse: the mirror failed on run 1 and 'set -e' killed the script before the bundle step, so an errored backup run produced NO archive at all. The bundle is now written and verified BEFORE anything remote is attempted, and a mirror failure warns and exits 1 instead of aborting.
+
+Could not reproduce the original push failure -- the reason line was cut off by 'tail -25' and the same push succeeded on retry. Not inventing a cause.
+
+Verified: bundle 1718741 bytes, 'git bundle verify' okay; run 3 reported 'snapshot already current, nothing to commit' and added no commit, so it is idempotent. The snapshot header carries a date, not a timestamp, so same-day re-runs are byte-identical; the first run after midnight commits a one-line date change.
+
+#### 2026-08-07 — bartek@turczynski.pl
+
+Done in 6cc97ad, merged to main via GitLab MR !1. data-raw/backup.sh + the rewritten 'Taking a backup' section of docs/repo-hygiene.md.
+
+All four acceptance criteria verified by running it:
+- refreshes the snapshot, then copies (and commits it first, without which a mirror/bundle cannot see the refresh at all)
+- refuses on --no-commit rather than copying a stale snapshot; confirmed no bundle is written on that path
+- idempotent: a re-run with no tracker change reported 'snapshot already current, nothing to commit' and added no commit
+- needs no network: bundle written and verified (1718741 bytes) before the mirror is attempted
+
 
 
 
