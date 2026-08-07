@@ -584,7 +584,7 @@ against. sitemapr publishes both through one exported accessor,
 | `contract_id` | `sitemapr.findings/v2` | Findings-contract generation |
 | `contract_version` | `2` | The ten pinned columns plus the ADR-009 additive ruleset fields |
 | `legacy_contract_version` | `1` | The ten pinned columns alone |
-| `registry_revision` | `2026-07-30` | Revision of `findings-registry.csv` |
+| `registry_revision` | `2026-08-07` | Revision of `findings-registry.csv` |
 | `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
 | `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.2.0, < 0.3.0` | Ranges this build is known to work against |
 
