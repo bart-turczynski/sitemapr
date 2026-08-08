@@ -881,14 +881,21 @@ ruleset does not imply a Bing *robots* policy: the two are chosen independently,
 because "which engine's sitemap rules am I validating under" and "which engine's
 robots semantics govern access" are different questions.
 
-**Explicit API carrier.** The robots axes are carried explicitly by
-`robots_context(product_token, policy_ruleset, matcher_backend)`, with
-`robots_context_preset()` supplying the documented presets above. A preset
-**retains its expanded values** on the returned object, so a caller can read
-back exactly which product token, policy ruleset, and matcher backend were
-selected — the mapping is inspectable, not implicit. Provenance:
-`application_choice` (the bridge is a named sitemapr product decision, not an
-engine-documented mapping).
+**Explicit internal carrier.** The robots axes are carried explicitly by
+`robots_context(product_token, policy_ruleset, matcher_backend)`; nothing
+derives them from `sitemap_ruleset`. Provenance: `application_choice` (the
+bridge is a named sitemapr product decision, not an engine-documented mapping).
+
+`robots_context()` is **internal**, and the public surface currently exposes
+only the matcher user-agent (`validate_sitemap(robots_user_agent =)`), which
+widens to a context on the Google defaults. The table above is therefore a
+**design commitment, not yet a public API**: a preset constructor for it lives
+in `tests/testthat/helper-robots-context.R` (SITE-bxzclfqv). Exporting a
+context and a preset constructor — so a caller can select an engine and read
+back **expanded** values recording exactly which product token, policy ruleset
+and matcher backend that preset selected — is SITE-fsawklnl, which also has to
+clear the Google-bounded `ROBOTS_*` findings path (evaluation already honours
+every engine; only the findings derivation is legacy-bounded).
 
 ### 13.1 Crawler-token model — steal the vocabulary, do not invoke the matcher
 
