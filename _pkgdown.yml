@@ -49,6 +49,7 @@ reference:
     contents:
       - validate_sitemap
       - validate_sitemap_ruleset
+      - validate_sitemap_robots
 
   - title: "Rulesets"
     desc: >
@@ -62,6 +63,9 @@ reference:
       - ruleset_context_for_child
       - gsc_submission
       - robots_cross_submission
+      - robots_context
+      - robots_context_preset
+      - robots_context_presets
 
   - title: "Auditing"
     desc: >

@@ -14,97 +14,19 @@
 #
 # Two deliberate design points:
 #
-# 1. The robots axes are carried EXPLICITLY (`robots_context()`), never derived
-#    from `sitemap_ruleset`. ADR-009 keeps its axes independent, and
+# 1. The robots axes are carried EXPLICITLY, never derived from
+#    `sitemap_ruleset`. ADR-009 keeps its axes independent, and
 #    `ruleset_context()` carries only the four sitemap-source axes — a robots
 #    policy ruleset and a matcher backend are different questions from "which
-#    engine's sitemap rules am I validating under".
+#    engine's sitemap rules am I validating under". The carrier itself
+#    (`robots_context()`) and its per-engine presets live in R/robots-context.R.
 #
 # 2. Evaluation routes through the v1 engine contract
 #    (`robots_evaluate_url_v1()`), so `matcher_status` / availability / the
-#    policy axes flow through for E.3's per-engine gate. The legacy findings
-#    stay byte-identical via the exported `as_legacy_robots_decisions_v1()`
-#    shim, which is Google-bounded by construction.
-
-# The robots policy/matcher axes for one evaluation. Kept separate from
-# `ruleset_context()` on purpose (see note 1 above). Values are validated
-# against the sibling's own published value sets, so an axis this build of
-# robotstxtr cannot honour fails here rather than deep inside the engine.
-robots_context_reject <- function(message) {
-  rlang::abort(message, class = "sitemapr_invalid_robots_context")
-}
-
-# A single non-NA, non-empty string, or reject naming the argument.
-check_robots_axis <- function(value, arg) {
-  if (
-    !is.character(value) ||
-      length(value) != 1L ||
-      is.na(value) ||
-      !nzchar(value)
-  ) {
-    robots_context_reject(
-      sprintf("`%s` must be a single non-empty string.", arg)
-    )
-  }
-  value
-}
-
-# Reject an axis value the INSTALLED robotstxtr does not publish. Read from the
-# public contract, so the accepted sets follow the sibling rather than a stale
-# copy pinned here.
-check_robots_axis_value <- function(value, arg, allowed) {
-  if (!value %in% allowed) {
-    robots_context_reject(
-      sprintf("`%s` must be one of %s.", arg, toString(allowed))
-    )
-  }
-  value
-}
-
-robots_context <- function(
-  product_token = "*",
-  policy_ruleset = "google",
-  matcher_backend = "google"
-) {
-  check_robots_axis(product_token, "product_token")
-  check_robots_axis(policy_ruleset, "policy_ruleset")
-  check_robots_axis(matcher_backend, "matcher_backend")
-  if (robotstxtr_available()) {
-    contract <- robotstxtr_engine_contract()
-    check_robots_axis_value(
-      policy_ruleset,
-      "policy_ruleset",
-      contract$robots_policy_rulesets
-    )
-    check_robots_axis_value(
-      matcher_backend,
-      "matcher_backend",
-      contract$matcher_backends
-    )
-  }
-  structure(
-    list(
-      product_token = product_token,
-      policy_ruleset = policy_ruleset,
-      matcher_backend = matcher_backend
-    ),
-    class = "sitemapr_robots_context"
-  )
-}
-
-# The engine presets of docs/sitemap-spec.md §13.0 live in
-# tests/testthat/helper-robots-context.R, not here: no production call site
-# selects a non-default context, so the constructor was package surface only
-# for the tests. Promoting it to a documented export needs an exported entry
-# point that can ACCEPT a context (SITE-fsawklnl).
-
-# Is this context the Google-bounded one the legacy adapter accepts? The shim
-# asserts BOTH axes are "google"; the product token is free (the legacy facade
-# always took an arbitrary matcher user-agent).
-robots_context_is_legacy <- function(context) {
-  identical(context$policy_ruleset, "google") &&
-    identical(context$matcher_backend, "google")
-}
+#    policy axes flow through for E.3's per-engine gate. The ROBOTS_* findings
+#    read a legacy-SHAPED view derived here from the published v1 fields
+#    (`robots_findings_view()`), which works for any context; a test pins it
+#    against the sibling's Google-bounded `as_legacy_robots_decisions_v1()`.
 
 # A zero-URL facts object: nothing testable was advertised, so no evaluation
 # ran. Consulting it always yields "undetermined".
@@ -115,9 +37,80 @@ robots_facts_empty <- function(context) {
       urls = character(0),
       decision = character(0),
       decisions = NULL,
-      legacy = NULL
+      view = NULL
     ),
     class = "sitemapr_robots_facts"
+  )
+}
+
+# The two per-row predicates every derivation below shares, joined to the
+# per-source evidence once. `evaluated` is "the matcher actually returned a
+# verdict"; `missing_allow` is "robots.txt was absent (404/410), which IS a
+# policy allow-all". They are separated because the v1 fields alone cannot tell
+# an absent robots.txt from a forbidden one — see the note on the trichotomy
+# below.
+robots_row_flags <- function(results, evidence) {
+  idx <- match(results$source_id, evidence$source_id)
+  final_status <- evidence$final_http_status[idx]
+  list(
+    idx = idx,
+    evaluated = !is.na(results$matcher_status) &
+      results$matcher_status == "evaluated",
+    missing_allow = !is.na(final_status) & final_status %in% c(404L, 410L)
+  )
+}
+
+# The row view the ROBOTS_* finding producers read (R/robots-validate.R):
+# `allowed` plus the four columns the messages and evidence quote. Derived HERE
+# from the PUBLISHED v1 fields, so it exists for ANY robots context — that is
+# what lets a non-Google context produce findings at all (SITE-fsawklnl).
+#
+# It reproduces `as_legacy_robots_decisions_v1()`'s arithmetic deliberately, for
+# the same reason `robots_decision_trichotomy()` does: the sibling's shim is
+# engine-agnostic in how it DERIVES these columns and Google-bounded only in the
+# guard it opens with, so reproducing the derivation is the whole of what a
+# non-Google path needs. A test asserts this view agrees with the shim's own
+# `results` column-for-column under a Google context, so E.5's output stays
+# byte-identical (ADR-009 §5) and the two cannot drift.
+#
+# Only the six columns with a reader are built. The rest of the legacy schema
+# (`input_id`, `decision_source`, `robots_url`, `http_status`, `error_*`) is
+# consumed nowhere in sitemapr, and deriving it would be an unread copy of the
+# sibling's shim rather than the minimum a finding needs.
+robots_findings_view <- function(results, evidence) {
+  n <- nrow(results)
+  flags <- robots_row_flags(results, evidence)
+  matched <- flags$evaluated
+  has_source <- !is.na(flags$idx)
+
+  allowed <- rep(NA, n)
+  allowed[matched] <- results$url_decision[matched] == "allow"
+  allowed[flags$missing_allow] <- TRUE
+
+  # No matching evidence row means the input never reached the fetcher at all.
+  fetch_outcome <- rep("input_invalid", n)
+  fetch_outcome[has_source] <- evidence$legacy_fetch_outcome[
+    flags$idx[has_source]
+  ]
+
+  # An unevaluated row carries no matched rule: the matcher never ran, so the
+  # rule columns describe nothing and must not leak a stale value into a
+  # finding's evidence.
+  matched_rule_type <- results$matched_rule_type
+  matched_rule_type[!matched] <- "unknown"
+  matched_rule_value <- results$matched_rule_value
+  matched_rule_value[!matched] <- NA_character_
+  matched_line <- results$matched_line
+  matched_line[!matched] <- NA_integer_
+
+  data.frame(
+    url = results$url,
+    allowed = allowed,
+    fetch_outcome = fetch_outcome,
+    matched_line = matched_line,
+    matched_rule_type = matched_rule_type,
+    matched_rule_value = matched_rule_value,
+    stringsAsFactors = FALSE
   )
 }
 
@@ -141,11 +134,9 @@ robots_decision_trichotomy <- function(results, evidence) {
   if (n == 0L) {
     return(character(0))
   }
-  idx <- match(results$source_id, evidence$source_id)
-  final_status <- evidence$final_http_status[idx]
-  evaluated <- !is.na(results$matcher_status) &
-    results$matcher_status == "evaluated"
-  missing_allow <- !is.na(final_status) & final_status %in% c(404L, 410L)
+  flags <- robots_row_flags(results, evidence)
+  evaluated <- flags$evaluated
+  missing_allow <- flags$missing_allow
 
   out <- rep("undetermined", n)
   out[
@@ -162,11 +153,11 @@ robots_decision_trichotomy <- function(results, evidence) {
 
 # Signal that the robots engine failed outright, so the robots layer is skipped
 # while every other layer proceeds. Deliberately a classed WARNING rather than a
-# finding: like the missing-sibling degrade in `resolve_robots_ua()`, an engine
-# that errors on a body it should have decoded is a setup fact about the user's
-# installed robotstxtr, not a diagnostic about the sitemap. The engine's own
-# message is quoted so the cause stays diagnosable, and the install hint names
-# the upgrade that fixes it.
+# finding: like the missing-sibling degrade in `resolve_robots_context()`, an
+# engine that errors on a body it should have decoded is a setup fact about the
+# user's installed robotstxtr, not a diagnostic about the sitemap. The engine's
+# own message is quoted so the cause stays diagnosable, and the install hint
+# names the upgrade that fixes it.
 robots_engine_failed_warn <- function(cnd) {
   rlang::warn(
     sprintf(
@@ -183,9 +174,10 @@ robots_engine_failed_warn <- function(cnd) {
 }
 
 # The facts producer. Evaluates every testable advertised loc ONCE through the
-# v1 engine contract and returns the consultable object. `legacy` is the
-# Google-bounded legacy view the findings derive from; it is NULL for a
-# non-Google context (the shim refuses those by design).
+# v1 engine contract and returns the consultable object. `view` is the row view
+# the ROBOTS_* findings derive from; unlike the sibling's legacy shim it is
+# built for every context, so an engine other than Google produces findings
+# rather than an error.
 robots_evaluate_facts <- function(locs, context = robots_context()) {
   testable <- robots_testable_locs(locs)
   if (length(testable) == 0L) {
@@ -203,7 +195,7 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
   # on a crawled origin would otherwise abort the whole validation run.
   #
   # Degrade rather than propagate, and report it the way a missing sibling is
-  # already reported (`resolve_robots_ua()`): a classed warning, because an
+  # already reported (`resolve_robots_context()`): a classed warning, because an
   # engine that cannot decode a body is a fact about the INSTALLED ENGINE, not a
   # finding about the sitemap. Fixed upstream, so a current robotstxtr never
   # trips this — but robotstxtr is Suggests and installed wholesale, so a
@@ -224,11 +216,6 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
   if (is.null(decisions)) {
     return(robots_facts_empty(context))
   }
-  legacy <- if (robots_context_is_legacy(context)) {
-    robotstxtr::as_legacy_robots_decisions_v1(decisions)
-  } else {
-    NULL
-  }
   structure(
     list(
       context = context,
@@ -238,7 +225,7 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
         decisions$evidence
       ),
       decisions = decisions,
-      legacy = legacy
+      view = robots_findings_view(decisions$results, decisions$evidence)
     ),
     class = "sitemapr_robots_facts"
   )
@@ -249,7 +236,7 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
 # sitemaps both advertise is evaluated twice — under the SAME context, against
 # the same robots.txt, so the two decisions agree and the first is kept.
 #
-# The merged object carries `decisions`/`legacy` as NULL on purpose: it exists
+# The merged object carries `decisions`/`view` as NULL on purpose: it exists
 # to be CONSULTED (`robots_decision_for()` / `robots_facts_consultable()`), not
 # to derive findings from. `robots_findings_from_facts()` stays per-source,
 # where each finding still anchors to its own advertising sitemap base.
@@ -267,7 +254,7 @@ robots_facts_merge <- function(parts) {
       urls = urls[keep],
       decision = decision[keep],
       decisions = NULL,
-      legacy = NULL
+      view = NULL
     ),
     class = "sitemapr_robots_facts"
   )

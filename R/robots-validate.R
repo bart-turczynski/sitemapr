@@ -22,8 +22,10 @@
 # routes through the v1 engine contract, so the robots axes and `matcher_status`
 # flow through for E.3's per-engine synthesis gate. THIS file only derives
 # findings from that already-evaluated facts object. The derivation reads the
-# facts' Google-bounded legacy view so E.5's output stayed byte-identical
-# across the refactor.
+# facts' legacy-SHAPED row view (`robots_findings_view()`) so E.5's output
+# stayed byte-identical across the refactor — and, since SITE-fsawklnl derives
+# that view here rather than through the sibling's Google-bounded legacy shim,
+# every ROBOTS_* finding is now available under any robots context.
 #
 # `robotstxtr` is an OPTIONAL dependency (DESCRIPTION Suggests). Availability is
 # resolved once by the caller (R/validate-sitemap.R): this producer is only ever
@@ -103,7 +105,7 @@ robotstxtr_contract_schema <- function() {
 # install that does not expose the accessor at all, one whose `contract_id` has
 # moved on, and one carrying the right id but no `matcher_capability` (the
 # pre-#43 build). Absence of the package stays a warning + graceful skip in
-# resolve_robots_ua() — that is a setup fact about the user's machine — but a
+# resolve_robots_context() — a setup fact about the user's machine — but a
 # version that is present and INCOMPATIBLE would otherwise yield wrong robots
 # findings, so it aborts instead.
 #
@@ -234,20 +236,16 @@ robots_indeterminate_messages <- function(loc, rows) {
   )
 }
 
-# Reject a facts object whose context has no Google-bounded legacy view. Every
-# ROBOTS_* finding — listed-URL and document-level alike — is derived through
-# that view, so a context selecting another policy/matcher must consult the
-# decision object instead of silently producing an empty findings tibble.
-robots_legacy_view_required <- function(facts) {
+# Reject a facts object that carries no row view. A MERGED facts object
+# (`robots_facts_merge()`) is the one such shape: it drops the view on purpose,
+# because it exists to be CONSULTED per URL and every finding has to anchor to
+# its own advertising sitemap base. Deriving findings from one would silently
+# emit zero rows, so it fails loudly instead.
+robots_view_required <- function() {
   rlang::abort(
-    sprintf(
-      paste0(
-        "ROBOTS_* findings are derived through the Google-bounded legacy ",
-        "adapter, but the robots context selects policy '%s' / matcher ",
-        "'%s'. Consult the decision object instead."
-      ),
-      facts$context$policy_ruleset,
-      facts$context$matcher_backend
+    paste0(
+      "ROBOTS_* findings must be derived from a per-source facts object ",
+      "carrying a row view, not from a merged one."
     ),
     class = "sitemapr_robots_findings_unsupported"
   )
@@ -321,8 +319,9 @@ robots_sitemap_disallowed_finding <- function(base, url, res_row) {
 #' to contradict).
 #'
 #' @param sitemap_url The sitemap's requested URL.
-#' @param user_agent The matcher user-agent (the robots.txt group to evaluate),
-#'   as in `validate_robots()`.
+#' @param context The [robots_context()] to evaluate under: the matcher
+#'   product token (the robots.txt group), the policy ruleset, and the matcher
+#'   backend, as in `validate_robots()`.
 #' @param base The sitemap's document-level `subject_ref`; the finding anchors
 #'   to it unfragmented (`subject_type = "source"`).
 #' @return A robots-layer findings tibble in the contract's 8-column producer
@@ -331,33 +330,31 @@ robots_sitemap_disallowed_finding <- function(base, url, res_row) {
 #' @noRd
 validate_robots_sitemap <- function(
   sitemap_url,
-  user_agent,
+  context,
   base = NA_character_
 ) {
   url <- robots_testable_locs(sitemap_url)
   if (length(url) == 0L) {
     return(empty_robots_findings())
   }
-  facts <- robots_evaluate_facts(
-    url,
-    context = robots_context(product_token = user_agent)
+  robots_sitemap_findings_from_facts(
+    robots_evaluate_facts(url, context = context),
+    base
   )
-  robots_sitemap_findings_from_facts(facts, base)
 }
 
 # Derive the document-level finding from an already-evaluated facts object. The
-# facts here describe exactly ONE url (the sitemap's own), so the legacy view
-# carries at most one row. Like robots_findings_from_facts() this reads the
-# Google-bounded legacy view and rejects a non-legacy context rather than
-# silently emitting nothing.
+# facts here describe exactly ONE url (the sitemap's own), so the view carries
+# at most one row. Like robots_findings_from_facts() it reads the facts' derived
+# row view, which exists for every robots context.
 robots_sitemap_findings_from_facts <- function(facts, base = NA_character_) {
   if (!robots_facts_consultable(facts)) {
     return(empty_robots_findings())
   }
-  if (is.null(facts$legacy)) {
-    robots_legacy_view_required(facts)
+  if (is.null(facts$view)) {
+    robots_view_required()
   }
-  results <- facts$legacy$results
+  results <- facts$view
   out <- list()
   for (i in seq_len(nrow(results))) {
     row <- results[i, , drop = FALSE]
@@ -390,18 +387,19 @@ robots_sitemap_findings_from_facts <- function(facts, base = NA_character_) {
 #' matching is offline, so every testable URL is checked with no sampling.
 #'
 #' @param locs Character vector of the URLs the sitemap advertises (`<loc>`).
-#' @param user_agent The matcher user-agent (the robots.txt group to evaluate),
-#'   e.g. `"*"` for the catch-all group or a specific token such as
-#'   `"Googlebot"`. This is the group used for MATCHING, not the HTTP request
-#'   user-agent.
+#' @param context The [robots_context()] to evaluate under. Its
+#'   `product_token` is the robots.txt group used for MATCHING — `"*"` for the
+#'   catch-all group or a specific token such as `"Googlebot"` — not the HTTP
+#'   request user-agent; its other two axes select the policy ruleset and the
+#'   matcher backend.
 #' @param base The advertising sitemap's document-level `subject_ref` base; the
 #'   robots findings anchor to it with a `#page-url:<loc>` fragment.
 #' @return A robots-layer findings tibble in the contract's 8-column producer
 #'   shape; zero rows when nothing is disallowed or indeterminate.
 #' @keywords internal
 #' @noRd
-validate_robots <- function(locs, user_agent, base = NA_character_) {
-  robots_part(locs, user_agent, base)$findings
+validate_robots <- function(locs, context, base = NA_character_) {
+  robots_part(locs, context, base)$findings
 }
 
 # Evaluate one source's advertised locs and return BOTH halves: the ROBOTS_*
@@ -409,11 +407,8 @@ validate_robots <- function(locs, user_agent, base = NA_character_) {
 # the findings-only composition; the validate pipeline calls this instead
 # because the §5.4 trap synthesis (E.3b) has to retain the facts — the whole
 # point of the E.1b split is that ONE evaluation feeds both consumers.
-robots_part <- function(locs, user_agent, base = NA_character_) {
-  facts <- robots_evaluate_facts(
-    locs,
-    context = robots_context(product_token = user_agent)
-  )
+robots_part <- function(locs, context, base = NA_character_) {
+  facts <- robots_evaluate_facts(locs, context = context)
   list(facts = facts, findings = robots_findings_from_facts(facts, base))
 }
 
@@ -421,20 +416,20 @@ robots_part <- function(locs, user_agent, base = NA_character_) {
 # Split from evaluation so the same single evaluation feeds BOTH these findings
 # and the §5.4 synthesis.
 #
-# The rows are read from the facts' LEGACY view, not from the v1 results: the
-# messages and evidence quote legacy vocabulary (`fetch_outcome`) and the
-# legacy `allowed` trichotomy, so reading it keeps E.5's output byte-identical
-# across this refactor (ADR-009 §5 back-compat). That view is Google-bounded by
-# the shim, so a non-Google context has no legacy rows to derive from and is
-# rejected rather than silently emitting nothing.
+# The rows are read from the facts' derived row view, not from the raw v1
+# results: the messages and evidence quote legacy vocabulary (`fetch_outcome`)
+# and the `allowed` trichotomy, so reading that view keeps E.5's output
+# byte-identical across the refactors (ADR-009 §5 back-compat). Unlike the
+# sibling's Google-bounded legacy shim the view is built for EVERY context, so
+# selecting another engine yields findings rather than an error (SITE-fsawklnl).
 robots_findings_from_facts <- function(facts, base = NA_character_) {
   if (!robots_facts_consultable(facts)) {
     return(empty_robots_findings())
   }
-  if (is.null(facts$legacy)) {
-    robots_legacy_view_required(facts)
+  if (is.null(facts$view)) {
+    robots_view_required()
   }
-  results <- facts$legacy$results
+  results <- facts$view
 
   # Built in ONE vectorized pass rather than one tibble per row. Under a blanket
   # `Disallow: /` over a 50 000-URL sitemap the per-row form spent ~32s, 95% of

@@ -881,21 +881,41 @@ ruleset does not imply a Bing *robots* policy: the two are chosen independently,
 because "which engine's sitemap rules am I validating under" and "which engine's
 robots semantics govern access" are different questions.
 
-**Explicit internal carrier.** The robots axes are carried explicitly by
+**Explicit carrier.** The robots axes are carried explicitly by
 `robots_context(product_token, policy_ruleset, matcher_backend)`; nothing
 derives them from `sitemap_ruleset`. Provenance: `application_choice` (the
 bridge is a named sitemapr product decision, not an engine-documented mapping).
 
-`robots_context()` is **internal**, and the public surface currently exposes
-only the matcher user-agent (`validate_sitemap(robots_user_agent =)`), which
-widens to a context on the Google defaults. The table above is therefore a
-**design commitment, not yet a public API**: a preset constructor for it lives
-in `tests/testthat/helper-robots-context.R` (SITE-bxzclfqv). Exporting a
-context and a preset constructor — so a caller can select an engine and read
-back **expanded** values recording exactly which product token, policy ruleset
-and matcher backend that preset selected — is SITE-fsawklnl, which also has to
-clear the Google-bounded `ROBOTS_*` findings path (evaluation already honours
-every engine; only the findings derivation is legacy-bounded).
+**This is live public surface** (SITE-fsawklnl). `robots_context()` and the
+preset constructor `robots_context_preset()` are exported, and
+`validate_sitemap_robots()` is the entry point that accepts one — the
+robots-aware sibling of `validate_sitemap()`, parallel to how
+`validate_sitemap_ruleset()` accepts a `ruleset_context()`. The preset's values
+are **expanded onto the returned context** rather than re-derived at use time,
+so a caller reads back exactly which product token, policy ruleset and matcher
+backend a preset selected; the result surfaces them again in a `robots_context`
+list-column. `validate_sitemap(robots_user_agent =)` remains the string
+shorthand and still widens onto the Google defaults.
+
+The findings path is no longer Google-bounded. `ROBOTS_*` findings derive from
+a row view sitemapr builds off the published `robotstxtr` v1 fields
+(`robots_findings_view()`), not from the sibling's Google-only
+`as_legacy_robots_decisions_v1()` shim, so every engine that evaluates also
+produces findings. A test pins the two against each other under a Google
+context, so E.5's byte-identical output (ADR-009 §5) cannot drift.
+
+Two limits a caller should expect, both properties of the installed
+`robotstxtr` rather than of this bridge:
+
+- A backend whose published `matcher_availability` is `capability_unavailable`
+  (Bing and RFC 9309 as of robotstxtr v0.2.0) decides nothing: every advertised
+  URL surfaces as `ROBOTS_INDETERMINATE` rather than a guessed allow.
+- A backend whose `token_policy` is `bounded_profiles` accepts only its own
+  vendor profile tokens, and the accepted set is **not published**, so it cannot
+  be validated at construction. Yandex's bounded profile accepts `Yandex`, not
+  `YandexBot`. An unsupported token is not an error — it renders every URL
+  indeterminate — which is why `robots_context_preset()` carries a known-good
+  token per engine and a test asserts each one is honoured by its own backend.
 
 ### 13.1 Crawler-token model — steal the vocabulary, do not invoke the matcher
 

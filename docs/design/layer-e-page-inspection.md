@@ -113,7 +113,7 @@ separate, coordinated cross-repo migration, never a silent flip in an issue.
 >
 > `validate_robots_sitemap()` (`R/robots-validate.R`) evaluates the source's own
 > url through the same E.1b facts machinery and derives the finding from the
-> Google-bounded legacy view, exactly as E.5 does. It is appended per source in
+> facts' row view, exactly as E.5 does. It is appended per source in
 > `validate_sitemap_source()` rather than inside the per-format branches: a
 > sitemap at a `Disallow`-ed path is a defect whether the document parses as a
 > `urlset`, an HTML masquerade, or a corrupt gzip. Cost is one extra robots.txt
@@ -795,21 +795,26 @@ Delivered by SITE-kwkggijf. Robots evaluation now lives in `R/robots-facts.R`;
   from `sitemap_ruleset` (ADR-009 axis independence). Axis values are validated
   against the sibling's published sets read from the public contract. The
   documented presets (google/bing/yandex/rfc9309) whose **expanded** values are
-  retained on the object are specified in `docs/sitemap-spec.md` §13.0; their
-  constructor is a test helper until an exported entry point can accept a
-  context (SITE-bxzclfqv, SITE-fsawklnl).
-- **Back-compat.** E.5's findings are byte-identical across the refactor,
-  derived through the exported Google-bounded `as_legacy_robots_decisions_v1()`
-  shim. A non-Google context has no legacy view, so findings derivation aborts
-  (`sitemapr_robots_findings_unsupported`) rather than silently emitting zero
-  rows — while the **decision** stays consultable, which is the point of E.1b.
+  retained on the object are specified in `docs/sitemap-spec.md` §13.0. Since
+  SITE-fsawklnl the carrier, the presets and the entry point that accepts one
+  (`validate_sitemap_robots()`) are all exported.
+- **Back-compat.** E.5's findings are byte-identical across the refactor. They
+  derive from `robots_findings_view()`, sitemapr's own reproduction of the
+  arithmetic in the sibling's Google-bounded `as_legacy_robots_decisions_v1()`
+  shim, built off the published v1 fields for EVERY context — that is what
+  cleared the findings path for a non-Google engine (SITE-fsawklnl). A test
+  pins the view against the shim under a Google context so the two cannot
+  drift. The one shape that still refuses to yield findings is a MERGED facts
+  object, which drops its view on purpose because each finding must anchor to
+  its own advertising sitemap base (`sitemapr_robots_findings_unsupported`);
+  its **decisions** stay consultable, which is the point of E.1b.
 
 **Trichotomy note — the v1 fields alone are not sufficient.** A 404/410
 robots.txt (a genuine policy allow-all) and a **403** (unknown) both surface as
 `matcher_status = "not_needed"`, `url_decision = "allow"`,
 `reason = "policy_allow_all"`. The only discriminator is the HTTP status, so
 `robots_decision_trichotomy()` mirrors the shim's status rule, pinned by a test
-asserting it agrees with the legacy `allowed` column. The trichotomy is
+asserting it agrees with the row view's `allowed` column. The trichotomy is
 deliberately **conservative**: `"disallow"` requires an evaluated matcher
 verdict, so it can only ever decline to claim a trap, never manufacture one.
 
@@ -827,8 +832,8 @@ verdict, so it can only ever decline to claim a trap, never manufacture one.
   new `page_directive_ruleset` axis and no ADR-009 amendment. The robots axes
   are carried by the explicit `robots_context()` carrier (E.1b), with the
   `sitemap_ruleset → robots_policy_ruleset` bridge expressed as a documented
-  preset whose expanded values are retained (spec §13.0; the preset constructor
-  is a test helper for now — SITE-bxzclfqv).
+  preset whose expanded values are retained (spec §13.0; exported as
+  `robots_context_preset()` by SITE-fsawklnl).
 - **Provenance on every cell** (§5 tables). Diagnostic-only cells never drive a
   verdict.
 - **Six-field outcome model** reused for the page-fetch outcome (§3.1
