@@ -45,13 +45,13 @@ contract_versions <- function() {
 # revision would be a string nobody is obliged to maintain, which is worse than
 # publishing nothing.
 findings_registry_revision <- function() {
-  "2026-08-07"
+  "2026-08-08"
 }
 
 # md5 of the registry bytes the revision above describes. Paired with it, never
 # read on its own; see `findings_registry_revision()` for why it exists.
 findings_registry_digest <- function() {
-  "09a392d688aa50e2541db112ee29bf3b"
+  "28ead295bc4fbef193a9bfb6097b77fb"
 }
 
 # Supported sibling-version ranges (ADR-009 §7). Ranges this build is KNOWN to
