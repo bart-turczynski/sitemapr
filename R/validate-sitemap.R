@@ -1003,7 +1003,9 @@ combine_findings_contracts <- function(parts, ruleset = NULL) {
   }
   findings <- findings[, cols, drop = FALSE]
   out <- tibble::new_tibble(findings, nrow = nrow(findings))
-  findings_stamp_layers(out, layers_run)
+  # `[` and new_tibble() drop both stamps; the engine half is re-read from the
+  # argument rather than unioned, because every part of one call shares it.
+  findings_stamp_layers(findings_stamp_ruleset_run(out, ruleset), layers_run)
 }
 
 # Validate multiple normalized source records, converting source-level failures
@@ -1364,7 +1366,13 @@ validate_sitemaps <- function(
 #'   (character), `context` (a list-column of the context object as a named
 #'   list), and `provenance` (character, per finding), appended in that order
 #'   after the ten pinned columns. The same source, mode, ruleset, and context
-#'   yield a row-for-row identical tibble across calls.
+#'   yield a row-for-row identical tibble across calls. An engine overlay also
+#'   stamps a `ruleset_run` attribute (`attr(x, "ruleset_run")`) naming the
+#'   selected ruleset, so [report_sitemap()] can tell an engine-gated check that
+#'   ran and passed from one this call could never reach — the `ruleset` column
+#'   answers that per row, and a clean run has no rows. Like `layers_run` it is
+#'   a run manifest and not part of the row contract; the baseline path stamps
+#'   nothing.
 #' @seealso [validate_sitemap()] for the baseline entry point,
 #'   [sitemap_rulesets()] for the ruleset value set, and [ruleset_context()] for
 #'   the per-source context axes.

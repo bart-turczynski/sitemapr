@@ -564,6 +564,37 @@ Being `active` here means "emitted when the `yandex` overlay is selected", not
 "emitted on a baseline call". A baseline run never produces an engine-specific
 code — the `ruleset` column, not the `status` column, is what scopes them.
 
+#### Consumers must read the column, not the layer
+
+Anything that reports *which checks ran* has to gate on `ruleset` as well as
+`status` and `layer`. The report's Checks section did not, and marked all four
+non-`baseline` codes `passed` on a baseline `validate_sitemap()` — their layers
+had run, so layer membership alone waved them through, and the passed tally was
+inflated by the same four (SITE-lbhbltzf). Correcting the registry cell does not
+by itself correct a consumer that never reads it. A non-`baseline` code is
+reported as having run only when the run selected a ruleset that can reach it:
+its own engine, or any engine for the `overlay` tier.
+
+#### The run stamp: `attr(x, "ruleset_run")`
+
+Which ruleset a call selected is recorded as an attribute on the findings
+tibble, alongside `layers_run` and `page_coverage`. The additive `ruleset`
+*column* carries the same name but **per row**, so it cannot answer the question
+on the run that matters most: an overlay run that finds nothing has the column
+and no values in it, leaving the engine unrecoverable exactly when every gated
+check passed cleanly. That is the same class of fact `layers_run` exists for —
+one the run knows and the result forgets — and it is an attribute for the same
+reason: the ten-column contract is public, so a column would be a migration.
+
+The alternative considered was reading the engine off the column and reporting
+the gated codes `not-run` whenever it held no value. It was rejected: it makes a
+check's reported state depend on whether an *unrelated* check happened to fire,
+so a cleaner sitemap would vouch for fewer checks than a dirtier one. Only a
+selected overlay is stamped; a baseline call leaves the tibble's attributes
+exactly as they were before the stamp existed, and an absent stamp reads as "no
+overlay proven" — correct for a baseline run, an older result, and a hand-built
+tibble alike.
+
 ### Migration note
 
 Backwards compatibility is preserved **by construction** (ADR-009 §5):

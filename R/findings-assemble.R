@@ -341,7 +341,40 @@ findings_stamp_ruleset <- function(
     findings$severity
   )
   findings <- findings_sort(findings)
-  tibble::new_tibble(findings, nrow = n)
+  findings_stamp_ruleset_run(tibble::new_tibble(findings, nrow = n), ruleset)
+}
+
+# The engine half of the run manifest: the ruleset a call SELECTED, as
+# `attr(x, "ruleset_run")` (SITE-lbhbltzf).
+#
+# The additive `ruleset` column already carries the same name, but per ROW — so
+# an overlay run that found nothing has the column and no value in it, and the
+# engine is unrecoverable from the data exactly when the report most needs it
+# (deciding whether an engine-gated check ran and passed). That is the same
+# class of fact `layers_run` exists for: something the RUN knows and the RESULT
+# forgets. It is an attribute for the same reason too — the findings tibble is
+# the public ten-column contract, so a column would be a contract migration.
+#
+# Only a selected overlay is stamped. A baseline call (`ruleset = NULL`) leaves
+# the tibble untouched, so its attributes stay byte-identical to what it emitted
+# before this stamp existed, and an absent stamp reads as "no overlay proven" —
+# correct for a baseline run, an older result and a hand-built tibble alike.
+findings_stamp_ruleset_run <- function(findings, ruleset) {
+  if (is.null(ruleset)) {
+    return(findings)
+  }
+  attr(findings, "ruleset_run") <- ruleset$ruleset
+  findings
+}
+
+# The ruleset a run selected, or `character(0)` when it carries no stamp. The
+# one reader of the attribute, mirroring `findings_layers_run()`.
+findings_ruleset_run <- function(findings) {
+  ruleset <- attr(findings, "ruleset_run", exact = TRUE)
+  if (is.null(ruleset)) {
+    return(character(0))
+  }
+  ruleset
 }
 
 # Sort into the contract's stable order: layer (per the layer vocabulary, not

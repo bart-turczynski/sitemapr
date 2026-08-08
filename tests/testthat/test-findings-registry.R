@@ -42,11 +42,14 @@ test_that("the registry is parsed once per cache", {
   expect_equal(nrow(sitemapr_test_call("findings_registry", cache = cache)), 0L)
 })
 
-test_that("only active codes are eligible, with code/severity/layer", {
+test_that("only active codes are eligible, with code/severity/layer/ruleset", {
   reg <- sitemapr_test_call("findings_registry")
   active <- sitemapr_test_call("findings_active_codes")
 
-  expect_named(active, c("code", "severity", "layer"))
+  # `ruleset` rides along because status alone does not decide whether a check
+  # was exercised: it says the emitter exists here, `ruleset` says which calls
+  # can reach it (SITE-lbhbltzf).
+  expect_named(active, c("code", "severity", "layer", "ruleset"))
   expect_equal(nrow(active), sum(reg$status == "active"))
   # The statuses that name a check this port does NOT run are excluded, so they
   # can never be reported as having passed.

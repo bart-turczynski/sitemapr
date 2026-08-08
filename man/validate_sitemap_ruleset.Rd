@@ -117,7 +117,13 @@ overlay it additionally carries \code{ruleset} (character), \code{ruleset_revisi
 (character), \code{context} (a list-column of the context object as a named
 list), and \code{provenance} (character, per finding), appended in that order
 after the ten pinned columns. The same source, mode, ruleset, and context
-yield a row-for-row identical tibble across calls.
+yield a row-for-row identical tibble across calls. An engine overlay also
+stamps a \code{ruleset_run} attribute (\code{attr(x, "ruleset_run")}) naming the
+selected ruleset, so \code{\link[=report_sitemap]{report_sitemap()}} can tell an engine-gated check that
+ran and passed from one this call could never reach — the \code{ruleset} column
+answers that per row, and a clean run has no rows. Like \code{layers_run} it is
+a run manifest and not part of the row contract; the baseline path stamps
+nothing.
 }
 \description{
 The versioned, engine-aware entry point parallel to \code{\link[=validate_sitemap]{validate_sitemap()}}. It

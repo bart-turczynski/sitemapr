@@ -1342,7 +1342,12 @@ report_return <- function(html, output) {
 #' an empty findings table can be told apart from a validation that never ran.
 #' A layer counts as having run only on positive evidence, which understates
 #' rather than overstates: `check_robots = TRUE` leaves no trace when nothing is
-#' disallowed, so a clean robots run reads as "not exercised". The
+#' disallowed, so a clean robots run reads as "not exercised". A check is also
+#' gated on the registry's `ruleset` column, independently of its layer: a
+#' baseline call cannot reach an engine-gated emitter however thoroughly it
+#' exercised the surrounding layer, so those checks are reported as unknown
+#' rather than clean. Pass the result of [validate_sitemap_ruleset()] as
+#' `findings` to have the selected engine's checks counted. The
 #' **Recommendations** section is prescriptive rather than diagnostic — stale or
 #' absent `lastmod`, `priority`/`changefreq` that the major engines ignore, and
 #' the 50,000-URL / 50 MB / 50,000-child bounds as they are approached — each
