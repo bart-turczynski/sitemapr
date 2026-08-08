@@ -428,6 +428,50 @@ test_that("findings_stamp_ruleset returns input unchanged for NULL", {
     is_strict_only = FALSE
   )
   expect_identical(findings_stamp_ruleset(small, NULL), small)
+  # Including the run stamp: an absent attribute is what a baseline call has
+  # always had, and what the report reads as "no overlay proven".
+  expect_identical(findings_ruleset_run(small), character(0))
+})
+
+test_that("the ruleset run stamp survives every re-impose (SITE-lbhbltzf)", {
+  # `[` and new_tibble() drop attributes, so each assembly path has to carry the
+  # stamp across by hand -- the trap `precap_totals` and `layers_run` both hit.
+  spec <- findings_ruleset_spec("yandex", ruleset_context())
+  part <- protocol_findings(
+    code = "PROTOCOL_LASTMOD_INVALID",
+    severity = "error",
+    subject_type = "entry",
+    subject_ref = "https://e.com/s.xml#entry:1",
+    message = "bad lastmod",
+    evidence = list(finding_evidence()),
+    is_strict_only = FALSE
+  )
+
+  # The three assembler exits: rows, no parts, and parts that are all empty.
+  expect_identical(
+    findings_ruleset_run(assemble_findings(list(part), "strict", spec)),
+    "yandex"
+  )
+  expect_identical(
+    findings_ruleset_run(assemble_findings(list(), "strict", spec)),
+    "yandex"
+  )
+  expect_identical(
+    findings_ruleset_run(assemble_findings(list(part[0L, ]), "strict", spec)),
+    "yandex"
+  )
+  # And the row-bind across per-source contracts, empty set included.
+  combined <- sitemapr_test_ns$combine_findings_contracts(
+    list(assemble_findings(list(part), "strict", spec)),
+    spec
+  )
+  expect_identical(findings_ruleset_run(combined), "yandex")
+  expect_identical(
+    findings_ruleset_run(
+      sitemapr_test_ns$combine_findings_contracts(list(), spec)
+    ),
+    "yandex"
+  )
 })
 
 test_that("yandex overlay relabels metadata error to warning end-to-end", {

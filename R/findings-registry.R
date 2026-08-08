@@ -35,14 +35,21 @@ findings_registry <- function(cache = findings_registry_cache) {
   reg
 }
 
-# The `active` codes only, as `code`/`severity`/`layer` rows in registry order.
+# The `active` codes only, as `code`/`severity`/`layer`/`ruleset` rows in
+# registry order.
 #
 # Status is the eligibility gate for any "this check ran" claim: a
 # `validator-only` row names a check the sibling has and this port does NOT,
 # and `reserved` / `deferred-*` rows name codes nothing emits yet. Reporting one
 # of those as a check that passed would claim a check that does not exist here,
 # which is worse than saying nothing.
+#
+# `ruleset` is the second gate, and the reason this returns four columns rather
+# than three: status says the emitter EXISTS here, `ruleset` says which calls
+# can reach it (SITE-lbhbltzf). Without it the report reads layer membership
+# alone and claims an engine-gated check passed on a baseline run.
 findings_active_codes <- function() {
   reg <- findings_registry()
-  reg[reg$status == "active", c("code", "severity", "layer"), drop = FALSE]
+  cols <- c("code", "severity", "layer", "ruleset")
+  reg[reg$status == "active", cols, drop = FALSE]
 }

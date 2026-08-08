@@ -88,18 +88,49 @@ report_layer_ran <- function(urls, sources, findings) {
   ran[report_layer_order]
 }
 
+# Whether each active code's emitter was REACHABLE on this run, from the
+# registry's `ruleset` column against the ruleset the run selected
+# (SITE-lbhbltzf). The second gate on "passed", independent of the layer one: a
+# layer can run in full while a check inside it stays dormant because no engine
+# overlay selected it.
+#
+#   * `baseline` — reachable on every call.
+#   * `overlay`  — reachable only when SOME engine overlay is selected.
+#   * an engine name — reachable only under that one engine.
+#
+# `run` is `character(0)` on a baseline call and on any result carrying no
+# stamp, which correctly leaves the reachable set as `baseline` alone. Phrased
+# as one membership test rather than a boolean chain so an unset registry cell
+# reads as unreachable rather than as NA — understating, the safe direction, as
+# everywhere else here.
+report_code_reachable <- function(codes, run) {
+  reachable <- c("baseline", run)
+  if (length(run) > 0L) {
+    reachable <- c(reachable, "overlay")
+  }
+  codes$ruleset %in% reachable
+}
+
 # One row per active registry code with its outcome: "fired" (it is in the
 # findings, and therefore already rendered in the findings section), "passed"
-# (its layer ran and it did not fire), or "not-run" (its layer is unproven).
+# (its layer ran, its emitter was reachable, and it did not fire), or "not-run".
+# A `reason` accompanies each "not-run" — "layer" when the layer itself is
+# unproven, "ruleset" when the layer ran but this run could not reach the
+# emitter — because the two are reported to the reader differently.
 # Sorted by layer order, then code, so the table reads in pipeline order.
 report_check_states <- function(urls, sources, findings) {
   codes <- findings_active_codes()
   ran <- report_layer_ran(urls, sources, findings)
+  reachable <- report_code_reachable(codes, findings_ruleset_run(findings))
 
   state <- rep("not-run", nrow(codes))
-  state[ran[codes$layer]] <- "passed"
+  state[ran[codes$layer] & reachable] <- "passed"
+  # A fired code is proof of its own reachability, and outranks both gates for
+  # the same reason `report_layer_ran()` lets it outrank the layer inference.
   state[codes$code %in% findings$code] <- "fired"
   codes$state <- state
+  codes$reason <- ifelse(ran[codes$layer], "ruleset", "layer")
+  codes$reason[state != "not-run"] <- NA_character_
 
   codes[order(factor(codes$layer, levels = report_layer_order), codes$code), ]
 }
@@ -189,15 +220,54 @@ report_checks_skipped_note <- function(skipped) {
   )
 }
 
+# How a gating `ruleset` value reads to someone who does not know the column:
+# an engine name is already the name they would pass, the `overlay` tier is
+# every engine at once.
+report_ruleset_label <- function(ruleset) {
+  ifelse(ruleset == "overlay", "any engine", ruleset)
+}
+
+# The checks this run's RULESET could not reach, reported apart from the layer
+# note above rather than folded into it: their layers did run, so one combined
+# note would name a layer as unexercised while checks inside it passed.
+report_checks_ruleset_note <- function(skipped, run) {
+  if (nrow(skipped) == 0L) {
+    return(NULL)
+  }
+  selected <- if (length(run) == 0L) {
+    "sitemaps.org baseline"
+  } else {
+    paste(run, "ruleset")
+  }
+  htmltools::tags$p(
+    class = "smr-note",
+    sprintf(
+      paste(
+        "Gated on a ruleset this run did not select (%s, applying under: %s).",
+        "This run used the %s. Their layers ran but these checks did not, so",
+        "they are reported as unknown rather than clean."
+      ),
+      format(nrow(skipped), big.mark = ","),
+      toString(sort(unique(report_ruleset_label(skipped$ruleset)))),
+      selected
+    )
+  )
+}
+
 report_checks_section <- function(urls, sources, findings) {
   states <- report_check_states(urls, sources, findings)
+  skipped <- states[states$state == "not-run", , drop = FALSE]
   htmltools::tags$section(
     class = "smr-section",
     htmltools::tags$h2("Checks"),
     report_checks_summary(states),
     report_checks_table(states[states$state == "passed", , drop = FALSE]),
     report_checks_skipped_note(
-      states[states$state == "not-run", , drop = FALSE]
+      skipped[skipped$reason == "layer", , drop = FALSE]
+    ),
+    report_checks_ruleset_note(
+      skipped[skipped$reason == "ruleset", , drop = FALSE],
+      findings_ruleset_run(findings)
     )
   )
 }
