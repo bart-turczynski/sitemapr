@@ -19,7 +19,7 @@ prt_facts <- function(
       urls = urls,
       decision = decision,
       decisions = NULL,
-      legacy = NULL
+      view = NULL
     ),
     class = "sitemapr_robots_facts"
   )

@@ -52,6 +52,24 @@ related W3C and RFC standards.
   `robots`-layer codes ship with it: `ROBOTS_DISALLOWED`,
   `ROBOTS_SITEMAP_DISALLOWED`, and `ROBOTS_INDETERMINATE` for the case where
   the fetch could not establish an answer either way.
+* `validate_sitemap_robots()` and `validate_sitemaps_robots()` run that check
+  under an explicit **robots context** instead of a bare user-agent string.
+  `robots_context()` carries the three independent robots axes — the matcher
+  product token, the status-policy ruleset, and the matcher backend — and
+  `robots_context_preset()` selects one engine's set of all three at once
+  (`robots_context_presets()` enumerates them). The context's expanded values
+  are retained on the object and surfaced again in a `robots_context`
+  list-column of the result, so a caller can read back exactly which engine
+  decided each finding. The robots axes are independent of `sitemap_ruleset`
+  (ADR-009 §1): selecting a Bing *sitemap* ruleset does not select Bing
+  *robots* semantics, and vice versa. `validate_sitemap(robots_user_agent =)`
+  is unchanged and remains the string shorthand for the Google defaults.
+* Two limits are worth knowing, both properties of the installed `robotstxtr`
+  rather than of sitemapr: a matcher backend it reports as
+  `capability_unavailable` decides nothing, so every URL comes back
+  `ROBOTS_INDETERMINATE` rather than a guessed allow; and a backend bounded to
+  its own vendor profiles accepts only its own tokens without publishing the
+  set, which is why the presets carry a known-good token per engine.
 * `inspect_pages` opts into per-URL page inspection: a deduplicated,
   deterministically sampled, budgeted set of the advertised pages is fetched
   and each is checked for its transport outcome, its canonical, its

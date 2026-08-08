@@ -248,7 +248,7 @@ validate_archive_parts <- function(src, ruleset = NULL) {
     parts <- append_robots_part(
       parts,
       res$rows$loc,
-      src$robots_ua,
+      src$robots_ctx,
       src$base,
       src$page_sink,
       res$rows$alternates
@@ -430,7 +430,7 @@ validate_feed_parts <- function(
       )
     ),
     parsed$rows$loc,
-    src$robots_ua,
+    src$robots_ctx,
     src$base,
     src$page_sink,
     parsed$rows$alternates
@@ -481,7 +481,7 @@ validate_xml_parts <- function(
         )
       ),
       rows$loc,
-      src$robots_ua,
+      src$robots_ctx,
       src$base,
       src$page_sink,
       rows$alternates
@@ -571,7 +571,7 @@ validate_index_parts <- function(
         ex$rows,
         ex$sources,
         src$base,
-        src$robots_ua,
+        src$robots_ctx,
         ruleset,
         src$page_sink
       )
@@ -619,7 +619,7 @@ index_protocol_parts <- function(
   rows,
   sources,
   fallback_base,
-  robots_ua = NULL,
+  robots_ctx = NULL,
   ruleset = NULL,
   page_sink = NULL
 ) {
@@ -641,7 +641,7 @@ index_protocol_parts <- function(
         ruleset = ruleset
       )),
       rows$loc,
-      robots_ua,
+      robots_ctx,
       fallback_base,
       page_sink,
       rows$alternates
@@ -667,7 +667,7 @@ index_protocol_parts <- function(
     parts <- append_robots_part(
       parts,
       child_rows$loc,
-      robots_ua,
+      robots_ctx,
       child_base,
       page_sink,
       child_rows$alternates
@@ -703,17 +703,32 @@ validate_failure_finding <- function(source, cnd) {
   )
 }
 
-# Resolve the robots matcher user-agent for a call, or NULL when the robots
-# allow/disallow check is not active. Returns NULL when `check_robots` is FALSE.
-# When `check_robots` is TRUE but the optional `robotstxtr` engine is not
-# installed, this signals a classed warning naming the install command (the
-# absence is a setup fact about the user's machine, NOT a finding about the
-# sitemap) and returns NULL so validation proceeds with every other layer
-# unaffected. An engine that IS installed but reports an incompatible contract
-# aborts instead (robotstxtr_engine_contract()): wrong matcher semantics would
-# silently corrupt robots findings, which is worse than failing.
-# Otherwise it returns the matcher user-agent to test against.
-resolve_robots_ua <- function(check_robots, robots_user_agent) {
+# Widen the public robots argument to a `robots_context()`. Two shapes reach
+# here: the historical `robots_user_agent=` string — a bare matcher user-agent,
+# widened onto the Google policy/matcher defaults, which is what every
+# string-taking entry point has always meant — and, since SITE-fsawklnl, a
+# context object built by the caller, which passes through with all three axes
+# intact.
+as_robots_context <- function(x) {
+  if (inherits(x, "sitemapr_robots_context")) {
+    return(x)
+  }
+  robots_context(product_token = x)
+}
+
+# Resolve the robots context for a call, or NULL when the robots allow/disallow
+# check is not active. Returns NULL when `check_robots` is FALSE. When
+# `check_robots` is TRUE but the optional `robotstxtr` engine is not installed,
+# this signals a classed warning naming the install command (the absence is a
+# setup fact about the user's machine, NOT a finding about the sitemap) and
+# returns NULL so validation proceeds with every other layer unaffected. An
+# engine that IS installed but reports an incompatible contract aborts instead
+# (robotstxtr_engine_contract()): wrong matcher semantics would silently corrupt
+# robots findings, which is worse than failing.
+#
+# The context is built only AFTER those gates, so its axis validation reads the
+# installed sibling's published value sets rather than being skipped.
+resolve_robots_context <- function(check_robots, robots) {
   if (!isTRUE(check_robots)) {
     return(NULL)
   }
@@ -731,7 +746,7 @@ resolve_robots_ua <- function(check_robots, robots_user_agent) {
     return(NULL)
   }
   robotstxtr_engine_contract()
-  robots_user_agent
+  as_robots_context(robots)
 }
 
 # A page-inspection loc sink: a mutable env accumulating every advertised loc
@@ -807,7 +822,7 @@ page_sink_add <- function(sink, locs, base, alternates = NULL) {
 }
 
 # Append a robots-layer producer part for the advertised `locs` to `parts` when
-# the robots check is active (`robots_ua` non-NULL), and record the same locs
+# the robots check is active (`robots_ctx` non-NULL), and record the same locs
 # into the page-inspection `sink` when one is active. The sink record runs
 # regardless of the robots check (page inspection is independent of it); both
 # are no-ops when their gate is NULL, so the rows-bearing branches can call this
@@ -815,20 +830,20 @@ page_sink_add <- function(sink, locs, base, alternates = NULL) {
 append_robots_part <- function(
   parts,
   locs,
-  robots_ua,
+  robots_ctx,
   base,
   sink = NULL,
   alternates = NULL
 ) {
   page_sink_add(sink, locs, base, alternates)
-  if (is.null(robots_ua)) {
+  if (is.null(robots_ctx)) {
     return(parts)
   }
   # One evaluation, two consumers (E.1b): the ROBOTS_* findings for this source
   # and — via the sink — the call-wide decision the §5.4 trap synthesis
   # consults. The findings half is byte-identical to the former
   # `validate_robots()` call.
-  part <- robots_part(locs, robots_ua, base)
+  part <- robots_part(locs, robots_ctx, base)
   page_sink_add_robots(sink, part$facts)
   parts[[length(parts) + 1L]] <- part$findings
   parts
@@ -843,7 +858,7 @@ validate_sitemap_source <- function(
   limits,
   index_limits,
   policy,
-  robots_ua = NULL,
+  robots_ctx = NULL,
   ruleset = NULL,
   page_sink = NULL
 ) {
@@ -866,7 +881,7 @@ validate_sitemap_source <- function(
   # without a threaded argument (NULL = check inactive). The page-inspection
   # sink rides the same way: each rows-bearing branch records its advertised
   # locs into it via append_robots_part (NULL = page inspection off).
-  src$robots_ua <- robots_ua
+  src$robots_ctx <- robots_ctx
   src$page_sink <- page_sink
   # The run manifest rides along the same way (R/layers-run.R): the branches
   # record the layers they exercise, and the stamp is attached to this source's
@@ -893,7 +908,7 @@ validate_sitemap_source <- function(
     append_robots_part(
       list(validate_text_protocol(text, src$base)),
       split_lines(text),
-      src$robots_ua,
+      src$robots_ctx,
       src$base,
       src$page_sink
     )
@@ -919,13 +934,13 @@ validate_sitemap_source <- function(
   parts <- append_robots_sitemap_part(
     parts,
     as.character(source$normalized_url)[[1L]],
-    robots_ua,
+    robots_ctx,
     src$base
   )
-  # That call is unconditional whenever `robots_ua` is set, so a non-NULL UA is
-  # itself proof the robots layer ran — which is the only evidence a clean run
-  # (every advertised URL allowed) ever produces.
-  if (!is.null(robots_ua)) {
+  # That call is unconditional whenever `robots_ctx` is set, so a non-NULL
+  # context is itself proof the robots layer ran — which is the only evidence a
+  # clean run (every advertised URL allowed) ever produces.
+  if (!is.null(robots_ctx)) {
     layer_sink_record(layer_sink, "robots")
   }
 
@@ -949,14 +964,14 @@ append_encoding_part <- function(parts, src) {
 }
 
 # Append the document-level robots part for the source's own url, or leave
-# `parts` untouched when the robots check is inactive (`robots_ua` NULL).
-append_robots_sitemap_part <- function(parts, sitemap_url, robots_ua, base) {
-  if (is.null(robots_ua)) {
+# `parts` untouched when the robots check is inactive (`robots_ctx` NULL).
+append_robots_sitemap_part <- function(parts, sitemap_url, robots_ctx, base) {
+  if (is.null(robots_ctx)) {
     return(parts)
   }
   parts[[length(parts) + 1L]] <- validate_robots_sitemap(
     sitemap_url,
-    robots_ua,
+    robots_ctx,
     base
   )
   parts
@@ -1000,7 +1015,7 @@ validate_sitemap_batch <- function(
   limits,
   index_limits,
   policy,
-  robots_ua = NULL,
+  robots_ctx = NULL,
   ruleset = NULL,
   page_sink = NULL
 ) {
@@ -1016,7 +1031,7 @@ validate_sitemap_batch <- function(
           limits,
           index_limits,
           policy,
-          robots_ua,
+          robots_ctx,
           ruleset,
           page_sink
         )
@@ -1047,6 +1062,88 @@ findings_ruleset_spec <- function(sitemap_ruleset, context) {
     ruleset = sitemap_ruleset,
     ruleset_revision = ruleset_revision(sitemap_ruleset),
     context = context
+  )
+}
+
+# The one implementation behind every exported validate_sitemap*() entry point.
+# They differ ONLY in what they resolve for two arguments — the engine `ruleset`
+# spec (NULL on the baseline) and the `robots` carrier (a matcher user-agent
+# string or a `robots_context()`) — so the pipeline lives here once instead of
+# being copied per entry point.
+#
+# `mode` / `page_mode` are match.arg()ed by the callers, not here: their
+# defaults are the choice vectors themselves, which only the exported signature
+# can express.
+validate_sitemap_core <- function(
+  x,
+  mode,
+  user_agent,
+  limits,
+  index_limits,
+  policy,
+  check_robots,
+  robots,
+  ruleset,
+  inspect_pages,
+  page_sample,
+  page_mode,
+  page_budget,
+  page_user_agent
+) {
+  sources <- sitemap_public_source_records(x)
+  if (is.null(index_limits)) {
+    index_limits <- index_limits()
+  }
+  robots_ctx <- resolve_robots_context(check_robots, robots)
+  # The page-inspection sink is created ONLY when inspect_pages is on; it stays
+  # NULL otherwise so the loc-gathering plumbing is a strict no-op and the
+  # result is byte-identical to a call without page inspection.
+  page_sink <- if (isTRUE(inspect_pages)) page_sink_new() else NULL
+
+  base <- if (length(x) == 1L) {
+    validate_sitemap_source(
+      sources[1L, , drop = FALSE],
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      robots_ctx = robots_ctx,
+      ruleset = ruleset,
+      page_sink = page_sink
+    )
+  } else {
+    validate_sitemap_batch(
+      sources,
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      robots_ctx = robots_ctx,
+      ruleset = ruleset,
+      page_sink = page_sink
+    )
+  }
+
+  if (!isTRUE(inspect_pages)) {
+    return(base)
+  }
+  # The page-layer findings are assembled + combined under the SAME `ruleset` as
+  # the base result, so an engine overlay's provenance / context columns
+  # (ADR-009 §5.2/§5.3) engage over the transport / canonical / hreflang page
+  # findings too rather than emitting as generic baseline diagnostics.
+  page_inspection_finalize(
+    base = base,
+    sink = page_sink,
+    mode = mode,
+    ruleset = ruleset,
+    budget = page_budget,
+    sample_size = page_sample,
+    page_mode = page_mode,
+    user_agent = page_user_agent,
+    limits = limits,
+    policy = policy
   )
 }
 
@@ -1170,56 +1267,21 @@ validate_sitemap <- function(
   page_budget = page_inspection_budget(),
   page_user_agent = default_user_agent()
 ) {
-  mode <- match.arg(mode)
-  page_mode <- match.arg(page_mode)
-  sources <- sitemap_public_source_records(x)
-  if (is.null(index_limits)) {
-    index_limits <- index_limits()
-  }
-  robots_ua <- resolve_robots_ua(check_robots, robots_user_agent)
-  # The page-inspection sink is created ONLY when inspect_pages is on; it stays
-  # NULL otherwise so the loc-gathering plumbing is a strict no-op and the
-  # result is byte-identical to a call without page inspection.
-  page_sink <- if (isTRUE(inspect_pages)) page_sink_new() else NULL
-
-  base <- if (length(x) == 1L) {
-    validate_sitemap_source(
-      sources[1L, , drop = FALSE],
-      mode = mode,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits,
-      policy = policy,
-      robots_ua = robots_ua,
-      page_sink = page_sink
-    )
-  } else {
-    validate_sitemap_batch(
-      sources,
-      mode = mode,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits,
-      policy = policy,
-      robots_ua = robots_ua,
-      page_sink = page_sink
-    )
-  }
-
-  if (!isTRUE(inspect_pages)) {
-    return(base)
-  }
-  page_inspection_finalize(
-    base = base,
-    sink = page_sink,
-    mode = mode,
-    ruleset = NULL,
-    budget = page_budget,
-    sample_size = page_sample,
-    page_mode = page_mode,
-    user_agent = page_user_agent,
+  validate_sitemap_core(
+    x,
+    mode = match.arg(mode),
+    user_agent = user_agent,
     limits = limits,
-    policy = policy
+    index_limits = index_limits,
+    policy = policy,
+    check_robots = check_robots,
+    robots = robots_user_agent,
+    ruleset = NULL,
+    inspect_pages = inspect_pages,
+    page_sample = page_sample,
+    page_mode = match.arg(page_mode),
+    page_budget = page_budget,
+    page_user_agent = page_user_agent
   )
 }
 
@@ -1339,63 +1401,21 @@ validate_sitemap_ruleset <- function(
   page_user_agent = default_user_agent()
 ) {
   sitemap_ruleset <- match.arg(sitemap_ruleset, sitemap_rulesets())
-  mode <- match.arg(mode)
-  page_mode <- match.arg(page_mode)
-  sources <- sitemap_public_source_records(x)
-  if (is.null(index_limits)) {
-    index_limits <- index_limits()
-  }
-  robots_ua <- resolve_robots_ua(check_robots, robots_user_agent)
-  ruleset <- findings_ruleset_spec(sitemap_ruleset, context)
-  # As in validate_sitemap(): the sink exists only when inspect_pages is on, so
-  # the loc-gathering plumbing is a strict no-op and the baseline/engine result
-  # is byte-identical to a call without page inspection.
-  page_sink <- if (isTRUE(inspect_pages)) page_sink_new() else NULL
-
-  base <- if (length(x) == 1L) {
-    validate_sitemap_source(
-      sources[1L, , drop = FALSE],
-      mode = mode,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits,
-      policy = policy,
-      robots_ua = robots_ua,
-      ruleset = ruleset,
-      page_sink = page_sink
-    )
-  } else {
-    validate_sitemap_batch(
-      sources,
-      mode = mode,
-      user_agent = user_agent,
-      limits = limits,
-      index_limits = index_limits,
-      policy = policy,
-      robots_ua = robots_ua,
-      ruleset = ruleset,
-      page_sink = page_sink
-    )
-  }
-
-  if (!isTRUE(inspect_pages)) {
-    return(base)
-  }
-  # Unlike validate_sitemap() (ruleset = NULL), the page-layer findings are
-  # assembled + combined under the SAME engine `ruleset` as the base result, so
-  # the per-engine provenance / context columns (ADR-009 §5.2/§5.3) engage over
-  # the transport / canonical / hreflang page findings too.
-  page_inspection_finalize(
-    base = base,
-    sink = page_sink,
-    mode = mode,
-    ruleset = ruleset,
-    budget = page_budget,
-    sample_size = page_sample,
-    page_mode = page_mode,
-    user_agent = page_user_agent,
+  validate_sitemap_core(
+    x,
+    mode = match.arg(mode),
+    user_agent = user_agent,
     limits = limits,
-    policy = policy
+    index_limits = index_limits,
+    policy = policy,
+    check_robots = check_robots,
+    robots = robots_user_agent,
+    ruleset = findings_ruleset_spec(sitemap_ruleset, context),
+    inspect_pages = inspect_pages,
+    page_sample = page_sample,
+    page_mode = match.arg(page_mode),
+    page_budget = page_budget,
+    page_user_agent = page_user_agent
   )
 }
 
@@ -1429,6 +1449,152 @@ validate_sitemaps_ruleset <- function(
     policy = policy,
     check_robots = check_robots,
     robots_user_agent = robots_user_agent,
+    inspect_pages = inspect_pages,
+    page_sample = page_sample,
+    page_mode = page_mode,
+    page_budget = page_budget,
+    page_user_agent = page_user_agent
+  )
+}
+
+# Surface the call's robots context on the result: one additive list-column
+# carrying the EXPANDED axes, appended after the pinned columns. This mirrors
+# how the engine-aware entry point surfaces its ruleset context, and it is the
+# reason a preset expands rather than re-deriving — a caller can read back
+# exactly which product token, policy ruleset and matcher backend produced
+# these findings.
+#
+# Constant across rows by construction: the robots context is a call-level
+# choice, unlike `ruleset_context()`, which is a per-SOURCE fact. It is stored
+# unclassed, as the ruleset context column is, so the column holds plain named
+# lists rather than S3 objects.
+findings_add_robots_context <- function(findings, context) {
+  findings$robots_context <- rep(list(unclass(context)), nrow(findings))
+  findings
+}
+
+#' Validate a sitemap under an explicit robots context (sitemap-spec §13.0)
+#'
+#' The robots-aware entry point parallel to [validate_sitemap()]. It runs the
+#' identical validation pipeline with the robots allow/disallow layer **on**,
+#' evaluated under a caller-supplied [robots_context()] rather than the bare
+#' matcher user-agent [validate_sitemap()] accepts, and appends the context to
+#' the result as a `robots_context` list-column.
+#'
+#' Use it when the robots question is "would *this engine* fetch these URLs".
+#' [validate_sitemap()] carries only `robots_user_agent`, a matcher user-agent
+#' string that widens onto the Google policy and matcher; this entry point
+#' carries all three axes, so the `ROBOTS_DISALLOWED` /
+#' `ROBOTS_INDETERMINATE` / `ROBOTS_SITEMAP_DISALLOWED` findings are decided by
+#' the selected engine's own status policy and matcher. Under the default
+#' `robots_context()` the result is exactly `validate_sitemap(check_robots =
+#' TRUE)`, plus the added column.
+#'
+#' The robots axes are independent of the `sitemap_ruleset` axis (ADR-009 §1):
+#' this entry point selects an engine's **robots** semantics and does not
+#' select a sitemap ruleset. It returns the baseline schema-v1 result, so the
+#' additive per-engine ruleset columns of [validate_sitemap_ruleset()] are not
+#' present; the two entry points are deliberately not combined.
+#'
+#' A backend the installed `robotstxtr` reports as `capability_unavailable`
+#' decides nothing rather than guessing: every advertised URL comes back as
+#' `ROBOTS_INDETERMINATE`. The same is true of a product token a bounded
+#' matcher backend does not accept — prefer [robots_context_preset()], whose
+#' tokens are known-good for their backend.
+#'
+#' @param context A robots evaluation context from [robots_context()] or
+#'   [robots_context_preset()] (the three ADR-009 §1 robots axes). Defaults to
+#'   [robots_context()], the Google-default widening `validate_sitemap()` has
+#'   always applied. Carried into the `robots_context` list-column of the
+#'   result.
+#' @inheritParams validate_sitemap
+#' @return The findings tibble of [validate_sitemap()] — the pinned ten columns
+#'   — plus a `robots_context` list-column of the context as a named list,
+#'   appended last. The same source, mode and context yield a row-for-row
+#'   identical tibble across calls.
+#' @seealso [robots_context()] and [robots_context_preset()] for the carrier,
+#'   [validate_sitemap()] for the baseline entry point, and
+#'   [validate_sitemap_ruleset()] for the independent sitemap-ruleset axis.
+#' @export
+#' @examples
+#' xml <- paste0(
+#'   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+#'   '<url><loc>https://example.com/</loc></url>',
+#'   '</urlset>'
+#' )
+#' path <- tempfile(fileext = ".xml")
+#' writeLines(xml, path)
+#'
+#' # A local file advertises a remote URL, so this reaches the network only
+#' # when `robotstxtr` is installed; without it the layer warns and skips.
+#' # validate_sitemap_robots(path, robots_context_preset("yandex"))
+validate_sitemap_robots <- function(
+  x,
+  context = robots_context(),
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL,
+  policy = request_policy(),
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
+) {
+  if (!inherits(context, "sitemapr_robots_context")) {
+    robots_context_reject(
+      "`context` must be a `robots_context()` object."
+    )
+  }
+  findings_add_robots_context(
+    validate_sitemap_core(
+      x,
+      mode = match.arg(mode),
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      # On by construction: supplying a robots context IS the request to run
+      # the robots layer, so there is no `check_robots` argument to contradict
+      # it. An absent `robotstxtr` still warns and skips, as everywhere else.
+      check_robots = TRUE,
+      robots = context,
+      ruleset = NULL,
+      inspect_pages = inspect_pages,
+      page_sample = page_sample,
+      page_mode = match.arg(page_mode),
+      page_budget = page_budget,
+      page_user_agent = page_user_agent
+    ),
+    context
+  )
+}
+
+#' @rdname validate_sitemap_robots
+#' @export
+validate_sitemaps_robots <- function(
+  x,
+  context = robots_context(),
+  mode = c("strict", "non-strict"),
+  user_agent = default_user_agent(),
+  limits = fetch_limits(),
+  index_limits = NULL,
+  policy = request_policy(),
+  inspect_pages = FALSE,
+  page_sample = 50L,
+  page_mode = c("sample", "full"),
+  page_budget = page_inspection_budget(),
+  page_user_agent = default_user_agent()
+) {
+  validate_sitemap_robots(
+    x,
+    context = context,
+    mode = mode,
+    user_agent = user_agent,
+    limits = limits,
+    index_limits = index_limits,
+    policy = policy,
     inspect_pages = inspect_pages,
     page_sample = page_sample,
     page_mode = page_mode,

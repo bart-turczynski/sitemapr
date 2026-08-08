@@ -5,41 +5,11 @@
 # robots.txt body (or a status) keyed on the request host, exercising the four
 # fetch outcomes (rule match, allow-all body, 404 missing, 5xx failure).
 
-# A mocked robots.txt transport. Each origin's /robots.txt gets a deterministic
-# response keyed on its host: `disallow.example` blocks `/private`,
-# `allow.example` serves a body that allows everything, `missing.example` 404s
-# (allow-all), and `boom.example` 500s (indeterminate).
-mock_robots <- function(req) {
-  host <- httr2::url_parse(req$url)$hostname
-  if (identical(host, "disallow.example")) {
-    return(httr2::response(
-      status_code = 200L,
-      url = req$url,
-      body = charToRaw("User-agent: *\nDisallow: /private\n")
-    ))
-  }
-  if (identical(host, "allow.example")) {
-    return(httr2::response(
-      status_code = 200L,
-      url = req$url,
-      body = charToRaw("User-agent: *\nDisallow: /other\n")
-    ))
-  }
-  if (identical(host, "missing.example")) {
-    return(httr2::response(status_code = 404L, url = req$url, body = raw(0)))
-  }
-  httr2::response(status_code = 503L, url = req$url, body = raw(0))
-}
-
-with_robots <- function(code) {
-  httr2::with_mocked_responses(mock_robots, code)
-}
-
 test_that("a disallowed URL yields a ROBOTS_DISALLOWED warning with evidence", {
   skip_if_not_installed("robotstxtr")
   f <- with_robots(validate_robots(
     "https://disallow.example/private/page",
-    user_agent = "*",
+    context = robots_context(),
     base = "https://disallow.example/sitemap.xml"
   ))
 
@@ -64,7 +34,7 @@ test_that("an allowed URL and a 404 (allow-all) robots.txt yield no rows", {
   skip_if_not_installed("robotstxtr")
   f <- with_robots(validate_robots(
     c("https://allow.example/ok", "https://missing.example/anything"),
-    user_agent = "*",
+    context = robots_context(),
     base = "https://s.xml"
   ))
   expect_identical(nrow(f), 0L)
@@ -74,7 +44,7 @@ test_that("an unfetchable robots.txt yields ROBOTS_INDETERMINATE info", {
   skip_if_not_installed("robotstxtr")
   f <- with_robots(validate_robots(
     "https://boom.example/page",
-    user_agent = "*",
+    context = robots_context(),
     base = "https://boom.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 1L)
@@ -88,7 +58,7 @@ test_that("non-absolute and non-http locs are skipped (not tested)", {
   # No mock needed: relative / non-http locs never reach the fetcher.
   f <- validate_robots(
     c("/relative/path", "ftp://host/x", "mailto:a@b.com", NA_character_, ""),
-    user_agent = "*",
+    context = robots_context(),
     base = "https://s.xml"
   )
   expect_identical(nrow(f), 0L)
@@ -101,44 +71,65 @@ test_that("duplicate locs are checked once", {
       "https://disallow.example/private/a",
       "https://disallow.example/private/a"
     ),
-    user_agent = "*",
+    context = robots_context(),
     base = "https://disallow.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 1L)
 })
 
 test_that("empty loc input yields an empty findings tibble", {
-  f <- validate_robots(character(0), user_agent = "*", base = "https://s.xml")
+  f <- validate_robots(
+    character(0),
+    context = robots_context(),
+    base = "https://s.xml"
+  )
   expect_identical(nrow(f), 0L)
   expect_identical(f$layer, character(0))
 })
 
-# --- resolve_robots_ua(): the optional-dependency guard -------------------
+# --- resolve_robots_context(): the optional-dependency guard ---------------
 
-test_that("resolve_robots_ua returns NULL when the check is off", {
-  expect_null(resolve_robots_ua(FALSE, "*"))
+test_that("resolve_robots_context returns NULL when the check is off", {
+  expect_null(resolve_robots_context(FALSE, "*"))
 })
 
-test_that("resolve_robots_ua returns the UA when robotstxtr is available", {
-  # The contract gate is stubbed too, so the test stays hermetic: it asserts
-  # the UA passthrough, not whether the sibling happens to be installed.
+test_that("a bare user-agent widens onto the Google axes", {
+  # The historical `robots_user_agent=` surface: a matcher user-agent string
+  # means that product token under the Google policy and matcher. The contract
+  # gate is stubbed so the test asserts the widening, not whether the sibling
+  # happens to be installed.
   local_mocked_bindings(
     robotstxtr_available = function() TRUE,
-    robotstxtr_engine_contract = function() NULL
+    # A minimal stand-in contract: the constructor validates the two engine
+    # axes against the value sets the INSTALLED sibling publishes, so the stub
+    # has to publish the ones the Google defaults name.
+    robotstxtr_engine_contract = function() {
+      list(robots_policy_rulesets = "google", matcher_backends = "google")
+    }
   )
-  expect_identical(resolve_robots_ua(TRUE, "Googlebot"), "Googlebot")
+  ctx <- resolve_robots_context(TRUE, "Googlebot")
+  expect_s3_class(ctx, "sitemapr_robots_context")
+  expect_identical(ctx$product_token, "Googlebot")
+  expect_identical(ctx$policy_ruleset, "google")
+  expect_identical(ctx$matcher_backend, "google")
 })
 
-test_that("resolve_robots_ua warns (classed) and skips when engine absent", {
+test_that("a context argument passes through with every axis intact", {
+  skip_if_not_installed("robotstxtr")
+  ctx <- resolve_robots_context(TRUE, robots_context_preset("yandex"))
+  expect_identical(ctx, robots_context_preset("yandex"))
+})
+
+test_that("resolve_robots_context warns (classed) when engine absent", {
   local_mocked_bindings(robotstxtr_available = function() FALSE)
   expect_warning(
-    ua <- resolve_robots_ua(TRUE, "*"),
+    ua <- resolve_robots_context(TRUE, "*"),
     class = "sitemapr_robots_unavailable"
   )
   expect_null(ua)
   # The message names the install command.
   w <- tryCatch(
-    resolve_robots_ua(TRUE, "*"),
+    resolve_robots_context(TRUE, "*"),
     sitemapr_robots_unavailable = function(cnd) cnd
   )
   expect_match(conditionMessage(w), "pak::pak", fixed = TRUE)
@@ -220,7 +211,7 @@ test_that("an incompatible engine aborts rather than skipping silently", {
   # Contrast with the ABSENT engine, which warns and degrades gracefully: a
   # present-but-wrong engine must not silently produce robots findings.
   expect_error(
-    resolve_robots_ua(TRUE, "*"),
+    resolve_robots_context(TRUE, "*"),
     class = "sitemapr_robotstxtr_contract"
   )
 })
@@ -306,7 +297,7 @@ test_that("a disallowed sitemap document yields ROBOTS_SITEMAP_DISALLOWED", {
   skip_if_not_installed("robotstxtr")
   f <- with_robots(validate_robots_sitemap(
     "https://disallow.example/private/sitemap.xml",
-    user_agent = "*",
+    context = robots_context(),
     base = "https://disallow.example/private/sitemap.xml"
   ))
 
@@ -328,7 +319,7 @@ test_that("an allowed sitemap document yields no row", {
   skip_if_not_installed("robotstxtr")
   f <- with_robots(validate_robots_sitemap(
     "https://allow.example/sitemap.xml",
-    user_agent = "*",
+    context = robots_context(),
     base = "https://allow.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 0L)
@@ -339,7 +330,7 @@ test_that("an undecidable robots.txt yields no document-level row", {
   # There is deliberately no source-scoped analog of ROBOTS_INDETERMINATE.
   f <- with_robots(validate_robots_sitemap(
     "https://boom.example/sitemap.xml",
-    user_agent = "*",
+    context = robots_context(),
     base = "https://boom.example/sitemap.xml"
   ))
   expect_identical(nrow(f), 0L)
@@ -350,7 +341,7 @@ test_that("a non-http(s) sitemap source is skipped (no robots.txt governs)", {
   # A local file path never reaches the fetcher, so no mock is needed.
   f <- validate_robots_sitemap(
     "/var/tmp/sitemap.xml",
-    user_agent = "*",
+    context = robots_context(),
     base = "/var/tmp/sitemap.xml"
   )
   expect_identical(nrow(f), 0L)
@@ -359,7 +350,7 @@ test_that("a non-http(s) sitemap source is skipped (no robots.txt governs)", {
 test_that("a facts object with nothing evaluated yields no document row", {
   skip_if_not_installed("robotstxtr")
   # The document check short-circuits on non-consultable facts before it ever
-  # reaches for the legacy view, so a NULL (robots evaluation off) and a facts
+  # reaches for the row view, so a NULL (robots evaluation off) and a facts
   # object carrying no urls both yield the empty producer shape, not an error.
   expect_identical(nrow(robots_sitemap_findings_from_facts(NULL)), 0L)
   expect_identical(
@@ -373,16 +364,20 @@ test_that("a facts object with nothing evaluated yields no document row", {
   )
 })
 
-test_that("a non-legacy robots context is rejected, not silently empty", {
+test_that("the document check honours a non-Google robots context", {
   skip_if_not_installed("robotstxtr")
+  # SITE-fsawklnl: this used to abort, because the document-level finding was
+  # derived through the sibling's Google-bounded legacy shim. The derivation is
+  # sitemapr's own now, so a Yandex context reaches the same verdict.
   facts <- with_robots(robots_evaluate_facts(
     "https://disallow.example/private/sitemap.xml",
-    context = robots_context_preset("rfc9309")
+    context = robots_context_preset("yandex")
   ))
-  expect_error(
-    robots_sitemap_findings_from_facts(facts, base = "https://s.xml"),
-    class = "sitemapr_robots_findings_unsupported"
-  )
+  f <- robots_sitemap_findings_from_facts(facts, base = "https://s.xml")
+
+  expect_identical(nrow(f), 1L)
+  expect_identical(f$code, "ROBOTS_SITEMAP_DISALLOWED")
+  expect_identical(f$subject_ref, "https://s.xml")
 })
 
 # A transport mock that serves a urlset for any `/sitemap.xml` path and defers
@@ -465,13 +460,11 @@ test_that("indeterminate-only results derive without matcher columns", {
   facts <- list(
     urls = "https://e.com/a",
     decision = "undetermined",
-    legacy = list(
-      results = data.frame(
-        url = "https://e.com/a",
-        allowed = NA,
-        fetch_outcome = "timeout",
-        stringsAsFactors = FALSE
-      )
+    view = data.frame(
+      url = "https://e.com/a",
+      allowed = NA,
+      fetch_outcome = "timeout",
+      stringsAsFactors = FALSE
     )
   )
 
