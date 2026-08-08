@@ -792,10 +792,12 @@ Delivered by SITE-kwkggijf. Robots evaluation now lives in `R/robots-facts.R`;
   findings stand alone with no synthesis.
 - **Explicit axes (§0.3).** `robots_context(product_token, policy_ruleset,
   matcher_backend)` carries the robots axes **explicitly**; nothing derives them
-  from `sitemap_ruleset` (ADR-009 axis independence). `robots_context_preset()`
-  supplies documented presets (google/bing/yandex/rfc9309) whose **expanded**
-  values are retained on the object. Axis values are validated against the
-  sibling's published sets read from the public contract.
+  from `sitemap_ruleset` (ADR-009 axis independence). Axis values are validated
+  against the sibling's published sets read from the public contract. The
+  documented presets (google/bing/yandex/rfc9309) whose **expanded** values are
+  retained on the object are specified in `docs/sitemap-spec.md` §13.0; their
+  constructor is a test helper until an exported entry point can accept a
+  context (SITE-bxzclfqv, SITE-fsawklnl).
 - **Back-compat.** E.5's findings are byte-identical across the refactor,
   derived through the exported Google-bounded `as_legacy_robots_decisions_v1()`
   shim. A non-Google context has no legacy view, so findings derivation aborts
@@ -823,9 +825,10 @@ verdict, so it can only ever decline to claim a trap, never manufacture one.
   per-engine page-directive interpretation is documented in
   `docs/sitemap-spec.md` **§13**, keyed off the existing axes; there is **no**
   new `page_directive_ruleset` axis and no ADR-009 amendment. The robots axes
-  are carried by the explicit `robots_context()` / `robots_context_preset()`
-  carrier (E.1b), with the `sitemap_ruleset → robots_policy_ruleset` bridge
-  expressed as a documented preset whose expanded values are retained.
+  are carried by the explicit `robots_context()` carrier (E.1b), with the
+  `sitemap_ruleset → robots_policy_ruleset` bridge expressed as a documented
+  preset whose expanded values are retained (spec §13.0; the preset constructor
+  is a test helper for now — SITE-bxzclfqv).
 - **Provenance on every cell** (§5 tables). Diagnostic-only cells never drive a
   verdict.
 - **Six-field outcome model** reused for the page-fetch outcome (§3.1

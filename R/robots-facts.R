@@ -92,30 +92,11 @@ robots_context <- function(
   )
 }
 
-# Documented presets. The EXPANDED values are retained on the returned context
-# (not re-derived at use time), so a caller can read back exactly which product
-# token / policy / backend a preset selected.
-robots_context_presets <- function() {
-  list(
-    google = list("Googlebot", "google", "google"),
-    bing = list("Bingbot", "bing", "bing"),
-    yandex = list("YandexBot", "yandex", "yandex"),
-    rfc9309 = list("*", "rfc9309", "rfc9309")
-  )
-}
-
-robots_context_preset <- function(preset) {
-  presets <- robots_context_presets()
-  preset <- match.arg(preset, names(presets))
-  spec <- presets[[preset]]
-  ctx <- robots_context(
-    product_token = spec[[1L]],
-    policy_ruleset = spec[[2L]],
-    matcher_backend = spec[[3L]]
-  )
-  ctx$preset <- preset
-  ctx
-}
+# The engine presets of docs/sitemap-spec.md §13.0 live in
+# tests/testthat/helper-robots-context.R, not here: no production call site
+# selects a non-default context, so the constructor was package surface only
+# for the tests. Promoting it to a documented export needs an exported entry
+# point that can ACCEPT a context (SITE-fsawklnl).
 
 # Is this context the Google-bounded one the legacy adapter accepts? The shim
 # asserts BOTH axes are "google"; the product token is free (the legacy facade
