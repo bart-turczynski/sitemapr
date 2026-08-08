@@ -56,7 +56,7 @@ INDEX_CYCLE_DETECTED,error,index-expansion,index-child,FALSE,active,,INDEX_CYCLE
 INDEX_DEPTH_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_DEPTH_EXCEEDED,baseline
 SITEMAP_INDEX_NESTED,warning,index-expansion,index-child,FALSE,active,,SITEMAP_INDEX_NESTED,baseline
 INDEX_CHILD_COUNT_EXCEEDED,error,index-expansion,index-child,FALSE,active,,INDEX_CHILD_COUNT_EXCEEDED,baseline
-INDEX_CHILD_OUT_OF_SCOPE,warning,index-expansion,index-child,FALSE,active,,,baseline
+INDEX_CHILD_OUT_OF_SCOPE,warning,index-expansion,index-child,FALSE,active,,,overlay
 INDEX_TOTAL_SITEMAPS_EXCEEDED,info,index-expansion,report,FALSE,active,done,INDEX_TOTAL_SITEMAPS_EXCEEDED,baseline
 INDEX_TOTAL_URLS_EXCEEDED,info,index-expansion,report,FALSE,active,done,INDEX_TOTAL_URLS_EXCEEDED,baseline
 INDEX_TOO_MANY_CHILDREN,warning,index-expansion,index-child,FALSE,validator-only,,INDEX_TOO_MANY_CHILDREN,baseline

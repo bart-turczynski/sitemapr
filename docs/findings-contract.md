@@ -353,6 +353,18 @@ Emitted under `layer = "classification"`.
 - `INDEX_CYCLE_DETECTED` — a child URL creates a cycle (self-ref, A→B→A, etc.)
 - `INDEX_DEPTH_EXCEEDED` — recursion depth exceeded the configured limit (3)
 - `INDEX_CHILD_COUNT_EXCEEDED` — child count cap reached
+- `INDEX_TOTAL_SITEMAPS_EXCEEDED` — traversal-wide sitemap budget reached
+  (`subject_type = "report"`; report-scoped truncation, not a child error)
+- `INDEX_TOTAL_URLS_EXCEEDED` — traversal-wide URL budget reached
+  (`subject_type = "report"`)
+- `INDEX_CHILD_OUT_OF_SCOPE` — **per-engine ruleset code** (`ruleset = overlay`,
+  `active`; emitted under *any* engine overlay, never on a baseline call). An
+  advertised child sitemap falls outside the index's child scope
+  (sitemap-spec §12.2b): every engine requires the child on the same authority
+  as the index, and google additionally requires it in the same-or-lower
+  directory. The index-child scope axis is separate from the (a) page-scope
+  axis and has no authority suppression — a submitted or verified parent index
+  confers nothing on a cross-site child (§12.1). One row per out-of-scope child.
 
 ### Page codes (`PAGE_*`)
 Emitted under `layer = "page"` by the opt-in per-URL live page inspection
@@ -517,12 +529,28 @@ Yandex file-analysis tool) enters as `application_choice` (executable) or
 `findings-registry.csv` gains one additive per-code column, `ruleset`:
 
 - `baseline` — a shared code that applies under **every** ruleset (by
-  inheritance). All pre-ADR-009 codes are `baseline`; for the sibling validator
-  this is a semantic no-op.
+  inheritance), *including a baseline call*. All pre-ADR-009 codes are
+  `baseline`; for the sibling validator this is a semantic no-op.
+- `overlay` — a code that applies under **every engine overlay but never on a
+  baseline call**. The rule is an engine interpretation rather than an RFC
+  baseline requirement, so all engines carry it (possibly with different
+  strictness) and `sitemaps.org` carries none of it. One code today:
+  `INDEX_CHILD_OUT_OF_SCOPE` (sitemap-spec §12.2b; google additionally requires
+  the child in the same-or-lower directory, bing and yandex require same
+  authority only).
 - an engine name (`google` / `bing` / `yandex`) — a **genuinely engine-specific**
   code (ADR-009 §6). Only mint one where semantics differ from an existing code;
   otherwise reuse the existing code and let the runtime `ruleset`/`provenance`
   fields carry the engine context.
+
+The cell describes **where the emitter is reachable**, not where the rule feels
+like it belongs. A cell that disagrees with its own emitter manufactures a
+cross-port *baseline implementation gap* out of what is really an overlay
+capability — `INDEX_CHILD_OUT_OF_SCOPE` was minted as `baseline` against an
+emitter that returns empty on the baseline path, and the sibling filed and
+worked a gap that never existed (SITE-crjgvsht, sibling SMV-xalhuaxt). Verify a
+new cell by running the code under `sitemap_ruleset = "sitemaps.org"` and under
+each overlay; reading the emitter is not enough.
 
 Three engine-specific codes are minted, all `ruleset = yandex` and all `active`:
 `PROTOCOL_URL_DECODED_TOO_LONG` and `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (see the
@@ -584,7 +612,7 @@ against. sitemapr publishes both through one exported accessor,
 | `contract_id` | `sitemapr.findings/v2` | Findings-contract generation |
 | `contract_version` | `2` | The ten pinned columns plus the ADR-009 additive ruleset fields |
 | `legacy_contract_version` | `1` | The ten pinned columns alone |
-| `registry_revision` | `2026-08-07` | Revision of `findings-registry.csv` |
+| `registry_revision` | `2026-08-08` | Revision of `findings-registry.csv` |
 | `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
 | `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.2.0, < 0.3.0` | Ranges this build is known to work against |
 
@@ -714,15 +742,16 @@ Two asymmetries are known and deliberate:
 
 ### Row status semantics (`status` column)
 
-Two values occur in the registry today, across 94 rows:
+Two values occur in the registry today, across 93 rows:
 
 - `active` — emitted by the sitemapr pipeline today (**76 codes**). Some fire
   only under an opt-in: the three `ROBOTS_*` codes need
   `check_robots = TRUE`, the eleven `PAGE_*` codes need `inspect_pages = TRUE`,
-  and the three `ruleset = yandex` codes need that overlay selected. "Active"
+  the three `ruleset = yandex` codes need that overlay selected, and the one
+  `ruleset = overlay` code needs *any* engine overlay selected. "Active"
   means an emitter exists and is reachable, not that a default call produces it.
 - `validator-only` — exists in `sitemap-validator` with no sitemapr equivalent
-  yet (**18 codes**); carried so the contract is complete and to guide future
+  yet (**17 codes**); carried so the contract is complete and to guide future
   adoption.
 
 `status` has **two consumers**, which is why a row's value is load-bearing

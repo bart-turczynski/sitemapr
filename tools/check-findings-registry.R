@@ -18,9 +18,13 @@
 #      "deferred-ruleset") are skipped — they carry no rows today, but stay in
 #      the vocabulary for the next code registered ahead of its emitter. The
 #      additive "ruleset" column marks each code's applicability: "baseline"
-#      (shared, applies under every ruleset by inheritance) or an engine name
-#      for a genuinely engine-specific rule; an engine-specific code is emitted
-#      only when that overlay is selected, which is orthogonal to its status.
+#      (shared, applies under every ruleset by inheritance), "overlay" (applies
+#      under every ENGINE overlay but never on a baseline call) or an engine
+#      name for a genuinely engine-specific rule. Anything but "baseline" is
+#      emitted only when an overlay is selected, which is orthogonal to its
+#      status. The column describes the EMITTER's reachability, so a cell that
+#      disagrees with its emitter manufactures a cross-port baseline gap out of
+#      an overlay capability (SITE-crjgvsht); check it against the code.
 #
 # Run from the package root (as the verify gate and lint.yaml do).
 
@@ -145,7 +149,7 @@ vocab <- list(
     "deferred-ruleset",
     "validator-only"
   ),
-  ruleset = c("baseline", "google", "bing", "yandex")
+  ruleset = c("baseline", "overlay", "google", "bing", "yandex")
 )
 
 # Every check below appends to one list so a bad registry reports all of its
