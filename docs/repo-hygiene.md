@@ -52,13 +52,13 @@ The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
 arguments. Run it directly rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, lint, R CMD check
+Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, lint, R CMD check
 Rscript tools/verify.R --all        # adds coverage and the README diff
 Rscript tools/verify.R lint check   # named stages only
 Rscript tools/verify.R --list       # list the stages
 ```
 
-`rfloor` (`tools/check-r-floor.R`) is the one stage with no counterpart in
+`rfloor` (`tools/check-r-floor.R`) has no counterpart in
 `R CMD check`: it walks the hard-dependency closure, takes the maximum
 `R (>= x.y)` any of them declares, and fails when `DESCRIPTION`'s own floor
 sits below it. A floor that a dependency contradicts is *uninstallable*, not
@@ -66,6 +66,14 @@ merely untested, and `--as-cran` never cross-checks the two. It reads the
 **installed** dependency DESCRIPTIONs, so it checks this machine's versions
 rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
 offline, and enough to catch the class that shipped once already.
+
+`linewidth` (`tools/check-line-width.R`) compares `air.toml`'s `line-width`
+against the width `.lintr` passes to `line_length_linter()`. Both files claim
+in comments to mirror the other, and nothing enforced it: lintr never reads
+`air.toml`, air never reads `.lintr`. Raise one alone and the two gates become
+unsatisfiable together — the pre-commit formatter rewrites a line to a width
+the pre-push linter then rejects, on every commit. The stage reads both
+textually to stay dependency-free and offline.
 
 `lint` runs `lintr::lint_package()` **and** `lintr::lint_dir("tools")`. The
 second call is not redundant: `tools/` is `.Rbuildignore`d, so `lint_package()`

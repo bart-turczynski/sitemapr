@@ -17,8 +17,14 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![R-CMD-check](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml)
-[![Codecov coverage](https://codecov.io/gh/bart-turczynski/sitemapr/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/sitemapr)
+<!-- No CI badges: R-CMD-check, Codecov, pkgcheck, Security audit and OSV
+     audit all rendered from GitHub Actions runs, and every workflow in
+     .github/workflows/ is dormant (the account is suspended; `origin` is
+     GitLab and carries no CI). A badge for a workflow that cannot run is a
+     stale signal, not a missing one -- it reports the last state before the
+     lights went out. tools/verify.R is the gate that actually runs; see
+     docs/repo-hygiene.md. Restore these from git history once Actions runs
+     again (SITE-yvspdyen). -->
 <!-- No DOI badge yet: zenodo.org/badge/latestdoi/1282558407 404s because the
      repo has no Zenodo deposit, and R CMD check --as-cran flags it as a
      possibly invalid URL. Re-add it after the first GitHub release archives
@@ -26,9 +32,6 @@ knitr::opts_chunk$set(
      and stays. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
-[![pkgcheck](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml)
-[![Security audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml)
-[![OSV audit](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml/badge.svg)](https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml)
 <!-- badges: end -->
 
 sitemapr is a deterministic toolkit for reading and validating XML, text, and
