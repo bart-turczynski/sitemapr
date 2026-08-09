@@ -59,6 +59,10 @@ jobs:
         run: source("tools/check-r-floor.R")
         shell: Rscript {0}
 
+      - name: Line width agrees (tools/check-line-width.R)
+        run: source("tools/check-line-width.R")
+        shell: Rscript {0}
+
       # lint_package() skips tools/ (it is .Rbuildignore'd), so the scripts the
       # gate is made of need the second call to be linted at all.
       - name: Lint (package and tools/)

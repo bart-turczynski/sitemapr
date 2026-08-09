@@ -42,6 +42,14 @@ verify_stages <- list(
     default = TRUE,
     run = function() source("tools/check-r-floor.R")
   ),
+  # CI: verify.yml job "lint", step "Line width agrees". Placed before lint
+  # because it explains a whole class of lint failure the lint stage can only
+  # report one line at a time: air reformatting to a width lintr rejects.
+  linewidth = list(
+    label = "air.toml and .lintr agree on line width",
+    default = TRUE,
+    run = function() source("tools/check-line-width.R")
+  ),
   # CI: verify.yml job "lint", step "Lint" (LINTR_ERROR_ON_LINT=true).
   #
   # `lint_package()` alone is NOT enough: it skips `tools/`, which is
