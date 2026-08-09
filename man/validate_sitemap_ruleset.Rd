@@ -16,6 +16,7 @@ validate_sitemap_ruleset(
   policy = request_policy(),
   check_robots = FALSE,
   robots_user_agent = "*",
+  robots_context = NULL,
   inspect_pages = FALSE,
   page_sample = 50L,
   page_mode = c("sample", "full"),
@@ -34,6 +35,7 @@ validate_sitemaps_ruleset(
   policy = request_policy(),
   check_robots = FALSE,
   robots_user_agent = "*",
+  robots_context = NULL,
   inspect_pages = FALSE,
   page_sample = 50L,
   page_mode = c("sample", "full"),
@@ -53,7 +55,9 @@ columns.}
 \item{context}{A per-source validation context from \code{\link[=ruleset_context]{ruleset_context()}} (the
 four independent ADR-009 §1 axes). Carried into the \code{context} list-column
 of the additive result. Ignored on the baseline path (which emits no
-additive columns).}
+additive columns). This is the RULESET context; the robots context is the
+separate \code{robots_context} argument, and passing one where the other belongs
+is rejected rather than silently accepted.}
 
 \item{mode}{\code{"strict"} (the default) or \code{"non-strict"}. In \code{non-strict},
 strict-only findings are dropped and schema violations are downgraded to
@@ -80,6 +84,16 @@ the optional \code{robotstxtr} package). Defaults to \code{FALSE}.}
 \item{robots_user_agent}{The robots.txt group to match against when
 \code{check_robots = TRUE}, e.g. \code{"*"} (the catch-all group, the default) or a
 specific crawler token such as \code{"Googlebot"}.}
+
+\item{robots_context}{A robots evaluation context from \code{\link[=robots_context]{robots_context()}} or
+\code{\link[=robots_context_preset]{robots_context_preset()}}, or \code{NULL} (the default) to leave the robots axis
+as \code{\link[=validate_sitemap]{validate_sitemap()}} treats it. Supplying one runs the robots layer by
+construction — as in \code{\link[=validate_sitemap_robots]{validate_sitemap_robots()}}, the context IS the
+request, so \code{check_robots} need not also be set — and appends the
+\code{robots_context} list-column. It cannot be combined with a non-default
+\code{robots_user_agent}: that argument is the string shorthand for the same
+axis, and honouring both would make it ambiguous which one decided the
+findings.}
 
 \item{inspect_pages}{Logical; the master opt-in for per-URL page inspection
 (Layer E). When \code{FALSE} (the default) no page is fetched and the result is
@@ -123,7 +137,11 @@ selected ruleset, so \code{\link[=report_sitemap]{report_sitemap()}} can tell an
 ran and passed from one this call could never reach — the \code{ruleset} column
 answers that per row, and a clean run has no rows. Like \code{layers_run} it is
 a run manifest and not part of the row contract; the baseline path stamps
-nothing.
+nothing. Supplying \code{robots_context} appends one further list-column,
+\code{robots_context}, last — after the additive ruleset columns when both axes
+are selected. Because each axis governs its own columns, a baseline call
+carrying a robots context returns exactly \code{\link[=validate_sitemap_robots]{validate_sitemap_robots()}}'s
+result for the same context.
 }
 \description{
 The versioned, engine-aware entry point parallel to \code{\link[=validate_sitemap]{validate_sitemap()}}. It
@@ -154,6 +172,17 @@ findings, so the per-engine provenance / context (ADR-009 §5.2/§5.3) engages
 over the page layer rather than emitting as generic baseline diagnostics. As
 in \code{\link[=validate_sitemap]{validate_sitemap()}}, \code{inspect_pages = FALSE} is byte-identical to a call
 without the argument.
+
+This is the engine-aware entry point, and it carries \strong{both} engine-aware
+axes: pass \verb{robots_context =} to select an engine's robots semantics in the
+same call (SITE-otfmeyqx). The two axes stay independent as ADR-009 §1
+requires — neither is derived from the other, so a Bing sitemap ruleset with
+a Yandex robots context is a legal and honoured pair — but they are no longer
+mutually exclusive, and a combined call runs the pipeline once rather than
+fetching everything twice. Each axis governs its own columns: the additive
+ruleset columns appear only under an engine overlay, and \code{robots_context}
+appears only when an explicit robots context is supplied. Use
+\code{\link[=validate_sitemap_robots]{validate_sitemap_robots()}} when you want the robots axis alone.
 }
 \examples{
 xml <- paste0(
@@ -169,9 +198,15 @@ validate_sitemap_ruleset(path, "sitemaps.org")
 
 # Engine overlay: adds the additive schema-v2 columns.
 validate_sitemap_ruleset(path, "google")
+
+# Both engine-aware axes in one call, independently chosen.
+# validate_sitemap_ruleset(
+#   path, "bing", robots_context = robots_context_preset("yandex")
+# )
 }
 \seealso{
 \code{\link[=validate_sitemap]{validate_sitemap()}} for the baseline entry point,
-\code{\link[=sitemap_rulesets]{sitemap_rulesets()}} for the ruleset value set, and \code{\link[=ruleset_context]{ruleset_context()}} for
-the per-source context axes.
+\code{\link[=validate_sitemap_robots]{validate_sitemap_robots()}} for the robots axis alone,
+\code{\link[=sitemap_rulesets]{sitemap_rulesets()}} for the ruleset value set, \code{\link[=ruleset_context]{ruleset_context()}} for
+the per-source context axes, and \code{\link[=robots_context]{robots_context()}} for the robots axes.
 }

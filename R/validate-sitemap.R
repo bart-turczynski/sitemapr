@@ -1321,6 +1321,42 @@ validate_sitemaps <- function(
   )
 }
 
+# Resolve which of the two robots-axis surfaces a ruleset call is using, and
+# return the carrier `validate_sitemap_core()` wants. Both reach the same axis:
+# `robots_user_agent=` is the string shorthand that widens onto the Google
+# defaults, `robots_context=` is the explicit three-axis carrier.
+#
+# Supplying both is refused rather than silently ranked. The two disagree in
+# general — a "Bingbot" string still widens onto the GOOGLE policy and matcher,
+# while a context names all three axes — so any precedence rule would leave the
+# caller unable to tell from the call which one decided the findings, which is
+# the ambiguity the context surface exists to remove.
+#
+# The conflict is detected by VALUE, not by missing(): `validate_sitemaps_*()`
+# delegates by forwarding every argument explicitly, so nothing is ever missing
+# in the inner call.
+resolve_ruleset_robots_axis <- function(robots_context, robots_user_agent) {
+  if (is.null(robots_context)) {
+    return(robots_user_agent)
+  }
+  if (!inherits(robots_context, "sitemapr_robots_context")) {
+    robots_context_reject(
+      "`robots_context` must be a `robots_context()` object or NULL."
+    )
+  }
+  if (!identical(robots_user_agent, "*")) {
+    robots_context_reject(
+      paste0(
+        "`robots_context` and `robots_user_agent` both select the robots ",
+        "axis; supply one. `robots_user_agent` is the string shorthand that ",
+        "widens onto the Google policy and matcher, so it cannot refine a ",
+        "context that already names all three axes."
+      )
+    )
+  }
+  robots_context
+}
+
 #' Validate a sitemap under an engine-aware ruleset (ADR-009)
 #'
 #' The versioned, engine-aware entry point parallel to [validate_sitemap()]. It
@@ -1351,6 +1387,17 @@ validate_sitemaps <- function(
 #' in [validate_sitemap()], `inspect_pages = FALSE` is byte-identical to a call
 #' without the argument.
 #'
+#' This is the engine-aware entry point, and it carries **both** engine-aware
+#' axes: pass `robots_context =` to select an engine's robots semantics in the
+#' same call (SITE-otfmeyqx). The two axes stay independent as ADR-009 §1
+#' requires — neither is derived from the other, so a Bing sitemap ruleset with
+#' a Yandex robots context is a legal and honoured pair — but they are no longer
+#' mutually exclusive, and a combined call runs the pipeline once rather than
+#' fetching everything twice. Each axis governs its own columns: the additive
+#' ruleset columns appear only under an engine overlay, and `robots_context`
+#' appears only when an explicit robots context is supplied. Use
+#' [validate_sitemap_robots()] when you want the robots axis alone.
+#'
 #' @param sitemap_ruleset The engine ruleset to validate under; one of
 #'   [sitemap_rulesets()] (baseline `"sitemaps.org"` first, the default). The
 #'   baseline emits the schema-v1 result; an engine overlay adds the additive
@@ -1358,7 +1405,18 @@ validate_sitemaps <- function(
 #' @param context A per-source validation context from [ruleset_context()] (the
 #'   four independent ADR-009 §1 axes). Carried into the `context` list-column
 #'   of the additive result. Ignored on the baseline path (which emits no
-#'   additive columns).
+#'   additive columns). This is the RULESET context; the robots context is the
+#'   separate `robots_context` argument, and passing one where the other belongs
+#'   is rejected rather than silently accepted.
+#' @param robots_context A robots evaluation context from [robots_context()] or
+#'   [robots_context_preset()], or `NULL` (the default) to leave the robots axis
+#'   as [validate_sitemap()] treats it. Supplying one runs the robots layer by
+#'   construction — as in [validate_sitemap_robots()], the context IS the
+#'   request, so `check_robots` need not also be set — and appends the
+#'   `robots_context` list-column. It cannot be combined with a non-default
+#'   `robots_user_agent`: that argument is the string shorthand for the same
+#'   axis, and honouring both would make it ambiguous which one decided the
+#'   findings.
 #' @inheritParams validate_sitemap
 #' @return The findings tibble of [validate_sitemap()]. Under the baseline
 #'   `sitemap_ruleset` it is exactly the pinned ten columns; under an engine
@@ -1372,10 +1430,15 @@ validate_sitemaps <- function(
 #'   ran and passed from one this call could never reach — the `ruleset` column
 #'   answers that per row, and a clean run has no rows. Like `layers_run` it is
 #'   a run manifest and not part of the row contract; the baseline path stamps
-#'   nothing.
+#'   nothing. Supplying `robots_context` appends one further list-column,
+#'   `robots_context`, last — after the additive ruleset columns when both axes
+#'   are selected. Because each axis governs its own columns, a baseline call
+#'   carrying a robots context returns exactly [validate_sitemap_robots()]'s
+#'   result for the same context.
 #' @seealso [validate_sitemap()] for the baseline entry point,
-#'   [sitemap_rulesets()] for the ruleset value set, and [ruleset_context()] for
-#'   the per-source context axes.
+#'   [validate_sitemap_robots()] for the robots axis alone,
+#'   [sitemap_rulesets()] for the ruleset value set, [ruleset_context()] for
+#'   the per-source context axes, and [robots_context()] for the robots axes.
 #' @export
 #' @examples
 #' xml <- paste0(
@@ -1391,6 +1454,11 @@ validate_sitemaps <- function(
 #'
 #' # Engine overlay: adds the additive schema-v2 columns.
 #' validate_sitemap_ruleset(path, "google")
+#'
+#' # Both engine-aware axes in one call, independently chosen.
+#' # validate_sitemap_ruleset(
+#' #   path, "bing", robots_context = robots_context_preset("yandex")
+#' # )
 validate_sitemap_ruleset <- function(
   x,
   sitemap_ruleset = sitemap_rulesets(),
@@ -1402,6 +1470,7 @@ validate_sitemap_ruleset <- function(
   policy = request_policy(),
   check_robots = FALSE,
   robots_user_agent = "*",
+  robots_context = NULL,
   inspect_pages = FALSE,
   page_sample = 50L,
   page_mode = c("sample", "full"),
@@ -1409,15 +1478,30 @@ validate_sitemap_ruleset <- function(
   page_user_agent = default_user_agent()
 ) {
   sitemap_ruleset <- match.arg(sitemap_ruleset, sitemap_rulesets())
-  validate_sitemap_core(
+  # Guard the `context` name collision head-on. Two context objects now reach
+  # this signature, and before SITE-otfmeyqx a `robots_context()` passed as
+  # `context` was accepted in silence: `findings_ruleset_spec()` stores it and
+  # the baseline path discards it, so the call "worked" and validated under
+  # nothing the caller asked for. Mirrors the check validate_sitemap_robots()
+  # has always applied to its own context.
+  if (!inherits(context, "sitemapr_ruleset_context")) {
+    ruleset_context_reject(
+      "`context` must be a `ruleset_context()` object."
+    )
+  }
+  robots <- resolve_ruleset_robots_axis(robots_context, robots_user_agent)
+  findings <- validate_sitemap_core(
     x,
     mode = match.arg(mode),
     user_agent = user_agent,
     limits = limits,
     index_limits = index_limits,
     policy = policy,
-    check_robots = check_robots,
-    robots = robots_user_agent,
+    # Supplying a robots context IS the request to run the layer, exactly as in
+    # validate_sitemap_robots(); `check_robots` stays the switch for the
+    # string-shorthand path.
+    check_robots = check_robots || !is.null(robots_context),
+    robots = robots,
     ruleset = findings_ruleset_spec(sitemap_ruleset, context),
     inspect_pages = inspect_pages,
     page_sample = page_sample,
@@ -1425,6 +1509,10 @@ validate_sitemap_ruleset <- function(
     page_budget = page_budget,
     page_user_agent = page_user_agent
   )
+  if (is.null(robots_context)) {
+    return(findings)
+  }
+  findings_add_robots_context(findings, robots_context)
 }
 
 #' @rdname validate_sitemap_ruleset
@@ -1440,6 +1528,7 @@ validate_sitemaps_ruleset <- function(
   policy = request_policy(),
   check_robots = FALSE,
   robots_user_agent = "*",
+  robots_context = NULL,
   inspect_pages = FALSE,
   page_sample = 50L,
   page_mode = c("sample", "full"),
@@ -1457,6 +1546,7 @@ validate_sitemaps_ruleset <- function(
     policy = policy,
     check_robots = check_robots,
     robots_user_agent = robots_user_agent,
+    robots_context = robots_context,
     inspect_pages = inspect_pages,
     page_sample = page_sample,
     page_mode = page_mode,
@@ -1502,7 +1592,11 @@ findings_add_robots_context <- function(findings, context) {
 #' this entry point selects an engine's **robots** semantics and does not
 #' select a sitemap ruleset. It returns the baseline schema-v1 result, so the
 #' additive per-engine ruleset columns of [validate_sitemap_ruleset()] are not
-#' present; the two entry points are deliberately not combined.
+#' present. To select both axes, call [validate_sitemap_ruleset()] with its
+#' `robots_context` argument; independence means the axes are chosen separately,
+#' not that they cannot be chosen together. This entry point remains the
+#' shorthand for the robots axis alone, and is exactly
+#' `validate_sitemap_ruleset(x, "sitemaps.org", robots_context = context)`.
 #'
 #' A backend the installed `robotstxtr` reports as `capability_unavailable`
 #' decides nothing rather than guessing: every advertised URL comes back as
