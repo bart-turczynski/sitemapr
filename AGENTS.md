@@ -5,16 +5,17 @@ against Sitemap Protocol 0.9 and related W3C and RFC standards.
 
 ## Toolchain
 
-`Rscript tools/verify.R` is the single definition of "verified"; the pre-push
-hook and CI both run it. Use it instead of a bare `devtools::check()`. `man/`
-and `NAMESPACE` are roxygen2-generated against the 8.0.0 pin in `DESCRIPTION`.
-air formats R at 80 columns on commit.
+`Rscript tools/verify.R` — not a bare `devtools::check()` — is the single
+definition of "verified", and the only gate that runs: the pre-push hook invokes
+it, `origin` is GitLab with no CI, and the `.github/` workflows are dormant.
+`man/` and `NAMESPACE` are roxygen2-generated. air formats R at 80 columns on
+commit.
 
 ## Vocabulary
 
 **Finding** — a reason-coded validation result. The code set lives in
-`docs/findings-registry.csv`, shared with a sibling validator; a verify stage
-fails on drift.
+`docs/findings-registry.csv`, mirrored byte-identically in `inst/` and shared
+with a sibling validator; a verify stage fails on drift.
 
 **Layer** — a pipeline stage A–F. Code, docs and issues share that axis.
 
@@ -24,11 +25,8 @@ those bytes alone.
 
 ## Rules
 
-Planning notes go in `_scratch/`. Do not commit `_scratch/`, `.fp/`, secrets,
-dependencies or build outputs.
-
-`.fp/` is gitignored, so the tracker behind every `SITE-*` id cited in `docs/`
-exists only on this machine.
+Planning notes go in `_scratch/` (gitignored). `.fp/` is gitignored too, so the
+`SITE-*` ids cited in `docs/` resolve only on this machine.
 
 For the verify gate, hook setup and tracker snapshots, see docs/repo-hygiene.md.
 For the layer model and output contracts, see docs/architecture.md.
