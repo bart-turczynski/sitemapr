@@ -118,7 +118,11 @@ The robots axes are independent of the \code{sitemap_ruleset} axis (ADR-009 §1)
 this entry point selects an engine's \strong{robots} semantics and does not
 select a sitemap ruleset. It returns the baseline schema-v1 result, so the
 additive per-engine ruleset columns of \code{\link[=validate_sitemap_ruleset]{validate_sitemap_ruleset()}} are not
-present; the two entry points are deliberately not combined.
+present. To select both axes, call \code{\link[=validate_sitemap_ruleset]{validate_sitemap_ruleset()}} with its
+\code{robots_context} argument; independence means the axes are chosen separately,
+not that they cannot be chosen together. This entry point remains the
+shorthand for the robots axis alone, and is exactly
+\code{validate_sitemap_ruleset(x, "sitemaps.org", robots_context = context)}.
 
 A backend the installed \code{robotstxtr} reports as \code{capability_unavailable}
 decides nothing rather than guessing: every advertised URL comes back as

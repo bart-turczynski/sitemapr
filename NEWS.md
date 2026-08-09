@@ -64,6 +64,17 @@ related W3C and RFC standards.
   (ADR-009 §1): selecting a Bing *sitemap* ruleset does not select Bing
   *robots* semantics, and vice versa. `validate_sitemap(robots_user_agent =)`
   is unchanged and remains the string shorthand for the Google defaults.
+* Both engine-aware axes can be selected in a **single call**:
+  `validate_sitemap_ruleset(x, sitemap_ruleset, robots_context =)` validates
+  under one engine's sitemap rules while deciding robots under another's, and
+  runs the pipeline once instead of the two passes a caller previously needed.
+  Independence is unchanged — neither axis derives the other, so a `"bing"`
+  sitemap ruleset paired with a Yandex robots context is honoured on both sides
+  — and each axis still governs its own columns, so a baseline call carrying a
+  robots context returns exactly what `validate_sitemap_robots()` returns.
+  `validate_sitemap_robots()` remains the shorthand for the robots axis alone.
+  Supplying both `robots_context` and a non-default `robots_user_agent` is an
+  error rather than a silent precedence rule: they select the same axis.
 * Two limits are worth knowing, both properties of the installed `robotstxtr`
   rather than of sitemapr: a matcher backend it reports as
   `capability_unavailable` decides nothing, so every URL comes back
@@ -143,6 +154,12 @@ related W3C and RFC standards.
   the selectable values (`"sitemaps.org"`, `"google"`, `"bing"`, `"yandex"`).
   Selecting an engine is always explicit — nothing falls through to an overlay,
   and the default stays `"sitemaps.org"` (ADR-009).
+* `validate_sitemap_ruleset(context =)` now rejects anything that is not a
+  `ruleset_context()`, matching the check `validate_sitemap_robots()` has
+  always applied to its own context. Previously a `robots_context()` passed
+  there was accepted in silence and then discarded, so the call appeared to
+  succeed while validating under nothing the caller had asked for. With both
+  contexts now reachable from one signature, that confusion had to be closed.
 * The result gains four **additive** columns under an engine ruleset:
   `ruleset`, `ruleset_revision`, `context`, and `provenance`. A baseline call
   returns exactly the pinned ten-column schema v1, byte-for-byte unchanged, so

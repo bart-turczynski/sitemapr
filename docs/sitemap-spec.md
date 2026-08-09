@@ -890,7 +890,32 @@ bridge is a named sitemapr product decision, not an engine-documented mapping).
 preset constructor `robots_context_preset()` are exported, and
 `validate_sitemap_robots()` is the entry point that accepts one — the
 robots-aware sibling of `validate_sitemap()`, parallel to how
-`validate_sitemap_ruleset()` accepts a `ruleset_context()`. The preset's values
+`validate_sitemap_ruleset()` accepts a `ruleset_context()`.
+
+**Both axes fit in one call** (SITE-otfmeyqx). Independence means the axes are
+chosen separately, not that they cannot be chosen together — and until that
+slice the exported surface confused the two, because each axis lived on its own
+entry point and a caller wanting both had to run the pipeline twice and join.
+`validate_sitemap_ruleset(x, sitemap_ruleset, robots_context =)` selects both;
+`validate_sitemap_robots()` remains the shorthand for the robots axis alone and
+is exactly the baseline case of it. Which call to reach for:
+
+| want | call |
+|---|---|
+| neither axis | `validate_sitemap()` (`robots_user_agent=` string shorthand) |
+| sitemap ruleset only | `validate_sitemap_ruleset(x, ruleset)` |
+| robots only | `validate_sitemap_robots(x, context)` |
+| both | `validate_sitemap_ruleset(x, ruleset, robots_context = context)` |
+
+Combining still derives nothing. A `bing` sitemap ruleset with a `yandex`
+robots context is a legal pair and each side is honoured on its own terms; the
+bridge above stays a preset a caller opts into, never an implication. Each axis
+governs its own columns — the additive ruleset columns appear only under an
+engine overlay, `robots_context` only when a context is supplied — so a
+baseline call carrying a robots context returns exactly what
+`validate_sitemap_robots()` returns.
+
+The preset's values
 are **expanded onto the returned context** rather than re-derived at use time,
 so a caller reads back exactly which product token, policy ruleset and matcher
 backend a preset selected; the result surfaces them again in a `robots_context`
