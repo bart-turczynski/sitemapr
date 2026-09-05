@@ -1,48 +1,48 @@
 {
   "homepage_url_status": "Met",
-  "homepage_url_justification": "Project homepage is the pkgdown site https://bart-turczynski.github.io/sitemapr/ (also linked from DESCRIPTION URL).",
+  "homepage_url_justification": "Project homepage is the pkgdown site https://bart-turczynski.gitlab.io/sitemapr/ (also listed in the DESCRIPTION URL field).",
 
   "sites_https_status": "Met",
-  "sites_https_justification": "All project sites are served over HTTPS: https://github.com/bart-turczynski/sitemapr and https://bart-turczynski.github.io/sitemapr/ .",
+  "sites_https_justification": "All project sites are served over HTTPS: https://gitlab.com/bart-turczynski/sitemapr and https://bart-turczynski.gitlab.io/sitemapr/ .",
 
   "description_good_status": "Met",
-  "description_good_justification": "DESCRIPTION and README provide a clear description of what sitemapr does: https://github.com/bart-turczynski/sitemapr#readme",
+  "description_good_justification": "DESCRIPTION and README.md provide a clear description of what sitemapr does: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md",
 
   "interact_status": "Met",
-  "interact_justification": "CONTRIBUTING.md explains how to interact with and contribute to the project: https://github.com/bart-turczynski/sitemapr/blob/main/CONTRIBUTING.md",
+  "interact_justification": "CONTRIBUTING.md explains how to interact with and contribute to the project: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "contribution_status": "Met",
-  "contribution_justification": "Contribution guide at https://github.com/bart-turczynski/sitemapr/blob/main/CONTRIBUTING.md",
+  "contribution_justification": "Contribution guide at https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "contribution_requirements_status": "Met",
-  "contribution_requirements_justification": "CONTRIBUTING.md states the requirements for acceptable contributions, including tests, formatting, and the verification gate: https://github.com/bart-turczynski/sitemapr/blob/main/CONTRIBUTING.md",
+  "contribution_requirements_justification": "CONTRIBUTING.md states the requirements for acceptable contributions: code formatted with air (air.toml), roxygen2 docs regenerated at the pinned version, and a passing verification gate -- `Rscript tools/verify.R`, whose chain is docs, findings registry, lint and R CMD check --as-cran: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "license_location_status": "Met",
-  "license_location_justification": "LICENSE is at the repository top level: https://github.com/bart-turczynski/sitemapr/blob/main/LICENSE",
+  "license_location_justification": "LICENSE is at the repository top level: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/LICENSE",
 
   "floss_license_status": "Met",
-  "floss_license_justification": "Released under the MIT license: https://github.com/bart-turczynski/sitemapr/blob/main/LICENSE",
+  "floss_license_justification": "Released under the MIT license: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/LICENSE",
 
   "floss_license_osi_status": "Met",
   "floss_license_osi_justification": "MIT is an OSI-approved open source license: https://opensource.org/license/mit",
 
   "documentation_basics_status": "Met",
-  "documentation_basics_justification": "Basic documentation is in the README and pkgdown site: https://bart-turczynski.github.io/sitemapr/",
+  "documentation_basics_justification": "Basic documentation is in README.md and on the pkgdown site: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md and https://bart-turczynski.gitlab.io/sitemapr/",
 
   "documentation_interface_status": "Met",
-  "documentation_interface_justification": "Exported functions are documented with roxygen2 man pages and published on the pkgdown reference index: https://bart-turczynski.github.io/sitemapr/reference/index.html",
+  "documentation_interface_justification": "Exported functions are documented with roxygen2 man pages under man/ and rendered on the pkgdown reference index: https://bart-turczynski.gitlab.io/sitemapr/reference/index.html",
 
   "repo_public_status": "Met",
-  "repo_public_justification": "Public GitHub repository: https://github.com/bart-turczynski/sitemapr",
+  "repo_public_justification": "The project source is hosted on GitLab: https://gitlab.com/bart-turczynski/sitemapr",
 
   "repo_track_status": "Met",
-  "repo_track_justification": "All changes are tracked in git: https://github.com/bart-turczynski/sitemapr/commits/main",
+  "repo_track_justification": "All changes are tracked in git: https://gitlab.com/bart-turczynski/sitemapr/-/commits/main",
 
   "repo_interim_status": "Met",
-  "repo_interim_justification": "Interim development commits are publicly available on GitHub between releases: https://github.com/bart-turczynski/sitemapr/commits/main",
+  "repo_interim_justification": "Interim development commits are published on GitLab between releases: https://gitlab.com/bart-turczynski/sitemapr/-/commits/main",
 
   "repo_distributed_status": "Met",
-  "repo_distributed_justification": "Uses git, a distributed version control system: https://github.com/bart-turczynski/sitemapr",
+  "repo_distributed_justification": "Uses git, a distributed version control system: https://gitlab.com/bart-turczynski/sitemapr",
 
   "version_unique_status": "Met",
   "version_unique_justification": "Package versions are declared in DESCRIPTION and release tags use unique version identifiers.",
@@ -51,43 +51,43 @@
   "version_semver_justification": "Uses semantic-style x.y.z versioning in DESCRIPTION.",
 
   "version_tags_status": "Met",
-  "version_tags_justification": "Release preparation workflows are tied to version tags matching v*: https://github.com/bart-turczynski/sitemapr/blob/main/.github/workflows/full-check.yml",
+  "version_tags_justification": "Releases are identified by git tags in the GitLab repository: https://gitlab.com/bart-turczynski/sitemapr/-/tags . The former tag-triggered GitHub Actions release workflow is gone, and the package is still pre-release (DESCRIPTION version 0.0.0.9000), so no release tag has been cut yet.",
 
   "release_notes_status": "Met",
-  "release_notes_justification": "NEWS.md documents user-facing changes: https://github.com/bart-turczynski/sitemapr/blob/main/NEWS.md",
+  "release_notes_justification": "NEWS.md documents user-facing changes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
 
   "release_notes_vulns_status": "Met",
-  "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records user-facing changes: https://github.com/bart-turczynski/sitemapr/blob/main/NEWS.md",
+  "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records user-facing changes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
 
   "report_url_status": "Met",
-  "report_url_justification": "Bug tracker: https://github.com/bart-turczynski/sitemapr/issues",
+  "report_url_justification": "Bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues (declared as the BugReports field in DESCRIPTION).",
 
   "report_tracker_status": "Met",
-  "report_tracker_justification": "GitHub Issues serve as the bug tracker: https://github.com/bart-turczynski/sitemapr/issues",
+  "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports through the GitHub issue tracker: https://github.com/bart-turczynski/sitemapr/issues",
+  "report_process_justification": "Users submit bug reports as GitLab issues; the tracker is declared as the BugReports field in DESCRIPTION and reachable at https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "report_responses_status": "Met",
-  "report_responses_justification": "Maintainer responds to issue reports on the tracker: https://github.com/bart-turczynski/sitemapr/issues",
+  "report_responses_justification": "Maintainer responds to issue reports on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "enhancement_responses_status": "Met",
-  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the tracker: https://github.com/bart-turczynski/sitemapr/issues",
+  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "report_archive_status": "Met",
-  "report_archive_justification": "GitHub Issues provide a publicly available, searchable archive of reports and responses: https://github.com/bart-turczynski/sitemapr/issues?q=is%3Aissue",
+  "report_archive_justification": "GitLab Issues provide a publicly available, searchable archive of reports and responses, open and closed: https://gitlab.com/bart-turczynski/sitemapr/-/issues/?state=all",
 
   "vulnerability_report_process_status": "Met",
-  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in SECURITY.md and the GitHub security policy: https://github.com/bart-turczynski/sitemapr/security/policy",
+  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in SECURITY.md, which asks reporters not to use the public issue tracker and gives a private channel plus a 7-day acknowledgement target: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "vulnerability_report_private_status": "Met",
-  "vulnerability_report_private_justification": "GitHub private vulnerability reporting provides a confidential channel: https://github.com/bart-turczynski/sitemapr/security/advisories/new",
+  "vulnerability_report_private_justification": "Private reports go by email to the maintainer at bartek@turczynski.pl, the confidential channel documented in SECURITY.md: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "vulnerability_report_response_status": "Met",
-  "vulnerability_report_response_justification": "SECURITY.md documents the response process: https://github.com/bart-turczynski/sitemapr/blob/main/SECURITY.md",
+  "vulnerability_report_response_justification": "SECURITY.md documents the response process, including a 7-day acknowledgement target and coordinated disclosure: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "build_status": "Met",
-  "build_justification": "Builds with the standard R toolchain (R CMD build / INSTALL, devtools): https://github.com/bart-turczynski/sitemapr",
+  "build_justification": "Builds with the standard R toolchain (R CMD build / INSTALL, devtools): https://gitlab.com/bart-turczynski/sitemapr",
 
   "build_common_tools_status": "Met",
   "build_common_tools_justification": "Uses the standard, widely available R build tooling.",
@@ -96,31 +96,31 @@
   "build_floss_tools_justification": "R and its toolchain are free/open source software: https://www.r-project.org/",
 
   "test_status": "Met",
-  "test_justification": "Automated test suite using testthat and cucumber: https://github.com/bart-turczynski/sitemapr/tree/main/tests",
+  "test_justification": "Automated test suite using testthat and cucumber: https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/tests",
 
   "test_invocation_status": "Met",
   "test_invocation_justification": "Tests run via devtools::test() and as part of R CMD check.",
 
   "test_most_status": "Met",
-  "test_most_justification": "Coverage is measured with covr and uploaded to Codecov: https://app.codecov.io/gh/bart-turczynski/sitemapr",
+  "test_most_justification": "The testthat and cucumber suite under tests/testthat/ exercises the parse, index-expansion, discovery, fetch, schema-validation and protocol-validation layers, including the byte-sensitive corpus fixtures (BOMs, CRLF, UTF-16): https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/tests . No coverage service currently publishes a figure: the Codecov upload ran from GitHub Actions and is no longer available.",
 
   "test_policy_status": "Met",
-  "test_policy_justification": "CONTRIBUTING.md requires tests for new features and bug fixes: https://github.com/bart-turczynski/sitemapr/blob/main/CONTRIBUTING.md",
+  "test_policy_justification": "CONTRIBUTING.md makes the verification gate `Rscript tools/verify.R` -- which runs the full testthat and cucumber suite under R CMD check --as-cran -- a requirement for contributions, and the pre-push hook enforces it: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "tests_are_added_status": "Met",
   "tests_are_added_justification": "New functionality ships with tests, enforced in review.",
 
   "tests_documented_added_status": "Met",
-  "tests_documented_added_justification": "The test-addition policy is documented in CONTRIBUTING.md: https://github.com/bart-turczynski/sitemapr/blob/main/CONTRIBUTING.md",
+  "tests_documented_added_justification": "CONTRIBUTING.md documents where tests live (tests/testthat/, with their Cucumber .feature files) and requires every contribution to pass the verify gate that runs them: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "warnings_status": "Met",
-  "warnings_justification": "Warnings are surfaced via R CMD check and lintr in CI: https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml",
+  "warnings_justification": "Warnings are surfaced by `Rscript tools/verify.R`, which runs lintr and R CMD check --as-cran; the `verify` pre-push hook in .pre-commit-config.yaml invokes it on every push: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
   "warnings_fixed_status": "Met",
-  "warnings_fixed_justification": "Warnings are treated as errors in the strict R CMD check gate and fixed before release.",
+  "warnings_fixed_justification": "Warnings from R CMD check --as-cran and findings from lintr are fixed as they appear; the pre-push verify gate re-runs both before any push reaches the remote, so they do not accumulate.",
 
   "warnings_strict_status": "Met",
-  "warnings_strict_justification": "CI sets LINTR_ERROR_ON_LINT=true and the package check uses error-on warning: https://github.com/bart-turczynski/sitemapr/blob/main/.github/workflows/verify.yml",
+  "warnings_strict_justification": "lintr is configured in .lintr with the goodpractice-aligned linter set at line width 80, and the package check runs in R's strictest standard mode, R CMD check --as-cran: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.lintr",
 
   "know_secure_design_status": "Met",
   "know_secure_design_justification": "sitemapr defensively handles untrusted XML, URL, archive, and network inputs, including XXE-safe XML parsing, bounded archive extraction, and SSRF protections.",
@@ -156,59 +156,59 @@
   "crypto_verification_private_justification": "sitemapr does not implement custom certificate verification.",
 
   "delivery_mitm_status": "Met",
-  "delivery_mitm_justification": "Distributed via GitHub over HTTPS: https://github.com/bart-turczynski/sitemapr",
+  "delivery_mitm_justification": "Distributed over HTTPS from GitLab; installation is from that HTTPS origin via pak/remotes: https://gitlab.com/bart-turczynski/sitemapr",
 
   "delivery_unsigned_status": "Met",
-  "delivery_unsigned_justification": "Downloads are served over HTTPS by GitHub and GitHub Releases.",
+  "delivery_unsigned_justification": "Sources are retrieved over HTTPS from GitLab. The project publishes no separate hash or signature files, so no cryptographic hash is served over an unencrypted channel.",
 
   "vulnerabilities_fixed_60_days_status": "Met",
-  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://github.com/bart-turczynski/sitemapr/issues",
+  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_critical_fixed_justification": "No known unfixed critical vulnerabilities.",
 
   "static_analysis_status": "Met",
-  "static_analysis_justification": "lintr, R CMD check, pkgcheck, and dependency vulnerability audits run in GitHub Actions.",
+  "static_analysis_justification": "lintr, configured in .lintr, and R CMD check --as-cran run in the local verify gate `Rscript tools/verify.R`, which the `verify` pre-push hook invokes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
   "static_analysis_common_vulnerabilities_status": "Met",
-  "static_analysis_common_vulnerabilities_justification": "R CMD check plus lintr cover common defect classes; OSV and OSS Index audits cover dependency vulnerabilities: https://github.com/bart-turczynski/sitemapr/actions",
+  "static_analysis_common_vulnerabilities_justification": "R CMD check --as-cran plus the lintr set cover common R defect classes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.lintr . The OSV and OSS Index dependency audits no longer run automatically -- they were GitHub Actions workflows -- although rosv and oysteR remain declared in DESCRIPTION Suggests for on-demand runs.",
 
   "static_analysis_fixed_status": "Met",
-  "static_analysis_fixed_justification": "Static-analysis findings are addressed before merge.",
+  "static_analysis_fixed_justification": "Static-analysis findings are fixed before the pre-push verify gate will pass, so they are resolved before the change reaches the remote.",
 
   "static_analysis_often_status": "Met",
-  "static_analysis_often_justification": "lintr runs on every CI build (each push and pull request): https://github.com/bart-turczynski/sitemapr/blob/main/.github/workflows/verify.yml",
+  "static_analysis_often_justification": "lintr runs on every push: the `verify` pre-push hook in .pre-commit-config.yaml invokes `Rscript tools/verify.R`, whose chain includes the lint stage: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
   "dynamic_analysis_status": "Met",
-  "dynamic_analysis_justification": "Before releases the rhub workflow runs R CMD check, including the test suite, on sanitizer and valgrind containers: https://github.com/bart-turczynski/sitemapr/blob/main/.github/workflows/rhub.yaml",
+  "dynamic_analysis_justification": "The testthat and cucumber suite runs under R CMD check --as-cran in the pre-push verify gate, exercising the package at runtime against the byte-sensitive corpus fixtures. The rhub sanitizer and valgrind runs were GitHub Actions workflows and no longer run.",
 
   "dynamic_analysis_unsafe_status": "N/A",
   "dynamic_analysis_unsafe_justification": "sitemapr is an R package with no compiled code of its own.",
 
   "dynamic_analysis_enable_assertions_status": "Met",
-  "dynamic_analysis_enable_assertions_justification": "The automated test suite uses testthat expectations and cucumber scenarios, which are checked at runtime during CI.",
+  "dynamic_analysis_enable_assertions_justification": "The automated test suite uses testthat expectations and cucumber scenarios, which are checked at runtime on every pre-push verify run.",
 
   "dynamic_analysis_fixed_status": "Met",
-  "dynamic_analysis_fixed_justification": "Any issues surfaced by sanitizer, valgrind, or R CMD check runs are fixed before release.",
+  "dynamic_analysis_fixed_justification": "Any issue surfaced by an R CMD check --as-cran or test-suite run is fixed before the change is pushed.",
 
-  "test_continuous_integration_status": "Met",
-  "test_continuous_integration_justification": "GitHub Actions verify.yml runs lint, R CMD check, README sync, registry guards, and coverage on every push and pull request: https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml",
+  "test_continuous_integration_status": "Unmet",
+  "test_continuous_integration_justification": "Not currently met. No hosted CI runs for this project: `origin` is GitLab and carries no pipeline, and the former GitHub Actions workflows are unavailable. The equivalent chain -- docs, findings registry, lint, R CMD check --as-cran -- runs as `Rscript tools/verify.R`, invoked by the `verify` pre-push hook in .pre-commit-config.yaml (https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml), but that is a per-developer pre-push gate on one machine, not continuous integration on a server.",
 
   "discussion_status": "Met",
-  "discussion_justification": "GitHub Issues provide a public forum for project discussion: https://github.com/bart-turczynski/sitemapr/issues",
+  "discussion_justification": "GitLab Issues provide a public forum for project discussion: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
 
   "no_leaked_credentials_status": "Met",
-  "no_leaked_credentials_justification": "No credentials are committed to the repository; secret-bearing workflows use GitHub Actions secrets.",
+  "no_leaked_credentials_justification": "No credentials are committed to the repository: .gitignore excludes .env and .env.*, and the tracked .env.example carries placeholder text only.",
 
   "english_status": "Met",
-  "english_justification": "Documentation and issue-tracker interaction are conducted in English: https://github.com/bart-turczynski/sitemapr#readme",
+  "english_justification": "Documentation and issue-tracker interaction are conducted in English: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md",
 
   "hardening_status": "N/A",
   "hardening_justification": "Hardening mechanisms such as HTTP security headers apply to web applications; sitemapr is an R library.",
 
   "sites_password_security_status": "N/A",
-  "sites_password_security_justification": "Project sites (GitHub and pkgdown) manage their own authentication; sitemapr operates no site with user passwords.",
+  "sites_password_security_justification": "Project sites (GitLab and the pkgdown site) manage their own authentication; sitemapr operates no site with user passwords.",
 
   "maintained_status": "Met",
-  "maintained_justification": "Actively maintained: recent commits, issue tracking, and CI workflows are present at https://github.com/bart-turczynski/sitemapr"
+  "maintained_justification": "Actively maintained: recent commits and issue tracking on GitLab at https://gitlab.com/bart-turczynski/sitemapr"
 }
