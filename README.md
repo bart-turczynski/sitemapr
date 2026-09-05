@@ -16,11 +16,17 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
      there is no CI and no server-side branch protection, and tools/verify.R
      under the pre-push hook is the only gate that runs at all. See
      docs/repo-hygiene.md. -->
-<!-- No DOI badge yet: zenodo.org/badge/latestdoi/1282558407 404s because the
-     repo has no Zenodo deposit, and R CMD check --as-cran flags it as a
-     possibly invalid URL. Re-add it after the first GitHub release archives
-     to Zenodo (SITE-ewcnqior). The all-software search badge below resolves
-     and stays. -->
+<!-- No DOI badge: zenodo.org/badge/latestdoi/1282558407 404s (re-measured
+     2026-09-05) and R CMD check --as-cran flags it as a possibly invalid URL.
+     That id belongs to the deleted GitHub repository and the badge resolves
+     only through Zenodo's GitHub archiving integration, so it cannot come back
+     -- the account is suspended for good (SITE-ewcnqior, SITE-jyndiitx). Do
+     not wait for a release to archive itself. A DOI from GitLab means
+     depositing a release archive to Zenodo by hand and linking the minted DOI
+     directly, not through a /badge/latestdoi route; .zenodo.json is the
+     prepared metadata for such a deposit and is dormant until one is made. The
+     all-software search badge below is a different URL, resolves 200, and
+     stays. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
