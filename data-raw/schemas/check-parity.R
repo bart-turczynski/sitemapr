@@ -18,7 +18,7 @@ suppressPackageStartupMessages(library(xml2))
 
 root <- normalizePath(".", mustWork = TRUE)
 bundled_dir <- file.path(root, "inst", "schemas")
-UA <- "sitemapr-schema-parity/1 (+https://github.com/bart-turczynski/sitemapr)"
+UA <- "sitemapr-schema-parity/1 (+https://gitlab.com/bart-turczynski/sitemapr)"
 
 # Canonical upstream URLs, by bundled filename.
 upstream <- c(

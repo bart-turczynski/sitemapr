@@ -116,7 +116,7 @@ not consulted in this version.
 
 ## Where to go next
 
-- The [function reference](https://bart-turczynski.github.io/sitemapr/reference/)
+- The [function reference](https://bart-turczynski.gitlab.io/sitemapr/reference/)
   documents every argument, including the `limits`, `index_limits`, and
   `user_agent` controls shared across the entry points.
 - `read_sitemap()` for extraction, `validate_sitemap()` for conformance, and
@@ -131,4 +131,4 @@ protocol and Google's sitemap extensions, following the relevant W3C XML, RFC
 
 The full list of credits — prior art, dependencies, the standards this code
 implements, and the data sources it serves — is in
-[`ACKNOWLEDGMENTS.md`](https://github.com/bart-turczynski/sitemapr/blob/main/ACKNOWLEDGMENTS.md).
+[`ACKNOWLEDGMENTS.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/ACKNOWLEDGMENTS.md).

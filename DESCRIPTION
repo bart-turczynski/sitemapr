@@ -11,9 +11,9 @@ Description: A deterministic toolkit for reading and validating XML, text, and
     indexes, and reports schema and protocol findings with stable, reproducible
     output.
 License: MIT + file LICENSE
-URL: https://github.com/bart-turczynski/sitemapr,
-    https://bart-turczynski.github.io/sitemapr/
-BugReports: https://github.com/bart-turczynski/sitemapr/issues
+URL: https://gitlab.com/bart-turczynski/sitemapr,
+    https://bart-turczynski.gitlab.io/sitemapr/
+BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/issues
 Imports:
     htmltools,
     httr2 (>= 1.1.1),
@@ -36,8 +36,8 @@ Suggests:
     testthat (>= 3.0.0),
     withr
 Remotes:
-    bart-turczynski/rurl@v2.2.1,
-    bart-turczynski/robotstxtr@v0.2.0
+    gitlab::bart-turczynski/rurl,
+    gitlab::bart-turczynski/robotstxtr@v0.2.0
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

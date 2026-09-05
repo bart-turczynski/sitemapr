@@ -86,9 +86,10 @@ failure. Because the hook and a manual run share one definition, they cannot
 disagree about what "verified" means.
 
 Every stage runs offline except `readme`: `devtools::build_readme()` installs the
-package, which resolves the GitHub-hosted dependency chain (`sitemapr` → `rurl` →
-`pslr`) through pak. With GitHub unreachable it fails with a pak 403 rather than
-a README problem — which is why `--all` is not the default.
+package, which resolves the dependency chain (`sitemapr` → `rurl`) through pak.
+It needs network, which is why `--all` is not the default. It also needs every
+`Remotes:` target to be publicly readable — a private GitLab project fails the
+stage with a pak 403 rather than a README problem.
 
 **Do not rely on the pre-push hook as the only trigger.** It fires on `git push`,
 so it never runs while the remote is unreachable — and the per-commit hooks only

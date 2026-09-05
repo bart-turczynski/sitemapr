@@ -49,7 +49,7 @@ test_that("default_user_agent() follows the documented pattern", {
 
   expect_match(
     ua,
-    "^sitemapr/[0-9.]+.*\\(\\+https://github\\.com/bart-turczynski/sitemapr\\)$"
+    "^sitemapr/[0-9.]+.*\\(\\+https://gitlab\\.com/bart-turczynski/sitemapr\\)$"
   )
 
   version <- sub("^sitemapr/([0-9.]+).*$", "\\1", ua)

@@ -34,4 +34,4 @@ For the R-package-facing changelog (rendered on the pkgdown site), see
   cloud-metadata addresses, including NAT64 / IPv4-translated / IPv4-compatible
   IPv6 embedding decoding.
 
-[Unreleased]: https://github.com/bart-turczynski/sitemapr/commits/main
+[Unreleased]: https://gitlab.com/bart-turczynski/sitemapr/-/commits/main
