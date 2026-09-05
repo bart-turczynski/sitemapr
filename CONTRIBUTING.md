@@ -12,9 +12,12 @@ Run verification:
 Rscript tools/verify.R
 ```
 
-That is the same chain the pre-push hook and CI run — docs, findings registry,
-lint, `R CMD check --as-cran`. See [docs/repo-hygiene.md](docs/repo-hygiene.md)
-for the individual stages and for `--all`.
+That is the same chain the pre-push hook runs — docs, findings registry, lint,
+`R CMD check --as-cran`. It is also the only gate there is: `origin` is GitLab
+and carries no pipeline, and there is no server-side branch protection, so
+nothing downstream catches what a local run lets through. See
+[docs/repo-hygiene.md](docs/repo-hygiene.md) for the individual stages and for
+`--all`.
 
 ## Formatting
 

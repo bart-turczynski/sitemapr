@@ -45,7 +45,7 @@ repos:
   - repo: local
     hooks:
       - id: verify
-        name: verify (mirrors CI)
+        name: verify (the only gate)
         entry: Rscript tools/verify.R
         language: system
         pass_filenames: false
