@@ -126,11 +126,34 @@ verify_stages <- list(
   ),
   # Runs with the manual built, so a manual-only problem is caught here
   # rather than at CRAN submission.
+  #
+  # `--as-cran`'s first step downloads CRAN's archive.rds, and R's default
+  # download timeout is 60s. A stalled connection there halts the whole run
+  # before a single result marker -- a false RED that rejects the push
+  # (SITE-xolykhjm, seen three times on 2026-09-05, each retry passing in
+  # seconds). It is not bandwidth: curl fetched that same 5,423,044-byte file
+  # in 0.79s during a failing run. So the ceiling is raised for this gate's own
+  # runs rather than left at a default tuned for interactive use.
+  #
+  # It has to travel as an environment variable: `R CMD check` runs in a child
+  # R process, so `options(timeout=)` set here would not reach it, but the
+  # child reads R_DEFAULT_INTERNET_TIMEOUT at startup. rcmdcheck merges a named
+  # `env` onto `callr::rcmd_safe_env()`, so this adds one variable rather than
+  # replacing that env.
+  #
+  # Raising it cannot mask a real failure: the run still has to reach a
+  # terminal `Status:` line for this stage to report clean. A stall now costs
+  # five minutes before it fails instead of one, which is the price of not
+  # rejecting good pushes.
   check = list(
     label = "R CMD check --as-cran",
     default = TRUE,
     run = function() {
-      res <- rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")
+      res <- rcmdcheck::rcmdcheck(
+        args = "--as-cran",
+        error_on = "warning",
+        env = c(R_DEFAULT_INTERNET_TIMEOUT = "300")
+      )
       verify_assert_check_completed(res)
     }
   ),
