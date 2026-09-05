@@ -39,13 +39,13 @@ schema and protocol findings with stable, reproducible output.
 ## Installation
 
 sitemapr and its URL-parsing dependency
-([rurl](https://github.com/bart-turczynski/rurl)) are installed from
-GitHub. [pak](https://pak.r-lib.org) reads the `Remotes` field and
+([rurl](https://gitlab.com/bart-turczynski/rurl)) are installed from
+GitLab. [pak](https://pak.r-lib.org) reads the `Remotes` field and
 resolves the chain for you:
 
 ``` r
 # install.packages("pak")
-pak::pak("bart-turczynski/sitemapr")
+pak::pak("gitlab::bart-turczynski/sitemapr")
 ```
 
 ## Usage
@@ -133,7 +133,7 @@ sitemap_tree("https://example.com")
 ## Learn more
 
 - Full reference and articles:
-  <https://bart-turczynski.github.io/sitemapr/>
+  <https://bart-turczynski.gitlab.io/sitemapr/>
 - Getting-started vignette:
   `vignette("introduction", package = "sitemapr")`
 

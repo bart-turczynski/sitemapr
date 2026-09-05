@@ -1,4 +1,4 @@
-url: https://bart-turczynski.github.io/sitemapr/
+url: https://bart-turczynski.gitlab.io/sitemapr/
 destination: site
 
 template:
@@ -23,10 +23,10 @@ navbar:
   components:
     acknowledgments:
       text: Acknowledgments
-      href: https://github.com/bart-turczynski/sitemapr/blob/main/ACKNOWLEDGMENTS.md
+      href: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/ACKNOWLEDGMENTS.md
     github:
       icon: fab fa-github fa-lg
-      href: https://github.com/bart-turczynski/sitemapr
+      href: https://gitlab.com/bart-turczynski/sitemapr
       aria-label: GitHub
 
 reference:
@@ -114,6 +114,6 @@ footer:
   components:
     related: >
       Related:
-      <a href="https://bart-turczynski.github.io/rurl/">rurl</a> ·
-      <a href="https://bart-turczynski.github.io/pslr/">pslr</a> ·
-      <a href="https://bart-turczynski.github.io/punycoder/">punycoder</a>
+      <a href="https://bart-turczynski.gitlab.io/rurl/">rurl</a> ·
+      <a href="https://bart-turczynski.gitlab.io/pslr/">pslr</a> ·
+      <a href="https://CRAN.R-project.org/package=punycoder">punycoder</a>

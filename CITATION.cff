@@ -12,8 +12,8 @@ authors:
   - family-names: Turczynski
     given-names: Bart
     orcid: "https://orcid.org/0000-0002-8788-7980"
-repository-code: "https://github.com/bart-turczynski/sitemapr"
-url: "https://bart-turczynski.github.io/sitemapr/"
+repository-code: "https://gitlab.com/bart-turczynski/sitemapr"
+url: "https://bart-turczynski.gitlab.io/sitemapr/"
 license: MIT
 keywords:
   - sitemap

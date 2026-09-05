@@ -4,9 +4,9 @@
   "identifier": "sitemapr",
   "description": "A deterministic toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It parses sitemap sources into tidy tibbles, expands sitemap indexes, and reports schema and protocol findings with stable, reproducible output.",
   "name": "sitemapr: Parse and Validate XML Sitemaps",
-  "relatedLink": "https://bart-turczynski.github.io/sitemapr/",
-  "codeRepository": "https://github.com/bart-turczynski/sitemapr",
-  "issueTracker": "https://github.com/bart-turczynski/sitemapr/issues",
+  "relatedLink": "https://bart-turczynski.gitlab.io/sitemapr/",
+  "codeRepository": "https://gitlab.com/bart-turczynski/sitemapr",
+  "issueTracker": "https://gitlab.com/bart-turczynski/sitemapr/-/issues",
   "license": "https://spdx.org/licenses/MIT",
   "version": "0.0.0.9000",
   "programmingLanguage": {
@@ -228,12 +228,11 @@
         }
       ],
       "name": "{sitemapr}: Parse and Validate XML Sitemaps",
-      "url": "https://bart-turczynski.github.io/sitemapr/",
+      "url": "https://bart-turczynski.gitlab.io/sitemapr/",
       "description": "R package version 0.0.0.9000"
     }
   ],
-  "releaseNotes": "https://github.com/bart-turczynski/sitemapr/blob/main/NEWS.md",
-  "readme": "https://github.com/bart-turczynski/sitemapr/blob/main/README.md",
-  "contIntegration": ["https://github.com/bart-turczynski/sitemapr/actions/workflows/verify.yml", "https://app.codecov.io/gh/bart-turczynski/sitemapr", "https://github.com/bart-turczynski/sitemapr/actions/workflows/pkgcheck.yaml", "https://github.com/bart-turczynski/sitemapr/actions/workflows/security-audit.yml", "https://github.com/bart-turczynski/sitemapr/actions/workflows/osv-audit.yml"],
+  "releaseNotes": "https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
+  "readme": "https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md",
   "developmentStatus": "https://lifecycle.r-lib.org/articles/stages.html#experimental"
 }
