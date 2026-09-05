@@ -79,9 +79,9 @@ writeLines(sitemap, path)
 read_sitemap(path)
 #> # A tibble: 2 × 9
 #>   loc    lastmod             changefreq priority images video  news   alternates
-#>   <chr>  <dttm>              <chr>         <dbl> <list> <list> <list> <list>
-#> 1 https… 2024-01-01 00:00:00 <NA>              1 <NULL> <NULL> <NULL> <NULL>
-#> 2 https… NA                  monthly          NA <NULL> <NULL> <NULL> <NULL>
+#>   <chr>  <dttm>              <chr>         <dbl> <list> <list> <list> <list>    
+#> 1 https… 2024-01-01 00:00:00 <NA>              1 <NULL> <NULL> <NULL> <NULL>    
+#> 2 https… NA                  monthly          NA <NULL> <NULL> <NULL> <NULL>    
 #> # ℹ 1 more variable: source_sitemap <chr>
 ```
 
@@ -109,9 +109,9 @@ writeLines(invalid, path)
 findings <- validate_sitemap(path)
 findings[, c("code", "severity", "layer")]
 #> # A tibble: 3 × 3
-#>   code                           severity layer
-#>   <chr>                          <chr>    <chr>
-#> 1 SCHEMA_INVALID                 error    schema
+#>   code                           severity layer   
+#>   <chr>                          <chr>    <chr>   
+#> 1 SCHEMA_INVALID                 error    schema  
 #> 2 PROTOCOL_PRIORITY_OUT_OF_RANGE error    protocol
 #> 3 PROTOCOL_URL_NOT_ABSOLUTE      error    protocol
 ```
