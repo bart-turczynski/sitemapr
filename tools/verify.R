@@ -19,6 +19,62 @@
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).
+#
+# Two stages reach the network: `check` (--as-cran queries CRAN for incoming
+# feasibility) and `readme` (pak resolves the dependency chain). Everything
+# else is offline. A stage that needs the network must prove it RAN, not merely
+# that it reported nothing -- see verify_assert_check_completed() below.
+
+# Assert that an `R CMD check` run actually REACHED ITS END.
+#
+# rcmdcheck derives `$errors`, `$warnings` and `$notes` by grepping the check
+# stdout for the per-check result markers -- see `new_rcmdcheck()` in rcmdcheck
+# 1.4.0, which builds all three with `grep("ERROR\n", entries)` and friends. A
+# run that DIES before emitting any marker therefore yields three empty vectors,
+# `error_on=` has nothing to fire on, and `rcmdcheck()` returns normally. The
+# check stage would then report a green over a check that never ran.
+#
+# That is not hypothetical. On 2026-09-05 a timeout fetching CRAN's archive.rds
+# halted the very FIRST check (`checking CRAN incoming feasibility`) and this
+# stage still printed `ok`. Nothing else ran -- no install, no tests, no
+# examples, no Rd checks -- and with no CI and no branch protection behind this
+# gate, nothing downstream would have caught it (SITE-uzzefkgi).
+#
+# The terminal `Status:` line is the load-bearing assertion: `R CMD check`
+# always emits one on a complete run, whatever its exit code, so it does not
+# depend on how an aborted run happens to exit. `$status` and `$timeout` are
+# cheaper signals for the same failure and are tested first purely so the
+# message names the cause.
+verify_assert_check_completed <- function(res) {
+  if (isTRUE(res$timeout)) {
+    stop("R CMD check timed out; nothing was verified.", call. = FALSE)
+  }
+
+  status <- suppressWarnings(as.integer(res$status))
+  if (!identical(status, 0L)) {
+    stop(
+      sprintf(
+        "R CMD check exited with status %s; the run did not complete.",
+        format(res$status)
+      ),
+      call. = FALSE
+    )
+  }
+
+  stdout <- if (is.character(res$stdout)) res$stdout else ""
+  lines <- strsplit(stdout, "\n", fixed = TRUE)[[1L]]
+  if (!any(grepl("^Status:", lines))) {
+    cat(utils::tail(lines, 15L), sep = "\n")
+    stop(
+      "R CMD check emitted no terminal `Status:` line, so it aborted before ",
+      "finishing. Reporting this stage clean would be a green over an unrun ",
+      "check.",
+      call. = FALSE
+    )
+  }
+
+  invisible(res)
+}
 
 verify_stages <- list(
   # CI: verify.yml job "lint", step "Docs are reproducible"
@@ -80,7 +136,8 @@ verify_stages <- list(
     label = "R CMD check --as-cran",
     default = TRUE,
     run = function() {
-      rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")
+      res <- rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")
+      verify_assert_check_completed(res)
     }
   ),
   # CI: verify.yml job "coverage". Off by default -- it re-runs the whole test
@@ -103,12 +160,15 @@ verify_stages <- list(
       }
     }
   ),
-  # CI: verify.yml job "readme". Off by default, and the ONLY stage that needs
-  # network access: build_readme() installs the package into a temporary
-  # library, which resolves the GitHub-hosted dependency chain
-  # (sitemapr -> rurl -> pslr) through pak. It therefore cannot run while
-  # GitHub is unreachable -- it fails with a pak 403, not a README problem.
-  # Every other stage is fully offline.
+  # CI: verify.yml job "readme". Off by default. build_readme() installs the
+  # package into a temporary library, resolving the dependency chain
+  # (sitemapr -> rurl) through pak, so it needs network AND needs every
+  # `Remotes:` target to be publicly readable -- a private GitLab project fails
+  # it with a pak 403, not a README problem.
+  #
+  # It is not the only networked stage, though this comment long claimed it
+  # was: `check` runs --as-cran, whose `checking CRAN incoming feasibility`
+  # step queries CRAN. That is what made SITE-uzzefkgi reachable.
   readme = list(
     label = "README.md in sync with README.Rmd",
     default = FALSE,
