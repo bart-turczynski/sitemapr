@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Findings-registry guard (mirrors CI; run by the pre-push verify gate).
+# Findings-registry guard (run by the pre-push verify gate).
 #
 # docs/findings-registry.csv is the language-neutral source of truth for the
 # finding-code contract, shared with the sibling TypeScript implementation

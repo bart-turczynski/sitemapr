@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Reproducible-docs guard (mirrors CI; run by the pre-push verify gate).
+# Reproducible-docs guard (run by the pre-push verify gate).
 #
 # man/ and NAMESPACE are roxygen2-generated. Different roxygen2 versions emit
 # subtly different output (whitespace reflows, stray .Rd files for internal
