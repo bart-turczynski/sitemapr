@@ -32,6 +32,8 @@ Planning notes go in `_scratch/` (gitignored). `.fp/` is gitignored too, so the
 For the verify gate, hook setup and tracker snapshots, see docs/repo-hygiene.md.
 For the layer model and output contracts, see docs/architecture.md.
 For finding codes and the layer vocabulary, see docs/findings-contract.md.
+For traps that made a gate report the wrong answer, see
+docs/verification-traps.md.
 For settled design decisions, see docs/decisions/.
 
 @FP_AGENTS.md
