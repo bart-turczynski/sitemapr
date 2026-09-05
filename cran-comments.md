@@ -87,9 +87,10 @@ of them is done yet.
    `robotstxtr` projects are private. Every link a reviewer may follow has to
    resolve for an anonymous visitor first: the `URL:` entries in DESCRIPTION
    (the project page and the pkgdown site), `BugReports:`, and the dependency
-   links above. A private GitLab project answers an anonymous request with a
-   404, which both wastes the reviewer's time and gives `--as-cran` a URL to
-   report. This is a repository-visibility change, not a package change.
+   links above. A private GitLab project redirects an anonymous request to the
+   sign-in page (measured: `302` to `/users/sign_in`, resolving to `403`), which
+   both wastes the reviewer's time and gives `--as-cran` a URL to report. This
+   is a repository-visibility change, not a package change.
 
 ---
 
