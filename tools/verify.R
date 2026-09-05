@@ -9,13 +9,13 @@
 # pre-push `verify` hook invokes it with no arguments, so the hook and a manual
 # run can never disagree about what "verified" means.
 #
-# It is also the ONLY gate that runs at all. `origin` is GitLab and carries no
-# CI config; every workflow in `.github/workflows/` is GitHub Actions, and that
-# account is suspended, so none of them run. There is no server-side branch
-# protection behind this either. The `# CI:` comments below name each stage's
-# dormant workflow counterpart so the mirror can be restored intact — they do
-# not describe anything that currently executes. Treat a failure here as a red
-# build: nothing downstream will catch what this lets through.
+# It is also the ONLY gate that runs at all, anywhere. `origin` is GitLab and
+# carries no CI config. There are no CI workflows: the repository once carried a
+# GitHub Actions workflow tree, but that account is permanently suspended,
+# so the tree was deleted rather than left to rot (SITE-kgpdfhoh — git history
+# keeps it restorable). There is no server-side branch protection behind this
+# either. Treat a failure here as a red build: nothing downstream will catch
+# what this lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).
@@ -77,19 +77,16 @@ verify_assert_check_completed <- function(res) {
 }
 
 verify_stages <- list(
-  # CI: verify.yml job "lint", step "Docs are reproducible"
   docs = list(
     label = "docs reproducible",
     default = TRUE,
     run = function() source("tools/check-docs.R")
   ),
-  # CI: verify.yml job "lint", step "Findings registry in sync"
   registry = list(
     label = "findings registry in sync",
     default = TRUE,
     run = function() source("tools/check-findings-registry.R")
   ),
-  # CI: verify.yml job "lint", step "Declared R floor covers dependencies".
   # Cheap, offline, and placed before lint/check because it answers a question
   # neither of those asks: `R CMD check --as-cran` never compares DESCRIPTION's
   # declared R floor against the floors its dependencies declare.
@@ -98,16 +95,14 @@ verify_stages <- list(
     default = TRUE,
     run = function() source("tools/check-r-floor.R")
   ),
-  # CI: verify.yml job "lint", step "Line width agrees". Placed before lint
-  # because it explains a whole class of lint failure the lint stage can only
-  # report one line at a time: air reformatting to a width lintr rejects.
+  # Placed before lint because it explains a whole class of lint failure the
+  # lint stage can only report one line at a time: air reformatting to a
+  # width lintr rejects.
   linewidth = list(
     label = "air.toml and .lintr agree on line width",
     default = TRUE,
     run = function() source("tools/check-line-width.R")
   ),
-  # CI: verify.yml job "lint", step "Lint" (LINTR_ERROR_ON_LINT=true).
-  #
   # `lint_package()` alone is NOT enough: it skips `tools/`, which is
   # .Rbuildignore'd, so every script this gate is made of was exempt from the
   # gate's own lint stage until SITE-pzrosmkn. `lint_dir("tools")` closes that.
@@ -129,9 +124,8 @@ verify_stages <- list(
       }
     }
   ),
-  # CI: verify.yml job "check" (r-lib/actions/check-r-package, --as-cran,
-  # error-on warning). Local runs keep the manual so a manual-only problem is
-  # caught here rather than at CRAN submission.
+  # Runs with the manual built, so a manual-only problem is caught here
+  # rather than at CRAN submission.
   check = list(
     label = "R CMD check --as-cran",
     default = TRUE,
@@ -140,9 +134,9 @@ verify_stages <- list(
       verify_assert_check_completed(res)
     }
   ),
-  # CI: verify.yml job "coverage". Off by default -- it re-runs the whole test
-  # suite, roughly doubling the chain -- but the project holds 100%, so a
-  # release-shaped run should include it.
+  # Off by default -- it re-runs the whole test suite, roughly doubling the
+  # chain -- but the project holds 100%, so a release-shaped run should
+  # include it.
   coverage = list(
     label = "test coverage",
     default = FALSE,
@@ -160,11 +154,10 @@ verify_stages <- list(
       }
     }
   ),
-  # CI: verify.yml job "readme". Off by default. build_readme() installs the
-  # package into a temporary library, resolving the dependency chain
-  # (sitemapr -> rurl) through pak, so it needs network AND needs every
-  # `Remotes:` target to be publicly readable -- a private GitLab project fails
-  # it with a pak 403, not a README problem.
+  # Off by default. build_readme() installs the package into a temporary
+  # library, resolving the dependency chain (sitemapr -> rurl) through pak, so
+  # it needs network AND needs every `Remotes:` target to be publicly readable
+  # -- a private GitLab project fails it with a pak 403, not a README problem.
   #
   # It is not the only networked stage, though this comment long claimed it
   # was: `check` runs --as-cran, whose `checking CRAN incoming feasibility`

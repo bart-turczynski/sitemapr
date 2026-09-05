@@ -9,9 +9,11 @@
 # `rosv::osv_query()` is version-aware: for a given (package, version) it
 # returns zero rows when that version is unaffected, so a non-empty result is
 # a genuine advisory against the installed version. It is a network test, so
-# it skips on CRAN, offline, or when rosv is not installed. The dedicated
-# osv-audit.yml workflow runs it (weekly + on demand) to drive the README
-# badge; everywhere else it skips cleanly.
+# it skips on CRAN, offline, or when rosv is not installed. There is no longer
+# any scheduled runner behind it -- the osv-audit.yml workflow and its README
+# badge went with the deleted GitHub Actions tree (SITE-kgpdfhoh) -- so this
+# audit only happens when someone runs the suite locally with network;
+# everywhere else it skips cleanly.
 
 test_that("runtime dependencies have no known OSV vulnerabilities", {
   skip_on_cran()
@@ -19,7 +21,7 @@ test_that("runtime dependencies have no known OSV vulnerabilities", {
   skip_if_not_installed("rosv")
 
   # installed.packages() is the standard dependency database for recursive
-  # resolution; its "slow" caveat is irrelevant in a weekly CI audit, and it
+  # resolution; its "slow" caveat is irrelevant in an occasional audit, and it
   # works offline (unlike available.packages()).
   db <- utils::installed.packages() # nolint: installed_packages_linter.
   priority <- db[, "Priority"]
