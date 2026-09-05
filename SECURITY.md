@@ -13,20 +13,17 @@ commit or release before reporting.
 
 ## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+**Please do not report security vulnerabilities through the public issue
+tracker.**
 
-Preferred channel - **GitHub private vulnerability reporting**:
+Preferred channel - **email the maintainer** at **bartek@turczynski.pl**. This
+is the only private reporting channel; there is no separate advisory workflow.
 
-1. Go to the repository's **Security** tab.
-2. Click **Report a vulnerability**.
-
-This opens a private security advisory visible only to the maintainers.
-
-If you cannot use that channel, email the maintainer at
-**bartek@turczynski.pl** instead.
+Please include the affected version or commit, steps to reproduce, and the
+impact you observed.
 
 Do not include secrets, credentials, tokens, or private customer data in issues,
-pull requests, logs, or `_scratch/`.
+merge requests, logs, or `_scratch/`.
 
 ## What to expect
 
