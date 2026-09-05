@@ -6,11 +6,12 @@
 # OSSINDEX_TOKEN):
 # the API rejects unauthenticated requests with HTTP 401, so the test is
 # guarded to skip wherever those preconditions are absent (CRAN, offline,
-# missing credentials, oysteR not installed). The dedicated
-# security-audit.yml workflow supplies the credentials as repository secrets
-# so the audit actually runs there (and drives the README badge); in every
-# other context (local runs, the verify/full-check/rhub suites) it skips
-# cleanly rather than failing.
+# missing credentials, oysteR not installed). Nothing supplies those
+# credentials automatically any more -- the security-audit.yml workflow that
+# held them as repository secrets, and the README badge it drove, went with the
+# deleted GitHub Actions tree (SITE-kgpdfhoh). So this audit runs only when a
+# local environment sets OSSINDEX_USER / OSSINDEX_TOKEN, and skips cleanly
+# rather than failing everywhere else.
 
 test_that("declared dependencies have no known OSS Index vulnerabilities", {
   skip_on_cran()

@@ -1,7 +1,8 @@
 # Repository hygiene
 
-How this repository verifies a tree before it reaches CI, and how the issue
-tracker survives leaving this machine.
+How this repository verifies a tree before it reaches `origin` — there is no CI
+behind that, so this is the whole of it — and how the issue tracker survives
+leaving this machine.
 
 ## Hooks
 
@@ -36,15 +37,15 @@ destroys what they test.
 
 ### Pre-push verify gate
 
-On `git push`, the `verify` hook runs the project's verify command — the same
-chain the CI workflows run.
+On `git push`, the `verify` hook runs the project's verify command.
 
-**It is currently the only gate that runs at all.** `origin` is GitLab and
-carries no CI config; every workflow in `.github/workflows/` is GitHub Actions,
-and that account is suspended, so nothing runs them. There is also no
-server-side branch protection standing behind it. Treat a red pre-push gate as a
-red build: no second opinion is coming, and nothing downstream will catch what
-it lets through.
+**It is the only gate that runs at all, anywhere.** `origin` is GitLab and
+carries no CI config. There are no CI workflows of any kind: the repository once
+carried a GitHub Actions workflow tree, but that account is permanently
+suspended, so the tree was deleted rather than left to rot (SITE-kgpdfhoh — git
+history keeps it restorable). There is also no server-side branch protection
+standing behind the hook. Treat a red pre-push gate as a red build: no second
+opinion is coming, and nothing downstream will catch what it lets through.
 
 ## Running the checks locally
 
