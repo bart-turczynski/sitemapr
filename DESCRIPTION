@@ -18,7 +18,7 @@ Imports:
     htmltools,
     httr2 (>= 1.1.1),
     rlang,
-    rurl (>= 2.1.0),
+    rurl (>= 3.0.1),
     tibble,
     utils,
     xml2
@@ -36,7 +36,6 @@ Suggests:
     testthat (>= 3.0.0),
     withr
 Remotes:
-    gitlab::bart-turczynski/rurl,
     gitlab::bart-turczynski/robotstxtr@v0.2.0
 Config/testthat/edition: 3
 VignetteBuilder: knitr
