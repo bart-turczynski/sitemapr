@@ -317,3 +317,7 @@ related W3C and RFC standards.
   declares `R (>= 4.1)`, so resolution failed on R 4.0 before any sitemapr code
   ran. sitemapr's own sources use no post-4.0 syntax — the floor comes entirely
   from the dependency chain, and no supported configuration is lost.
+* `rurl` now resolves from CRAN. The declared floor is `rurl (>= 3.0.1)`,
+  corrected from `rurl (>= 2.1.0)` — a version that exists on no repository and
+  no tag — and the `Remotes:` entry pointing at GitLab has been dropped
+  (SITE-ieajhiee).
