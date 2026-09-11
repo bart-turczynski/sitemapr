@@ -15,8 +15,9 @@
 # says only that the docs built. The repository once carried a GitHub Actions
 # workflow tree, but that account is permanently suspended, so the tree was
 # deleted rather than left to rot (SITE-kgpdfhoh -- git history keeps it
-# restorable). There is no server-side branch protection behind this either. Treat a failure here as a red build: nothing downstream will catch
-# what this lets through.
+# restorable). There is no server-side branch protection behind this either.
+# Treat a failure here as a red build: nothing downstream will catch what this
+# lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).
