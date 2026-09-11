@@ -322,6 +322,20 @@ related W3C and RFC standards.
   no tag — and the `Remotes:` entry pointing at GitLab has been dropped
   (SITE-ieajhiee).
 
+## Documentation
+
+* The documentation URL is now `https://sitemapr-eca867.gitlab.io/`, corrected
+  from `https://bart-turczynski.gitlab.io/sitemapr/` — a host that never served
+  this project, because its GitLab Pages site uses a unique domain rather than
+  the namespace path. `DESCRIPTION`, `inst/CITATION`, `CITATION.cff`,
+  `.zenodo.json`, `codemeta.json`, `.bestpractices.json`, the README, the
+  introduction vignette and `_pkgdown.yml` all name the same address; the
+  repository URL stays first in `DESCRIPTION` because `default_user_agent()`
+  reads that entry as the crawler contact URL (SITE-rysgulhf).
+* A `pages` job in `.gitlab-ci.yml` builds the pkgdown site on the default
+  branch and deploys it, so the declared documentation URL is published rather
+  than merely advertised (SITE-rysgulhf).
+
 ## Internal
 
 * The OSS Index dependency audit in `tests/testthat/test-security.R` scopes to

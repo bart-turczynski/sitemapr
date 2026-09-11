@@ -4,7 +4,7 @@
   "identifier": "sitemapr",
   "description": "A deterministic toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It parses sitemap sources into tidy tibbles, expands sitemap indexes, and reports schema and protocol findings with stable, reproducible output.",
   "name": "sitemapr: Parse and Validate XML Sitemaps",
-  "relatedLink": "https://bart-turczynski.gitlab.io/sitemapr/",
+  "relatedLink": "https://sitemapr-eca867.gitlab.io/",
   "codeRepository": "https://gitlab.com/bart-turczynski/sitemapr",
   "issueTracker": "https://gitlab.com/bart-turczynski/sitemapr/-/issues",
   "license": "https://spdx.org/licenses/MIT",
@@ -228,7 +228,7 @@
         }
       ],
       "name": "{sitemapr}: Parse and Validate XML Sitemaps",
-      "url": "https://bart-turczynski.gitlab.io/sitemapr/",
+      "url": "https://sitemapr-eca867.gitlab.io/",
       "description": "R package version 0.0.0.9000"
     }
   ],

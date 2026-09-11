@@ -30,7 +30,7 @@
   "notes": "sitemapr is part of a URL-handling ecosystem for R and depends on rurl for URL parsing and normalization. It bundles clean-room XSD profiles for the core Sitemap Protocol and image, video, news, pagemap, and xhtml-hreflang extensions.",
   "related_identifiers": [
     {
-      "identifier": "https://bart-turczynski.gitlab.io/sitemapr/",
+      "identifier": "https://sitemapr-eca867.gitlab.io/",
       "relation": "isDocumentedBy",
       "resource_type": "publication-softwaredocumentation",
       "scheme": "url"

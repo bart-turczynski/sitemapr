@@ -10,12 +10,14 @@
 # run can never disagree about what "verified" means.
 #
 # It is also the ONLY gate that runs at all, anywhere. `origin` is GitLab and
-# carries no CI config. There are no CI workflows: the repository once carried a
-# GitHub Actions workflow tree, but that account is permanently suspended,
-# so the tree was deleted rather than left to rot (SITE-kgpdfhoh — git history
-# keeps it restorable). There is no server-side branch protection behind this
-# either. Treat a failure here as a red build: nothing downstream will catch
-# what this lets through.
+# its `.gitlab-ci.yml` holds exactly one job, `pages`, which publishes the
+# pkgdown site and VERIFIES NOTHING (SITE-rysgulhf) -- a green pipeline there
+# says only that the docs built. The repository once carried a GitHub Actions
+# workflow tree, but that account is permanently suspended, so the tree was
+# deleted rather than left to rot (SITE-kgpdfhoh -- git history keeps it
+# restorable). There is no server-side branch protection behind this either.
+# Treat a failure here as a red build: nothing downstream will catch what this
+# lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).

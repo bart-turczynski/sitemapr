@@ -33,5 +33,18 @@ For the R-package-facing changelog (rendered on the pkgdown site), see
 - **Network safety** — SSRF guard blocking private, loopback, link-local, and
   cloud-metadata addresses, including NAT64 / IPv4-translated / IPv4-compatible
   IPv6 embedding decoding.
+- **Documentation publishing** — a `pages` job in `.gitlab-ci.yml` builds the
+  pkgdown site on the default branch and deploys it to GitLab Pages, so the
+  documentation URL the package declares is actually published.
+
+### Fixed
+
+- **Documentation URL** — the declared documentation address is now
+  `https://sitemapr-eca867.gitlab.io/`, corrected from
+  `https://bart-turczynski.gitlab.io/sitemapr/`, which never served this
+  project: its GitLab Pages site uses a unique domain, not the namespace path.
+  `DESCRIPTION`, `inst/CITATION`, `CITATION.cff`, `.zenodo.json`,
+  `codemeta.json`, `.bestpractices.json`, the README, the introduction vignette
+  and `_pkgdown.yml` now agree on it.
 
 [Unreleased]: https://gitlab.com/bart-turczynski/sitemapr/-/commits/main

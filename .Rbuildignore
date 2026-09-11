@@ -21,6 +21,7 @@
 ^\.env\.example$
 ^\.gitattributes$
 ^\.gitignore$
+^\.gitlab-ci\.yml$
 ^\.pre-commit-config\.yaml$
 ^air\.toml$
 ^\.fp$

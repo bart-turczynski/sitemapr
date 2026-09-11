@@ -9,12 +9,13 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- No CI badges, permanently: R-CMD-check, Codecov, pkgcheck, Security audit
      and OSV audit all rendered from GitHub Actions runs. That account is
-     suspended for good and `origin` is GitLab with no CI, so the workflows
-     were deleted rather than left dormant (SITE-kgpdfhoh). A badge for a
-     workflow that cannot run is a stale signal, not a missing one -- it
-     reports the last state before the lights went out. Do not re-add these:
-     there is no CI and no server-side branch protection, and tools/verify.R
-     under the pre-push hook is the only gate that runs at all. See
+     suspended for good and `origin` is GitLab, so the workflows were deleted
+     rather than left dormant (SITE-kgpdfhoh). A badge for a workflow that
+     cannot run is a stale signal, not a missing one -- it reports the last
+     state before the lights went out. Do not re-add these: GitLab CI here is
+     one `pages` job that publishes the docs site and verifies nothing, there
+     is no server-side branch protection, and tools/verify.R under the
+     pre-push hook is the only gate that runs at all. See
      docs/repo-hygiene.md. -->
 <!-- No DOI badge: zenodo.org/badge/latestdoi/1282558407 404s (re-measured
      2026-09-05) and R CMD check --as-cran flags it as a possibly invalid URL.
@@ -139,8 +140,7 @@ sitemap_tree("https://example.com")
 
 ## Learn more
 
-- Full reference and articles:
-  <https://bart-turczynski.gitlab.io/sitemapr/>
+- Full reference and articles: <https://sitemapr-eca867.gitlab.io/>
 - Getting-started vignette:
   `vignette("introduction", package = "sitemapr")`
 
