@@ -13,7 +13,7 @@ Description: A deterministic toolkit for reading and validating XML, text, and
 License: MIT + file LICENSE
 URL: https://gitlab.com/bart-turczynski/sitemapr,
     https://sitemapr-eca867.gitlab.io/
-BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/issues
+BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/work_items
 Imports:
     htmltools,
     httr2 (>= 1.1.1),
