@@ -6,7 +6,7 @@
   "name": "sitemapr: Parse and Validate XML Sitemaps",
   "relatedLink": "https://sitemapr-eca867.gitlab.io/",
   "codeRepository": "https://gitlab.com/bart-turczynski/sitemapr",
-  "issueTracker": "https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "issueTracker": "https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
   "license": "https://spdx.org/licenses/MIT",
   "version": "0.0.0.9000",
   "programmingLanguage": {

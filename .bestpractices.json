@@ -60,22 +60,22 @@
   "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records user-facing changes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
 
   "report_url_status": "Met",
-  "report_url_justification": "Bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues (declared as the BugReports field in DESCRIPTION).",
+  "report_url_justification": "Bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items (declared as the BugReports field in DESCRIPTION).",
 
   "report_tracker_status": "Met",
-  "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports as GitLab issues; the tracker is declared as the BugReports field in DESCRIPTION and reachable at https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "report_process_justification": "Users submit bug reports as GitLab issues; the tracker is declared as the BugReports field in DESCRIPTION and reachable at https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "report_responses_status": "Met",
-  "report_responses_justification": "Maintainer responds to issue reports on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "report_responses_justification": "Maintainer responds to issue reports on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "enhancement_responses_status": "Met",
-  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "report_archive_status": "Met",
-  "report_archive_justification": "GitLab Issues provide a publicly available, searchable archive of reports and responses, open and closed: https://gitlab.com/bart-turczynski/sitemapr/-/issues/?state=all",
+  "report_archive_justification": "GitLab Issues provide a publicly available, searchable archive of reports and responses, open and closed: https://gitlab.com/bart-turczynski/sitemapr/-/work_items/?state=all",
 
   "vulnerability_report_process_status": "Met",
   "vulnerability_report_process_justification": "The vulnerability-reporting process is published in SECURITY.md, which asks reporters not to use the public issue tracker and gives a private channel plus a 7-day acknowledgement target: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
@@ -162,7 +162,7 @@
   "delivery_unsigned_justification": "Sources are retrieved over HTTPS from GitLab. The project publishes no separate hash or signature files, so no cryptographic hash is served over an unencrypted channel.",
 
   "vulnerabilities_fixed_60_days_status": "Met",
-  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_critical_fixed_justification": "No known unfixed critical vulnerabilities.",
@@ -195,7 +195,7 @@
   "test_continuous_integration_justification": "Not currently met. No hosted CI runs for this project: `origin` is GitLab and carries no pipeline, and the former GitHub Actions workflows are unavailable. The equivalent chain -- docs, findings registry, lint, R CMD check --as-cran -- runs as `Rscript tools/verify.R`, invoked by the `verify` pre-push hook in .pre-commit-config.yaml (https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml), but that is a per-developer pre-push gate on one machine, not continuous integration on a server.",
 
   "discussion_status": "Met",
-  "discussion_justification": "GitLab Issues provide a public forum for project discussion: https://gitlab.com/bart-turczynski/sitemapr/-/issues",
+  "discussion_justification": "GitLab Issues provide a public forum for project discussion: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "no_leaked_credentials_status": "Met",
   "no_leaked_credentials_justification": "No credentials are committed to the repository: .gitignore excludes .env and .env.*, and the tracked .env.example carries placeholder text only.",
