@@ -1,4 +1,12 @@
-url: https://bart-turczynski.gitlab.io/sitemapr/
+# A GitLab Pages UNIQUE DOMAIN, read off `GET /projects/:id/pages` rather than
+# assumed. It is deliberately not `bart-turczynski.gitlab.io/sitemapr`: GitLab
+# defaults new Pages sites to unique domains, and that older-convention path
+# does not exist for this project — it 403s, which is this host's not-found.
+# The sibling sites that DO resolve on the namespace path (rurl, pslr, linked
+# in `footer` below) simply have unique domains switched off. Keep this string
+# byte-identical to DESCRIPTION's second `URL:` entry, or pkgdown emits
+# canonical links pointing at a host nothing serves.
+url: https://sitemapr-eca867.gitlab.io/
 destination: site
 
 template:

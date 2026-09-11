@@ -1,0 +1,142 @@
+# GitLab CI for sitemapr — deliberately ONE job.
+#
+# Scope: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
+# documentation URL, `R CMD check --as-cran` fetches every declared URL, and
+# until this file existed nothing had ever published one (`GET
+# /projects/:id/pages` reported `deployments: []`). That is the whole problem
+# this file solves (SITE-rysgulhf).
+#
+# It is NOT the verification gate. `Rscript tools/verify.R` under the pre-push
+# hook remains the only gate that runs, exactly as AGENTS.md and
+# docs/repo-hygiene.md say. A full ported pipeline — guards, lint, docs, check,
+# coverage, readme — is parked on `feature/gitlab-ci-verify-pipeline`
+# (SITE-fxkbboia) and is on hold. THAT BRANCH MUST RECONCILE WITH THIS FILE
+# rather than overwrite it: it carries no `pages` job (`grep -cE "^pages:"`
+# returns 0), so replacing this file wholesale would un-publish the site again.
+# Merge the `pages` job below into it; keep the `before_script` repo shim.
+#
+# Runner: this project has no self-hosted runner attached, and attaching one is
+# an owner action. Until then a pipeline here stays `pending` with
+# "no runner". That is the expected state, not a defect in this file — the
+# fleet's single self-hosted runner is untagged and currently bound to other
+# projects, which is why no `tags:` key appears below.
+
+stages:
+  - deploy
+
+default:
+  # Pinned to a minor R series rather than `latest`, so an upstream R release
+  # cannot turn this red on a day nothing in the package changed. Matches the
+  # image the sibling pagerankr/pslr pipelines run on, so the runner host needs
+  # no additional one-off `docker pull --platform linux/arm64 rocker/r-ver:4.6`.
+  image: rocker/r-ver:4.6
+  before_script:
+    - mkdir -p "$R_LIBS_USER"
+    # Add CRAN itself BEHIND the image's p3m repo.
+    #
+    # rocker/r-ver points `install.packages()` at the Posit binary repo (p3m)
+    # for this image's Ubuntu release, so R packages normally arrive prebuilt.
+    # But p3m lags CRAN by up to a day or more for a new release, and there is
+    # no snapshot date that fixes it: measured ~38 h after rurl 3.0.1 was
+    # published, the `2026-09-01` snapshot, the same-day `2026-09-09` snapshot
+    # and `__linux__/noble/latest` ALL still served rurl 1.2.0, while
+    # cloud.r-project.org served 3.0.1. sitemapr declares `rurl (>= 3.0.1)`, so
+    # from p3m alone that dependency is unresolvable at any coordinate and the
+    # job dies with "Can't install dependency rurl (>= 3.0.1)".
+    #
+    # p3m stays FIRST so everything else still arrives as a binary — resolving
+    # the whole Suggests set from source would otherwise dominate the job.
+    # CRAN is a source-only fallback for the handful of packages p3m has not
+    # synced yet; `available.packages()` unions the two and takes the highest
+    # version, so on any day p3m is current this line changes nothing.
+    #
+    # Appended to Rprofile.site rather than rewriting it, so rocker's
+    # HTTPUserAgent line — the one that makes p3m serve binaries instead of
+    # source — survives, and this later `options()` call wins.
+    # Proven in pagerankr at cfdef3c.
+    - |
+      Rscript -e '
+      current <- getOption("repos")[["CRAN"]]
+      if (is.null(current) || !nzchar(current) || identical(current, "@CRAN@")) {
+        stop("Expected a repo in Rprofile.site, found: ", current, call. = FALSE)
+      }
+      line <- sprintf("options(repos = c(P3M = %s, CRAN = %s))",
+                      dQuote(current, FALSE),
+                      dQuote("https://cloud.r-project.org", FALSE))
+      cat(line, "\n", sep = "", file = file.path(R.home(), "etc", "Rprofile.site"),
+          append = TRUE)'
+    - Rscript -e 'cat("Effective repos:\n"); print(getOption("repos"))'
+    - Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
+  cache:
+    # Keyed on DESCRIPTION: the library only needs rebuilding when the declared
+    # dependencies move.
+    key:
+      files:
+        - DESCRIPTION
+    paths:
+      - .cache/R
+
+variables:
+  R_LIBS_USER: "$CI_PROJECT_DIR/.cache/R"
+  # `R_LIBS_USER` alone does NOT make the cache work. rocker's Renviron.site
+  # sets `R_LIBS=${R_LIBS-'…site-library:…library'}`, which puts the container's
+  # own site library first in `.libPaths()` and leaves `.cache/R` third — so pak
+  # installs into the container, `.cache/R` is archived EMPTY, and every job
+  # re-downloads the full dependency set while the log still reports
+  # "Successfully extracted cache". Setting `R_LIBS` wins because that
+  # Renviron.site default defers to an already-set value.
+  R_LIBS: "$CI_PROJECT_DIR/.cache/R:/usr/local/lib/R/site-library:/usr/local/lib/R/library"
+  # pak resolves Ubuntu system requirements itself; the image runs as root, so
+  # it can act on them. Saves hand-maintaining an apt list.
+  PKG_SYSREQS: "true"
+  GIT_DEPTH: "0"
+
+# Keeps a branch push and its merge request from producing two identical
+# pipelines.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# The docs site. Must be named `pages` and publish `public/` — that pairing is
+# what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
+# sets `destination: site` (the repo's `docs/` holds durable project context,
+# not generated output), hence the `site` -> `public` move rather than
+# pkgdown's default `docs` -> `public`.
+#
+# Default branch only: a site rebuilt from every merge request would publish
+# unreviewed docs to the same URL.
+#
+# Publishing here is necessary but NOT sufficient for the declared URL to
+# answer 200 to an anonymous client: this project's `pages_access_level` is
+# `private`, which 403s whatever is deployed. Flipping it to `enabled` is an
+# owner action on the project settings, not something this file can do.
+pages:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    # pkgdown renders the vignettes through rmarkdown, which shells out to
+    # pandoc; rocker/r-ver does not ship it.
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    # `dependencies = TRUE` pulls Suggests as well as Imports: pkgdown builds
+    # the vignettes (knitr, rmarkdown) and evaluates the examples, some of
+    # which reach for the optional `robotstxtr` engine. That one resolves via
+    # DESCRIPTION's `Remotes: gitlab::bart-turczynski/robotstxtr@v0.2.0`, so
+    # this step needs the robotstxtr project to stay publicly readable — pak
+    # reports a 403, not a missing package, if it is not.
+    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
+    - Rscript -e 'pak::pkg_install("pkgdown")'
+    # sitemapr itself must be INSTALLED, not merely loaded: `build_reference()`
+    # evaluates the examples, and those call `library(sitemapr)`. Building with
+    # `install = FALSE` and no installed copy fails at the first example with
+    # "there is no package called 'sitemapr'".
+    - Rscript -e 'pak::local_install(upgrade = FALSE)'
+    - Rscript -e 'pkgdown::build_site(new_process = FALSE, install = FALSE)'
+    - mv site public
+  artifacts:
+    paths:
+      - public

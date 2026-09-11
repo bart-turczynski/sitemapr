@@ -1,9 +1,9 @@
 {
   "homepage_url_status": "Met",
-  "homepage_url_justification": "Project homepage is the pkgdown site https://bart-turczynski.gitlab.io/sitemapr/ (also listed in the DESCRIPTION URL field).",
+  "homepage_url_justification": "Project homepage is the pkgdown site https://sitemapr-eca867.gitlab.io/ (also listed in the DESCRIPTION URL field).",
 
   "sites_https_status": "Met",
-  "sites_https_justification": "All project sites are served over HTTPS: https://gitlab.com/bart-turczynski/sitemapr and https://bart-turczynski.gitlab.io/sitemapr/ .",
+  "sites_https_justification": "All project sites are served over HTTPS: https://gitlab.com/bart-turczynski/sitemapr and https://sitemapr-eca867.gitlab.io/ .",
 
   "description_good_status": "Met",
   "description_good_justification": "DESCRIPTION and README.md provide a clear description of what sitemapr does: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md",
@@ -27,10 +27,10 @@
   "floss_license_osi_justification": "MIT is an OSI-approved open source license: https://opensource.org/license/mit",
 
   "documentation_basics_status": "Met",
-  "documentation_basics_justification": "Basic documentation is in README.md and on the pkgdown site: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md and https://bart-turczynski.gitlab.io/sitemapr/",
+  "documentation_basics_justification": "Basic documentation is in README.md and on the pkgdown site: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/README.md and https://sitemapr-eca867.gitlab.io/",
 
   "documentation_interface_status": "Met",
-  "documentation_interface_justification": "Exported functions are documented with roxygen2 man pages under man/ and rendered on the pkgdown reference index: https://bart-turczynski.gitlab.io/sitemapr/reference/index.html",
+  "documentation_interface_justification": "Exported functions are documented with roxygen2 man pages under man/ and rendered on the pkgdown reference index: https://sitemapr-eca867.gitlab.io/reference/index.html",
 
   "repo_public_status": "Met",
   "repo_public_justification": "The project source is hosted on GitLab: https://gitlab.com/bart-turczynski/sitemapr",

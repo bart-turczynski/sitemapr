@@ -116,7 +116,7 @@ not consulted in this version.
 
 ## Where to go next
 
-- The [function reference](https://bart-turczynski.gitlab.io/sitemapr/reference/)
+- The [function reference](https://sitemapr-eca867.gitlab.io/reference/)
   documents every argument, including the `limits`, `index_limits`, and
   `user_agent` controls shared across the entry points.
 - `read_sitemap()` for extraction, `validate_sitemap()` for conformance, and
