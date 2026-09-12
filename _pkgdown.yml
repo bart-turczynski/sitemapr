@@ -62,11 +62,13 @@ reference:
   - title: "Rulesets"
     desc: >
       Engine-aware validation: the supported rulesets, their published
-      revisions, and the per-source context (including submission presets)
-      that drives engine-specific interpretation.
+      revisions and the findings contract that pins them, and the per-source
+      context (including submission presets) that drives engine-specific
+      interpretation.
     contents:
       - sitemap_rulesets
       - ruleset_revision
+      - sitemap_contract
       - ruleset_context
       - ruleset_context_for_child
       - gsc_submission
