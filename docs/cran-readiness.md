@@ -31,12 +31,13 @@ helpers whose edge cases would be obscured through the public entry points.
 
 ## Continuous Integration
 
-**Nothing in CI checks this package.** `origin`'s `.gitlab-ci.yml` holds
-exactly one job, `pages`, which builds and publishes the pkgdown site so the
-documentation URL that `DESCRIPTION` declares actually resolves
-(SITE-rysgulhf). It runs no tests, no lint and no `R CMD check`; a green
-pipeline there means the docs built, nothing more. A fuller ported pipeline
-(guards, lint, docs, check, coverage, readme) is parked on
+**Nothing in CI checks the package code.** `origin`'s `.gitlab-ci.yml` holds
+two jobs. `pages` builds and publishes the pkgdown site so the documentation
+URL that `DESCRIPTION` declares actually resolves (SITE-rysgulhf).
+`citation-version` runs `scripts/check-citation.py` on a Python image. Neither
+runs tests, lint or `R CMD check`; a green pipeline there means the docs built
+and the citation metadata agrees with `DESCRIPTION`, nothing more. A fuller
+ported pipeline (guards, lint, docs, check, coverage, readme) is parked on
 `feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but the
@@ -45,16 +46,34 @@ look like coverage it could not provide (SITE-kgpdfhoh; git history keeps it
 restorable).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
-that runs at all, and there is no server-side branch protection behind it. Treat
-a red gate as a red build: nothing downstream will catch what it lets through.
+that checks the package itself, and there is no server-side branch protection
+behind it. Treat a red gate as a red build: nothing downstream will catch what
+it lets through.
 
 This changes how one pkgcheck message must be read. `pkgcheck::pkgcheck()`
 reports "Package has no continuous integration checks", and that report is
-still substantively **correct** — no CI job verifies anything — rather than a
+still substantively **correct** — no CI job runs the tests or `R CMD check`
+— rather than a
 token/access artefact. It was previously documented here as a local
 false-negative to disregard; that explanation is obsolete and inverted. The
 finding stands until a verifying pipeline actually runs, and it is an accepted,
 deliberate gap rather than a defect to explain away.
+
+## Citation Metadata Names The Release
+
+`CITATION.cff`'s `version:` and `.zenodo.json`'s `"version"` carry **the release
+`DESCRIPTION`'s `Version` names** — `X.Y.Z` stays `X.Y.Z`, and `X.Y.Z.9000`
+drops to `X.Y.Z`. sitemapr has never released, so the named release is `0.0.0`
+and both files carry the development version `0.0.0.9000` verbatim, with no
+`date-released` and no DOI. Every `http(s)` URL those two files declare must
+also appear in `DESCRIPTION`'s `URL:` field.
+
+**Move both files at the `DESCRIPTION` bump that opens a release cycle, not at
+the tag.** They are part of the release, not a record of it.
+`scripts/check-citation.py` enforces this from the pre-push hook and from the
+`citation-version` CI job. The reasoning lives in seor's `design/adr/`, as
+`0001-citation-metadata-names-the-release.md` and
+`0002-citation-urls-are-the-ones-about-this-package.md`.
 
 ## Superassignment In Tests
 

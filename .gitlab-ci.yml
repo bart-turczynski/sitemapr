@@ -1,14 +1,15 @@
-# GitLab CI for sitemapr — deliberately ONE job.
+# GitLab CI for sitemapr — deliberately MINIMAL: publish the pkgdown site,
+# plus one offline metadata check that needs no R image.
 #
-# Scope: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
+# Scope of the `pages` job: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
 # documentation URL, `R CMD check --as-cran` fetches every declared URL, and
 # until this file existed nothing had ever published one (`GET
 # /projects/:id/pages` reported `deployments: []`). That is the whole problem
 # this file solves (SITE-rysgulhf).
 #
 # It is NOT the verification gate. `Rscript tools/verify.R` under the pre-push
-# hook remains the only gate that runs, exactly as AGENTS.md and
-# docs/repo-hygiene.md say. A full ported pipeline — guards, lint, docs, check,
+# hook remains the R gate, exactly as AGENTS.md and docs/repo-hygiene.md say;
+# `scripts/check-citation.py` runs beside it on the same hook. A full ported pipeline — guards, lint, docs, check,
 # coverage, readme — is parked on `feature/gitlab-ci-verify-pipeline`
 # (SITE-fxkbboia) and is on hold. THAT BRANCH MUST RECONCILE WITH THIS FILE
 # rather than overwrite it: it carries no `pages` job (`grep -cE "^pages:"`
@@ -22,6 +23,7 @@
 # projects, which is why no `tags:` key appears below.
 
 stages:
+  - verify
   - deploy
 
 default:
@@ -100,6 +102,25 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
+
+# CITATION.cff's `version:` and .zenodo.json's `"version"` must name the
+# release DESCRIPTION's Version points at (X.Y.Z -> X.Y.Z; X.Y.Z.9000 ->
+# X.Y.Z), plus every URL those two files declare must also appear in
+# DESCRIPTION's URL field. sitemapr is conformant today; this job exists so it
+# stays that way. Ported from seor, where the rule is design/adr/0001 and
+# design/adr/0002.
+#
+# Offline and stdlib-only, so it overrides the R image, the R `before_script`
+# and the DESCRIPTION-keyed cache that `default:` sets for the `pages` job —
+# none of which exist on python:3.13-alpine. It costs seconds.
+citation-version:
+  stage: verify
+  image: python:3.13-alpine
+  cache: []
+  before_script: []
+  script:
+    - python3 scripts/check-citation.py --self-test
+    - python3 scripts/check-citation.py
 
 # The docs site. Must be named `pages` and publish `public/` — that pairing is
 # what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
