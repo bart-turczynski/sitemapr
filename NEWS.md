@@ -350,6 +350,11 @@ related W3C and RFC standards.
 
 ## Internal
 
+* The pkgdown site no longer publishes the repository's agent instruction
+  files. pkgdown renders every top-level `.md`, so `AGENTS.html`,
+  `CLAUDE.html`, `FP_AGENTS.html` and `FP_CLAUDE.html` were being served next
+  to the function reference; the `pages` job now strips them with a glob
+  before `build_site` (SEOR-pibdjanz).
 * `.gitlab-ci.yml` gained a `check` job that runs `Rscript tools/verify.R` —
   the exact chain the pre-push hook runs — so a green pipeline now verifies
   the package, not only the citation metadata and the docs site
