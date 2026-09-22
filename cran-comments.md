@@ -18,7 +18,7 @@ suggest coverage it could no longer provide. The single gate is
 ### Note
 
 `checking CRAN incoming feasibility ... NOTE` — the usual new-submission note.
-It covers four items:
+It covers five items:
 
 * **New submission.** This is the first CRAN submission of `sitemapr`.
 * **Version contains large components (`0.0.0.9000`).** The package is still on
@@ -45,6 +45,29 @@ It covers four items:
   submission.
 * **`Suggests` not in mainstream repositories: `robotstxtr`.** Same cause —
   `robotstxtr` is an optional (Suggests) dependency not yet on CRAN.
+* **`BugReports:` reported as a 404.**
+
+      Found the following (possibly) invalid URLs:
+        URL: https://gitlab.com/bart-turczynski/sitemapr/-/issues
+          From: DESCRIPTION
+          Status: 404
+
+  This is the address the incoming check itself asks for. GitLab has migrated
+  issues to work items and answers `/-/issues` with 404 to any signed-out,
+  non-browser client, on every project on the site: GitLab's own tracker,
+  `https://gitlab.com/gitlab-org/gitlab/-/issues`, answers 404 identically. A
+  browser is redirected (302) to `/-/work_items`, so the link works for a
+  reader.
+
+  No gitlab.com address clears both checks.
+  `tools:::.check_package_CRAN_incoming()` accepts a gitlab.com `BugReports:`
+  only when its path ends in `/-/issues`, and every such path, with or without
+  a query string, is the 404 above. A sibling package's first upload declared
+  `/-/work_items`, which returns 200, and was archived at the pretest for that
+  reason; it was accepted on resubmission with `/-/issues`. The field here
+  follows the check's suggestion, as the dependency `rurl` 3.0.1 does on CRAN.
+  The `NEWS.md` bullet gives the address as code rather than as a link, so the
+  404 is reported once, from `DESCRIPTION` only.
 
 ---
 
@@ -86,11 +109,14 @@ of them is done yet.
 4. **The GitLab projects made public.** As of this writing the `sitemapr` and
    `robotstxtr` projects are private. Every link a reviewer may follow has to
    resolve for an anonymous visitor first: the `URL:` entries in DESCRIPTION
-   (the project page and the pkgdown site), `BugReports:`, and the dependency
-   links above. A private GitLab project redirects an anonymous request to the
-   sign-in page (measured: `302` to `/users/sign_in`, resolving to `403`), which
-   both wastes the reviewer's time and gives `--as-cran` a URL to report. This
-   is a repository-visibility change, not a package change.
+   (the project page and the pkgdown site) and the dependency links above. A
+   private GitLab project redirects an anonymous request to the sign-in page
+   (measured: `302` to `/users/sign_in`, resolving to `403`), which both wastes
+   the reviewer's time and gives `--as-cran` a URL to report. This is a
+   repository-visibility change, not a package change. `BugReports:` is the one
+   exception: it stays on `/-/issues` and 404s for a non-browser client even
+   once the project is public, because that is the form the incoming check
+   requires — see the note above.
 
 ---
 
