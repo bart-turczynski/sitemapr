@@ -109,15 +109,52 @@ variables:
   PKG_SYSREQS: "true"
   GIT_DEPTH: "0"
 
-# Keeps a branch push and its merge request from producing two identical
-# pipelines.
+# Exactly one pipeline per unit of work: the one on `main`. The rule set
+# below SUPERSEDES an earlier one that only suppressed the branch pipeline
+# when its merge request was still open (the standard GitLab duplicate-
+# pipeline guard). That guard was not enough: this fleet's slice flow
+# (branch -> commit -> push -> MR -> merge -> delete, AGENTS.md) fires THREE
+# pipelines per unit - branch, merge-request, and main - and the fleet's
+# single self-hosted runner (see above) serves six-plus projects at
+# concurrency 1, so they queue instead of running in parallel. Two of the
+# three are useless: the branch pipeline frequently starts only after the
+# slice flow has already deleted the branch, and dies at `get_sources` with
+# exit 128; the merge-request pipeline for an MR that is already merged has
+# repeatedly outlived its own branch and held the runner's only slot for
+# tens of minutes - once over half an hour - while `main`'s pipeline, the
+# one that actually verifies anything, sat pending behind it. The
+# superseded guard above never touched that second case, because it only
+# ever suppressed the branch pipeline. Decided fleet-wide on SEOR-bmgkzhvy
+# (2026-09-22, applied to every repo but pslr, whose manual-only gate is
+# deliberate): suppress BOTH the branch and merge-request pipelines and run
+# CI only on tags and pushes to the default branch.
+#
+# Costs, named rather than dropped quietly:
+# - No CI result is visible before a merge lands. That costs nothing here in
+#   practice: `only_allow_merge_if_pipeline_succeeds` is false, `main` is a
+#   protected branch (Maintainer role gates push/merge, not CI status - see
+#   the fleet-wide correction on SEOR-bmgkzhvy, AGENTS.md's "no server-side
+#   branch protection" line predates that finding), and the local
+#   `Rscript tools/verify.R` pre-push gate is what actually blocks bad code,
+#   and it runs before the push ever happens.
+# - A feature-branch push gets no pipeline at all. That is the intent.
+# - A web/API-triggered pipeline on any branch OTHER than `main` now creates
+#   nothing (it falls through to the final `when: never`). This file never
+#   had a `web`/`api` escape-hatch rule of its own, so no previously working
+#   hand-trigger stops working here - flagged anyway because the fleet-wide
+#   decision removes that capability where it did exist (e.g. punycoder,
+#   robotstxtr).
+# - sitemapr has no coverage job (see the `check` job's comment below), so
+#   the MR-diff per-line coverage-annotation loss found on seor and
+#   pagerankr - whose coverage jobs fed GitLab's MR-widget annotations -
+#   does not apply here.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
-    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
 
 # CITATION.cff's `version:` and .zenodo.json's `"version"` must name the
 # release DESCRIPTION's Version points at (X.Y.Z -> X.Y.Z; X.Y.Z.9000 ->

@@ -365,3 +365,7 @@ related W3C and RFC standards.
   advisory that is reported and not allow-listed fails, an allow-listed
   advisory that is no longer reported fails, and drift past a review date or a
   package version warns (SITE-epezowxs).
+* `.gitlab-ci.yml`'s `workflow:` rules now suppress both the branch pipeline
+  and the merge-request pipeline, leaving exactly one pipeline per merge, on
+  `main`; CI on a feature branch or an open MR no longer runs at all
+  (SEOR-bmgkzhvy).
