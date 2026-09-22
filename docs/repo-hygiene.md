@@ -43,7 +43,7 @@ On `git push`, the `verify` hook runs the project's verify command.
 GitLab and its `.gitlab-ci.yml` holds three jobs: `citation-version`; `check`,
 which runs this same `tools/verify.R` chain on every push to `main`
 (SITE-dzikrmnh); and `pages`, which publishes the pkgdown site and verifies
-nothing (SITE-rysgulhf). Until SITE-dzikrmnh landed, `pages` was the only job,
+nothing (SITE-rysgulhf). It strips the agent instruction files first — pkgdown renders every top-level `.md`, so `AGENTS.md`, `CLAUDE.md` and the `FP_*.md` files were being published next to the function reference as `AGENTS.html`, `CLAUDE.html` and friends: internal working notes served as if they were user documentation (SEOR-pibdjanz). The job removes them with a glob, `rm -f AGENTS*.md CLAUDE*.md FP_*.md`, immediately before `build_site`, so a file later added under one of those names is covered without another round of this. Add an agent file that does **not** match those patterns and you must extend the glob in the same commit. Until SITE-dzikrmnh landed, `pages` was the only job,
 and a green pipeline here meant the docs built, not that the package was sound.
 CI now runs only on pushes to `main`, on tags, and on a pipeline someone
 starts by hand (SEOR-bmgkzhvy) — branch and merge-request pipelines are not
