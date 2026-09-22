@@ -335,6 +335,18 @@ related W3C and RFC standards.
 * A `pages` job in `.gitlab-ci.yml` builds the pkgdown site on the default
   branch and deploys it, so the declared documentation URL is published rather
   than merely advertised (SITE-rysgulhf).
+* The `BugReports:` field in `DESCRIPTION` now reads
+  `https://gitlab.com/bart-turczynski/sitemapr/-/issues`, corrected from the
+  `/-/work_items` form. `tools:::.check_package_CRAN_incoming()` accepts a
+  gitlab.com bug tracker only when its path ends in `/-/issues`, and the
+  `/-/work_items` form is what got a sibling package archived at the CRAN
+  incoming pretest. GitLab answers `/-/issues` with 404 to a signed-out,
+  non-browser client and redirects a browser to the work-items view, so the
+  address a reader clicks still resolves; `cran-comments.md` explains the
+  resulting URL note. The check reads no file but `DESCRIPTION`, so the two
+  human-facing metadata files that name the tracker — `codemeta.json` and
+  `.bestpractices.json` — deliberately keep the `/-/work_items` address, which
+  returns 200 (SITE-wpxlhijx).
 
 ## Internal
 
