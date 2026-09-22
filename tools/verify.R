@@ -126,8 +126,17 @@ verify_stages <- list(
       }
     }
   ),
-  # Runs with the manual built, so a manual-only problem is caught here
-  # rather than at CRAN submission.
+  # `--no-manual` skips `checking PDF version of manual without index`, which
+  # shells out to `texi2pdf`/`texi2dvi`. The dev machine has LaTeX installed,
+  # so this stage used to build the manual and a manual-only problem would
+  # have been caught here rather than at CRAN submission -- but the CI image
+  # this same chain also runs under (`rocker/r-ver`, via `tools/verify.R` from
+  # the `check` job in .gitlab-ci.yml, SITE-dzikrmnh) ships no LaTeX at all,
+  # so that check ERRORs there on every push regardless of package content.
+  # Ported from pagerankr's `.githooks/pre-push`, which hit and fixed the same
+  # divergence. Losing PDF-manual coverage here is not a regression worth
+  # keeping: a genuine Rd/LaTeX problem is still caught at CRAN submission
+  # time (cran-comments.md / win-builder), which builds the manual too.
   #
   # `--as-cran`'s first step downloads CRAN's archive.rds, and R's default
   # download timeout is 60s. A stalled connection there halts the whole run
@@ -148,11 +157,11 @@ verify_stages <- list(
   # five minutes before it fails instead of one, which is the price of not
   # rejecting good pushes.
   check = list(
-    label = "R CMD check --as-cran",
+    label = "R CMD check --no-manual --as-cran",
     default = TRUE,
     run = function() {
       res <- rcmdcheck::rcmdcheck(
-        args = "--as-cran",
+        args = c("--no-manual", "--as-cran"),
         error_on = "warning",
         env = c(R_DEFAULT_INTERNET_TIMEOUT = "300")
       )
