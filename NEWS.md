@@ -350,6 +350,10 @@ related W3C and RFC standards.
 
 ## Internal
 
+* `.gitlab-ci.yml` gained a `check` job that runs `Rscript tools/verify.R` —
+  the exact chain the pre-push hook runs — so a green pipeline now verifies
+  the package, not only the citation metadata and the docs site
+  (SITE-dzikrmnh).
 * The OSS Index dependency audit in `tests/testthat/test-security.R` scopes to
   hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, and
   allow-lists by ID the two `curl` advisories the narrower scope still reports.
