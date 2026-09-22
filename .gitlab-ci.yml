@@ -1,5 +1,9 @@
-# GitLab CI for sitemapr — deliberately MINIMAL: publish the pkgdown site,
-# plus one offline metadata check that needs no R image.
+# GitLab CI for sitemapr: publish the pkgdown site, an offline
+# citation-metadata check, and (since SITE-dzikrmnh) a `check` job that runs
+# the same `tools/verify.R` chain the pre-push hook runs. Before SITE-dzikrmnh
+# this file defined exactly two jobs (`citation-version`, `pages`), so a green
+# pipeline proved only that the docs site built — nothing about the package
+# itself. It is still deliberately NOT the whole ported pipeline; see below.
 #
 # Scope of the `pages` job: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
 # documentation URL, `R CMD check --as-cran` fetches every declared URL, and
@@ -7,20 +11,32 @@
 # /projects/:id/pages` reported `deployments: []`). That is the whole problem
 # this file solves (SITE-rysgulhf).
 #
-# It is NOT the verification gate. `Rscript tools/verify.R` under the pre-push
-# hook remains the R gate, exactly as AGENTS.md and docs/repo-hygiene.md say;
-# `scripts/check-citation.py` runs beside it on the same hook. A full ported pipeline — guards, lint, docs, check,
-# coverage, readme — is parked on `feature/gitlab-ci-verify-pipeline`
-# (SITE-fxkbboia) and is on hold. THAT BRANCH MUST RECONCILE WITH THIS FILE
-# rather than overwrite it: it carries no `pages` job (`grep -cE "^pages:"`
-# returns 0), so replacing this file wholesale would un-publish the site again.
-# Merge the `pages` job below into it; keep the `before_script` repo shim.
+# `Rscript tools/verify.R` under the pre-push hook remains the SINGLE
+# definition of "verified", exactly as AGENTS.md and docs/repo-hygiene.md say;
+# `scripts/check-citation.py` runs beside it on the same hook. The `check` job
+# below does not reimplement that chain — it shells out to the identical
+# command, so CI and the hook cannot disagree about what "verified" means. It
+# still is not a substitute for the hook: `only_allow_merge_if_pipeline_succeeds`
+# is false and there is no server-side branch protection, so this pipeline is a
+# second opinion, not a gate in front of `main`. A full ported pipeline that
+# SPLITS the chain into separate `guards`/`lint`/`docs`/`check` jobs (plus
+# `coverage` and `readme`) is parked on `feature/gitlab-ci-verify-pipeline`
+# (SITE-fxkbboia) and is on hold — SITE-dzikrmnh deliberately adds ONE job
+# instead, because the fleet's single self-hosted runner serves every repo at
+# concurrency 1 and a four-way split multiplies queued runner time across
+# projects for no gain the single job does not already give. THAT BRANCH MUST
+# RECONCILE WITH THIS FILE rather than overwrite it: it carries no `pages` job
+# (`grep -cE "^pages:"` returns 0) and, as of SITE-dzikrmnh, no `citation-version`
+# or `check` job either — replacing this file wholesale would un-publish the
+# site and drop both checks. Merge `pages`, `citation-version` and `check`
+# below into it; keep the `before_script` repo shim.
 #
-# Runner: this project has no self-hosted runner attached, and attaching one is
-# an owner action. Until then a pipeline here stays `pending` with
-# "no runner". That is the expected state, not a defect in this file — the
-# fleet's single self-hosted runner is untagged and currently bound to other
-# projects, which is why no `tags:` key appears below.
+# Runner: `seor-local-docker`, the fleet's single self-hosted Docker runner, IS
+# attached to this project (confirmed via the GitLab runners API 2026-09-22,
+# `runner_type: project_type`, `status: online`) and accepts untagged jobs
+# (`run_untagged: true`), so no `tags:` key is needed below. It runs at
+# concurrency 1 and is shared with the rest of the fleet, so jobs here queue
+# behind whatever else is running elsewhere rather than in parallel.
 
 stages:
   - verify
@@ -121,6 +137,40 @@ citation-version:
   script:
     - python3 scripts/check-citation.py --self-test
     - python3 scripts/check-citation.py
+
+# `R CMD check --as-cran` plus the whole DEFAULT `tools/verify.R` chain —
+# docs-reproducibility, the findings-registry guard, the R-floor guard, the
+# air/.lintr line-width agreement guard, lintr, then `check` itself — as ONE
+# job, by running the bare `Rscript tools/verify.R` the pre-push hook runs with
+# no arguments. That is deliberate: `coverage` and `readme` are both
+# `default = FALSE` in tools/verify.R (off the pre-push gate too), so leaving
+# them out of this job keeps CI checking exactly what the gate checks, not
+# more and not less. Fleet-tier decision, recorded here rather than left
+# implicit: sitemapr's CI does NOT run coverage or the README-sync check —
+# both stay local-only `--all` extras, same as they are on the hook, and
+# turning either into a CI job is a separate ticket, not a byproduct of this
+# one (SITE-dzikrmnh).
+check:
+  stage: verify
+  script:
+    # R CMD check builds the vignettes through rmarkdown, which shells out to
+    # pandoc; rocker/r-ver does not ship it (same requirement as `pages`
+    # below).
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    # Full Suggests, not just Imports: the `check` stage runs the testthat
+    # suite and builds the vignettes, both of which reach into Suggests.
+    # rcmdcheck, lintr and the pinned roxygen2 are dev tooling the verify
+    # stages need, not declared dependencies of the package itself — same
+    # split the `pages` job below makes for pkgdown.
+    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
+    - |
+      Rscript -e '
+      pak::pkg_install(c(
+        "lintr",
+        "rcmdcheck",
+        paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]])
+      ))'
+    - Rscript tools/verify.R
 
 # The docs site. Must be named `pages` and publish `public/` — that pairing is
 # what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
