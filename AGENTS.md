@@ -6,11 +6,10 @@ against Sitemap Protocol 0.9 and related W3C and RFC standards.
 ## Toolchain
 
 `Rscript tools/verify.R` — not a bare `devtools::check()` — is the single
-definition of "verified", and the only gate that runs anywhere: the pre-push
-hook invokes it, `origin`'s only CI job (`pages` in `.gitlab-ci.yml`) publishes
-the docs site and verifies nothing, and there is no server-side branch
-protection. A red gate is a red build — nothing downstream catches what
-it lets through. `man/` and `NAMESPACE` are roxygen2-generated. air formats R at
+definition of "verified": the pre-push hook invokes it, and `origin`'s `check`
+job runs the same chain on every push to `main` (SITE-dzikrmnh). CI is not
+created for branches or merge requests at all (SEOR-bmgkzhvy), so on a feature
+branch the hook is still the only thing that runs. A red gate is a red build. `man/` and `NAMESPACE` are roxygen2-generated. air formats R at
 80 columns on commit.
 
 ## Vocabulary

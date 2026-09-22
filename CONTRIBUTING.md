@@ -13,9 +13,10 @@ Rscript tools/verify.R
 ```
 
 That is the same chain the pre-push hook runs — docs, findings registry, lint,
-`R CMD check --as-cran`. It is also the only gate there is: `origin` is GitLab
-and carries no pipeline, and there is no server-side branch protection, so
-nothing downstream catches what a local run lets through. See
+`R CMD check --as-cran` — and the same chain `origin`'s `check` job runs on
+every push to `main` (SITE-dzikrmnh). It is the first gate, and on a branch the
+only one: branch and merge-request pipelines are no longer created
+(SEOR-bmgkzhvy), so nothing runs between your push and the merge. See
 [docs/repo-hygiene.md](docs/repo-hygiene.md) for the individual stages and for
 `--all`.
 

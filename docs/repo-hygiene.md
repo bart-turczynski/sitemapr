@@ -39,16 +39,22 @@ destroys what they test.
 
 On `git push`, the `verify` hook runs the project's verify command.
 
-**It is the only gate that runs at all, anywhere.** `origin` is GitLab and its
-`.gitlab-ci.yml` holds exactly one job, `pages`, which publishes the pkgdown
-site and verifies nothing (SITE-rysgulhf) — a green pipeline there means the
-docs built, not that the package is sound. A fuller ported pipeline is parked
+**It is the first gate, and on a branch it is the only one.** `origin` is
+GitLab and its `.gitlab-ci.yml` holds three jobs: `citation-version`; `check`,
+which runs this same `tools/verify.R` chain on every push to `main`
+(SITE-dzikrmnh); and `pages`, which publishes the pkgdown site and verifies
+nothing (SITE-rysgulhf). Until SITE-dzikrmnh landed, `pages` was the only job,
+and a green pipeline here meant the docs built, not that the package was sound.
+CI now runs only on pushes to `main` and on tags (SEOR-bmgkzhvy) — branch and
+merge-request pipelines are not created — so nothing verifies a feature branch
+but this hook. A fuller ported pipeline is parked
 on `feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
 repository once carried a GitHub Actions workflow tree, but that account is
 permanently suspended, so the tree was deleted rather than left to rot
-(SITE-kgpdfhoh — git history keeps it restorable). There is also no server-side
-branch protection standing behind the hook. Treat a red pre-push gate as a red build: no second
-opinion is coming, and nothing downstream will catch what it lets through.
+(SITE-kgpdfhoh — git history keeps it restorable). `main` is a protected branch
+(Maintainer-only push and merge, force-push refused), but that governs who may
+write to it, not whether the tree is sound. Treat a red pre-push gate as a red
+build: on a branch, no second opinion is coming.
 
 ## Running the checks locally
 
