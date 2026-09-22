@@ -367,5 +367,7 @@ related W3C and RFC standards.
   package version warns (SITE-epezowxs).
 * `.gitlab-ci.yml`'s `workflow:` rules now suppress both the branch pipeline
   and the merge-request pipeline, leaving exactly one pipeline per merge, on
-  `main`; CI on a feature branch or an open MR no longer runs at all
-  (SEOR-bmgkzhvy).
+  `main`; CI on a feature branch or an open MR no longer runs of its own
+  accord. A pipeline started by hand from Build > Pipelines > Run pipeline is
+  admitted on any ref and runs `check` there, so a branch can still be verified
+  on the server before it merges (SEOR-bmgkzhvy).

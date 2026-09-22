@@ -15,8 +15,10 @@ Rscript tools/verify.R
 That is the same chain the pre-push hook runs — docs, findings registry, lint,
 `R CMD check --as-cran` — and the same chain `origin`'s `check` job runs on
 every push to `main` (SITE-dzikrmnh). It is the first gate, and on a branch the
-only one: branch and merge-request pipelines are no longer created
-(SEOR-bmgkzhvy), so nothing runs between your push and the merge. See
+only one that runs on its own: branch and merge-request pipelines are no longer
+created (SEOR-bmgkzhvy), so nothing runs between your push and the merge unless
+you ask for it. You can — start a pipeline at **Build > Pipelines > Run
+pipeline**, pick the branch, and the same `check` runs on the server. See
 [docs/repo-hygiene.md](docs/repo-hygiene.md) for the individual stages and for
 `--all`.
 

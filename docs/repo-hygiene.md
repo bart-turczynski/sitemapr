@@ -45,9 +45,12 @@ which runs this same `tools/verify.R` chain on every push to `main`
 (SITE-dzikrmnh); and `pages`, which publishes the pkgdown site and verifies
 nothing (SITE-rysgulhf). Until SITE-dzikrmnh landed, `pages` was the only job,
 and a green pipeline here meant the docs built, not that the package was sound.
-CI now runs only on pushes to `main` and on tags (SEOR-bmgkzhvy) — branch and
-merge-request pipelines are not created — so nothing verifies a feature branch
-but this hook. A fuller ported pipeline is parked
+CI now runs only on pushes to `main`, on tags, and on a pipeline someone
+starts by hand (SEOR-bmgkzhvy) — branch and merge-request pipelines are not
+created — so nothing verifies a feature branch but this hook, unless you open
+**Build > Pipelines > Run pipeline** and select the branch, which runs `check`
+against it on the server. `pages` is pinned to `main` and is not reachable that
+way. A fuller ported pipeline is parked
 on `feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
 repository once carried a GitHub Actions workflow tree, but that account is
 permanently suspended, so the tree was deleted rather than left to rot

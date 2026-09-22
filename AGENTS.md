@@ -9,7 +9,9 @@ against Sitemap Protocol 0.9 and related W3C and RFC standards.
 definition of "verified": the pre-push hook invokes it, and `origin`'s `check`
 job runs the same chain on every push to `main` (SITE-dzikrmnh). CI is not
 created for branches or merge requests at all (SEOR-bmgkzhvy), so on a feature
-branch the hook is still the only thing that runs. A red gate is a red build. `man/` and `NAMESPACE` are roxygen2-generated. air formats R at
+branch the hook is the only thing that runs *by itself* — you can start a
+pipeline by hand at Build > Pipelines > Run pipeline and pick the branch, and
+`check` runs there. A red gate is a red build. `man/` and `NAMESPACE` are roxygen2-generated. air formats R at
 80 columns on commit.
 
 ## Vocabulary
