@@ -182,9 +182,20 @@ def check_md_filter() -> None:
 
     # Scenario A: today's real top-level .md inventory. Every agent-file
     # family already known to this repo (AGENTS*, CLAUDE*, FP_*) must be kept
-    # off the published site; everything else must survive.
+    # off the published site. CHANGELOG.md is ALSO expected to be moved out
+    # under the keep-list filter: it says of itself "For the R-package-facing
+    # changelog (rendered on the pkgdown site), see NEWS.md; this file
+    # mirrors it" -- CHANGELOG.md names itself as not the site's file, and it
+    # is not on scripts/filter-agent-md.sh's keep list or referenced by
+    # _pkgdown.yml. Everything else must survive.
     survivors, _ = run_filter(cmd, KNOWN_MD_FILES)
-    expected_removed = {"AGENTS.md", "CLAUDE.md", "FP_AGENTS.md", "FP_CLAUDE.md"}
+    expected_removed = {
+        "AGENTS.md",
+        "CLAUDE.md",
+        "FP_AGENTS.md",
+        "FP_CLAUDE.md",
+        "CHANGELOG.md",
+    }
     still_present = expected_removed & survivors
     if still_present:
         raise CheckFailed(
@@ -205,30 +216,27 @@ def check_md_filter() -> None:
     print(f"OK  agent-md filter: known inventory survivors == {sorted(expected_survivors)}")
 
     # Scenario B: the known inventory PLUS one file naming no agent tool this
-    # repo has ever used. Pinned here as a KNOWN, NAMED fact about today's
-    # filter, not as an aspiration: the current filter names only the bad
-    # globs it already knows about (AGENTS*.md, CLAUDE*.md, FP_*.md), so a
-    # file from any OTHER agent tool's instruction-file family -- GEMINI.md
-    # stands in for "the next one nobody has invented yet" -- is invisible to
-    # those three patterns and survives to publish. That is the SEOR-wqxhftpv
-    # defect (fail-OPEN by name, not fail-CLOSED by keep-list); pinning it
-    # here, rather than silently asserting the fixed behavior, means the fix
-    # commit has to visibly FLIP this assertion (see the comment on the next
-    # line once it does) instead of quietly rewriting history.
+    # repo has ever used. GEMINI.md stands in for "the next agent-file family
+    # nobody has invented yet". SEOR-wqxhftpv's keep-list filter
+    # (scripts/filter-agent-md.sh) moves it out by default because it is not
+    # on the keep list, not because anything recognizes its name -- that is
+    # what makes it fail-CLOSED where the earlier `rm -f AGENTS*.md
+    # CLAUDE*.md FP_*.md` glob was fail-OPEN (it named the bad files, so an
+    # unlisted family matched none of the three patterns and survived).
     #
-    # FLIP THIS when SEOR-wqxhftpv's keep-list filter lands: assert
-    # FUTURE_FAMILY_FILE is NOT in future_survivors instead.
+    # This assertion used to be the reverse (GEMINI.md DID survive, pinned as
+    # a known gap) before the keep-list filter landed; it was flipped in the
+    # same commit that added scripts/filter-agent-md.sh.
     future_survivors, _ = run_filter(cmd, KNOWN_MD_FILES + [FUTURE_FAMILY_FILE])
-    if FUTURE_FAMILY_FILE not in future_survivors:
+    if FUTURE_FAMILY_FILE in future_survivors:
         raise CheckFailed(
-            f"{FUTURE_FAMILY_FILE} no longer survives the filter -- if the "
-            "SEOR-wqxhftpv keep-list fix landed, flip this assertion (see "
-            "the comment above) to require it does NOT survive; don't just "
-            "delete the check."
+            f"{FUTURE_FAMILY_FILE} (a synthetic stand-in for an "
+            "as-yet-uninvented agent-file family) survived the filter and "
+            "would publish -- the filter is fail-OPEN again (SEOR-wqxhftpv)."
         )
     print(
-        f"OK  agent-md filter: {FUTURE_FAMILY_FILE} (unknown family) still "
-        "survives -- known fail-open gap, pinned pending SEOR-wqxhftpv"
+        f"OK  agent-md filter: {FUTURE_FAMILY_FILE} (unknown family) does "
+        "not survive -- fail-closed by default (SEOR-wqxhftpv)"
     )
 
 
