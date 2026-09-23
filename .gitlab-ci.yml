@@ -263,6 +263,7 @@ pages:
     # of this. `rm -f` so a pattern that matches nothing is a no-op: the
     # set of files present differs per repo, and some are gitignored and
     # never reach the runner at all.
+    # CI-PIN: agent-md filter step below
     - 'rm -f AGENTS*.md CLAUDE*.md FP_*.md'
     - Rscript -e 'pkgdown::build_site(new_process = FALSE, install = FALSE)'
     - mv site public
