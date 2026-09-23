@@ -350,6 +350,12 @@ related W3C and RFC standards.
 
 ## Internal
 
+* `DESCRIPTION`'s `URL:` now lists the package's r-universe page. r-universe
+  records this repository's upstream owner as `gitlab-bart-turczynski` because
+  it is hosted on GitLab, which does not match the `bart-turczynski` universe,
+  so the package was built and served but hidden from r-universe search. The
+  URL claims it (SEOR-zfamoutf).
+
 * The pkgdown site no longer publishes the repository's agent instruction
   files. pkgdown renders every top-level `.md`, so `AGENTS.html`,
   `CLAUDE.html`, `FP_AGENTS.html` and `FP_CLAUDE.html` were being served next
