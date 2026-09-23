@@ -180,39 +180,48 @@ def check_md_filter() -> None:
     text = read_ci_file()
     cmd = extract_filter_command(text)
 
-    # Scenario A: today's real top-level .md inventory. Every agent-file
-    # family already known to this repo (AGENTS*, CLAUDE*, FP_*) must be kept
-    # off the published site. CHANGELOG.md is ALSO expected to be moved out
-    # under the keep-list filter: it says of itself "For the R-package-facing
-    # changelog (rendered on the pkgdown site), see NEWS.md; this file
-    # mirrors it" -- CHANGELOG.md names itself as not the site's file, and it
-    # is not on scripts/filter-agent-md.sh's keep list or referenced by
-    # _pkgdown.yml. Everything else must survive.
+    # Scenario A: today's real top-level .md inventory. Only the agent-file
+    # families already known to this repo (AGENTS*, CLAUDE*, FP_*) must be
+    # kept off the published site; everything else -- including
+    # CHANGELOG.md, deliberately GRANDFATHERED onto scripts/filter-agent-md.sh's
+    # keep list even though nothing references it from _pkgdown.yml, because
+    # https://sitemapr-eca867.gitlab.io/CHANGELOG.html already answers 200 and
+    # retiring an already-published page is a separate editorial call, not a
+    # by-product of closing the AGENTS.md/CLAUDE.md leak (SEOR-wqxhftpv
+    # decision, 2026-09-23) -- must survive.
     survivors, _ = run_filter(cmd, KNOWN_MD_FILES)
-    expected_removed = {
-        "AGENTS.md",
-        "CLAUDE.md",
-        "FP_AGENTS.md",
-        "FP_CLAUDE.md",
-        "CHANGELOG.md",
-    }
-    still_present = expected_removed & survivors
-    if still_present:
+    expected_agent_files = {"AGENTS.md", "CLAUDE.md", "FP_AGENTS.md", "FP_CLAUDE.md"}
+    agent_files_still_present = expected_agent_files & survivors
+    if agent_files_still_present:
         raise CheckFailed(
-            f"known agent file(s) survived the filter and would publish: "
-            f"{sorted(still_present)}"
+            "known agent-instruction file(s) survived the filter and would "
+            f"publish: {sorted(agent_files_still_present)}"
         )
-    expected_survivors = set(KNOWN_MD_FILES) - expected_removed
-    if survivors != expected_survivors:
-        raise CheckFailed(
-            "the filter's survivor set for today's known .md files changed:\n"
-            f"  expected: {sorted(expected_survivors)}\n"
-            f"  actual:   {sorted(survivors)}\n"
-            "(a change here means either a keep-listed file stopped "
-            "surviving, or a file that used to be filtered now is not -- "
-            "update KNOWN_MD_FILES/expected sets deliberately if that is "
-            "the intended new behavior, don't just silence this.)"
+    expected_survivors = set(KNOWN_MD_FILES) - expected_agent_files
+    missing_from_survivors = expected_survivors - survivors
+    unexpected_extra = survivors - expected_survivors
+    if missing_from_survivors or unexpected_extra:
+        parts = []
+        if missing_from_survivors:
+            # A file on the keep list (deliberately meant for the site, e.g.
+            # the CHANGELOG.md grandfather above) stopped surviving -- not an
+            # agent-file leak, but a live page about to go missing.
+            parts.append(
+                "deliberately-kept file(s) no longer survive the filter "
+                f"(would un-publish a live page): {sorted(missing_from_survivors)}"
+            )
+        if unexpected_extra:
+            # A file NOT on the keep list is surviving anyway -- this is the
+            # actual leak shape SEOR-wqxhftpv exists to catch.
+            parts.append(
+                "unexpected file(s) not on the keep list would publish "
+                f"anyway: {sorted(unexpected_extra)}"
+            )
+        parts.append(
+            "update KNOWN_MD_FILES/expected sets deliberately if either "
+            "change is intended, don't just silence this."
         )
+        raise CheckFailed("\n".join(parts))
     print(f"OK  agent-md filter: known inventory survivors == {sorted(expected_survivors)}")
 
     # Scenario B: the known inventory PLUS one file naming no agent tool this

@@ -43,10 +43,24 @@ mkdir -p "$target_dir"
 # present in this repository today (licensing lives in the extensionless
 # `LICENSE` file, which this *.md glob never touches) but are listed so
 # adding either later needs no second round of this. ACKNOWLEDGMENTS.md is a
-# per-repo addition: _pkgdown.yml's navbar links straight to it. cran-comments.md
-# keeps its current (already-published) status unchanged here rather than
-# newly privating it -- that file is out of scope for this change.
-keep="README.md NEWS.md LICENSE.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md THIRD_PARTY_NOTICES.md ACKNOWLEDGMENTS.md cran-comments.md"
+# per-repo addition: _pkgdown.yml's navbar links straight to it.
+#
+# cran-comments.md is listed for self-documentation only, not because it was
+# ever at risk: `pkgdown:::package_mds()` hardcodes it as `no_render`, and
+# `cran-comments.html` 404s on every fleet site regardless of whether that
+# site's filter mentions the name at all (confirmed empirically across five
+# live sites, 2026-09-23). Its presence on or absence from this list changes
+# nothing.
+#
+# CHANGELOG.md is GRANDFATHERED, not newly kept: it is not referenced by
+# _pkgdown.yml and its own text says NEWS.md is the site-rendered file it
+# mirrors -- an argument for retiring CHANGELOG.html, not a decision. That
+# page already answers 200 on the live site today, and this job auto-deploys
+# on every push to the default branch, so removing it here would take down a
+# live page as a by-product of closing the AGENTS.md/CLAUDE.md leak this
+# script exists for. Retiring it is a separate, owner-made editorial call
+# (SEOR-wqxhftpv decision, 2026-09-23), not something to do while unattended.
+keep="README.md NEWS.md LICENSE.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md THIRD_PARTY_NOTICES.md ACKNOWLEDGMENTS.md cran-comments.md CHANGELOG.md"
 
 for f in *.md; do
   [ -f "$f" ] || continue
