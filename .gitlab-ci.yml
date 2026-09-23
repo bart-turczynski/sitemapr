@@ -21,22 +21,35 @@
 # second opinion, not a gate in front of `main`. A full ported pipeline that
 # SPLITS the chain into separate `guards`/`lint`/`docs`/`check` jobs (plus
 # `coverage` and `readme`) is parked on `feature/gitlab-ci-verify-pipeline`
-# (SITE-fxkbboia) and is on hold — SITE-dzikrmnh deliberately adds ONE job
-# instead, because the fleet's single self-hosted runner serves every repo at
-# concurrency 1 and a four-way split multiplies queued runner time across
-# projects for no gain the single job does not already give. THAT BRANCH MUST
-# RECONCILE WITH THIS FILE rather than overwrite it: it carries no `pages` job
+# (SITE-fxkbboia) and is on hold — SITE-dzikrmnh deliberately added ONE job
+# instead, reasoning that the fleet's self-hosted runners (see below) served
+# every repo at `concurrent = 1` (a setting in this host's own
+# `~/.gitlab-runner/config.toml`, not a GitLab platform limit) and a four-way
+# split would multiply queued runner time across projects for no gain the
+# single job did not already give. That premise no longer holds as stated:
+# `concurrent` was raised to 4 on 2026-09-23 (design/adr/0003 in seor,
+# SEOR-gpafxhua, SEOR-hhtzaknn), so whether a four-way split still buys
+# nothing is an open question this comment cannot answer by itself — see
+# SEOR-pgammbgo for the fleet's decision on job consolidation before treating
+# a split as settled either way. THAT BRANCH MUST RECONCILE WITH THIS FILE
+# rather than overwrite it: it carries no `pages` job
 # (`grep -cE "^pages:"` returns 0) and, as of SITE-dzikrmnh, no `citation-version`
 # or `check` job either — replacing this file wholesale would un-publish the
 # site and drop both checks. Merge `pages`, `citation-version` and `check`
 # below into it; keep the `before_script` repo shim.
 #
-# Runner: `seor-local-docker`, the fleet's single self-hosted Docker runner, IS
-# attached to this project (confirmed via the GitLab runners API 2026-09-22,
-# `runner_type: project_type`, `status: online`) and accepts untagged jobs
-# (`run_untagged: true`), so no `tags:` key is needed below. It runs at
-# concurrency 1 and is shared with the rest of the fleet, so jobs here queue
-# behind whatever else is running elsewhere rather than in parallel.
+# Runner: `seor-local-docker` IS attached to this project (confirmed via the
+# GitLab runners API 2026-09-22, `runner_type: project_type`, `status:
+# online`) and accepts untagged jobs (`run_untagged: true`), so no `tags:`
+# key is needed below. It is one of several self-hosted Docker runners
+# registered from a single Mac's `~/.gitlab-runner/config.toml` — not a
+# GitLab-hosted shared runner — and is also the runner five other repos in
+# the fleet use (design/adr/0003 in seor, SEOR-gpafxhua). That host's
+# `concurrent` setting is 4, not 1 (raised from 2 on 2026-09-23), so jobs
+# from different repos can run at the same time rather than strictly
+# queuing one at a time; they still contend for that one machine's CPU and
+# network, which is a real constraint, just not the one "concurrency 1"
+# described.
 
 stages:
   - verify
@@ -84,6 +97,13 @@ default:
       cat(line, "\n", sep = "", file = file.path(R.home(), "etc", "Rprofile.site"),
           append = TRUE)'
     - Rscript -e 'cat("Effective repos:\n"); print(getOption("repos"))'
+    # Self-evidencing check for the R_LIBS fix below (SEOR-dyzgzyot): print
+    # .libPaths() on every job so a future change to this image, or to the
+    # variables below, that puts the cache dir anywhere but first is visible
+    # in the log instead of failing silently -- the exact way this broke
+    # before: the cache archived and restored fine, it was just always empty,
+    # because R never installed anything into it.
+    - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
     - Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
   cache:
     # Keyed on DESCRIPTION: the library only needs rebuilding when the declared
@@ -115,14 +135,19 @@ variables:
 # pipeline guard). That guard was not enough: this fleet's slice flow
 # (branch -> commit -> push -> MR -> merge -> delete, AGENTS.md) fires THREE
 # pipelines per unit - branch, merge-request, and main - and the fleet's
-# single self-hosted runner (see above) serves six-plus projects at
-# concurrency 1, so they queue instead of running in parallel. Two of the
-# three are useless: the branch pipeline frequently starts only after the
-# slice flow has already deleted the branch, and dies at `get_sources` with
-# exit 128; the merge-request pipeline for an MR that is already merged has
-# repeatedly outlived its own branch and held the runner's only slot for
-# tens of minutes - once over half an hour - while `main`'s pipeline, the
-# one that actually verifies anything, sat pending behind it. The
+# self-hosted runners (see above), all registered on one Mac, serve eight
+# projects at `concurrent = 4` (not 1 - design/adr/0003 in seor,
+# SEOR-gpafxhua), so several of those pipelines CAN run at once rather than
+# strictly queuing one at a time - but they are still contending for one
+# machine's finite CPU and network, so extra pipelines are still waste, just
+# not the "everything queues serially" waste this comment originally
+# described. Two of the three are useless: the branch pipeline frequently
+# starts only after the slice flow has already deleted the branch, and dies
+# at `get_sources` with exit 128; the merge-request pipeline for an MR that
+# is already merged has repeatedly outlived its own branch and held one of
+# the runner's four slots for tens of minutes - once over half an hour -
+# while `main`'s pipeline, the one that actually verifies anything, sat
+# pending behind whichever slot was free. The
 # superseded guard above never touched that second case, because it only
 # ever suppressed the branch pipeline. Decided fleet-wide on SEOR-bmgkzhvy
 # (2026-09-22, applied to every repo but pslr, whose manual-only gate is
@@ -255,15 +280,17 @@ pages:
     # friends next to the reference -- internal working notes served as if
     # they were user documentation, and indexable (SEOR-pibdjanz).
     #
-    # Globbed on purpose, not spelled out file by file. The leak reached
-    # four repos AFTER being fixed in one, because the exact names differ
-    # per repo and the explicit list was copied rather than re-derived.
-    # These three patterns cover every agent file in the fleet today and a
-    # future AGENTS_SOMETHING.md or FP_WHATEVER.md without a second round
-    # of this. `rm -f` so a pattern that matches nothing is a no-op: the
-    # set of files present differs per repo, and some are gitignored and
-    # never reach the runner at all.
-    - 'rm -f AGENTS*.md CLAUDE*.md FP_*.md'
+    # A GOOD (keep) list, not a glob of known-bad names: scripts/filter-agent-md.sh
+    # moves every top-level *.md file out of this checkout unless it is on
+    # that script's keep list, so an unknown file defaults to private. This
+    # replaced an earlier `rm -f AGENTS*.md CLAUDE*.md FP_*.md`, which named
+    # the bad files and was fail-OPEN -- a new agent tool's instruction-file
+    # family (GEMINI.md, CODEX.md, ...) matched none of those three globs and
+    # would have published unnoticed, the same way the original leak reached
+    # four repos after being fixed in one (SEOR-wqxhftpv). See that script for
+    # the keep list itself and the fail-loud safety net behind it.
+    # CI-PIN: agent-md filter step below
+    - sh scripts/filter-agent-md.sh
     - Rscript -e 'pkgdown::build_site(new_process = FALSE, install = FALSE)'
     - mv site public
   artifacts:
