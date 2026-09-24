@@ -382,3 +382,11 @@ related W3C and RFC standards.
   accord. A pipeline started by hand from Build > Pipelines > Run pipeline is
   admitted on any ref and runs `check` there, so a branch can still be verified
   on the server before it merges (SEOR-bmgkzhvy).
+* The OSS Index allow-list is now checked by a validator,
+  `oss_index_allowlist_violations()`, that a fixture test proves rejects
+  malformed rows, instead of a loop of expectations over whatever rows exist.
+  The audit test also gains `OSSINDEX_AUDIT_REQUIRED=true`: under that flag a
+  missing `oysteR` or missing credentials fails with a message naming what is
+  absent, instead of skipping to a green that audited nothing. An audit that
+  resolves no packages now fails too. The two `curl` rows are unchanged
+  (SEOR-fftbjnpl).

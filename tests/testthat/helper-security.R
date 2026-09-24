@@ -1,7 +1,7 @@
 # Allow-list and helpers for the OSS Index dependency audit in
 # test-security.R. The list lives here rather than in the test file because
-# both test blocks read it -- the offline well-formedness check and the
-# network audit itself.
+# more than one test block reads it -- the offline well-formedness check and
+# the network audit itself.
 #
 # Narrowing the audit to hard dependencies cleared five of the seven repos in
 # this fleet. It does NOT clear sitemapr: `curl` is a genuine hard dependency
@@ -66,6 +66,123 @@ oss_index_allowlist <- list(
     )
   )
 )
+
+# The fields every allow-list row carries, in the order they are documented.
+oss_index_allowlist_fields <- c(
+  "id",
+  "package",
+  "version_seen",
+  "review",
+  "reason"
+)
+
+# Problems with a set of allow-list rows, as a character vector; empty when the
+# set is well formed. Written as a function returning findings rather than as a
+# block of expectations so that it can be exercised against fixtures. The loop
+# of expectations it replaces checked only the rows that happened to exist:
+# nothing proved it would reject a malformed one, and with the list emptied it
+# would assert nothing at all and still report as a passing test.
+oss_index_allowlist_violations <- function(rows) {
+  out <- character()
+
+  parses_as_version <- function(x) {
+    tryCatch(
+      {
+        package_version(x)
+        TRUE
+      },
+      error = function(e) FALSE,
+      warning = function(w) FALSE
+    )
+  }
+
+  for (i in seq_along(rows)) {
+    row <- rows[[i]]
+    label <- sprintf("row %d", i)
+
+    absent <- setdiff(oss_index_allowlist_fields, names(row))
+    unknown <- setdiff(names(row), oss_index_allowlist_fields)
+    if (length(absent) > 0) {
+      out <- c(
+        out,
+        sprintf("%s: missing field(s): %s", label, toString(absent))
+      )
+    }
+    if (length(unknown) > 0) {
+      out <- c(
+        out,
+        sprintf("%s: unknown field(s): %s", label, toString(unknown))
+      )
+    }
+    if (length(absent) > 0) {
+      next
+    }
+
+    label <- sprintf("row %d (%s)", i, paste(row$id, collapse = " "))
+    if (
+      !is.character(row$id) ||
+        length(row$id) != 1L ||
+        !grepl("^CVE-[0-9]{4}-[0-9]+$", row$id)
+    ) {
+      out <- c(out, sprintf("%s: `id` is not a single CVE identifier", label))
+    }
+    if (
+      !is.character(row$package) ||
+        length(row$package) != 1L ||
+        !nzchar(row$package)
+    ) {
+      out <- c(
+        out,
+        sprintf("%s: `package` is not a single package name", label)
+      )
+    }
+    if (
+      !is.character(row$version_seen) ||
+        length(row$version_seen) != 1L ||
+        !parses_as_version(row$version_seen)
+    ) {
+      out <- c(
+        out,
+        sprintf("%s: `version_seen` is not a parseable version", label)
+      )
+    }
+    if (!inherits(row$review, "Date") || length(row$review) != 1L) {
+      out <- c(out, sprintf("%s: `review` is not a single Date", label))
+    }
+    # A reason long enough to be an argument rather than a placeholder.
+    if (
+      !is.character(row$reason) ||
+        length(row$reason) != 1L ||
+        nchar(row$reason) <= 80
+    ) {
+      out <- c(
+        out,
+        sprintf("%s: `reason` is missing or too short to be an argument", label)
+      )
+    }
+  }
+
+  ids <- vapply(
+    rows,
+    function(row) {
+      if (is.character(row$id) && length(row$id) == 1L) {
+        row$id
+      } else {
+        NA_character_
+      }
+    },
+    character(1)
+  )
+  duplicates <- unique(ids[duplicated(ids) & !is.na(ids)])
+  if (length(duplicates) > 0) {
+    out <- c(
+      out,
+      sprintf("duplicate allow-list id(s): %s", toString(duplicates))
+    )
+  }
+
+  out
+}
 
 # Flatten an oysteR::audit_description() result to one row per reported
 # advisory. The `vulnerabilities` column is a list of per-package lists, empty
