@@ -390,3 +390,14 @@ related W3C and RFC standards.
   absent, instead of skipping to a green that audited nothing. An audit that
   resolves no packages now fails too. The two `curl` rows are unchanged
   (SEOR-fftbjnpl).
+* `scripts/check-bugreports.py` pins the `BugReports:` split on the pre-push
+  hook and in the `citation-version` CI job: `DESCRIPTION` must keep the
+  CRAN-safe `/-/issues` form, while `codemeta.json` and `.bestpractices.json`
+  must name `/-/work_items`, and no other human-facing file may link a
+  `/-/issues` address (SEOR-ocbtrrnl).
+* `.gitlab-ci.yml` gains `osv-audit` and `security-audit` jobs, so the
+  dependency audits in `test-osv.R` and `test-security.R` now have a runner.
+  Both run only on a pipeline schedule that sets
+  `SCHEDULE_KIND=dependency-audit`, or by hand from a web pipeline;
+  `security-audit` sets `OSSINDEX_AUDIT_REQUIRED=true`, so missing OSS Index
+  credentials fail the job instead of skipping it (SEOR-fftbjnpl).
