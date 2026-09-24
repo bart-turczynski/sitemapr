@@ -11,7 +11,7 @@
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
   `docs/sitemap-spec.md` (§2 three-axis limit model — authoritative);
   `docs/decisions/ADR-010-page-inspection.md` (per-page body cap — amends §3 below);
-  `ssrfr` `docs/decisions/ADR-001-network-safety-policy.md` (supersedes §1 and §4
+  `ssrfr` `design/adr/0001-network-safety-policy.md` (supersedes §1 and §4
   **for `ssrfr`'s scope only**, on the grounds that its audience — long-lived
   servers fetching attacker-supplied URLs — has a different threat model)
 
@@ -86,7 +86,7 @@ any of the following:
   always inside the scope this section claims rather than a scope extension.
   ISATAP under a link-local prefix was blocked before that, but incidentally, by
   the `fe80::/10` rule rather than by decoding — a rule that happens to cover a
-  case for an unrelated reason is not coverage. See `ssrfr` ADR-001 §2.3 for the
+  case for an unrelated reason is not coverage. See `ssrfr` ADR 0001 §2.3 for the
   normative statement (INV-13 embedded-address corollary), and the `pydantic-ai`
   CVE sequence for the same defect class recurring three times against one
   blocklist.
