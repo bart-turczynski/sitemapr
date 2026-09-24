@@ -17,7 +17,8 @@
 # reported as "cloud-metadata", and all of 0.0.0.0/8 as "unspecified" when only
 # 0.0.0.0/32 is. Neither the blocked set nor the posture changed — both blocks
 # stay blocked — only the label. Corrected here rather than propagated into
-# ssrfr, whose spec §5.2 names both as misnomers to fix deliberately.
+# ssrfr, whose spec (ssrfr-v1.md §6.3) names both as misnomers to fix
+# deliberately.
 #
 # IPv6->IPv4 embedding (ADR-003 §1). Several IPv6 spellings embed a 32-bit IPv4
 # address; left undecoded each is a bypass of the IPv4 range checks. We decode
@@ -288,7 +289,7 @@ ssrf_embedded_ipv4 <- function(h) {
 # Adding these prefixes to the blocked range table would NOT fix the gap:
 # 2002::/16 and 2001::/32 are legitimately globally reachable, and what has to
 # be classified is the address they WRAP. The set of embedding forms is a
-# decoder inventory, not a range table (ssrfr ADR-001 §2.3, INV-13
+# decoder inventory, not a range table (ssrfr ADR 0001 §2.3, INV-13
 # embedded-address corollary) — this is the defect class behind pydantic-ai's
 # three CVEs against one blocklist, each a different transition wrapper of the
 # same metadata address.
