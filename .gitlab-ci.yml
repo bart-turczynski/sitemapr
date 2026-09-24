@@ -4,6 +4,8 @@
 # this file defined exactly two jobs (`citation-version`, `pages`), so a green
 # pipeline proved only that the docs site built — nothing about the package
 # itself. It is still deliberately NOT the whole ported pipeline; see below.
+# Since SEOR-fftbjnpl it also carries two schedule-only dependency audits,
+# `osv-audit` and `security-audit`, at the end of this file.
 #
 # Scope of the `pages` job: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
 # documentation URL, `R CMD check --as-cran` fetches every declared URL, and
@@ -54,6 +56,7 @@
 stages:
   - verify
   - deploy
+  - audit
 
 default:
   # Pinned to a minor R series rather than `latest`, so an upstream R release
@@ -302,3 +305,86 @@ pages:
   artifacts:
     paths:
       - public
+
+# ---------------------------------------------------------------------------
+# audit -- dependency vulnerability audits, on a schedule only (SEOR-fftbjnpl)
+#
+# Ported from seor's `osv-audit` / `security-audit`, with punycoder's
+# SCHEDULE_KIND selector. Before this, tests/testthat/test-security.R and
+# test-osv.R had no runner at all: every automated path (the pre-push hook,
+# the `check` job) reaches them through rcmdcheck, which does not set
+# NOT_CRAN, so both skip there (see test-security.R's header).
+#
+# SCHEDULE_KIND selects among schedule-triggered jobs. A scheduled pipeline
+# alone is not a selector: a job guarded only by
+# `$CI_PIPELINE_SOURCE == "schedule"` would fire on ANY schedule this project
+# ever gets. So each job below requires the schedule to carry the pipeline-
+# schedule variable `SCHEDULE_KIND=dependency-audit` (set on the schedule under
+# Build > Pipeline schedules > edit > Variables, not in this file). The
+# workflow: rules above admit a scheduled pipeline because it runs on the
+# default branch (`$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH`).
+#
+# OWNER GATE: this file cannot create the schedule. Until one exists on
+# `main` carrying SCHEDULE_KIND=dependency-audit, neither job runs unattended.
+# Both can also be started by hand from a `web` pipeline (manual, non-
+# blocking there, so a hand-started pipeline is never held on them).
+#
+# A scheduled run is BLOCKING: `allow_failure` is not set on the schedule
+# rule, because a detector that reports success when it fires is worthless.
+#
+# NOTE: `check`, `citation-version` and `pages` carry no rules of their own,
+# so a scheduled pipeline on `main` runs them too, alongside these audits.
+#
+# Both jobs INSTALL sitemapr rather than only loading it: test-osv.R resolves
+# the runtime closure from installed.packages(), where an uninstalled sitemapr
+# resolves to nothing and the test skips. `dependencies = TRUE` pulls
+# Suggests too, because testthat sources every setup-*.R file (the cucumber
+# step definitions) whatever the filter.
+# ---------------------------------------------------------------------------
+
+.dependency-audit:
+  stage: audit
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "dependency-audit"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+    - when: never
+  variables:
+    # So skip_on_cran() cannot skip the audit silently. test_local() sets it
+    # too; kept explicit so the job does not depend on that detail.
+    NOT_CRAN: "true"
+
+# OSV database (https://osv.dev) via {rosv}. Needs no account, token or CI/CD
+# variable. Runs tests/testthat/test-osv.R against the runtime dependency
+# closure at installed versions.
+osv-audit:
+  extends: .dependency-audit
+  script:
+    - Rscript -e 'pak::pak(c("any::rosv", "any::testthat"))'
+    - Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
+    - Rscript -e 'pak::local_install(upgrade = FALSE)'
+    - Rscript -e 'testthat::test_local(filter = "osv", stop_on_failure = TRUE)'
+
+# Sonatype OSS Index via {oysteR}. OSS Index rejects anonymous requests with
+# HTTP 401, so this job needs two CI/CD variables (Settings > CI/CD >
+# Variables): OSSINDEX_USER (account email) and OSSINDEX_TOKEN (API token).
+#
+# THIS JOB FAILS WHEN THEY ARE ABSENT, ON PURPOSE. OSSINDEX_AUDIT_REQUIRED
+# turns each missing precondition in tests/testthat/test-security.R (no
+# oysteR, no credentials) into a loud failure instead of a skip, so the job
+# cannot report success having audited nothing. It is set here and nowhere
+# else, so local runs, the pre-push gate and `check` still skip. The two
+# allow-listed curl advisories in tests/testthat/helper-security.R still
+# apply: an advisory outside that list fails, and so does a listed one that
+# is no longer reported.
+security-audit:
+  extends: .dependency-audit
+  variables:
+    NOT_CRAN: "true"
+    OSSINDEX_AUDIT_REQUIRED: "true"
+  script:
+    - Rscript -e 'pak::pak(c("any::oysteR", "any::testthat"))'
+    - Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
+    - Rscript -e 'pak::local_install(upgrade = FALSE)'
+    - Rscript -e 'testthat::test_local(filter = "security", stop_on_failure = TRUE)'
