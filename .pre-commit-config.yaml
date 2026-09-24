@@ -57,6 +57,18 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # DESCRIPTION's BugReports: keeps the CRAN-incoming-safe /-/issues form
+      # (CRAN string-tests that one field; pslr 1.2.1's first upload was
+      # archived for /-/work_items), while every human-facing file points at
+      # /-/work_items, which does not 404 for a signed-out visitor. Offline,
+      # stdlib-only and instant, like check-citation above (SEOR-ocbtrrnl).
+      - id: check-bugreports
+        name: BugReports split (DESCRIPTION vs human-facing files)
+        entry: python3 scripts/check-bugreports.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       # Toolchain drift makes the gate red on a tree nobody changed, and it
       # arrives disguised as a code defect: a roxygen2 skew aborts the docs
       # guard, and a package built under a newer R than this one surfaces as an

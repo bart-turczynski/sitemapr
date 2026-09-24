@@ -198,6 +198,10 @@ workflow:
 # Offline and stdlib-only, so it overrides the R image, the R `before_script`
 # and the DESCRIPTION-keyed cache that `default:` sets for the `pages` job —
 # none of which exist on python:3.13-alpine. It costs seconds.
+#
+# The same job runs scripts/check-bugreports.py, the equally offline gate that
+# keeps DESCRIPTION's BugReports: on the CRAN-incoming-safe /-/issues form and
+# every human-facing tracker link on /-/work_items (SEOR-ocbtrrnl).
 citation-version:
   stage: verify
   image: python:3.13-alpine
@@ -206,6 +210,8 @@ citation-version:
   script:
     - python3 scripts/check-citation.py --self-test
     - python3 scripts/check-citation.py
+    - python3 scripts/check-bugreports.py --self-test
+    - python3 scripts/check-bugreports.py
 
 # `R CMD check --as-cran` plus the whole DEFAULT `tools/verify.R` chain —
 # docs-reproducibility, the findings-registry guard, the R-floor guard, the
