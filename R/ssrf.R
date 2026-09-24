@@ -287,8 +287,9 @@ ssrf_embedded_ipv4 <- function(h) {
 #   ISATAP (RFC 5214) any prefix  IPv4 in the interface identifier, after a
 #                                 0000:5efe / 0200:5efe marker
 # Adding these prefixes to the blocked range table would NOT fix the gap:
-# 2002::/16 and 2001::/32 are legitimately globally reachable, and what has to
-# be classified is the address they WRAP. The set of embedding forms is a
+# IANA records 2002::/16 and 2001::/32 as Globally Reachable "N/A": whether
+# such an address is reachable depends on what it WRAPS, so that is what has
+# to be classified. The set of embedding forms is a
 # decoder inventory, not a range table (ssrfr ADR 0001 §2.3, INV-13
 # embedded-address corollary) — this is the defect class behind pydantic-ai's
 # three CVEs against one blocklist, each a different transition wrapper of the
