@@ -390,3 +390,11 @@ related W3C and RFC standards.
   absent, instead of skipping to a green that audited nothing. An audit that
   resolves no packages now fails too. The two `curl` rows are unchanged
   (SEOR-fftbjnpl).
+* `scripts/bestpractices-url.py`, vendored from seor, turns
+  `.bestpractices.json` into bestpractices.dev edit links and checks the live
+  entry against it, because the site never imports the file from a GitLab
+  repository. `.bestpractices.json` now names GitLab, with GitHub only as the
+  read-only mirror, and describes today's CI: the GitLab pipeline runs the
+  verify chain on every push to `main`, so continuous integration is met, while
+  vulnerability-focused static analysis and dynamic analysis are recorded as
+  unmet (SEOR-grrcptww).
