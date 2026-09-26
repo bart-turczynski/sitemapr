@@ -1,7 +1,4 @@
 {
-  "homepage_url_status": "Met",
-  "homepage_url_justification": "Project homepage is the pkgdown site https://sitemapr-eca867.gitlab.io/ (also listed in the DESCRIPTION URL field).",
-
   "sites_https_status": "Met",
   "sites_https_justification": "All project sites are served over HTTPS: https://gitlab.com/bart-turczynski/sitemapr and https://sitemapr-eca867.gitlab.io/ .",
 
@@ -33,7 +30,7 @@
   "documentation_interface_justification": "Exported functions are documented with roxygen2 man pages under man/ and rendered on the pkgdown reference index: https://sitemapr-eca867.gitlab.io/reference/index.html",
 
   "repo_public_status": "Met",
-  "repo_public_justification": "The project source is hosted on GitLab: https://gitlab.com/bart-turczynski/sitemapr",
+  "repo_public_justification": "The project source is in a public git repository on GitLab: https://gitlab.com/bart-turczynski/sitemapr . The GitHub repository github.com/bart-turczynski/sitemapr is a read-only mirror.",
 
   "repo_track_status": "Met",
   "repo_track_justification": "All changes are tracked in git: https://gitlab.com/bart-turczynski/sitemapr/-/commits/main",
@@ -51,16 +48,13 @@
   "version_semver_justification": "Uses semantic-style x.y.z versioning in DESCRIPTION.",
 
   "version_tags_status": "Met",
-  "version_tags_justification": "Releases are identified by git tags in the GitLab repository: https://gitlab.com/bart-turczynski/sitemapr/-/tags . The former tag-triggered GitHub Actions release workflow is gone, and the package is still pre-release (DESCRIPTION version 0.0.0.9000), so no release tag has been cut yet.",
+  "version_tags_justification": "No release exists yet: DESCRIPTION's Version is the development version 0.0.0.9000, and no release tag has been cut. Each release will be tagged in the GitLab repository, where tags are listed at https://gitlab.com/bart-turczynski/sitemapr/-/tags .",
 
   "release_notes_status": "Met",
   "release_notes_justification": "NEWS.md documents user-facing changes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
 
   "release_notes_vulns_status": "Met",
   "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records user-facing changes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md",
-
-  "report_url_status": "Met",
-  "report_url_justification": "Bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items (declared as the BugReports field in DESCRIPTION).",
 
   "report_tracker_status": "Met",
   "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
@@ -102,10 +96,10 @@
   "test_invocation_justification": "Tests run via devtools::test() and as part of R CMD check.",
 
   "test_most_status": "Met",
-  "test_most_justification": "The testthat and cucumber suite under tests/testthat/ exercises the parse, index-expansion, discovery, fetch, schema-validation and protocol-validation layers, including the byte-sensitive corpus fixtures (BOMs, CRLF, UTF-16): https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/tests . No coverage service currently publishes a figure: the Codecov upload ran from GitHub Actions and is no longer available.",
+  "test_most_justification": "The testthat and cucumber suite under tests/testthat/ exercises the parse, index-expansion, discovery, fetch, schema-validation and protocol-validation layers, including the byte-sensitive corpus fixtures (BOMs, CRLF, UTF-16): https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/tests . Line coverage is measured with covr by the opt-in `coverage` stage of `Rscript tools/verify.R`, which fails on any uncovered line; no CI job publishes a coverage figure.",
 
   "test_policy_status": "Met",
-  "test_policy_justification": "CONTRIBUTING.md makes the verification gate `Rscript tools/verify.R` -- which runs the full testthat and cucumber suite under R CMD check --as-cran -- a requirement for contributions, and the pre-push hook enforces it: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
+  "test_policy_justification": "CONTRIBUTING.md makes the verification gate `Rscript tools/verify.R` -- which runs the full testthat and cucumber suite under R CMD check --as-cran -- a requirement for contributions; the pre-push hook enforces it on every branch, and the GitLab pipeline's `check` job runs it again on every push to main: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "tests_are_added_status": "Met",
   "tests_are_added_justification": "New functionality ships with tests, enforced in review.",
@@ -114,10 +108,10 @@
   "tests_documented_added_justification": "CONTRIBUTING.md documents where tests live (tests/testthat/, with their Cucumber .feature files) and requires every contribution to pass the verify gate that runs them: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md",
 
   "warnings_status": "Met",
-  "warnings_justification": "Warnings are surfaced by `Rscript tools/verify.R`, which runs lintr and R CMD check --as-cran; the `verify` pre-push hook in .pre-commit-config.yaml invokes it on every push: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
+  "warnings_justification": "Warnings are surfaced by `Rscript tools/verify.R`, which runs lintr and R CMD check --as-cran and fails on any lint or check warning. The `verify` pre-push hook in .pre-commit-config.yaml runs it on every push, and the GitLab pipeline's `check` job runs it on every push to main: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
   "warnings_fixed_status": "Met",
-  "warnings_fixed_justification": "Warnings from R CMD check --as-cran and findings from lintr are fixed as they appear; the pre-push verify gate re-runs both before any push reaches the remote, so they do not accumulate.",
+  "warnings_fixed_justification": "Warnings from R CMD check --as-cran and findings from lintr are fixed as they appear: the verify chain fails on any of them, so a change carrying one does not pass the pre-push gate or the GitLab pipeline.",
 
   "warnings_strict_status": "Met",
   "warnings_strict_justification": "lintr is configured in .lintr with the goodpractice-aligned linter set at line width 80, and the package check runs in R's strictest standard mode, R CMD check --as-cran: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.lintr",
@@ -156,10 +150,10 @@
   "crypto_verification_private_justification": "sitemapr does not implement custom certificate verification.",
 
   "delivery_mitm_status": "Met",
-  "delivery_mitm_justification": "Distributed over HTTPS from GitLab; installation is from that HTTPS origin via pak/remotes: https://gitlab.com/bart-turczynski/sitemapr",
+  "delivery_mitm_justification": "sitemapr is installed from GitLab (https://gitlab.com/bart-turczynski/sitemapr) with pak, or from r-universe (https://bart-turczynski.r-universe.dev/sitemapr), both over HTTPS only.",
 
   "delivery_unsigned_status": "Met",
-  "delivery_unsigned_justification": "Sources are retrieved over HTTPS from GitLab. The project publishes no separate hash or signature files, so no cryptographic hash is served over an unencrypted channel.",
+  "delivery_unsigned_justification": "Installation fetches sources from GitLab or r-universe over HTTPS. The project publishes no separate hash or signature files, so no cryptographic hash is served over an unencrypted channel.",
 
   "vulnerabilities_fixed_60_days_status": "Met",
   "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
@@ -168,31 +162,31 @@
   "vulnerabilities_critical_fixed_justification": "No known unfixed critical vulnerabilities.",
 
   "static_analysis_status": "Met",
-  "static_analysis_justification": "lintr, configured in .lintr, and R CMD check --as-cran run in the local verify gate `Rscript tools/verify.R`, which the `verify` pre-push hook invokes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
+  "static_analysis_justification": "lintr, configured in .lintr, and R CMD check --as-cran run in the verify chain `Rscript tools/verify.R`, which the `verify` pre-push hook invokes on every push and the GitLab pipeline's `check` job runs on every push to main: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
-  "static_analysis_common_vulnerabilities_status": "Met",
-  "static_analysis_common_vulnerabilities_justification": "R CMD check --as-cran plus the lintr set cover common R defect classes: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.lintr . The OSV and OSS Index dependency audits no longer run automatically -- they were GitHub Actions workflows -- although rosv and oysteR remain declared in DESCRIPTION Suggests for on-demand runs.",
+  "static_analysis_common_vulnerabilities_status": "Unmet",
+  "static_analysis_common_vulnerabilities_justification": "lintr and R CMD check find defects but are not vulnerability scanners. tests/testthat/test-security.R carries an OSS Index dependency audit, but it is SCA, not static analysis of sitemapr's code, and it skips under R CMD check, so it runs only when started by hand.",
 
   "static_analysis_fixed_status": "Met",
-  "static_analysis_fixed_justification": "Static-analysis findings are fixed before the pre-push verify gate will pass, so they are resolved before the change reaches the remote.",
+  "static_analysis_fixed_justification": "Static-analysis findings are fixed before the change reaches main: the verify chain fails on any lintr finding, in the pre-push hook and in the GitLab pipeline.",
 
   "static_analysis_often_status": "Met",
-  "static_analysis_often_justification": "lintr runs on every push: the `verify` pre-push hook in .pre-commit-config.yaml invokes `Rscript tools/verify.R`, whose chain includes the lint stage: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
+  "static_analysis_often_justification": "lintr runs on every push: the `verify` pre-push hook invokes `Rscript tools/verify.R`, whose chain includes the lint stage, and the GitLab pipeline runs the same chain on every push to main: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml",
 
-  "dynamic_analysis_status": "Met",
-  "dynamic_analysis_justification": "The testthat and cucumber suite runs under R CMD check --as-cran in the pre-push verify gate, exercising the package at runtime against the byte-sensitive corpus fixtures. The rhub sanitizer and valgrind runs were GitHub Actions workflows and no longer run.",
+  "dynamic_analysis_status": "Unmet",
+  "dynamic_analysis_justification": "No dynamic analysis tool (fuzzer, sanitizer or valgrind) is run. sitemapr is pure R with no compiled code; its testthat and cucumber suite runs at every verify, but that is testing, not dynamic analysis.",
 
   "dynamic_analysis_unsafe_status": "N/A",
-  "dynamic_analysis_unsafe_justification": "sitemapr is an R package with no compiled code of its own.",
+  "dynamic_analysis_unsafe_justification": "sitemapr is pure R with no compiled code (no src/ directory), so it contains no memory-unsafe code of its own.",
 
   "dynamic_analysis_enable_assertions_status": "Met",
-  "dynamic_analysis_enable_assertions_justification": "The automated test suite uses testthat expectations and cucumber scenarios, which are checked at runtime on every pre-push verify run.",
+  "dynamic_analysis_enable_assertions_justification": "The testthat expectations and cucumber scenarios are assertions checked at runtime on every run of the verify chain, in the pre-push hook and in the GitLab pipeline.",
 
-  "dynamic_analysis_fixed_status": "Met",
-  "dynamic_analysis_fixed_justification": "Any issue surfaced by an R CMD check --as-cran or test-suite run is fixed before the change is pushed.",
+  "dynamic_analysis_fixed_status": "N/A",
+  "dynamic_analysis_fixed_justification": "No dynamic analysis is run (see dynamic_analysis), so there are no findings to fix.",
 
-  "test_continuous_integration_status": "Unmet",
-  "test_continuous_integration_justification": "Not currently met. No hosted CI runs for this project: `origin` is GitLab and carries no pipeline, and the former GitHub Actions workflows are unavailable. The equivalent chain -- docs, findings registry, lint, R CMD check --as-cran -- runs as `Rscript tools/verify.R`, invoked by the `verify` pre-push hook in .pre-commit-config.yaml (https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/.pre-commit-config.yaml), but that is a per-developer pre-push gate on one machine, not continuous integration on a server.",
+  "test_continuous_integration_status": "Met",
+  "test_continuous_integration_justification": "The GitLab CI pipeline (https://gitlab.com/bart-turczynski/sitemapr/-/pipelines) runs the full verification chain -- `Rscript tools/verify.R`: docs, findings registry, lint and R CMD check --as-cran with the test suite -- in its `check` job on every push to main. The same chain runs as the `verify` pre-push hook on every branch before it leaves a contributor's machine.",
 
   "discussion_status": "Met",
   "discussion_justification": "GitLab Issues provide a public forum for project discussion: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
@@ -210,5 +204,5 @@
   "sites_password_security_justification": "Project sites (GitLab and the pkgdown site) manage their own authentication; sitemapr operates no site with user passwords.",
 
   "maintained_status": "Met",
-  "maintained_justification": "Actively maintained: recent commits and issue tracking on GitLab at https://gitlab.com/bart-turczynski/sitemapr"
+  "maintained_justification": "Actively maintained: recent commits, issue tracking and passing pipelines on GitLab at https://gitlab.com/bart-turczynski/sitemapr"
 }
