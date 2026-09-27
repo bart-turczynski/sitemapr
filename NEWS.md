@@ -350,6 +350,12 @@ related W3C and RFC standards.
 
 ## Internal
 
+* The agent instructions no longer import `FP_AGENTS.md`, and it and
+  `FP_CLAUDE.md`, the files the `fp` tracker generates, are deleted.
+  `AGENTS.md` points at the house `agent-workflow` and `fp` skills for the git
+  workflow, and `docs/repo-hygiene.md` describes the `pages` keep-list the job
+  actually uses (SEOR-ipwcbcov).
+
 * `DESCRIPTION`'s `URL:` now lists the package's r-universe page. r-universe
   records this repository's upstream owner as `gitlab-bart-turczynski` because
   it is hosted on GitLab, which does not match the `bart-turczynski` universe,
