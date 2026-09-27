@@ -27,15 +27,18 @@ home:
 navbar:
   structure:
     left:  [reference, articles, news, acknowledgments]
-    right: [search, github]
+    right: [search, gitlab]
   components:
     acknowledgments:
       text: Acknowledgments
       href: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/ACKNOWLEDGMENTS.md
-    github:
-      icon: fab fa-github fa-lg
+    # pkgdown ships a built-in `github` component but none for GitLab, so this
+    # is a plain custom component using the Font Awesome brand icon pkgdown
+    # already bundles.
+    gitlab:
+      icon: fab fa-gitlab fa-lg
       href: https://gitlab.com/bart-turczynski/sitemapr
-      aria-label: GitHub
+      aria-label: GitLab
 
 reference:
   - title: "Reading"
