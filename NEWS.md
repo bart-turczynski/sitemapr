@@ -332,6 +332,11 @@ related W3C and RFC standards.
   introduction vignette and `_pkgdown.yml` all name the same address; the
   repository URL stays first in `DESCRIPTION` because `default_user_agent()`
   reads that entry as the crawler contact URL (SITE-rysgulhf).
+* The documentation site has moved to the GitLab Pages namespace path,
+  `https://bart-turczynski.gitlab.io/sitemapr/`, the address every package in
+  the fleet now uses. The unique domain `https://sitemapr-eca867.gitlab.io/`
+  is being retired and will stop resolving, with no redirect. The same files
+  listed above name the new address (SEOR-hcmtspmv).
 * A `pages` job in `.gitlab-ci.yml` builds the pkgdown site on the default
   branch and deploys it, so the declared documentation URL is published rather
   than merely advertised (SITE-rysgulhf).

@@ -37,6 +37,14 @@ For the R-package-facing changelog (rendered on the pkgdown site), see
   pkgdown site on the default branch and deploys it to GitLab Pages, so the
   documentation URL the package declares is actually published.
 
+### Changed
+
+- **Documentation URL** — the documentation site has moved to the GitLab Pages
+  namespace path, `https://bart-turczynski.gitlab.io/sitemapr/`, the fleet
+  standard. The unique domain `https://sitemapr-eca867.gitlab.io/` is being
+  retired and will stop resolving, with no redirect. Every file that named the
+  unique domain now names the new address (SEOR-hcmtspmv).
+
 ### Fixed
 
 - **Documentation URL** — the declared documentation address is now
