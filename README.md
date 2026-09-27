@@ -140,7 +140,7 @@ sitemap_tree("https://example.com")
 
 ## Learn more
 
-- Full reference and articles: <https://sitemapr-eca867.gitlab.io/>
+- Full reference and articles: <https://bart-turczynski.gitlab.io/sitemapr/>
 - Getting-started vignette:
   `vignette("introduction", package = "sitemapr")`
 

@@ -185,9 +185,9 @@ def check_md_filter() -> None:
     # kept off the published site; everything else -- including
     # CHANGELOG.md, deliberately GRANDFATHERED onto scripts/filter-agent-md.sh's
     # keep list even though nothing references it from _pkgdown.yml, because
-    # https://sitemapr-eca867.gitlab.io/CHANGELOG.html already answers 200 and
-    # retiring an already-published page is a separate editorial call, not a
-    # by-product of closing the AGENTS.md/CLAUDE.md leak (SEOR-wqxhftpv
+    # https://bart-turczynski.gitlab.io/sitemapr/CHANGELOG.html already
+    # answers 200 and retiring an already-published page is a separate
+    # editorial call, not a by-product of closing the AGENTS.md/CLAUDE.md leak (SEOR-wqxhftpv
     # decision, 2026-09-23) -- must survive.
     survivors, _ = run_filter(cmd, KNOWN_MD_FILES)
     expected_agent_files = {"AGENTS.md", "CLAUDE.md", "FP_AGENTS.md", "FP_CLAUDE.md"}
