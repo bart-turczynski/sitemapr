@@ -29,7 +29,9 @@ those bytes alone.
 ## Rules
 
 Planning notes go in `_scratch/` (gitignored). `.fp/` is gitignored too, so the
-`SITE-*` ids cited in `docs/` resolve only on this machine.
+`SITE-*` ids cited in `docs/` resolve only on this machine. Git follows the
+house `agent-workflow` skill, and fp status changes stay decoupled from git
+(the `fp` skill's `references/decoupling.md`).
 
 For the verify gate, hook setup and tracker snapshots, see docs/repo-hygiene.md.
 For the layer model and output contracts, see docs/architecture.md.
@@ -49,5 +51,3 @@ cost an afternoon (SEOR-tcytizic).
 
 If that check passes and the gate is still red on a tree you have not touched,
 say so and keep the evidence rather than assuming your change caused it.
-
-@FP_AGENTS.md
