@@ -60,7 +60,7 @@
   "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports as GitLab issues; the tracker is declared as the BugReports field in DESCRIPTION and reachable at https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
+  "report_process_justification": "Users submit bug reports as GitLab issues; DESCRIPTION's BugReports field declares the tracker, which is reachable at https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
 
   "report_responses_status": "Met",
   "report_responses_justification": "Maintainer responds to issue reports on the GitLab tracker: https://gitlab.com/bart-turczynski/sitemapr/-/work_items",
