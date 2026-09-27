@@ -355,6 +355,12 @@ related W3C and RFC standards.
 
 ## Internal
 
+* `.lintr` no longer carries a comment header, so `lintr::lint_package()` runs
+  on R 4.5 and older instead of aborting with "Invalid DCF format":
+  `read.dcf()` only skips comment lines from R 4.6. The rationale for the
+  linter set and its deviations from goodpractice moved to
+  `docs/repo-hygiene.md` (SEOR-qfxolldq).
+
 * The agent instructions no longer import `FP_AGENTS.md`, and it and
   `FP_CLAUDE.md`, the files the `fp` tracker generates, are deleted.
   `AGENTS.md` points at the house `agent-workflow` and `fp` skills for the git
