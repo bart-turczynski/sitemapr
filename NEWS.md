@@ -69,7 +69,7 @@ related W3C and RFC standards.
   under one engine's sitemap rules while deciding robots under another's, and
   runs the pipeline once instead of the two passes a caller previously needed.
   Independence is unchanged — neither axis derives the other, so a `"bing"`
-  sitemap ruleset paired with a Yandex robots context is honoured on both sides
+  sitemap ruleset paired with a Yandex robots context is honored on both sides
   — and each axis still governs its own columns, so a baseline call carrying a
   robots context returns exactly what `validate_sitemap_robots()` returns.
   `validate_sitemap_robots()` remains the shorthand for the robots axis alone.
@@ -282,11 +282,11 @@ related W3C and RFC standards.
 * The guard classifies the IPv6 unspecified and loopback addresses on the
   expanded address rather than the literal string, so every spelling of those
   128 bits is treated alike: `0::1`, `::0:1`, `0:0:0:0:0:0:0:1` and
-  `::0.0.0.1` are all recognised as loopback, and the matching forms of `::`
+  `::0.0.0.1` are all recognized as loopback, and the matching forms of `::`
   as unspecified. Previously only the exact literals `::1` and `::` matched,
   and every other spelling was classified as neither special nor embedded
   IPv4 and reached the default allow. Fetches were not affected, because
-  `rurl` canonicalises such literals before the guard sees them; the guard is
+  `rurl` canonicalizes such literals before the guard sees them; the guard is
   now correct on its own rather than relying on that (SITE-vovtwvuh).
 * The guard's IPv6 link-local and AWS cloud-metadata rules now match on the
   expanded address too, completing the change above. Because a hextet may be
@@ -352,6 +352,10 @@ related W3C and RFC standards.
   human-facing metadata files that name the tracker — `codemeta.json` and
   `.bestpractices.json` — deliberately keep the `/-/work_items` address, which
   returns 200 (SITE-wpxlhijx).
+* The help pages and these release notes are spelled in US English, matching
+  the package's declared `Language: en-US`: "honor", "recognized", "signaled"
+  and "canonicalizes" replace their British forms, and the spelling word list
+  no longer accepts the British spellings (SEOR-kfiqpymb).
 
 ## Internal
 

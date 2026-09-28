@@ -92,7 +92,7 @@ construction — as in \code{\link[=validate_sitemap_robots]{validate_sitemap_ro
 request, so \code{check_robots} need not also be set — and appends the
 \code{robots_context} list-column. It cannot be combined with a non-default
 \code{robots_user_agent}: that argument is the string shorthand for the same
-axis, and honouring both would make it ambiguous which one decided the
+axis, and honoring both would make it ambiguous which one decided the
 findings.}
 
 \item{inspect_pages}{Logical; the master opt-in for per-URL page inspection
@@ -177,7 +177,7 @@ This is the engine-aware entry point, and it carries \strong{both} engine-aware
 axes: pass \verb{robots_context =} to select an engine's robots semantics in the
 same call (SITE-otfmeyqx). The two axes stay independent as ADR-009 §1
 requires — neither is derived from the other, so a Bing sitemap ruleset with
-a Yandex robots context is a legal and honoured pair — but they are no longer
+a Yandex robots context is a legal and honored pair — but they are no longer
 mutually exclusive, and a combined call runs the pipeline once rather than
 fetching everything twice. Each axis governs its own columns: the additive
 ruleset columns appear only under an engine overlay, and \code{robots_context}

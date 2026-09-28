@@ -43,7 +43,7 @@ the HTTP request user-agent sitemapr fetches with.
 The vocabulary for the last two belongs to the sibling \code{robotstxtr} package,
 not to sitemapr, and each value is validated against the set the
 \strong{installed} build publishes on its engine contract — so an axis this
-build cannot honour is rejected here rather than deep inside the engine.
+build cannot honor is rejected here rather than deep inside the engine.
 \code{robotstxtr} is an optional dependency; when it is absent only the shape of
 each axis is checked.
 
