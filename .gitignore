@@ -6,6 +6,8 @@
 
 .fp/
 _scratch/
+# Logs and build output (fleet convention, SEOR-jlwnvzoq).
+tmp/
 
 # Heavy artifacts — never commit (a big blob bloats .git history even after deletion).
 *.db

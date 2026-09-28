@@ -218,9 +218,9 @@ citation-version:
 
 # `R CMD check --as-cran` plus the whole DEFAULT `tools/verify.R` chain —
 # docs-reproducibility, the findings-registry guard, the R-floor guard, the
-# air/.lintr line-width agreement guard, lintr, then `check` itself — as ONE
-# job, by running the bare `Rscript tools/verify.R` the pre-push hook runs with
-# no arguments. That is deliberate: `coverage` and `readme` are both
+# air/.lintr line-width agreement guard, spelling, lintr, then `check` itself
+# — as ONE job, by running the bare `Rscript tools/verify.R` the pre-push hook
+# runs with no arguments. That is deliberate: `coverage` and `readme` are both
 # `default = FALSE` in tools/verify.R (off the pre-push gate too), so leaving
 # them out of this job keeps CI checking exactly what the gate checks, not
 # more and not less. Fleet-tier decision, recorded here rather than left
@@ -237,15 +237,16 @@ check:
     - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
     # Full Suggests, not just Imports: the `check` stage runs the testthat
     # suite and builds the vignettes, both of which reach into Suggests.
-    # rcmdcheck, lintr and the pinned roxygen2 are dev tooling the verify
-    # stages need, not declared dependencies of the package itself — same
-    # split the `pages` job below makes for pkgdown.
+    # rcmdcheck, lintr, spelling and the pinned roxygen2 are dev tooling the
+    # verify stages need, not declared dependencies of the package itself —
+    # same split the `pages` job below makes for pkgdown.
     - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
     - |
       Rscript -e '
       pak::pkg_install(c(
         "lintr",
         "rcmdcheck",
+        "spelling",
         paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]])
       ))'
     - Rscript tools/verify.R
