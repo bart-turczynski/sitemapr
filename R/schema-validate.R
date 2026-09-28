@@ -17,7 +17,7 @@
 #     namespace, so a broken extension element in a mixed document is reported
 #     against that extension rather than the whole document.
 #   * SCHEMA_UNKNOWN_NAMESPACE — the document uses a namespace the catalog does
-#     not recognise; one finding per unknown namespace and no validation against
+#     not recognize; one finding per unknown namespace and no validation against
 #     it (architecture.md §6).
 #
 # XXE safety (architecture.md §6): the caller parses with `read_sitemap_xml()`,
@@ -92,7 +92,7 @@ schema_document_namespaces <- function(doc) {
   declared[used]
 }
 
-# One SCHEMA_UNKNOWN_NAMESPACE finding per unrecognised namespace. Severity is
+# One SCHEMA_UNKNOWN_NAMESPACE finding per unrecognized namespace. Severity is
 # `warning`, not `error`: the sitemaps protocol is extensible, so a namespace
 # absent from the catalog is content sitemapr could not validate (and that a
 # search engine may simply ignore), not a conformance failure of the document.
@@ -107,7 +107,7 @@ schema_unknown_ns_findings <- function(namespaces, subject_ref) {
       subject_ref = subject_ref,
       message = sprintf(
         paste0(
-          "Namespace '%s' is not recognised by the schema catalog; the ",
+          "Namespace '%s' is not recognized by the schema catalog; the ",
           "document was not validated against it."
         ),
         ns
