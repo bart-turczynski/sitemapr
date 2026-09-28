@@ -355,7 +355,8 @@ related W3C and RFC standards.
 * The help pages and these release notes are spelled in US English, matching
   the package's declared `Language: en-US`: "honor", "recognized", "signaled"
   and "canonicalizes" replace their British forms, and the spelling word list
-  no longer accepts the British spellings (SEOR-kfiqpymb).
+  no longer accepts the British spellings. The `SCHEMA_UNKNOWN_NAMESPACE`
+  finding's message now reads "not recognized" (SEOR-kfiqpymb).
 
 ## Internal
 
