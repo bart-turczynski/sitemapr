@@ -105,6 +105,22 @@ verify_stages <- list(
     default = TRUE,
     run = function() source("tools/check-line-width.R")
   ),
+  # `R CMD check` skips its DESCRIPTION spelling check on a machine with no
+  # English aspell/hunspell dictionary, so a typo first shows up in
+  # win-builder's incoming NOTE. spelling bundles its own hunspell dictionaries
+  # and also reads man/, vignettes, README and NEWS (SEOR-mtbzfroz). Offline and
+  # quick. Genuine terms go in inst/WORDLIST; a typo gets fixed at its source.
+  spelling = list(
+    label = "en-US spelling, genuine terms in inst/WORDLIST",
+    default = TRUE,
+    run = function() {
+      bad <- spelling::spell_check_package()
+      if (nrow(bad)) {
+        print(bad)
+        stop(sprintf("%d misspelled word(s)", nrow(bad)), call. = FALSE)
+      }
+    }
+  ),
   # `lint_package()` alone is NOT enough: it skips `tools/`, which is
   # .Rbuildignore'd, so every script this gate is made of was exempt from the
   # gate's own lint stage until SITE-pzrosmkn. `lint_dir("tools")` closes that.

@@ -65,7 +65,7 @@ The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
 arguments. Run it directly rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, lint, R CMD check
+Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, lint, R CMD check
 Rscript tools/verify.R --all        # adds coverage and the README diff
 Rscript tools/verify.R lint check   # named stages only
 Rscript tools/verify.R --list       # list the stages
@@ -93,6 +93,14 @@ second call is not redundant: `tools/` is `.Rbuildignore`d, so `lint_package()`
 skips it, and until SITE-pzrosmkn every script the gate is *made of* was exempt
 from the gate's own lint stage. Add a new `tools/` script and it is linted; that
 was not true before.
+
+`spelling` runs `spelling::spell_check_package()` over `DESCRIPTION`, `man/`,
+the vignettes, `README` and `NEWS.md`. `R CMD check` has a spelling check of its
+own, but it silently skips it on a machine with no English aspell or hunspell
+dictionary, so a typo first surfaced in win-builder's incoming NOTE
+(SEOR-mtbzfroz). spelling bundles its own dictionaries. A genuine term goes in
+`inst/WORDLIST`; a typo gets fixed at its source (the roxygen comment for
+`man/`, `README.Rmd` for `README.md`).
 
 Stages run in declared order, cheapest first, and the chain stops at the first
 failure. Because the hook and a manual run share one definition, they cannot
