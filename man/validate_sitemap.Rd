@@ -151,7 +151,7 @@ offline, so every advertised URL is checked with no sampling. The sitemap
 document's own URL is tested too: a sitemap published at a path its own
 robots.txt disallows yields \code{ROBOTS_SITEMAP_DISALLOWED} (\code{warning}, scoped to
 the source). When \code{robotstxtr} is not installed, a classed warning naming the
-install command is signalled and the check is skipped; every other layer is
+install command is signaled and the check is skipped; every other layer is
 unaffected.
 }
 \examples{

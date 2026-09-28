@@ -107,7 +107,7 @@ parse_feed_atom <- function(root, source_sitemap, date_local) {
 #' Reuses the XXE-safe `read_sitemap_xml()` parse, classifies the feed variant
 #' (`rss2.0` / `atom0.3` / `atom1.0`) from the root element and namespace, and
 #' extracts each item/entry's link URL and publication/updated date into the
-#' faithful row tibble (dates kept raw, per ADR-004). An unrecognised feed
+#' faithful row tibble (dates kept raw, per ADR-004). An unrecognized feed
 #' dialect or not-well-formed XML raises a classed condition. This primitive is
 #' not yet wired into the classification/validation pipeline.
 #'

@@ -14,7 +14,7 @@
 #   1. core-only docs validate directly against the bundled core schema;
 #   2. mixed-namespace docs return a "runtime" decision, leaving wrapper
 #      generation to R/schema-profile.R (S6.3);
-#   3. a namespace the catalog does not recognise yields an
+#   3. a namespace the catalog does not recognize yields an
 #      "unknown-namespace" decision (mapped to SCHEMA_UNKNOWN_NAMESPACE in
 #      Layer C, never a generated import).
 #
@@ -130,7 +130,7 @@ schema_cache_key <- function(
 #' @return A list describing the resolution:
 #'   * `kind` — one of `"bundled"` (validate against the single bundled core
 #'     schema), `"runtime"` (a wrapper must be generated, S6.3), or
-#'     `"unknown-namespace"` (an unrecognised namespace is present).
+#'     `"unknown-namespace"` (an unrecognized namespace is present).
 #'   * `cache_key` — the `(catalog_version, root_kind, sorted_namespace_set)`
 #'     key (see `schema_cache_key()`).
 #'   * `root_kind`, `namespaces` — the (sorted) inputs echoed back.

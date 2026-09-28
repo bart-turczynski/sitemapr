@@ -1184,7 +1184,7 @@ validate_sitemap_core <- function(
 #' document's own URL is tested too: a sitemap published at a path its own
 #' robots.txt disallows yields `ROBOTS_SITEMAP_DISALLOWED` (`warning`, scoped to
 #' the source). When `robotstxtr` is not installed, a classed warning naming the
-#' install command is signalled and the check is skipped; every other layer is
+#' install command is signaled and the check is skipped; every other layer is
 #' unaffected.
 #'
 #' @param mode `"strict"` (the default) or `"non-strict"`. In `non-strict`,
@@ -1391,7 +1391,7 @@ resolve_ruleset_robots_axis <- function(robots_context, robots_user_agent) {
 #' axes: pass `robots_context =` to select an engine's robots semantics in the
 #' same call (SITE-otfmeyqx). The two axes stay independent as ADR-009 §1
 #' requires — neither is derived from the other, so a Bing sitemap ruleset with
-#' a Yandex robots context is a legal and honoured pair — but they are no longer
+#' a Yandex robots context is a legal and honored pair — but they are no longer
 #' mutually exclusive, and a combined call runs the pipeline once rather than
 #' fetching everything twice. Each axis governs its own columns: the additive
 #' ruleset columns appear only under an engine overlay, and `robots_context`
@@ -1415,7 +1415,7 @@ resolve_ruleset_robots_axis <- function(robots_context, robots_user_agent) {
 #'   request, so `check_robots` need not also be set — and appends the
 #'   `robots_context` list-column. It cannot be combined with a non-default
 #'   `robots_user_agent`: that argument is the string shorthand for the same
-#'   axis, and honouring both would make it ambiguous which one decided the
+#'   axis, and honoring both would make it ambiguous which one decided the
 #'   findings.
 #' @inheritParams validate_sitemap
 #' @return The findings tibble of [validate_sitemap()]. Under the baseline

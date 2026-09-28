@@ -9,7 +9,7 @@
 # robots axis from `sitemap_ruleset`, and nothing there derives one from these.
 #
 # Axis values are validated against the value sets the INSTALLED `robotstxtr`
-# publishes on its own contract, so an axis this build cannot honour fails here
+# publishes on its own contract, so an axis this build cannot honor fails here
 # rather than deep inside the engine. Reading the sibling's published sets also
 # means the accepted values follow it rather than a stale copy pinned here.
 
@@ -62,7 +62,7 @@ check_robots_axis_value <- function(value, arg, allowed) {
 #' The vocabulary for the last two belongs to the sibling `robotstxtr` package,
 #' not to sitemapr, and each value is validated against the set the
 #' **installed** build publishes on its engine contract — so an axis this
-#' build cannot honour is rejected here rather than deep inside the engine.
+#' build cannot honor is rejected here rather than deep inside the engine.
 #' `robotstxtr` is an optional dependency; when it is absent only the shape of
 #' each axis is checked.
 #'
@@ -124,7 +124,7 @@ robots_context <- function(
 # The tokens are not decorative: a `bounded_profiles` backend refuses anything
 # outside its own vendor profiles, and an unsupported token silently renders
 # every URL indeterminate. Yandex's bounded profile accepts `"Yandex"` and not
-# `"YandexBot"` — a test asserts each preset's token is honoured by its own
+# `"YandexBot"` — a test asserts each preset's token is honored by its own
 # backend, for every backend the installed sibling reports as available.
 robots_preset_table <- function() {
   list(
