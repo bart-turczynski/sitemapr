@@ -83,7 +83,7 @@ test_that("an invalid extension element is scoped to that extension", {
 
 # --- Unknown namespace -----------------------------------------------------
 
-test_that("an unrecognised namespace yields SCHEMA_UNKNOWN_NAMESPACE", {
+test_that("an unrecognized namespace yields SCHEMA_UNKNOWN_NAMESPACE", {
   skip_if(identical(schema_dir(), ""), "package not installed")
   out <- validate_fixture("ns-unknown.xml")
   expect_identical(nrow(out), 1L)

@@ -142,9 +142,9 @@ test_that("split_lines() preserves empty and edge-position lines", {
 
 test_that("split_lines() agrees with the PCRE engine it replaced", {
   # The perl = TRUE form was ~290x slower on large documents but must remain
-  # behaviourally identical: the pattern is a plain alternation of literals
+  # behaviorally identical: the pattern is a plain alternation of literals
   # with no PCRE-only syntax. Asserted over the awkward inputs rather than
-  # assumed, including non-ASCII text, so the swap is not a silent behaviour
+  # assumed, including non-ASCII text, so the swap is not a silent behavior
   # change.
   inputs <- c(
     "",

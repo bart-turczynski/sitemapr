@@ -364,7 +364,7 @@ test_that("a facts object with nothing evaluated yields no document row", {
   )
 })
 
-test_that("the document check honours a non-Google robots context", {
+test_that("the document check honors a non-Google robots context", {
   skip_if_not_installed("robotstxtr")
   # SITE-fsawklnl: this used to abort, because the document-level finding was
   # derived through the sibling's Google-bounded legacy shim. The derivation is

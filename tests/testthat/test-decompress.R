@@ -99,7 +99,7 @@ test_that("the ceiling condition carries the limit and the bytes counted", {
   expect_identical(cnd$max_bytes, 1024^2)
   expect_gt(cnd$bytes_read, 1024^2)
   # Counted while streaming, so the abort fires near the ceiling rather than
-  # after the whole 64 MB has been materialised.
+  # after the whole 64 MB has been materialized.
   expect_lt(cnd$bytes_read, 2 * 1024^2)
 })
 

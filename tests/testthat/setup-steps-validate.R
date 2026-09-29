@@ -3,7 +3,7 @@
 #
 # These are the SHARED validate_sitemap steps. F.4 (feed/RSS classification)
 # reuses this file verbatim and only ADDS its feature-unique steps; the steps
-# here are kept generic/parameterised so they need no re-registration.
+# here are kept generic/parameterized so they need no re-registration.
 #
 # testthat sources `setup-*.R` before the test files, so these register before
 # `cucumber::run()` runs the active top-level features. cucumber's step registry
@@ -336,7 +336,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     expect_identical(nrow(validate_schema_rows(context)), 0L)
   })
 
-  # Parameterised code+layer assertion reused across features.
+  # Parameterized code+layer assertion reused across features.
   then(
     "a finding with code {word} and layer {string} is produced",
     function(code, layer, context) {
@@ -435,7 +435,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   )
 
   # In-process guarantee: xml2::xml_validate runs in the R process. Assert
-  # behaviourally that the call completed and returned the contract tibble with
+  # behaviorally that the call completed and returned the contract tibble with
   # no child process spawned (validate_sitemap shells out to nothing).
   then(
     "the process list shows no Java subprocess spawned during the call",

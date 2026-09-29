@@ -103,7 +103,7 @@ test_that("presets retain their EXPANDED axis values", {
   expect_identical(y$matcher_backend, "yandex")
 })
 
-test_that("every preset's product token is honoured by its own backend", {
+test_that("every preset's product token is honored by its own backend", {
   skip_if_not_installed("robotstxtr")
   # A preset whose token its own backend refuses is silently useless: every row
   # comes back `unsupported_product_token`, so the whole sitemap reads as
@@ -335,7 +335,7 @@ test_that("findings derived from facts equal the pre-refactor findings", {
 
 test_that("a non-Google context derives findings rather than refusing", {
   skip_if_not_installed("robotstxtr")
-  # The boundary SITE-fsawklnl removed. Evaluation always honoured every
+  # The boundary SITE-fsawklnl removed. Evaluation always honored every
   # engine; only the FINDINGS derivation was bounded to the sibling's
   # Google-only legacy shim, so a Yandex context used to abort here.
   facts <- rf_with(robots_evaluate_facts(
@@ -349,7 +349,7 @@ test_that("a non-Google context derives findings rather than refusing", {
   expect_setequal(f$code, c("ROBOTS_DISALLOWED", "ROBOTS_INDETERMINATE"))
   expect_true(all(f$layer == "robots"))
   # The disallow really is the Yandex matcher's verdict on the rule, not a
-  # Google verdict relabelled: the matched rule rides the evidence.
+  # Google verdict relabeled: the matched rule rides the evidence.
   dis <- f[f$code == "ROBOTS_DISALLOWED", ]
   expect_identical(nrow(dis), 1L)
   expect_match(dis$evidence[[1L]]$excerpt, "disallow: /private")

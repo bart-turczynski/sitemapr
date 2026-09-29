@@ -330,7 +330,7 @@ test_that("a long excerpt is truncated to max_chars with an ellipsis", {
   expect_match(out, "\\.\\.\\.$")
   expect_identical(substr(out, 1L, 10L), "abcdefghij")
 
-  # An explicit smaller budget is honoured.
+  # An explicit smaller budget is honored.
   expect_identical(nchar(probe_text_excerpt(charToRaw(long), 20L)), 23L)
 })
 

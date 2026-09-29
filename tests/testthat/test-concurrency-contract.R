@@ -318,7 +318,7 @@ test_that("read_sitemap(max_active=) engages the scheduler, output unchanged", {
 # ---- concurrent dispatch (SITE-hxzmvlkn) ------------------------------------
 #
 # The scheduler used to WINDOW a sequential for-loop over fetch_source(): the
-# worker cap was honoured trivially because the in-flight count was always 1.
+# worker cap was honored trivially because the in-flight count was always 1.
 # These tests pin the structure that a windowed sequential loop cannot satisfy,
 # and cover the failure branches of the batch path, which no longer share
 # fetch_source()'s abort handling.

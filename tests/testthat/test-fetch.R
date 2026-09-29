@@ -196,7 +196,7 @@ test_that("read_capped_body returns an empty raw for empty input", {
 
 # ---- timeout classification helper -------------------------------------------
 
-test_that("fetch_is_timeout recognises httr2 timeouts and message probes", {
+test_that("fetch_is_timeout recognizes httr2 timeouts and message probes", {
   httr2_to <- structure(
     list(message = "timed out"),
     class = c("httr2_timeout", "rlang_error", "error", "condition")

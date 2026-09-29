@@ -3,7 +3,7 @@
 
 # Helper: run the guard the way the fetch engine will, by parsing a full URL
 # through the real adapter and feeding the row to ssrf_check_parsed(). This
-# exercises the integration surface and the rurl normalization behaviour.
+# exercises the integration surface and the rurl normalization behavior.
 guard <- function(url) {
   parsed <- sitemapr_test_ns$parse_url_adapter(url)
   sitemapr_test_ns$ssrf_check_parsed(parsed)
@@ -144,7 +144,7 @@ test_that("every spelling of the AWS IPv6 metadata prefix is blocked", {
   expect_identical(classify("fd00:0ec2:ffff::1"), "cloud-metadata")
   # End to end through the real parse path as well.
   expect_identical(guard("http://[fd00:0ec2::254]/")$reason, "cloud-metadata")
-  # Neighbours outside the /32 stay allowed: only these two hextets match.
+  # Neighbors outside the /32 stay allowed: only these two hextets match.
   expect_true(is.na(classify("fd00:ec3::254")))
   expect_true(is.na(classify("fd01:ec2::254")))
   expect_true(is.na(classify("fd00::1")))
@@ -161,7 +161,7 @@ test_that("unspecified IPv4 0.0.0.0 is rejected as unspecified", {
 test_that("0.0.0.0/8 above the unspecified address is this-network", {
   # SITE-ghazltut. Only 0.0.0.0/32 is the unspecified address (RFC 1122
   # §3.2.1.3); the rest of 0.0.0.0/8 is "this network" (RFC 791 §3.2). The old
-  # single /8 row labelled all 16,777,216 addresses "unspecified", correct for
+  # single /8 row labeled all 16,777,216 addresses "unspecified", correct for
   # exactly one of them. Both remain blocked.
   classify <- sitemapr_test_ns$ssrf_classify_ipv4
   expect_identical(classify("0.0.0.0"), "unspecified")
@@ -358,7 +358,7 @@ test_that("dotted spellings of ::1 and :: are blocked on both layers", {
   expect_identical(guard("http://[::0.0.0.0]/")$reason, "unspecified")
 })
 
-test_that("the specials do not swallow neighbouring addresses", {
+test_that("the specials do not swallow neighboring addresses", {
   # One past the loopback special: with the low hextet above 1 the literal is
   # no longer a special and still routes to the embedding decoder, so the
   # deprecated IPv4-compatible reason keeps its meaning.
@@ -466,7 +466,7 @@ test_that("Teredo wrapping a PUBLIC address is allowed", {
 
 test_that("the Teredo prefix does not swallow 2001:db8::/32", {
   # Teredo is 2001:0000::/32 — the second hextet must be zero. The
-  # documentation range 2001:db8::/32 is a neighbour, not a Teredo address.
+  # documentation range 2001:db8::/32 is a neighbor, not a Teredo address.
   res <- guard("http://[2001:db8::1]/")
   expect_true(res$allowed)
   expect_true(is.na(res$reason))

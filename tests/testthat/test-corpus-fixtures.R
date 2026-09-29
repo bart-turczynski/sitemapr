@@ -53,7 +53,7 @@
 #           testthat::test_file("tests/testthat/test-corpus-fixtures.R")'
 #
 # A third invariant lives in the parameterized-case layer at the bottom of this
-# file, which reaches behaviour no fixture FILE can express. See its header.
+# file, which reaches behavior no fixture FILE can express. See its header.
 
 contract_cols <- c(
   "code",
@@ -145,7 +145,7 @@ test_that("corpus outcomes match the committed golden reference", {
 
 # ---- parameterized cases -----------------------------------------------------
 #
-# Some shipped behaviour cannot be reached by handing a fixture to
+# Some shipped behavior cannot be reached by handing a fixture to
 # validate_sitemap() as a LOCAL FILE, and no fixture file can fix that. Adding
 # more files to a corpus that must stay in step with the sibling would not help,
 # because the missing ingredient is not content:
@@ -178,7 +178,7 @@ test_that("corpus outcomes match the committed golden reference", {
 #
 # Deliberately on example.com, the host every corpus fixture's own URLs use: a
 # different host would make each served case additionally report
-# PROTOCOL_URL_OUT_OF_SCOPE, burying the behaviour under test in noise created
+# PROTOCOL_URL_OUT_OF_SCOPE, burying the behavior under test in noise created
 # by the harness rather than by the fixture.
 corpus_case_url <- "https://example.com/case.xml"
 

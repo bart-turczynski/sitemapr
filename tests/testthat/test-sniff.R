@@ -128,7 +128,7 @@ test_that("XML body served as .txt classifies by bytes (feature scenario)", {
   expect_identical(sniff(charToRaw(body)), "xml-urlset")
 })
 
-test_that("namespace-prefixed urlset root is recognised", {
+test_that("namespace-prefixed urlset root is recognized", {
   ns <- "http://www.sitemaps.org/schemas/sitemap/0.9"
   body <- paste0(
     "<sm:urlset xmlns:sm=\"",

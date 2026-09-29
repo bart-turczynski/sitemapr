@@ -78,7 +78,7 @@ test_that("an engine preset decides the findings under its own semantics", {
   skip_if(
     robotstxtr_engine_contract()$matcher_availability[["yandex"]] != "available"
   )
-  # Before SITE-fsawklnl this combination was unreachable: evaluation honoured
+  # Before SITE-fsawklnl this combination was unreachable: evaluation honored
   # every engine, but deriving findings from a non-Google context aborted.
   path <- vsr_urlset(vsr_locs())
   f <- with_robots(validate_sitemap_robots(
