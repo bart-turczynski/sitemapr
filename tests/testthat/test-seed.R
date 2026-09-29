@@ -98,7 +98,7 @@ test_that("bytes index seed expands children over the network", {
   expect_identical(sum(kids$page_count), 3L)
 })
 
-test_that("bytes index seed honours the child-count cap", {
+test_that("bytes index seed honors the child-count cap", {
   httr2::local_mocked_responses(seed_mock(list(
     "https://ex.com/a.xml" = seed_urlset("https://ex.com/1")
   )))

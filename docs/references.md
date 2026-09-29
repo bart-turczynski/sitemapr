@@ -33,7 +33,7 @@ under an explicitly selected `sitemap_ruleset`.
 | Combine extensions | https://developers.google.com/search/docs/crawling-indexing/sitemaps/combine-sitemap-extensions | Declaring multiple namespaces on one `<urlset>`; extension order after `<loc>` irrelevant |
 | Localized versions (hreflang) | https://developers.google.com/search/docs/specialty/international/localized-versions#sitemap | `xhtml:link rel="alternate" hreflang=…`, self-reference, reciprocity-or-ignored, `x-default`, hreflang token format |
 | GSC Sitemaps report | https://support.google.com/webmasters/answer/7451001 | Search Console submission model; documented sitemap fetch-error categories (404/4xx, HTTP error) — **not** an exhaustive per-status acceptance table (§12.4) |
-| Sitemaps `lastmod` ping deprecation (Jun 2023) | https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping | Google deprecated the anonymous sitemap-ping endpoint; the sitemaps.org "HTTP 200" ping acknowledgement is no longer current Google behavior (§12.4) |
+| Sitemaps `lastmod` ping deprecation (Jun 2023) | https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping | Google deprecated the anonymous sitemap-ping endpoint; the sitemaps.org "HTTP 200" ping acknowledgment is no longer current Google behavior (§12.4) |
 
 ## Bing
 

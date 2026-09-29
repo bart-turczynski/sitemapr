@@ -285,7 +285,7 @@ read_archive_bytes <- function(path, limits) {
 
   # The bound is enforced DURING inflation (R/decompress.R) rather than on the
   # inflated result, so an archive bomb is rejected before its tar stream is
-  # materialised. The generic ceiling condition is re-raised as the archive's
+  # materialized. The generic ceiling condition is re-raised as the archive's
   # own so this slice's contract is unchanged.
   tryCatch(
     gzip_decompress(gz, max_bytes = limits$max_decompressed_bytes),

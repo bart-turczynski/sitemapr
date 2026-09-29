@@ -53,7 +53,7 @@ parse_dispatch <- function(bytes, source_sitemap) {
     ))
   }
   # An RSS 2.0 / Atom 0.3 / Atom 1.0 feed is a first-class sitemap substitute:
-  # parse it into the faithful row schema. An unrecognised feed dialect (e.g. a
+  # parse it into the faithful row schema. An unrecognized feed dialect (e.g. a
   # <feed> in a non-Atom namespace) raises `sitemapr_unsupported_feed`, which
   # the index expander maps to UNSUPPORTED_FEED and a scalar read surfaces as a
   # classified error.

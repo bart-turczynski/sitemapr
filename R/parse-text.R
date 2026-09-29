@@ -23,7 +23,7 @@
 # decoded: the format is defined as UTF-8, and the NUL bytes such a document
 # carries would otherwise surface as a bare `rawToChar()` error.
 
-# Byte-order marks recognised on the raw bytes, longest-first so UTF-32LE is
+# Byte-order marks recognized on the raw bytes, longest-first so UTF-32LE is
 # tested before its UTF-16LE prefix. Only the UTF-8 mark is strippable; the
 # rest name an encoding the text format does not permit.
 text_boms <- list(

@@ -1,7 +1,7 @@
 # Unit tests for bounded, safe local .tar.gz extraction (R/parse-archive.R).
 # Pure/offline: every archive is built in-memory by a minimal ustar writer and
 # gzipped to a tempfile, so we control exact member names (including unsafe
-# ones the real `tar()` would normalise away). No network.
+# ones the real `tar()` would normalize away). No network.
 
 # ---- minimal ustar tar writer ------------------------------------------------
 # We deliberately reimplement the writer rather than use utils::tar() so the
@@ -225,7 +225,7 @@ test_that("exceeding the decompressed limit raises sitemapr_archive_limit", {
   )
 })
 
-test_that("the decompressed limit stops the bomb before it is materialised", {
+test_that("the decompressed limit stops the bomb before it is materialized", {
   # A 64 MB tar of zeros compresses to a few hundred KB. With a 1 MB ceiling
   # the extractor must reject it, and the generic `sitemapr_body_ceiling` the
   # decompressor raises must surface as this slice's own condition.

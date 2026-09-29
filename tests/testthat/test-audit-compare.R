@@ -1,4 +1,4 @@
-# Behavioural tests for compare_sitemap_audits() (R/audit-compare.R). Audits are
+# Behavioral tests for compare_sitemap_audits() (R/audit-compare.R). Audits are
 # assembled from the package's internal component constructors so the tests are
 # fully offline and exercise the comparison contract directly: determinism,
 # order-independence, volatile-field insensitivity, and each change class.

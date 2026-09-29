@@ -246,7 +246,7 @@ ssrf_num_to_quad <- function(n) {
 # (octets at bits 48-63 and 72-95, skipping the reserved u-byte at bits 64-71).
 #
 # Each `if` is a distinct RFC-defined embedding prefix, written as an exact
-# hextet pattern compared with a single vectorised `all()`. This reads as a flat
+# hextet pattern compared with a single vectorized `all()`. This reads as a flat
 # security spec table (prefix -> pattern) AND keeps cyclocomp low: a `&&` chain
 # is charged per-operator, whereas one `all(h[...] == c(...))` is a single
 # branch (ADR-003).

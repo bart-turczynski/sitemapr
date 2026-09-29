@@ -155,7 +155,7 @@ test_that("an arbitrary all-extensions combo resolves to runtime gen", {
   expect_setequal(names(res$imports), every_ns)
 })
 
-test_that("an unrecognised namespace yields an unknown-namespace decision", {
+test_that("an unrecognized namespace yields an unknown-namespace decision", {
   weird <- "https://example.com/ns/custom"
   res <- schema_resolve_profile(
     "urlset",

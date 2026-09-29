@@ -13,7 +13,7 @@
 # The index-body builders and the `expand_root()` harness are the same ones
 # test-index-expansion.R uses; defining them here (a helper loaded before all
 # test files) lets the contract file reuse them. test-index-expansion.R's own
-# top-level copies shadow these within that file, so its behaviour is unchanged.
+# top-level copies shadow these within that file, so its behavior is unchanged.
 
 # Force child fetches to complete in `order` (a permutation of catalog
 # positions) for the duration of the calling test. Sets the scheduler's

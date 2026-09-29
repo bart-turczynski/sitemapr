@@ -220,7 +220,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     }
   )
 
-  # ---- THEN: parameterised code presence/absence ----------------------------
+  # ---- THEN: parameterized code presence/absence ----------------------------
 
   then("a finding with code {word} is produced", function(code, context) {
     expect_gt(nrow(vp_rows_with_code(context, code)), 0L)

@@ -19,7 +19,7 @@
 #     (the alternate points outside the submitted corpus) — external targets are
 #     represented explicitly, never dropped;
 #   * CLUSTERS: connected components of the undirected alternate relation, with
-#     ids relabelled so they are stable across input row order.
+#     ids relabeled so they are stable across input row order.
 #
 # Identity: every URL (source `<loc>` and target href alike) is keyed through
 # the shared sitemapr URL stack (`parse_url_adapter()` + `build_loc_key()`, see

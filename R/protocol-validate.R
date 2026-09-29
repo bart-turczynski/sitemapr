@@ -213,7 +213,7 @@ sitemap_subject_ref <- function(sitemap_url) {
 }
 
 # Classify a raw `<loc>` string's absoluteness from the ORIGINAL text, never the
-# parsed scheme: `rurl` synthesises an `http` scheme for a relative input
+# parsed scheme: `rurl` synthesizes an `http` scheme for a relative input
 # (`/page` parses as host `page`), so absoluteness can only be read off the
 # original string. Returns "http(s)" (absolute and fetchable), "other-scheme"
 # (an absolute URI with a non-http(s) scheme such as `ftp:`/`data:`/`mailto:`),

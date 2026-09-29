@@ -15,7 +15,7 @@
 # allow-all, a 5xx/timeout/network failure or an SSRF block is indeterminate),
 # and it fetches each distinct origin's robots.txt exactly once. sitemapr does
 # NOT reimplement fetching or matching. The `ssrf_guard = TRUE` opt-out is left
-# at its default so the robots.txt fetch honours the same SSRF posture as the
+# at its default so the robots.txt fetch honors the same SSRF posture as the
 # rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
 #
 # Since E.1b (SITE-kwkggijf) evaluation itself lives in R/robots-facts.R and

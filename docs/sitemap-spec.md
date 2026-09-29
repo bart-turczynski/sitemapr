@@ -53,7 +53,7 @@ domain rules they assume.
 (Bing accepts XML, RSS 2.0, Atom 0.3 and 1.0, Text). They ARE parsed: a feed
 (RSS 2.0 / Atom 0.3 / Atom 1.0) is read into the faithful row schema, one row
 per item/entry, both as a top-level source and as a sitemap-index child. Only an
-UNRECOGNISED feed dialect (a `<feed>` in a non-Atom namespace) is recorded as
+UNRECOGNIZED feed dialect (a `<feed>` in a non-Atom namespace) is recorded as
 `UNSUPPORTED_FEED`, not parsed.
 
 Classification is by **bytes + structure, never by filename or `Content-Type`
@@ -682,7 +682,7 @@ parse a format an engine does not accept and emit a ruleset finding. States:
 |---|---|---|---|---|
 | XML `urlset` / index | supported | supported | supported | supported |
 | Text | supported | supported | supported | **supported** *(tester: clean)* |
-| RSS 2.0 | supported | supported | supported | **unsupported** *(tester: recognised as "Sitemap RSS-file", item links extracted, but standard channel children error — parse-then-reject)* |
+| RSS 2.0 | supported | supported | supported | **unsupported** *(tester: recognized as "Sitemap RSS-file", item links extracted, but standard channel children error — parse-then-reject)* |
 | Atom 1.0 | supported | supported | supported | **unsupported** *(tester: root `<feed>` rejected, 0 links)* |
 | Atom 0.3 | supported | `not_documented` | supported | unsupported |
 | mRSS | — | supported (video) | — | unsupported |
@@ -713,12 +713,12 @@ Never reuse either matrix here.
 | `yandex` | the sitemap request must return **exactly `200 OK`**; a non-200 is not processed; a redirect is surfaced as a condition to remove (fetch enforcement is production — see `SITE-jufaqaql`) | `documented` |
 | `google` | the sitemap must be fetchable by Googlebot, with documented 4xx / HTTP fetch-error categories | `documented` |
 | `bing` | no published sitemap-specific HTTP-status map | `documentation_gap` |
-| `sitemaps.org` | the protocol page's "HTTP 200" refers to the legacy **ping** acknowledgement, **not** sitemap-file retrieval | `documented` |
+| `sitemaps.org` | the protocol page's "HTTP 200" refers to the legacy **ping** acknowledgment, **not** sitemap-file retrieval | `documented` |
 
 Separate atomic facts (not competing tags in the cells above): Google publishes
 **no** exhaustive per-status acceptance table (`documentation_gap` — so do **not**
-synthesise per-code verdicts); and the sitemaps.org anonymous ping is **deprecated**
-(`advisory` — Google 2023, Bing 2022). Do **not** synthesise a per-status
+synthesize per-code verdicts); and the sitemaps.org anonymous ping is **deprecated**
+(`advisory` — Google 2023, Bing 2022). Do **not** synthesize a per-status
 acceptance table for Google/Bing, and do not
 promote general HTTP/page-indexing status rules into sitemap-fetch behavior.
 Sources: Yandex "File requirements" / "Sitemap isn't processed"; Google GSC
@@ -749,14 +749,14 @@ a clean observed boundary: the soft raw-byte data-guard already warns at
 ~1,200–1,500 bytes, so nothing is accepted cleanly up to 2,048. The
 `documentation_conflict` is thereby **resolved empirically**. With a short host the
 whole-URL-vs-path-component distinction is **not separable** in the probe (the two
-predictions coincide), so modelling the hard cap as ~1,024 on the **decoded whole
+predictions coincide), so modeling the hard cap as ~1,024 on the **decoded whole
 URL** is an `application_choice` (the error-dictionary "1,024" is the `documented`
 basis it rests on); it is **not** itself a documented Yandex statement. The **BOM** result **agrees with
 the baseline** and requires **no change to §3**; robots.txt byte behavior is
 **not** imported (ADR-009 non-goal). The **raw-IRI** result is compatible with the
 baseline RFC-3987 allowance and with `sitemapr`'s existing `info`
 `PROTOCOL_URL_NOT_ESCAPED` (§7 item 5, ADR-005) — under the `yandex` ruleset that
-`info` may be relabelled *engine-accepted* rather than flagged. Not constructable
+`info` may be relabeled *engine-accepted* rather than flagged. Not constructable
 (note only): a host > 1,024 chars is impossible (DNS caps a hostname at 253), so
 the "1024 domain" bucket cannot be exercised. Sources: Yandex "File
 requirements" + error-dictionary + tester; sitemaps.org "Entity escaping" / "XML
@@ -908,7 +908,7 @@ is exactly the baseline case of it. Which call to reach for:
 | both | `validate_sitemap_ruleset(x, ruleset, robots_context = context)` |
 
 Combining still derives nothing. A `bing` sitemap ruleset with a `yandex`
-robots context is a legal pair and each side is honoured on its own terms; the
+robots context is a legal pair and each side is honored on its own terms; the
 bridge above stays a preset a caller opts into, never an implication. Each axis
 governs its own columns — the additive ruleset columns appear only under an
 engine overlay, `robots_context` only when a context is supplied — so a
@@ -940,7 +940,7 @@ Two limits a caller should expect, both properties of the installed
   be validated at construction. Yandex's bounded profile accepts `Yandex`, not
   `YandexBot`. An unsupported token is not an error — it renders every URL
   indeterminate — which is why `robots_context_preset()` carries a known-good
-  token per engine and a test asserts each one is honoured by its own backend.
+  token per engine and a test asserts each one is honored by its own backend.
 
 ### 13.1 Crawler-token model — steal the vocabulary, do not invoke the matcher
 

@@ -502,7 +502,7 @@ test_that("executable and diagnostic provenance are visually distinct", {
   expect_match(diag, "smr-prov-diag", fixed = TRUE)
   expect_false(grepl("smr-prov-exec", diag, fixed = TRUE))
   # ADR-009 0: a diagnostic finding must not read as a hard verdict, so the
-  # distinction survives for a reader who never sees the colour.
+  # distinction survives for a reader who never sees the color.
   expect_match(diag, "(diagnostic)", fixed = TRUE)
   expect_match(diag, "never fails under this ruleset", fixed = TRUE)
 })

@@ -134,7 +134,7 @@ binary_container_types <- c(
 #   application/gzip; charset=…  the charset labels a binary container and is
 #     meaningless — comparing it to the inner XML declaration emits a false
 #     ENCODING_CONFLICT, so it is dropped.
-#   text/xml; charset=…          the server is labelling the payload as XML
+#   text/xml; charset=…          the server is labeling the payload as XML
 #     text, so the charset is a real claim about the sitemap and a mismatch
 #     with the declaration is a real conflict worth reporting.
 #

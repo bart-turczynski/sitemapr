@@ -96,7 +96,7 @@ schema_root_kind <- function(root_local_name) {
   }
 }
 
-# Normalise a namespace set: drop empty/NA, de-duplicate, sort. The core
+# Normalize a namespace set: drop empty/NA, de-duplicate, sort. The core
 # namespace is retained when present so the cache key reflects the full set.
 schema_sorted_namespace_set <- function(namespaces) {
   ns <- namespaces[!is.na(namespaces) & nzchar(namespaces)]

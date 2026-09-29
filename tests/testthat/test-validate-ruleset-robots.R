@@ -7,7 +7,7 @@
 # its own entry point, so "Bing's sitemap rules AND Bingbot's robots semantics"
 # had no expression and callers ran the pipeline twice. These tests pin what
 # independence is supposed to mean once both fit in one call: each axis governs
-# its own columns, neither derives the other, and a mismatched pair is honoured
+# its own columns, neither derives the other, and a mismatched pair is honored
 # on both sides rather than one axis quietly winning.
 #
 # Offline against the shared `mock_robots` / `with_robots` helpers.

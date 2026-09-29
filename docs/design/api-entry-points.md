@@ -4,7 +4,7 @@
   (2026-07-11):** `discover_sitemaps()` / `resolve_sitemap()` superseded by
   existing exports (`sitemap_tree(from = "root")` and `read_sitemap()`);
   `probe_url()` accepted as the one new primitive; cross-stream defaults settled
-  by shipped behaviour (ADR-003 / ADR-006). The body below is retained as the
+  by shipped behavior (ADR-003 / ADR-006). The body below is retained as the
   historical proposal that ADR-007 resolves.
 - Date: 2026-07-04
 - Related: `docs/architecture.md` (§4 slice map, §7 output contracts);

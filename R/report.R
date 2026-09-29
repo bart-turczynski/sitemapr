@@ -619,7 +619,7 @@ report_provenance_badge <- function(prov) {
       if (executable) "exec" else "diag"
     ),
     # The title carries the distinction in text, so it survives for a reader
-    # who never sees the colour (screen reader, printed report).
+    # who never sees the color (screen reader, printed report).
     title = if (executable) {
       "Executable provenance: this finding may drive a validity failure."
     } else {

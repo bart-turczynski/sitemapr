@@ -47,7 +47,7 @@ test_that("a scheme-relative loc produces PROTOCOL_URL_NOT_ABSOLUTE", {
   )
 })
 
-test_that("an uppercase scheme is still recognised as absolute", {
+test_that("an uppercase scheme is still recognized as absolute", {
   cc <- codes_for("HTTPS://example.com/a", sm_url)
   expect_false("PROTOCOL_URL_NOT_ABSOLUTE" %in% cc)
 })
@@ -1991,7 +1991,7 @@ test_that("diagnostics co-exist with protocol findings over real rows", {
 # be asserted over and over here for no gain.
 enc_conflicts <- function(out) out[endsWith(out$code, "CONFLICT"), ]
 
-test_that("BOM vs XML declaration is the specialised conflict (info)", {
+test_that("BOM vs XML declaration is the specialized conflict (info)", {
   out <- enc_conflicts(validate_encoding(
     source_meta(bom_encoding = "UTF-8", declared_encoding = "UTF-16"),
     base
@@ -2139,7 +2139,7 @@ test_that("NA / empty feed children are skipped", {
   expect_identical(nrow(out), 0L)
 })
 
-test_that("encoding normalisation helpers handle absent input", {
+test_that("encoding normalization helpers handle absent input", {
   # norm_encoding maps missing input to NA; encoding_signal_label renders it as
   # the literal "absent" for diagnostic messages.
   expect_true(is.na(norm_encoding(NULL)))

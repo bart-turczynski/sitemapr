@@ -43,7 +43,7 @@ xpath_child_local <- function(name) {
 # Accepts a date (`YYYY-MM-DD`, taken as midnight UTC) or a datetime with a
 # `Z` or `+hh:mm` offset, with optional fractional seconds. Unparseable or
 # empty values become `NA` (a malformed `lastmod` is a Layer D finding, not a
-# parse error). Vectorised over `x`.
+# parse error). Vectorized over `x`.
 parse_lastmod <- function(x) {
   out <- as.POSIXct(rep(NA_real_, length(x)), tz = "UTC")
   x <- trimws(as.character(x))

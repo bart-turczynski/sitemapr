@@ -15,7 +15,7 @@
 #
 # Faithful dates (ADR-004): the publication/updated date is kept as the raw,
 # trimmed string in the `lastmod` column (RFC-822 for RSS `<pubDate>`, ISO 8601
-# for Atom `<updated>`/`<modified>`). Normalisation to POSIXct is deferred; the
+# for Atom `<updated>`/`<modified>`). Normalization to POSIXct is deferred; the
 # feed parser never coerces dates, mirroring the XML parser's faithful form.
 #
 # Element matching is namespace-aware and prefix-agnostic: core elements are

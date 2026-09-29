@@ -123,7 +123,7 @@ hreflang_reciprocity_findings <- function(graph, base) {
 # One inconsistent-language finding for a target carrying conflicting tokens.
 hreflang_inconsistent_finding <- function(graph, base, key, tokens) {
   raw <- hreflang_node_raw(graph$nodes, key)
-  labelled <- paste0("'", sort(unique(tokens)), "'", collapse = ", ")
+  labeled <- paste0("'", sort(unique(tokens)), "'", collapse = ", ")
   protocol_document_finding(
     "HREFLANG_INCONSISTENT_LANGUAGE",
     "warning",
@@ -134,7 +134,7 @@ hreflang_inconsistent_finding <- function(graph, base, key, tokens) {
         "the sitemap: %s."
       ),
       raw,
-      labelled
+      labeled
     ),
     excerpt = raw
   )

@@ -316,14 +316,14 @@ still ignore an incomplete cluster.
 - `UNSUPPORTED_ROOT` — root element is neither `urlset` nor `sitemapindex`
 - `UNSUPPORTED_HTML_MASQUERADE` — document looks like HTML at the URL that
   was expected to serve a sitemap
-- `UNSUPPORTED_FEED` — sitemap index child points at a feed in an unrecognised
+- `UNSUPPORTED_FEED` — sitemap index child points at a feed in an unrecognized
   dialect (a `<feed>` in a non-Atom namespace); supported feeds (RSS 2.0 /
   Atom 0.3/1.0) are parsed into rows instead
 - `ENGINE_UNSUPPORTED_SITEMAP_FORMAT` — the source's parsed format is one the
   selected engine does not accept, though sitemapr parsed it (parse capability
   is orthogonal to engine acceptance, spec 12.3). Yandex rejects RSS 2.0 /
   Atom 1.0 / Atom 0.3 (parse-then-reject). Distinct from `UNSUPPORTED_FEED` (an
-  unrecognised dialect). Emitted only under an engine overlay; the baseline
+  unrecognized dialect). Emitted only under an engine overlay; the baseline
   never emits it.
 
 ### Decompression codes
