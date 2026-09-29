@@ -72,13 +72,13 @@
   "report_archive_justification": "GitLab Issues provide a publicly available, searchable archive of reports and responses, open and closed: https://gitlab.com/bart-turczynski/sitemapr/-/work_items/?state=all",
 
   "vulnerability_report_process_status": "Met",
-  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in SECURITY.md, which asks reporters not to use the public issue tracker and gives a private channel plus a 7-day acknowledgement target: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
+  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in SECURITY.md, which asks reporters not to use the public issue tracker and gives a private channel plus a 7-day acknowledgment target: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "vulnerability_report_private_status": "Met",
   "vulnerability_report_private_justification": "Private reports go by email to the maintainer at bartek@turczynski.pl, the confidential channel documented in SECURITY.md: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "vulnerability_report_response_status": "Met",
-  "vulnerability_report_response_justification": "SECURITY.md documents the response process, including a 7-day acknowledgement target and coordinated disclosure: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
+  "vulnerability_report_response_justification": "SECURITY.md documents the response process, including a 7-day acknowledgment target and coordinated disclosure: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md",
 
   "build_status": "Met",
   "build_justification": "Builds with the standard R toolchain (R CMD build / INSTALL, devtools): https://gitlab.com/bart-turczynski/sitemapr",
