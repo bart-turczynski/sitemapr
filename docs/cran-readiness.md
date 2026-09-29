@@ -54,7 +54,7 @@ This changes how one pkgcheck message must be read. `pkgcheck::pkgcheck()`
 reports "Package has no continuous integration checks", and that report is
 still substantively **correct** — no CI job runs the tests or `R CMD check`
 — rather than a
-token/access artefact. It was previously documented here as a local
+token/access artifact. It was previously documented here as a local
 false-negative to disregard; that explanation is obsolete and inverted. The
 finding stands until a verifying pipeline actually runs, and it is an accepted,
 deliberate gap rather than a defect to explain away.

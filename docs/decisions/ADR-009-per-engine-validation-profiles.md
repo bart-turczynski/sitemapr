@@ -61,7 +61,7 @@ Every engine/rule cell carries exactly one provenance tag:
 
 **Source precedence:** current guidance supersedes historical/superseded material — a value replaced
 by a newer official statement is `documented` at its current value, not a `documentation_conflict`.
-Historical sources may only support historical claims (labelled as such), never a current cell.
+Historical sources may only support historical claims (labeled as such), never a current cell.
 
 ### 1. Independent context axes (no single `profile` scalar)
 

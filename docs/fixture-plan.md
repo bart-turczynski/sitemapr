@@ -263,11 +263,11 @@ fixture bytes, plus per-case options, `validate_sitemap()` arguments, and
 optionally a served response), pinned separately in `corpus-cases-golden.tsv`
 because they are sitemapr-only and are not cross-port claims.
 
-Seven behaviours were wanted as corpus rows. Their disposition:
+Seven behaviors were wanted as corpus rows. Their disposition:
 
 | # | Want | Disposition |
 |---|---|---|
-| 1 | Text duplicates (`PROTOCOL_DUPLICATE_LOC` on a byte-identical repeat) | **Out of scope.** Needs fixture *content* no text fixture has. A new shared file requires sibling agreement; behaviour stays pinned in `test-protocol-validate.R` (SITE-lcmvzpel) |
+| 1 | Text duplicates (`PROTOCOL_DUPLICATE_LOC` on a byte-identical repeat) | **Out of scope.** Needs fixture *content* no text fixture has. A new shared file requires sibling agreement; behavior stays pinned in `test-protocol-validate.R` (SITE-lcmvzpel) |
 | 2 | Text URL-count cap | **Case row.** `text/valid.txt` with `max_url_count = 1` |
 | 3 | Unparseable `priority` | **Out of scope.** `xml/priority-out-of-range.xml` is out-of-range, not unparseable; needs a new shared file (SITE-prnqukft pinned it locally) |
 | 4 | Binary input | **Out of scope.** No corpus file is a binary blob; needs a new shared file |

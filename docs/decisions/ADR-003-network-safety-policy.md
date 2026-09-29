@@ -263,7 +263,7 @@ contact URL is assembled at runtime from `utils::packageDescription()`.
   the unrelated opt-out advice.)*
 - Failing closed on malformed IPv6 literals means a host containing a colon that
   is not a decodable IPv6 address is now refused rather than allowed. `rurl`
-  rejects such hosts before the guard sees them, so no reachable behaviour
+  rejects such hosts before the guard sees them, so no reachable behavior
   changes; the cost is that the guard is stricter than the parse layer rather
   than the other way round, which is the intended direction.
 - Reason codes are additive here (`6to4`, `teredo`, `isatap`,
@@ -286,7 +286,7 @@ contact URL is assembled at runtime from `utils::packageDescription()`.
   returns all A/AAAA records. It is already an indirect dependency via `httr2`.
 
   This condition is therefore no longer what defers §1. The deferral now rests
-  solely on the remaining §1 reasons: offline-testability, and the judgement
+  solely on the remaining §1 reasons: offline-testability, and the judgment
   that the residual threat model (a hostname resolving to a private IP) applies
   to multi-tenant services more than to a library whose callers fetch their own
   sitemaps. Both are still held. `ssrfr` reached the **opposite** conclusion on

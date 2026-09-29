@@ -78,9 +78,9 @@ child order that `dedup_and_cap_children()` already fixes — never in child
 returns responses in request order: concurrency changes *when* a child's bytes
 arrive, never *where* its rows land in the result.
 
-Everything below is subordinate to this invariant. Any behaviour the scheduler
+Everything below is subordinate to this invariant. Any behavior the scheduler
 cannot make byte-identical to sequential mode is out of scope for opt-in
-concurrency and must instead be an explicit, separately-flagged behaviour
+concurrency and must instead be an explicit, separately-flagged behavior
 change.
 
 ### 1. Opt-in; default sequential; sequential always available
@@ -107,7 +107,7 @@ Two caps compose, and both are respected simultaneously:
   `throttle_host_key()`) is **layered on top of** the worker cap. The worker cap
   bounds concurrency; the throttle bounds *rate per host*. A host with a
   configured `min_interval` is paced to that interval even when idle workers are
-  available, so the two never fight: the effective behaviour is "at most
+  available, so the two never fight: the effective behavior is "at most
   `max_active` in flight, and no host fetched faster than its throttle allows."
 
 The per-hop SSRF guard (ADR-003) and sitemapr's re-asserted transport controls
@@ -131,7 +131,7 @@ after the fact:
   bit-for-bit the rule `add_leaf_index_child()` already applies sequentially.
 - The truncation point therefore lands at **the same catalog position**
   sequential mode would cut, independent of completion order. In-flight fetches
-  beyond the truncation point are cancelled (see §5) and contribute nothing.
+  beyond the truncation point are canceled (see §5) and contribute nothing.
 
 ### 4. Partial failure: captured in place, same finding as today
 
@@ -156,8 +156,8 @@ concurrently.
   catalog order before dispatch, so the set of visited nodes is unchanged.
 - **Cancellation.** Once a budget stop is decided (§3), children in catalog
   order *after* the truncation point are not dispatched, and any already-
-  dispatched-but-not-yet-committed fetch beyond that point is cancelled; a
-  cancelled fetch produces no rows, no source record, and no finding. Because
+  dispatched-but-not-yet-committed fetch beyond that point is canceled; a
+  canceled fetch produces no rows, no source record, and no finding. Because
   commit order is catalog order, cancellation can never remove a child that
   sequential mode would have kept.
 - **Error propagation.** Per-child *fetch* errors are captured (§4), never
@@ -189,7 +189,7 @@ the operation builds one `throttle_state` up front and threads it through
 discovery, robots, and all `expand_index()` calls (the `throttle_state`
 parameter already exists on `fetch_source()`, `expand_index()`, and the
 discovery/robots helpers precisely so this store can be threaded in). This
-unification is a behaviour change relative to today's per-phase pacing, but it
+unification is a behavior change relative to today's per-phase pacing, but it
 only makes pacing **stricter** (never looser) and does not affect the row/
 finding/tree output, so it stays within the §0 invariant.
 
@@ -284,9 +284,9 @@ is for. A slow inspection is a better failure than a rude one.
 
 **Bounded waves, cut on wave boundaries.** No waste, but the truncation point
 moves: the sample, and therefore the findings, differ from sequential. §0 already
-classifies this — "any behaviour the scheduler cannot make byte-identical to
+classifies this — "any behavior the scheduler cannot make byte-identical to
 sequential mode is out of scope for opt-in concurrency and must instead be an
-explicit, separately-flagged behaviour change."
+explicit, separately-flagged behavior change."
 
 ### Decision
 

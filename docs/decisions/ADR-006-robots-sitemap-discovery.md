@@ -37,7 +37,7 @@ guessed-path catalog can never discover.
   valid `Sitemap:` directive as a discovery candidate with provenance
   `"robots"`, deduplicated against the guessed-path catalog on the full-URL
   identity key (robots directives take precedence).
-- The behaviour is controlled by two flags, both defaulting to `TRUE`:
+- The behavior is controlled by two flags, both defaulting to `TRUE`:
   `use_robots` (read robots.txt) and `use_known_paths` (try the guessed-path
   catalog). They compose, so a caller can run robots-only, guess-only, or both.
 - Only the `Sitemap:` directive is read. **Robots rules (`Disallow`/`Allow`) are
@@ -77,7 +77,7 @@ still stands.
 
 ### Negative / accepted trade-offs
 - `sitemap_tree(from = "root")` now issues one extra request (`/robots.txt`)
-  per call by default. Callers who want the prior guess-only behaviour set
+  per call by default. Callers who want the prior guess-only behavior set
   `use_robots = FALSE`.
 - `sitemapr` now fetches robots.txt, a small widening of scope beyond strictly
   sitemap resources — accepted as intrinsic to sitemap discovery.

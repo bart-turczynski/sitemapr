@@ -25,7 +25,7 @@ resolve_sitemap(url)
 ```
 
 Since that proposal was written, the exports it anticipated have shipped. Two
-of the three proposed verbs now duplicate existing behaviour, and only one
+of the three proposed verbs now duplicate existing behavior, and only one
 names a genuine gap. This ADR records the reshape and answers every open
 question the proposal left dangling. The proposal document is retained as a
 historical record; its status line is graduated to point here.
@@ -97,7 +97,7 @@ inventing a taxonomy. Fetch and parse failure states (`not_found`,
 `probe_url()` **counts** an index's children but never fetches them — that is
 what makes it a probe and not a resolver.
 
-### 3. Cross-stream defaults are NOT open — they were settled by shipped behaviour
+### 3. Cross-stream defaults are NOT open — they were settled by shipped behavior
 
 The proposal's "Cross-stream policy (defaults still open)" section is closed.
 The defaults are already decided by what `read_sitemap()` / `sitemap_tree()`
@@ -116,7 +116,7 @@ ship and by ADR-003 / ADR-006:
   handled or reported, not silently followed as something it is not.
 - **Every limit is caller-overridable** (ADR-003 §3: no non-overridable hard
   caps), but the *defaults* are conservative and fixed by the shipped
-  behaviour, not reopened here.
+  behavior, not reopened here.
 
 `probe_url()` does not participate in cross-stream traversal at all — it fetches
 exactly one resource — so these defaults bind only the resolving/discovering
@@ -156,7 +156,7 @@ functions that already implement them.
    otherwise valid index)?* — The existing partial-result contract stands: the
    audit/validation pipeline returns what it could resolve plus `problems`
    findings for the broken child; it does not fail the whole traversal. This is
-   the shipped `sitemap_audit` behaviour, not a new rule.
+   the shipped `sitemap_audit` behavior, not a new rule.
 8. *Do users need a structural view of the sitemap graph in addition to a
    flattened URL table?* — Yes, and it already exists: `sitemap_tree()` returns
    the structural view; `read_sitemap()` returns the flattened URL table. No new
@@ -189,7 +189,7 @@ introduced.
 - The public surface grows by exactly one function (`probe_url()`) and only
   where a real gap exists; no synonym exports, no migration burden.
 - `probe_url()` reuses `fetch_source()` and `sniff_format()`, so it inherits the
-  ADR-003 safety policy and the ADR-006 discovery behaviour for free and adds no
+  ADR-003 safety policy and the ADR-006 discovery behavior for free and adds no
   new fetch path or classification vocabulary.
 - Every open question in the design proposal now has a recorded answer; future
   contributors do not reopen settled cross-stream defaults.
