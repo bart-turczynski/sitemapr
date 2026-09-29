@@ -54,3 +54,18 @@ Source lives in `R/`, tests and their Cucumber `.feature` files live in
 `tests/testthat/`, and durable project context lives in `docs/`.
 
 Keep local-only planning state in `_scratch/`. Do not commit `_scratch/`, `.fp/`, secrets, dependency folders, build outputs, or generated caches.
+
+## CRAN release checklist
+
+Follow the fleet checklist,
+[seor `design/release-checklist.md`](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/release-checklist.md).
+sitemapr's deltas:
+
+- **Step 1: robotstxtr reaches CRAN first.** `DESCRIPTION` suggests
+  `robotstxtr (>= 0.2.0)` and pins it with
+  `Remotes: gitlab::bart-turczynski/robotstxtr@v0.2.0`. Once robotstxtr is on
+  CRAN, drop the pin and the `Remotes:` field with it (SEOR-jkmrvikj).
+- **Step 4: `cran-comments.md` predates the current dependencies.** It still
+  says `rurl (>= 2.1.0)`, lists a `rurl` entry under `Remotes:`, and calls
+  both dependencies off CRAN. `DESCRIPTION` now imports `rurl (>= 3.0.1)`
+  from CRAN. Rewrite those sections against `DESCRIPTION` at release time.
