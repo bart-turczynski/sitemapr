@@ -39,7 +39,7 @@ sniff_starts_with <- function(bytes, magic) {
 }
 
 # Number of leading bytes that make up a byte-order mark, or 0L if none.
-# Recognises UTF-8 (EF BB BF) and UTF-16 BE/LE (FE FF / FF FE).
+# Recognizes UTF-8 (EF BB BF) and UTF-16 BE/LE (FE FF / FF FE).
 sniff_bom_length <- function(bytes) {
   if (sniff_starts_with(bytes, c(0xEF, 0xBB, 0xBF))) {
     return(3L)
@@ -234,7 +234,7 @@ sniff_classify_root <- function(root) {
 }
 
 # Detect a markup format from raw bytes — an XML sitemap root, a feed, HTML, or
-# generic XML — or NA_character_ when the bytes are not recognisable markup.
+# generic XML — or NA_character_ when the bytes are not recognizable markup.
 # Strips a leading BOM, builds a lowercase ASCII preview, drops the XML
 # prologue, then classifies the root element. A bare `<!doctype html ...>` with
 # no separate root (one the prologue stripping would have eaten) is also HTML.

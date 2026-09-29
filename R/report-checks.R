@@ -78,7 +78,7 @@ report_layer_ran <- function(urls, sources, findings) {
     # The per-code cap that emits REPORT_TRUNCATED runs at every assembly.
     report = TRUE
   )
-  # What the run itself recorded. Only ever adds evidence — an unrecognised
+  # What the run itself recorded. Only ever adds evidence — an unrecognized
   # layer name is ignored rather than widening the table.
   ran[names(ran) %in% findings_layers_run(findings)] <- TRUE
   # A finding is proof its own layer ran, whatever the evidence above concluded.

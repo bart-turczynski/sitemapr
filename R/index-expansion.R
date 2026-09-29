@@ -380,7 +380,7 @@ index_unsupported_feed_child <- function(acc, final_url, child_depth, parent) {
 # `max_active` worker cap layered on the shared per-host throttle. The loop then
 # consumes cached bodies in catalog order, so completion order never affects
 # output. A warmed body the loop never reaches (a later budget stop, §3/§5, or a
-# redirect-induced cycle) is left in the cache and discarded -- cancelled,
+# redirect-induced cycle) is left in the cache and discarded -- canceled,
 # contributing nothing. With `max_active <= 1` the scheduler is inert and the
 # path is bit-for-bit the sequential default.
 
@@ -493,7 +493,7 @@ fetch_batch_into_cache <- function(
 # within the remaining aggregate sitemap-count budget (reserve-before-dispatch,
 # §3), so it never dispatches a child without a count slot. The URL-row budget
 # is data-dependent (known only after a leaf parses); the commit loop enforces
-# it and leaves any over-warmed body unconsumed (cancelled, §5). Keys are the
+# it and leaves any over-warmed body unconsumed (canceled, §5). Keys are the
 # requested URLs, matched by `child_fetch_cached()`.
 prefetch_index_children <- function(
   locs,

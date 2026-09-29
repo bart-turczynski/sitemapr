@@ -106,7 +106,7 @@ source_meta <- function(
   )
 }
 
-# Normalise an encoding name for comparison: lower-case and strip every
+# Normalize an encoding name for comparison: lower-case and strip every
 # non-alphanumeric character, so `UTF-8`, `utf8`, and `utf_8` compare equal and
 # `UTF-16BE` stays distinct from `UTF-8`. Absent/empty -> NA.
 norm_encoding <- function(x) {
@@ -381,7 +381,7 @@ resolve_encoding <- function(bom, decl, http, meta) {
 # and the mark say what the document claims to be. Conversely the label test
 # fires on a declared `ISO-8859-1` file whose bytes happen to be pure ASCII --
 # which is correct and is what the sibling does too (`isUtf8EncodingLabel()`
-# normalises the label and compares, it does not test the bytes).
+# normalizes the label and compares, it does not test the bytes).
 #
 # sitemapr checks one signal the sibling does not: the HTTP `Content-Type`
 # charset (tier 3 below the declaration). That follows sitemapr's own documented
@@ -434,7 +434,7 @@ encoding_conflict_message <- function(meta, resolution) {
 
 # Encoding-conflict diagnostics from `source_meta`. Resolution priority is
 # BOM > XML declaration > HTTP charset > UTF-8 (sitemap-spec.md §3). A
-# BOM-vs-XML-declaration disagreement is the specialised
+# BOM-vs-XML-declaration disagreement is the specialized
 # `ENCODING_BOM_DECLARATION_CONFLICT`; a disagreement involving the HTTP charset
 # is the general `ENCODING_CONFLICT`. Both are `info` here; Layer F elevates the
 # BOM/declaration one to `warning` in strict mode. The conflict predicate and

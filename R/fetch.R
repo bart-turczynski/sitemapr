@@ -103,7 +103,7 @@ read_capped_drain <- function(source, chunk_size, consume) {
 
 # Distinguish a timeout from a generic transport failure. httr2's real timeout
 # carries class `httr2_timeout`; otherwise fall back to a message probe so a
-# mocked curl-style failure ("Timeout was reached") is also recognised.
+# mocked curl-style failure ("Timeout was reached") is also recognized.
 fetch_is_timeout <- function(cnd) {
   if (inherits(cnd, "httr2_timeout")) {
     return(TRUE)

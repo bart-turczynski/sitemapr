@@ -25,7 +25,7 @@
 # inflated size FIRST by streaming the stream through `gzcon()` in fixed-size
 # chunks that are counted and discarded, aborting the moment the running total
 # exceeds the ceiling. Peak memory for the guard is one chunk, so a bomb is
-# rejected without ever being materialised.
+# rejected without ever being materialized.
 #
 # The guard measures; `memDecompress()` still produces the result. That split is
 # deliberate: `gzcon()` silently returns short data for a corrupt or truncated
@@ -58,7 +58,7 @@ gzip_abort_ceiling <- function(max_bytes, bytes_read) {
   )
 }
 
-# Measure the inflated size of a gzip-wrapped stream without materialising it,
+# Measure the inflated size of a gzip-wrapped stream without materializing it,
 # aborting as soon as the running total exceeds `max_bytes`.
 #
 # Only the gzip wrapper (magic 1f 8b) can be streamed: `gzcon()` passes a bare
