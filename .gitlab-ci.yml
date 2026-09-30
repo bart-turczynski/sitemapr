@@ -369,7 +369,10 @@ osv-audit:
 
 # Sonatype OSS Index via {oysteR}. OSS Index rejects anonymous requests with
 # HTTP 401, so this job needs two CI/CD variables (Settings > CI/CD >
-# Variables): OSSINDEX_USER (account email) and OSSINDEX_TOKEN (API token).
+# Variables): OSSINDEX_USER is the literal `x` and OSSINDEX_TOKEN a Sonatype
+# Guide personal access token (OSS Index moved to Guide). Guide's docs say the
+# username is ignored for a PAT; it is not: the account email returns 401, `x`
+# returns 200. Only a legacy OSS Index API token takes the account email.
 #
 # THIS JOB FAILS WHEN THEY ARE ABSENT, ON PURPOSE. OSSINDEX_AUDIT_REQUIRED
 # turns each missing precondition in tests/testthat/test-security.R (no
