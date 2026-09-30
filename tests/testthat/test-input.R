@@ -181,3 +181,37 @@ test_that("an unparseable URL raises sitemapr_input_parse_error", {
     class = "sitemapr_input_parse_error"
   )
 })
+
+# ---- local-file classification (SITE-oexcvvbn) ------------------------------
+
+is_local <- function(x) {
+  sitemapr_test_call("is_local_file_input", x)
+}
+
+test_that("a POSIX absolute path is local whether or not it exists", {
+  missing <- "/sitemapr-no-such-dir/sitemap.xml"
+  expect_false(file.exists(missing))
+  expect_true(is_local(missing))
+})
+
+test_that("a file:// URL is local and its scheme is stripped", {
+  expect_true(is_local("file:///sitemapr-no-such-dir/sitemap.xml"))
+  expect_true(is_local("FILE:///sitemapr-no-such-dir/sitemap.xml"))
+
+  rec <- source_records("file:///sitemapr-no-such-dir/sitemap.xml")
+  expect_true(rec$is_local_file)
+  expect_identical(rec$normalized_url, "/sitemapr-no-such-dir/sitemap.xml")
+})
+
+test_that("a bare host and a host:port stay URL candidates", {
+  expect_false(is_local("example.com"))
+  expect_false(is_local("example.com:8080"))
+  expect_false(is_local("example.com/sitemap.xml"))
+  expect_false(is_local("https://example.com/sitemap.xml"))
+
+  rec <- source_records("example.com:8080/sitemap.xml")
+  expect_false(rec$is_local_file)
+  expect_identical(rec$host, "example.com")
+  expect_identical(rec$port, 8080L)
+  expect_true(rec$scheme_inferred)
+})
