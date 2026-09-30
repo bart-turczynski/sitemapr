@@ -65,10 +65,11 @@ The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
 arguments. Run it directly rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, lint, R CMD check
+Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, lint, urls, R CMD check
 Rscript tools/verify.R --all        # adds coverage and the README diff
 Rscript tools/verify.R lint check   # named stages only
 Rscript tools/verify.R --list       # list the stages
+Rscript tools/verify.R --self-test  # the gate's own offline self-tests
 ```
 
 `rfloor` (`tools/check-r-floor.R`) has no counterpart in
@@ -101,6 +102,23 @@ dictionary, so a typo first surfaced in win-builder's incoming NOTE
 (SEOR-mtbzfroz). spelling bundles its own dictionaries. A genuine term goes in
 `inst/WORDLIST`; a typo gets fixed at its source (the roxygen comment for
 `man/`, `README.Rmd` for `README.md`).
+
+`urls` fetches every URL the package declares (`DESCRIPTION`, `man/`,
+`inst/CITATION`, `NEWS.md`, `README.md`) with `tools:::check_url_db()`, the
+function `R CMD check` itself uses. The `check` stage's `--as-cran` run fetches
+them too, but it reports a dead link as a NOTE and fails only on warnings, so
+before this stage a dead link passed the gate and surfaced at CRAN incoming
+(SITE-dpmutjii). A URL that answers HTTP 4xx or 5xx fails the stage. A URL that
+could not be reached at all (DNS failure, refused connection, timeout: no HTTP
+status) is printed as a warning and the stage passes, because a network blip
+must not reject a push (the lesson of SITE-xolykhjm in `check`). Exactly one URL
+is exempt: `DESCRIPTION`'s `BugReports:` in its `/-/issues` form, which 404s for
+a signed-out client since GitLab moved issues to `/-/work_items` but is the only
+form CRAN's incoming check accepts (SEOR-ocbtrrnl); the stage prints it as
+exempted. It fails rather than passes when it finds no URLs at all, and it
+prints how many it checked, so a lookup that read nothing cannot report clean.
+Its classifier runs an offline self-test first on every run;
+`Rscript tools/verify.R --self-test` runs that alone.
 
 Stages run in declared order, cheapest first, and the chain stops at the first
 failure. Because the hook and a manual run share one definition, they cannot

@@ -23,10 +23,12 @@
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).
 #
-# Two stages reach the network: `check` (--as-cran queries CRAN for incoming
-# feasibility) and `readme` (pak resolves the dependency chain). Everything
-# else is offline. A stage that needs the network must prove it RAN, not merely
-# that it reported nothing -- see verify_assert_check_completed() below.
+# Three stages reach the network: `urls` (fetches every URL the package
+# declares), `check` (--as-cran queries CRAN for incoming feasibility) and
+# `readme` (pak resolves the dependency chain). Everything else is offline.
+# A stage that needs the network must prove it RAN, not merely that it
+# reported nothing -- see verify_assert_check_completed() and verify_urls()
+# below.
 
 # Assert that an `R CMD check` run actually REACHED ITS END.
 #
@@ -98,7 +100,10 @@ verify_assert_check_completed <- function(res) {
 # So only "Error" rows with no static complaint are downgraded to a warning: a
 # transient network blip must never reject a push (the `check` stage learned
 # that as SITE-xolykhjm). Everything else check_url_db() returns is red, except
-# the exemption below.
+# the exemption below. That includes 403, which R CMD check's incoming step
+# drops by default (`_R_CHECK_URLS_TAKE_403_STATUS_AS_OK_`) because bot-shy
+# hosts answer it; GitLab answers 403, not 404, for a project that does not
+# exist, so here it stays a failure.
 #
 # The exemption. DESCRIPTION's BugReports keeps GitLab's `/-/issues` form,
 # which 404s for a signed-out client since GitLab moved issues to
@@ -198,6 +203,108 @@ verify_url_self_test <- function() {
   invisible(TRUE)
 }
 
+# The `urls` stage: fetch every URL the package declares and fail on a dead
+# one, which nothing else here does. `check` does fetch them -- --as-cran's
+# `checking CRAN incoming feasibility` step calls this same check_url_db() --
+# but a dead link there is only a NOTE, and `check` fails on warnings, not
+# notes (`error_on = "warning"`). So the gate printed the dead link, passed,
+# and CRAN incoming was the first thing to object.
+#
+# It reuses base R's own implementation -- the two unexported `tools`
+# functions R CMD check calls -- rather than urlchecker, which wraps the same
+# logic but would be one more dev dependency CI's `check` job must install.
+# The price is that unexported functions may change without notice, so their
+# absence, or a changed result shape, stops the stage with a message naming
+# the fix instead of passing it silently.
+#
+# Like `check`, it has to prove it RAN: an empty URL db would mean the lookup
+# read nothing, not that every URL is fine, so it fails, and the stage prints
+# how many URLs it checked. `url_db_from_package_sources()` reads DESCRIPTION,
+# man/, inst/CITATION, NEWS and README.md; vignettes count only once built to
+# inst/doc, which a source tree lacks.
+verify_urls <- function(dir = ".") {
+  verify_url_self_test()
+
+  fns <- c("url_db_from_package_sources", "check_url_db")
+  ns <- asNamespace("tools")
+  gone <- fns[!vapply(fns, exists, NA, envir = ns, inherits = FALSE)]
+  if (length(gone)) {
+    stop(
+      sprintf(
+        "%s no longer exist(s) in R %s, so the `urls` stage cannot ",
+        toString(sprintf("tools:::%s()", gone)),
+        getRversion()
+      ),
+      "run. Port it to urlchecker::url_check(), which wraps the same logic.",
+      call. = FALSE
+    )
+  }
+  url_db <- get(fns[[1L]], envir = ns)
+  check_url_db <- get(fns[[2L]], envir = ns)
+
+  db <- url_db(dir)
+  urls <- unique(db$URL)
+  if (!length(urls)) {
+    stop(
+      "found no URLs to check, yet DESCRIPTION declares several. The ",
+      "lookup read nothing, so this stage verified nothing.",
+      call. = FALSE
+    )
+  }
+
+  # Each unanswered URL costs one timeout, sequentially; R's 60s default would
+  # let a dead network hold a push for minutes only to warn at the end.
+  old <- options(timeout = 30)
+  on.exit(options(old), add = TRUE)
+  bad <- check_url_db(db)
+
+  bugreports <- read.dcf(file.path(dir, "DESCRIPTION"), "BugReports")[[1L]]
+  kind <- verify_classify_urls(bad, bugreports)
+
+  cat(sprintf(
+    "  checked %d URL(s) from %s\n",
+    length(urls),
+    toString(unique(db$Parent))
+  ))
+  show <- function(which, heading) {
+    rows <- bad[kind == which, , drop = FALSE]
+    if (!nrow(rows)) {
+      return(invisible())
+    }
+    cat(heading, "\n", sep = "")
+    for (i in seq_len(nrow(rows))) {
+      cat(sprintf(
+        "    %s\n      status %s: %s (from %s)\n",
+        rows$URL[[i]],
+        if (nzchar(rows$Status[[i]])) rows$Status[[i]] else "-",
+        gsub("[[:space:]]+", " ", rows$Message[[i]]),
+        toString(unlist(rows$From[i]))
+      ))
+      if ("New" %in% names(rows) && nzchar(rows$New[[i]])) {
+        cat(sprintf("      moved permanently to %s\n", rows$New[[i]]))
+      }
+    }
+  }
+  show(
+    "exempt",
+    paste(
+      "  exempted (DESCRIPTION's BugReports keeps the CRAN-incoming /-/issues",
+      "form by fleet decision, SEOR-ocbtrrnl):"
+    )
+  )
+  show(
+    "warn",
+    "  WARNING, not reached (no HTTP status; network, not the URL):"
+  )
+  show("red", "  BROKEN:")
+
+  red <- sum(kind == "red")
+  if (red) {
+    stop(sprintf("%d broken URL(s)", red), call. = FALSE)
+  }
+  invisible(bad)
+}
+
 verify_stages <- list(
   docs = list(
     label = "docs reproducible",
@@ -261,6 +368,15 @@ verify_stages <- list(
         stop(sprintf("%d lint(s)", found), call. = FALSE)
       }
     }
+  ),
+  # Seconds, but it needs the network, so it sits after every offline guard
+  # and before `check`. A dead link (HTTP 4xx/5xx) fails; a URL that could not
+  # be reached at all only warns, so a network blip never rejects a push. See
+  # verify_urls() and verify_classify_urls().
+  urls = list(
+    label = "declared URLs resolve",
+    default = TRUE,
+    run = function() verify_urls()
   ),
   # `--no-manual` skips `checking PDF version of manual without index`, which
   # shells out to `texi2pdf`/`texi2dvi`. The dev machine has LaTeX installed,
