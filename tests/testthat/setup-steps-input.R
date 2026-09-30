@@ -26,6 +26,14 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     context$as <- "sitemap"
   })
 
+  # A path that must not exist: the scenario proves classification alone, with
+  # no existence check (SITE-oexcvvbn).
+  given("a submitted sitemap path {string}", function(x, context) {
+    expect_false(file.exists(x))
+    context$input <- x
+    context$as <- "sitemap"
+  })
+
   given("a list of sitemap URLs:", function(table, context) {
     # cucumber treats the first table row as the header, so the first URL lands
     # in the column name. Reconstruct the full vector from header + body.
@@ -136,6 +144,15 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
 
   then("no network request is made", function(context) {
     expect_true(context$result$is_local_file[[1L]])
+  })
+
+  then("the source record is marked as a local file", function(context) {
+    expect_true(context$result$is_local_file[[1L]])
+    expect_identical(context$result$normalized_url[[1L]], context$input[[1L]])
+  })
+
+  then("no input parse error is raised", function(context) {
+    expect_null(context$error)
   })
 
   then("there are {int} source records", function(n, context) {

@@ -30,10 +30,14 @@ has_explicit_scheme <- function(x) {
 #' Classify a raw input string as a local file path
 #'
 #' A path-like input is treated as a local file: a `file://` URL, an absolute
-#' path (leading `/`), or any input with no `scheme://` prefix that is not a
-#' bare host candidate. We deliberately do not require the file to exist (the
-#' acceptance spec submits a non-existent path); existence is checked later by
-#' the read layer, never here.
+#' path, or a schemeless input that already exists on disk. Any other input
+#' with no `scheme://` prefix is a bare host candidate. An absolute path is a
+#' POSIX one (leading `/`), a Windows drive-letter one (`C:\` or `C:/`, either
+#' letter case) or a UNC one (leading `\\`), recognized the same way on every
+#' platform. A drive letter needs its slash, so `example.com:8080` and
+#' `a:8080` stay hosts. We deliberately do not require an absolute path to
+#' exist (the acceptance spec submits a non-existent one); existence is checked
+#' later by the read layer, never here.
 #'
 #' @param x Character vector of raw inputs.
 #' @return Logical vector, `TRUE` where the input denotes a local file.
@@ -41,7 +45,9 @@ has_explicit_scheme <- function(x) {
 #' @noRd
 is_local_file_input <- function(x) {
   file_url <- grepl("^file://", x, ignore.case = TRUE)
-  absolute <- grepl("^/", x)
+  absolute <- grepl("^/", x) |
+    grepl("^[A-Za-z]:[/\\\\]", x) |
+    startsWith(x, "\\\\")
   has_scheme <- has_explicit_scheme(x)
   # A schemeless, non-absolute input is a bare-host candidate (a site/sitemap
   # host) unless it already exists on disk as a file.

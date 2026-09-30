@@ -198,6 +198,25 @@ test_that("a submitted-list validation records source failures as findings", {
   expect_match(out$subject_ref, "sitemapr-missing-submitted-list.xml")
 })
 
+test_that("a missing Windows absolute path is a source failure, not an abort", {
+  # SITE-oexcvvbn: a drive-letter or UNC path that does not exist must reach
+  # the read layer as a local file (and fail there) on every platform, rather
+  # than be parsed as a bare host and abort with sitemapr_input_parse_error.
+  for (missing in c(
+    "C:\\sitemapr-no-such-dir\\missing-sitemap.xml",
+    "\\\\fileserver\\share\\missing-sitemap.xml"
+  )) {
+    out <- suppressWarnings(
+      validate_sitemap(c(fixture("valid-minimal.xml"), missing))
+    )
+
+    expect_named(out, contract_cols)
+    expect_identical(out$code, "FETCH_FAILED")
+    expect_identical(out$layer, "fetch")
+    expect_match(out$subject_ref, "missing-sitemap.xml", fixed = TRUE)
+  }
+})
+
 # An httr2 mock dispatching on request URL via a named body map; unknown URLs
 # 404. Mirrors the feed-child test's local helper, served as application/xml.
 mock_by_url <- function(map) {

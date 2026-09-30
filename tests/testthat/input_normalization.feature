@@ -50,6 +50,18 @@ Feature: Input normalization to source records
     Then the source record has provenance "submitted-directly"
     And no network request is made
 
+  Scenario: Missing Windows absolute path is treated as a local file
+    Given a submitted sitemap path "C:\Temp\missing-sitemap.xml"
+    When I create source records
+    Then the source record is marked as a local file
+    And no input parse error is raised
+
+  Scenario: Missing UNC path is treated as a local file
+    Given a submitted sitemap path "\\fileserver\share\missing-sitemap.xml"
+    When I create source records
+    Then the source record is marked as a local file
+    And no input parse error is raised
+
   Scenario: URL vector produces multiple source records
     Given a list of sitemap URLs:
       | https://example.com/sitemap1.xml |

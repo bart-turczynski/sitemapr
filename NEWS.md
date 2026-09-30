@@ -21,6 +21,12 @@ related W3C and RFC standards.
   optimization only — the rows, findings, tree, and budget-truncation point are
   byte-identical to the sequential default (ADR-008).
 * XML parsing is XXE-safe: external entities are never expanded.
+* Windows drive-letter paths (`C:\...`, `C:/...`) and UNC paths
+  (`\\server\share\...`) are recognized as local files on every platform,
+  whether or not the file exists. A missing one now fails when it is read,
+  like any other missing file (a `FETCH_FAILED` finding in a multi-source
+  validation or audit), instead of aborting with "Could not parse input as
+  a URL".
 
 ## Validation
 

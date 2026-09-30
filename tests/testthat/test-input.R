@@ -215,3 +215,33 @@ test_that("a bare host and a host:port stay URL candidates", {
   expect_identical(rec$port, 8080L)
   expect_true(rec$scheme_inferred)
 })
+
+test_that("Windows drive-letter and UNC paths are local on every platform", {
+  # None of these exist on the test machine, so only the absolute-path rule
+  # can classify them; before SITE-oexcvvbn they fell through to the bare-host
+  # branch and aborted with sitemapr_input_parse_error.
+  win <- c(
+    "C:\\sitemapr-no-such-dir\\x.xml",
+    "C:/sitemapr-no-such-dir/x.xml",
+    "d:\\sitemapr-no-such-dir\\x.xml",
+    "\\\\host\\share\\x.xml"
+  )
+  expect_false(any(file.exists(win)))
+  expect_identical(is_local(win), rep(TRUE, length(win)))
+})
+
+test_that("a Windows absolute path yields a local source record", {
+  for (p in c("C:\\Temp\\missing.xml", "\\\\fileserver\\share\\missing.xml")) {
+    rec <- source_records(p)
+    expect_true(rec$is_local_file)
+    expect_identical(rec$normalized_url, p)
+    expect_identical(rec$loc_key, p)
+    expect_false(rec$scheme_inferred)
+  }
+})
+
+test_that("a drive letter without its slash is not an absolute path", {
+  # `C:x.xml` is drive-relative on Windows, and `a:8080` is a host:port.
+  expect_false(is_local("a:8080"))
+  expect_false(is_local("C:sitemapr-no-such-file.xml"))
+})
