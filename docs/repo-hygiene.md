@@ -1,8 +1,8 @@
 # Repository hygiene
 
-How this repository verifies a tree before it reaches `origin` — no CI job
-verifies anything behind that, so this is the whole of it — and how the issue
-tracker survives leaving this machine.
+How this repository verifies a tree before it reaches `origin` — the pre-push
+hook is the only gate in front of `main`; CI reruns the same chain after the
+fact — and how the issue tracker survives leaving this machine.
 
 ## Hooks
 
@@ -124,11 +124,14 @@ Stages run in declared order, cheapest first, and the chain stops at the first
 failure. Because the hook and a manual run share one definition, they cannot
 disagree about what "verified" means.
 
-Every stage runs offline except `readme`: `devtools::build_readme()` installs the
-package, which resolves the dependency chain (`sitemapr` → `rurl`) through pak.
-It needs network, which is why `--all` is not the default. It also needs every
-`Remotes:` target to be publicly readable — a private GitLab project fails the
-stage with a pak 403 rather than a README problem.
+Three stages reach the network: `urls` fetches every URL the package declares;
+`check` (`--as-cran`) queries CRAN for incoming feasibility, and its incoming
+step fetches the declared URLs too; and `readme`, where
+`devtools::build_readme()` installs the package and resolves the dependency
+chain (`sitemapr` → `rurl`) through pak. `readme` is why `--all` is not the
+default. It also needs every `Remotes:` target to be publicly readable — a
+private GitLab project fails the stage with a pak 403 rather than a README
+problem. Everything else is offline.
 
 **Do not rely on the pre-push hook as the only trigger.** It fires on `git push`,
 so it never runs while the remote is unreachable — and the per-commit hooks only
