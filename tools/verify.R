@@ -10,15 +10,17 @@
 # pre-push `verify` hook invokes it with no arguments, so the hook and a manual
 # run can never disagree about what "verified" means.
 #
-# It is also the ONLY gate that runs at all, anywhere. `origin` is GitLab and
-# its `.gitlab-ci.yml` holds exactly one job, `pages`, which publishes the
-# pkgdown site and VERIFIES NOTHING (SITE-rysgulhf) -- a green pipeline there
-# says only that the docs built. The repository once carried a GitHub Actions
-# workflow tree, but that account is permanently suspended, so the tree was
-# deleted rather than left to rot (SITE-kgpdfhoh -- git history keeps it
-# restorable). There is no server-side branch protection behind this either.
-# Treat a failure here as a red build: nothing downstream will catch what this
-# lets through.
+# It is also the only gate IN FRONT OF `main`. `origin` is GitLab; its
+# `.gitlab-ci.yml` has a `check` job that runs this same chain (bare
+# `Rscript tools/verify.R`), plus `citation-version`, `pages` and the
+# schedule-only `osv-audit`/`security-audit`. But CI runs only on pushes to
+# `main`, tags and hand-started pipelines, and merging does not wait on a green
+# pipeline, so it is a second opinion after the fact, not a gate. The
+# repository once carried a GitHub Actions workflow tree, but that account is
+# permanently suspended, so the tree was deleted rather than left to rot
+# (SITE-kgpdfhoh -- git history keeps it restorable). There is no server-side
+# branch protection behind this either. Treat a failure here as a red build:
+# nothing upstream of `main` will catch what this lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).

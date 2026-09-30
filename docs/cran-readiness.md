@@ -13,9 +13,9 @@ The package already has broad unit, cucumber, fixture-corpus, and CRAN-check
 coverage. The remaining uncovered branches are mostly defensive fallback paths
 or generated report markup where extra tests would add maintenance cost without
 meaningfully changing release risk. Nothing archives coverage automatically any
-more — no CI job runs the suite (see below) — so a drop is only visible if
-someone runs `Rscript tools/verify.R coverage`, which prints the full covr
-summary and fails on any uncovered line.
+more — the CI `check` job does not run coverage (see below) — so a drop is only
+visible if someone runs `Rscript tools/verify.R coverage`, which prints the full
+covr summary and fails on any uncovered line.
 
 ## White-Box Test Access
 
@@ -31,14 +31,15 @@ helpers whose edge cases would be obscured through the public entry points.
 
 ## Continuous Integration
 
-**Nothing in CI checks the package code.** `origin`'s `.gitlab-ci.yml` holds
-two jobs. `pages` builds and publishes the pkgdown site so the documentation
-URL that `DESCRIPTION` declares actually resolves (SITE-rysgulhf).
-`citation-version` runs `scripts/check-citation.py` on a Python image. Neither
-runs tests, lint or `R CMD check`; a green pipeline there means the docs built
-and the citation metadata agrees with `DESCRIPTION`, nothing more. A fuller
-ported pipeline (guards, lint, docs, check, coverage, readme) is parked on
-`feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
+**CI checks the package only after the fact.** `origin`'s `.gitlab-ci.yml`
+has a `check` job that runs bare `Rscript tools/verify.R`, the same chain as the
+pre-push hook. It also has `citation-version`, `pages` (builds and publishes the
+pkgdown site so the documentation URL that `DESCRIPTION` declares resolves,
+SITE-rysgulhf) and schedule-only `osv-audit` and `security-audit`. Pipelines
+start only on pushes to `main`, tags and hand-started runs, so nothing runs on
+a branch or merge request. A split pipeline with separate guard, lint,
+coverage and readme jobs was proposed (SITE-fxkbboia) and dropped: seor's ADR
+0005 folds cheap jobs into one to cut per-job runner overhead. The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but the
 account is permanently suspended, so that tree was deleted rather than left to
@@ -46,18 +47,15 @@ look like coverage it could not provide (SITE-kgpdfhoh; git history keeps it
 restorable).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
-that checks the package itself, and there is no server-side branch protection
-behind it. Treat a red gate as a red build: nothing downstream will catch what
-it lets through.
+in front of `main`, and there is no server-side branch protection behind it
+(`only_allow_merge_if_pipeline_succeeds` is off). Treat a red gate as a red
+build: CI's `check` job reruns the chain only once the change is on `main`.
 
 This changes how one pkgcheck message must be read. `pkgcheck::pkgcheck()`
-reports "Package has no continuous integration checks", and that report is
-still substantively **correct** — no CI job runs the tests or `R CMD check`
-— rather than a
-token/access artifact. It was previously documented here as a local
-false-negative to disregard; that explanation is obsolete and inverted. The
-finding stands until a verifying pipeline actually runs, and it is an accepted,
-deliberate gap rather than a defect to explain away.
+reports "Package has no continuous integration checks". That report is
+stale in part: the `check` job now runs the tests and `R CMD check` on `main`.
+It remains true that no CI runs on branches or merge requests, so treat the
+message as a known, deliberate gap rather than a defect to explain away.
 
 ## Citation Metadata Names The Release
 
