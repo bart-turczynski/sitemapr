@@ -37,8 +37,9 @@ pre-push hook. It also has `citation-version`, `pages` (builds and publishes the
 pkgdown site so the documentation URL that `DESCRIPTION` declares resolves,
 SITE-rysgulhf) and schedule-only `osv-audit` and `security-audit`. Pipelines
 start only on pushes to `main`, tags and hand-started runs, so nothing runs on
-a branch or merge request. A fuller ported pipeline is parked on
-`feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
+a branch or merge request. A split pipeline with separate guard, lint,
+coverage and readme jobs was proposed (SITE-fxkbboia) and dropped: seor's ADR
+0005 folds cheap jobs into one to cut per-job runner overhead. The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but the
 account is permanently suspended, so that tree was deleted rather than left to

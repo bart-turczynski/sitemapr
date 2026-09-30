@@ -50,8 +50,9 @@ starts by hand (SEOR-bmgkzhvy) — branch and merge-request pipelines are not
 created — so nothing verifies a feature branch but this hook, unless you open
 **Build > Pipelines > Run pipeline** and select the branch, which runs `check`
 against it on the server. `pages` is pinned to `main` and is not reachable that
-way. A fuller ported pipeline is parked
-on `feature/gitlab-ci-verify-pipeline` (SITE-fxkbboia) and is on hold. The
+way. A split pipeline with separate guard, lint, coverage and readme jobs was
+proposed (SITE-fxkbboia) and dropped: seor's ADR 0005 folds cheap jobs into one
+to cut per-job runner overhead. The
 repository once carried a GitHub Actions workflow tree, but that account is
 permanently suspended, so the tree was deleted rather than left to rot
 (SITE-kgpdfhoh — git history keeps it restorable). `main` is a protected branch

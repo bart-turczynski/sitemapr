@@ -20,25 +20,12 @@
 # command, so CI and the hook cannot disagree about what "verified" means. It
 # still is not a substitute for the hook: `only_allow_merge_if_pipeline_succeeds`
 # is false and there is no server-side branch protection, so this pipeline is a
-# second opinion, not a gate in front of `main`. A full ported pipeline that
-# SPLITS the chain into separate `guards`/`lint`/`docs`/`check` jobs (plus
-# `coverage` and `readme`) is parked on `feature/gitlab-ci-verify-pipeline`
-# (SITE-fxkbboia) and is on hold — SITE-dzikrmnh deliberately added ONE job
-# instead, reasoning that the fleet's self-hosted runners (see below) served
-# every repo at `concurrent = 1` (a setting in this host's own
-# `~/.gitlab-runner/config.toml`, not a GitLab platform limit) and a four-way
-# split would multiply queued runner time across projects for no gain the
-# single job did not already give. That premise no longer holds as stated:
-# `concurrent` was raised to 4 on 2026-09-23 (design/adr/0003 in seor,
-# SEOR-gpafxhua, SEOR-hhtzaknn), so whether a four-way split still buys
-# nothing is an open question this comment cannot answer by itself — see
-# SEOR-pgammbgo for the fleet's decision on job consolidation before treating
-# a split as settled either way. THAT BRANCH MUST RECONCILE WITH THIS FILE
-# rather than overwrite it: it carries no `pages` job
-# (`grep -cE "^pages:"` returns 0) and, as of SITE-dzikrmnh, no `citation-version`
-# or `check` job either — replacing this file wholesale would un-publish the
-# site and drop both checks. Merge `pages`, `citation-version` and `check`
-# below into it; keep the `before_script` repo shim.
+# second opinion, not a gate in front of `main`. A split pipeline (separate
+# `guards`/`lint`/`docs`/`check` jobs plus `coverage` and `readme`) was
+# proposed on SITE-fxkbboia and dropped on 2026-09-30: seor's ADR 0005
+# (SEOR-pgammbgo) settled the fleet on folding cheap jobs into one, because
+# per-job runner pickup, not compute, dominated wall time. Coverage and the
+# README-sync check stay local-only `--all` extras (SITE-dzikrmnh).
 #
 # Runner: `seor-local-docker` IS attached to this project (confirmed via the
 # GitLab runners API 2026-09-22, `runner_type: project_type`, `status:
