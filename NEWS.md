@@ -437,3 +437,11 @@ related W3C and RFC standards.
   verify chain on every push to `main`, so continuous integration is met, while
   vulnerability-focused static analysis and dynamic analysis are recorded as
   unmet (SEOR-grrcptww).
+* The verify gate has a `urls` stage, on by default, that fetches every URL
+  the package declares with base R's own URL checker (`tools`, as `R CMD check`
+  uses it). The `check` stage's `--as-cran` run fetches the same URLs, but it
+  reports a dead one as a NOTE and fails only on warnings, so a dead link
+  passed the gate and surfaced at CRAN incoming. A URL that answers HTTP 4xx or
+  5xx fails the stage; one that cannot be reached at all only warns, so a
+  network blip never rejects a push. The `BugReports:` 404 is exempt by design
+  (SEOR-ocbtrrnl).
