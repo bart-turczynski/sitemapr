@@ -4,6 +4,7 @@
 #   Rscript tools/verify.R --all       # adds coverage + README
 #   Rscript tools/verify.R lint check  # named stages only
 #   Rscript tools/verify.R --list      # what stages exist
+#   Rscript tools/verify.R --self-test # the gate's own offline self-tests
 #
 # This file is the SINGLE definition of the gate: `.pre-commit-config.yaml`'s
 # pre-push `verify` hook invokes it with no arguments, so the hook and a manual
@@ -76,6 +77,125 @@ verify_assert_check_completed <- function(res) {
   }
 
   invisible(res)
+}
+
+# Sort the rows `tools:::check_url_db()` returns into what they mean for the
+# gate: "red" (a real defect: fail), "warn" (no answer at all: report, pass) or
+# "exempt" (the one known, deliberate 404). Pure and offline, so
+# verify_url_self_test() can pin it with a constructed data frame.
+#
+# check_url_db() returns only the URLs it objects to, one row each. Its
+# `Status` column holds the HTTP status as a string when the server answered,
+# and the literal "Error" when no HTTP exchange happened at all -- DNS failure,
+# refused connection, timeout -- with libcurl's message in `Message` (read off
+# `.check_http_A()` in R 4.6.0, and seen live: "libcurl error code 6: Could not
+# resolve host"). A row can also carry no status and a static complaint
+# instead (`Message` "Empty URL" or "Invalid URI scheme", or a non-empty
+# `New`/`CRAN`/`Spaces`/`R` column: moved permanently, a non-canonical CRAN
+# link, a space, an http:// r-project link). Those are defects in the text the
+# package declares, and R CMD check reports them the same way it reports a 404.
+#
+# So only "Error" rows with no static complaint are downgraded to a warning: a
+# transient network blip must never reject a push (the `check` stage learned
+# that as SITE-xolykhjm). Everything else check_url_db() returns is red, except
+# the exemption below.
+#
+# The exemption. DESCRIPTION's BugReports keeps GitLab's `/-/issues` form,
+# which 404s for a signed-out client since GitLab moved issues to
+# `/-/work_items`. That is a fleet decision, not a defect: CRAN's incoming
+# check string-tests BugReports for `/issues`, and a sibling package was
+# archived at CRAN incoming for declaring `/-/work_items` (SEOR-ocbtrrnl;
+# scripts/check-bugreports.py holds the split). So exactly that URL, in exactly
+# that form, answering exactly 404, is exempt. Nothing else is.
+verify_classify_urls <- function(bad, bugreports = NA_character_) {
+  absent <- setdiff(c("URL", "Status", "Message"), names(bad))
+  if (length(absent)) {
+    stop(
+      sprintf(
+        "tools:::check_url_db() returned no %s column(s); its result shape ",
+        toString(absent)
+      ),
+      "changed in this R release, so the URL check cannot be read.",
+      call. = FALSE
+    )
+  }
+
+  n <- nrow(bad)
+  complaint <- function(col) {
+    if (col %in% names(bad)) nzchar(bad[[col]]) else logical(n)
+  }
+  static <- complaint("New") |
+    complaint("CRAN") |
+    complaint("Spaces") |
+    complaint("R")
+
+  issues <- bugreports[
+    !is.na(bugreports) & grepl("/-/issues/?$", bugreports)
+  ]
+
+  kind <- rep("red", n)
+  kind[bad$Status == "Error" & !static] <- "warn"
+  kind[bad$Status == "404" & bad$URL %in% issues & !static] <- "exempt"
+  kind
+}
+
+# Pins verify_classify_urls() offline. The `urls` stage runs it before it
+# touches the network, so a classifier edit that would wave a dead link
+# through fails the gate on the spot; `Rscript tools/verify.R --self-test`
+# runs it alone.
+verify_url_self_test <- function() {
+  br <- "https://gitlab.com/o/p/-/issues"
+  wi <- "https://gitlab.com/o/p/-/work_items"
+  row <- function(url, status, message = "", new = "") {
+    data.frame(
+      URL = url,
+      Status = status,
+      Message = message,
+      New = new,
+      CRAN = "",
+      Spaces = "",
+      R = ""
+    )
+  }
+  cases <- list(
+    list(row(br, "404", "Not Found"), br, "exempt"),
+    list(row(br, "403", "Forbidden"), br, "red"), # the exemption is 404 only
+    list(row(wi, "404", "Not Found"), wi, "red"), # and /-/issues form only
+    list(row(br, "404", "Not Found"), NA_character_, "red"), # not BugReports
+    list(row("https://x.example/", "404", "Not Found"), br, "red"),
+    list(row("https://x.example/", "500", "Server Error"), br, "red"),
+    list(row("https://nonexistent.invalid/", "Error", "error 6"), br, "warn"),
+    list(row("https://10.255.255.1/", "Error", "error 28"), br, "warn"),
+    list(
+      row("https://x.example/a", "200", new = "https://x.example/b"),
+      br,
+      "red"
+    ),
+    list(row("", "", "Empty URL"), br, "red")
+  )
+  for (case in cases) {
+    got <- verify_classify_urls(case[[1L]], case[[2L]])
+    if (!identical(got, case[[3L]])) {
+      stop(
+        sprintf(
+          "URL classifier self-test: %s (status %s, BugReports %s) gave %s, ",
+          case[[1L]]$URL,
+          case[[1L]]$Status,
+          case[[2L]],
+          toString(got)
+        ),
+        sprintf("expected %s.", case[[3L]]),
+        call. = FALSE
+      )
+    }
+  }
+  if (length(verify_classify_urls(row(br, "404")[0L, ], br))) {
+    stop(
+      "URL classifier self-test: an empty result was not empty.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
 }
 
 verify_stages <- list(
@@ -245,6 +365,11 @@ verify_usage <- function() {
 verify_selection <- function(args) {
   if ("--list" %in% args) {
     verify_usage()
+    quit(status = 0)
+  }
+  if ("--self-test" %in% args) {
+    verify_url_self_test()
+    cat("self-test OK: URL classifier\n")
     quit(status = 0)
   }
   if ("--all" %in% args) {
