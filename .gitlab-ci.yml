@@ -29,8 +29,9 @@
 #
 # Runner: `seor-local-docker` IS attached to this project (confirmed via the
 # GitLab runners API 2026-09-22, `runner_type: project_type`, `status:
-# online`) and accepts untagged jobs (`run_untagged: true`), so no `tags:`
-# key is needed below. It is one of several self-hosted Docker runners
+# online`). It accepts untagged jobs (`run_untagged: true`), but `default:`
+# still names its `local-docker` tag so the dependency on it is explicit
+# (SEOR-hhtzaknn). It is one of several self-hosted Docker runners
 # registered from a single Mac's `~/.gitlab-runner/config.toml` — not a
 # GitLab-hosted shared runner — and is also the runner five other repos in
 # the fleet use (design/adr/0003 in seor, SEOR-gpafxhua). That host's
@@ -46,6 +47,12 @@ stages:
   - audit
 
 default:
+  # The fleet's jobs run only on the self-hosted Docker runners on the
+  # maintainer's Mac, which carry this tag. Naming it makes that dependency
+  # explicit: while the Mac sleeps, jobs sit pending and then fail as
+  # `stuck_pending_no_matching_runners`, which is infrastructure, not code
+  # (seor CONTRIBUTING.md, "Stuck-pending runbook"; SEOR-hhtzaknn).
+  tags: [local-docker]
   # Pinned to a minor R series rather than `latest`, so an upstream R release
   # cannot turn this red on a day nothing in the package changed. Matches the
   # image the sibling pagerankr/pslr pipelines run on, so the runner host needs
