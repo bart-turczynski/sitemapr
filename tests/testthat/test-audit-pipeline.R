@@ -229,6 +229,31 @@ test_that("a missing single local file yields FETCH_FAILED, not an abort", {
   }
 })
 
+test_that("a missing local audit source reports the read error, unwarned", {
+  # SITE-mrwvuchg: the finding carries sitemapr_local_read_error's message,
+  # not base R's bare "cannot open the connection", and no file() warning
+  # leaks.
+  for (missing in c(
+    "/sitemapr-no-such-dir/missing-sitemap.xml",
+    "C:/sitemapr-no-such-dir/missing-sitemap.xml"
+  )) {
+    expect_no_warning(a <- audit_sitemap(missing))
+    findings <- audit_findings(a)
+    expect_identical(findings$code, "FETCH_FAILED")
+    expect_identical(
+      findings$message,
+      sprintf(
+        paste0(
+          "Submitted sitemap source %s failed: ",
+          "Local sitemap file %s does not exist or is not readable."
+        ),
+        missing,
+        missing
+      )
+    )
+  }
+})
+
 # ---- policy threading --------------------------------------------------------
 
 test_that("audit threads the request policy to root and index children", {

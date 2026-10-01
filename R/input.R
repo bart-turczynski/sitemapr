@@ -68,6 +68,33 @@ strip_file_scheme <- function(x) {
   out
 }
 
+#' Abort unless a local sitemap path is a readable file
+#'
+#' The single guard every local read runs before its `readBin()`, which would
+#' otherwise fail with base R's bare "cannot open the connection" (and leak a
+#' `file()` warning) on a missing, unreadable or directory path. A batched
+#' call or `audit_sitemap()` maps the condition to FETCH_FAILED.
+#'
+#' @param path Scalar local filesystem path.
+#' @return `path`, invisibly, when it is a readable file.
+#' @keywords internal
+#' @noRd
+assert_local_readable <- function(path) {
+  problem <- if (file.access(path, mode = 4L) != 0L) {
+    "does not exist or is not readable"
+  } else if (dir.exists(path)) {
+    "is a directory, not a file"
+  }
+  if (!is.null(problem)) {
+    rlang::abort(
+      sprintf("Local sitemap file %s %s.", path, problem),
+      class = "sitemapr_local_read_error",
+      path = path
+    )
+  }
+  invisible(path)
+}
+
 #' Reduce a parsed URL row to its origin string
 #'
 #' Builds `scheme://host[:port]` with no path, query, or fragment. Used for the
