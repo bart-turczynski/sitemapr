@@ -513,6 +513,15 @@ mock_sitemap_and_nul_robots <- function(req) {
 
 test_that("a NUL-bearing robots.txt degrades instead of aborting the run", {
   skip_if_not_installed("robotstxtr")
+  # Only an old robotstxtr aborts on the NUL byte; 0.3.0 decodes it (SITE-
+  # ubnaeanf). So the engine's abort is mocked, with the error such a build
+  # raised, and the degrade path is tested whatever robotstxtr is installed.
+  local_mocked_bindings(
+    robots_evaluate_url_v1 = function(...) {
+      stop(simpleError("embedded nul in string: 'User-agent: *\\n\\0'"))
+    },
+    .package = "robotstxtr"
+  )
   run <- function() {
     httr2::with_mocked_responses(
       mock_sitemap_and_nul_robots,
