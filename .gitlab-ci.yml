@@ -19,8 +19,9 @@
 # below does not reimplement that chain — it shells out to the identical
 # command, so CI and the hook cannot disagree about what "verified" means. It
 # still is not a substitute for the hook: `only_allow_merge_if_pipeline_succeeds`
-# is false and there is no server-side branch protection, so this pipeline is a
-# second opinion, not a gate in front of `main`. A split pipeline (separate
+# is false, and `main`'s branch protection limits who may push or merge
+# (Maintainers), not what, so this pipeline is a second opinion, not a gate in
+# front of `main`. A split pipeline (separate
 # `guards`/`lint`/`docs`/`check` jobs plus `coverage` and `readme`) was
 # proposed on SITE-fxkbboia and dropped on 2026-09-30: seor's ADR 0005
 # (SEOR-pgammbgo) settled the fleet on folding cheap jobs into one, because
@@ -155,8 +156,7 @@ variables:
 # - No CI result is visible before a merge lands. That costs nothing here in
 #   practice: `only_allow_merge_if_pipeline_succeeds` is false, `main` is a
 #   protected branch (Maintainer role gates push/merge, not CI status - see
-#   the fleet-wide correction on SEOR-bmgkzhvy, AGENTS.md's "no server-side
-#   branch protection" line predates that finding), and the local
+#   the fleet-wide correction on SEOR-bmgkzhvy), and the local
 #   `Rscript tools/verify.R` pre-push gate is what actually blocks bad code,
 #   and it runs before the push ever happens.
 # - A feature-branch push gets no pipeline at all. That is the intent.
@@ -255,9 +255,10 @@ check:
 # unreviewed docs to the same URL.
 #
 # Publishing here is necessary but NOT sufficient for the declared URL to
-# answer 200 to an anonymous client: this project's `pages_access_level` is
-# `private`, which 403s whatever is deployed. Flipping it to `enabled` is an
-# owner action on the project settings, not something this file can do.
+# answer 200 to an anonymous client: that also needs the project's
+# `pages_access_level` to be `enabled` (it is), because `private` 403s whatever
+# is deployed. That setting lives in the project settings, an owner action,
+# not something this file can change.
 pages:
   stage: deploy
   rules:

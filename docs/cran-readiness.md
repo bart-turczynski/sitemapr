@@ -47,7 +47,8 @@ was deleted rather than left to look like coverage it could not provide
 (SITE-kgpdfhoh; git history keeps it restorable).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
-in front of `main`, and there is no server-side branch protection behind it
+in front of `main`. `main` is a protected branch (Maintainer-only push and
+merge), but nothing on the server requires a passing pipeline
 (`only_allow_merge_if_pipeline_succeeds` is off). Treat a red gate as a red
 build: CI's `check` job reruns the chain only once the change is on `main`.
 
