@@ -1,6 +1,6 @@
 # Verification traps
 
-Six ways this repository's own gates have reported the wrong answer, and what
+Seven ways this repository's own gates have reported the wrong answer, and what
 to do instead. Every entry below was paid for once â€” the date and the issue id
 name the run that found it. They are collected here because none of them is
 discoverable from the code: each is a case where a check passed, or failed, for
@@ -162,3 +162,29 @@ exits, `combine_findings_contracts()` (re-read from the argument, not unioned â€
 one call shares one ruleset), and the page path in `R/page-findings.R`. This has
 now bitten `precap_totals` (SITE-tudzmegl), `layers_run` and `ruleset_run`.
 Assume it applies to the next one, and pin it with a test covering every exit.
+
+## 7. A local `--as-cran` skips two of CRAN's incoming checks
+
+win-builder's incoming NOTE (2026-10-01, SITE-bncwavxq) flagged "tibbles" in
+`DESCRIPTION` and README links to `CONTRIBUTING.md` and `docs/`. The local
+`check` stage, which runs the same `R CMD check --as-cran`, reported neither.
+
+**Why.** `tools:::.check_package_CRAN_incoming()` runs both checks only when an
+environment variable is set, and both default to `FALSE`. CRAN sets them:
+
+- `_R_CHECK_CRAN_INCOMING_USE_ASPELL_`: aspell over the Title and Description,
+  with CRAN's dictionaries (en_US, en_GB, en_stats). `inst/WORDLIST` does not
+  apply. The `spelling` stage honors the WORDLIST, so it passed "tibbles" too.
+- `_R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_`: relative links must resolve inside
+  the **built** package. On a source tree `CONTRIBUTING.md` exists, so the link
+  looks fine; `.Rbuildignore` drops the file from the tarball.
+
+Setting the variables locally would not be enough: the spelling check calls the
+`aspell` program, which neither this machine nor the CI image has.
+
+**How to apply.** The `incoming` stage (`verify_incoming()` in
+`tools/verify.R`) repeats both checks offline. It runs spelling's hunspell en_US
+over the same text after CRAN's own ignore patterns, and it reads
+`.Rbuildignore` to judge a link. Hunspell is not CRAN's aspell, so a word one
+knows and the other doesn't can still slip through either way. Treat the
+win-builder NOTE as the final word, and add any new trap it finds here.

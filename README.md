@@ -140,12 +140,15 @@ sitemap_tree("https://example.com")
 
 ## Learn more
 
-- Full reference and articles: <https://bart-turczynski.gitlab.io/sitemapr/>
+- Full reference and articles:
+  <https://bart-turczynski.gitlab.io/sitemapr/>
 - Getting-started vignette:
   `vignette("introduction", package = "sitemapr")`
 
 ## Development
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev setup, verification
-gate, and formatting conventions. Durable project context lives under
-[`docs/`](docs/).
+See
+[`CONTRIBUTING.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md)
+for the dev setup, verification gate, and formatting conventions.
+Durable project context lives under
+[`docs/`](https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/docs).
