@@ -5,6 +5,12 @@ Checked with `R CMD check --as-cran` on:
 - macOS aarch64 (R 4.6.0, aarch64-apple-darwin23, macOS Tahoe 26.7, local)
 - Linux, GitLab CI's `check` job on the `rocker/r-ver:4.6` image (R 4.6
   series)
+- Windows Server 2022 x64, win-builder: R-release (R 4.6.1 ucrt) and
+  R-devel (2026-09-30 r90605 ucrt). Each: 0 errors | 0 warnings | 1 note,
+  the incoming-feasibility note below.
+- macOS 26.6 aarch64, mac-builder (R 4.6.1 Patched): Status OK. It runs
+  without `--as-cran`, so no incoming note; `robotstxtr` was unavailable
+  there, which R reports as INFO.
 
 Result: **0 errors | 0 warnings | 1 note** (local run; the note is below)
 
@@ -13,7 +19,8 @@ local pre-push hook. Its last stage is `R CMD check --no-manual --as-cran`,
 which fails the job on an error or a warning but not on a note, so a passing
 job does not report a note count. The job runs on every push to `main` and
 passed there at the commit checked locally. CI does not run on branches or
-merge requests, and these two platforms are the only ones checked so far.
+merge requests. The win-builder and mac-builder runs were on the final
+pre-submission commit of the package code.
 
 ---
 
