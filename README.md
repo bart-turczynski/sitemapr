@@ -8,8 +8,8 @@
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- No CI badges, permanently: R-CMD-check, Codecov, pkgcheck, Security audit
-     and OSV audit all rendered from GitHub Actions runs. That account is
-     suspended for good and `origin` is GitLab, so the workflows were deleted
+     and OSV audit all rendered from GitHub Actions runs. `origin` is GitLab
+     and GitHub holds only a read-only mirror, so the workflows were deleted
      rather than left dormant (SITE-kgpdfhoh). A badge for a workflow that
      cannot run is a stale signal, not a missing one -- it reports the last
      state before the lights went out. Do not re-add these: GitLab CI here runs
@@ -18,16 +18,16 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
      gate in front of `main`. See
      docs/repo-hygiene.md. -->
 <!-- No DOI badge: zenodo.org/badge/latestdoi/1282558407 404s (re-measured
-     2026-09-05) and R CMD check --as-cran flags it as a possibly invalid URL.
-     That id belongs to the deleted GitHub repository and the badge resolves
-     only through Zenodo's GitHub archiving integration, so it cannot come back
-     -- the account is suspended for good (SITE-ewcnqior, SITE-jyndiitx). Do
-     not wait for a release to archive itself. A DOI from GitLab means
-     depositing a release archive to Zenodo by hand and linking the minted DOI
-     directly, not through a /badge/latestdoi route; .zenodo.json is the
-     prepared metadata for such a deposit and is dormant until one is made. The
-     all-software search badge below is a different URL, resolves 200, and
-     stays. -->
+     2026-10-01) and R CMD check --as-cran flags it as a possibly invalid URL
+     (SITE-ewcnqior, SITE-jyndiitx). That id is the GitHub repository's, now a
+     read-only mirror of `origin` on GitLab, and the badge resolves only
+     through Zenodo's GitHub archiving integration. Which DOI route to take is
+     open (SITE-knuqpfaf): a release archive deposited to Zenodo by hand with
+     the minted DOI linked directly, that integration enabled on the mirror,
+     or no DOI at all. Do not re-add the badge, or wait for a release to
+     archive itself, until that decision is made. .zenodo.json is the prepared
+     metadata for a deposit and is dormant until one is made. The all-software
+     search badge below is a different URL, resolves 200, and stays. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
