@@ -56,6 +56,19 @@ validation_source_bytes <- function(
   policy
 ) {
   if (is_local) {
+    # Checked before readBin(), which would otherwise fail with base R's bare
+    # "cannot open the connection" (and leak a file() warning) on a missing or
+    # unreadable path. A batched call still maps this to FETCH_FAILED.
+    if (file.access(target, mode = 4L) != 0L) {
+      rlang::abort(
+        sprintf(
+          "Local sitemap file %s does not exist or is not readable.",
+          target
+        ),
+        class = "sitemapr_local_read_error",
+        path = target
+      )
+    }
     # A local file has no response, so it carries no HTTP charset signal.
     return(list(
       bytes = readBin(target, what = "raw", n = file.info(target)$size),
