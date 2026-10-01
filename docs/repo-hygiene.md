@@ -53,12 +53,12 @@ against it on the server. `pages` is pinned to `main` and is not reachable that
 way. A split pipeline with separate guard, lint, coverage and readme jobs was
 proposed (SITE-fxkbboia) and dropped: seor's ADR 0005 folds cheap jobs into one
 to cut per-job runner overhead. The
-repository once carried a GitHub Actions workflow tree, but that account is
-permanently suspended, so the tree was deleted rather than left to rot
-(SITE-kgpdfhoh — git history keeps it restorable). `main` is a protected branch
-(Maintainer-only push and merge, force-push refused), but that governs who may
-write to it, not whether the tree is sound. Treat a red pre-push gate as a red
-build: on a branch, no second opinion is coming.
+repository once carried a GitHub Actions workflow tree, but `origin` is GitLab
+and GitHub holds only a read-only mirror of it, so the tree was deleted rather
+than left to rot (SITE-kgpdfhoh — git history keeps it restorable). `main` is a
+protected branch (Maintainer-only push and merge, force-push refused), but that
+governs who may write to it, not whether the tree is sound. Treat a red
+pre-push gate as a red build: on a branch, no second opinion is coming.
 
 ## Running the checks locally
 

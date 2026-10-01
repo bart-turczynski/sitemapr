@@ -16,11 +16,11 @@
 # schedule-only `osv-audit`/`security-audit`. But CI runs only on pushes to
 # `main`, tags and hand-started pipelines, and merging does not wait on a green
 # pipeline, so it is a second opinion after the fact, not a gate. The
-# repository once carried a GitHub Actions workflow tree, but that account is
-# permanently suspended, so the tree was deleted rather than left to rot
-# (SITE-kgpdfhoh -- git history keeps it restorable). There is no server-side
-# branch protection behind this either. Treat a failure here as a red build:
-# nothing upstream of `main` will catch what this lets through.
+# repository once carried a GitHub Actions workflow tree, but GitHub holds only
+# a read-only mirror of `origin`, so the tree was deleted rather than left to
+# rot (SITE-kgpdfhoh -- git history keeps it restorable). There is no
+# server-side branch protection behind this either. Treat a failure here as a
+# red build: nothing upstream of `main` will catch what this lets through.
 #
 # Stages run in declared order and the chain stops at the first failure, so the
 # cheap guards (seconds) always report before the expensive ones (minutes).

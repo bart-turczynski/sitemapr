@@ -41,10 +41,10 @@ a branch or merge request. A split pipeline with separate guard, lint,
 coverage and readme jobs was proposed (SITE-fxkbboia) and dropped: seor's ADR
 0005 folds cheap jobs into one to cut per-job runner overhead. The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
-pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but the
-account is permanently suspended, so that tree was deleted rather than left to
-look like coverage it could not provide (SITE-kgpdfhoh; git history keeps it
-restorable).
+pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but
+`origin` is GitLab and GitHub holds only a read-only mirror of it, so that tree
+was deleted rather than left to look like coverage it could not provide
+(SITE-kgpdfhoh; git history keeps it restorable).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
 in front of `main`, and there is no server-side branch protection behind it
