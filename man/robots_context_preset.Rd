@@ -32,12 +32,12 @@ A preset selects a robots engine only. It does \strong{not} select a sitemap
 ruleset, and no sitemap ruleset selects it (ADR-009 §1): the bridge between
 the two value sets is this documented preset, never a silent derivation.
 
-The \code{bing} preset is Bing's matcher (token \code{"Bingbot"}) under RFC 9309
-fetch rules, \strong{not} Bing's own policy: Bing documents no robots.txt status
-policy, so \code{robotstxtr}'s \code{"bing"} policy ruleset declines to decide every
-fetched robots.txt, and the preset uses the explicit application policy
-\code{"assumed_rfc9309"} instead. The context records that value, so results
-never present the assumption as Bing's. The \code{yandex} preset keeps
+The \code{bing} preset is the Bing matcher (token \code{"Bingbot"}) under RFC 9309
+fetch rules, \strong{not} a policy Bing documents: Bing publishes no robots.txt
+status policy, so \code{robotstxtr}'s \code{"bing"} policy ruleset declines to decide
+every fetched robots.txt, and the preset uses the explicit application
+policy \code{"assumed_rfc9309"} instead. The context records that value, so
+results never present the assumption as a Bing policy. The \code{yandex} preset keeps
 \code{"yandex"} as its policy ruleset because Yandex does document one: a 200
 uses the rules, and any other status allows everything.
 

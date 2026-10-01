@@ -175,12 +175,12 @@ robots_context_presets <- function() {
 #' ruleset, and no sitemap ruleset selects it (ADR-009 §1): the bridge between
 #' the two value sets is this documented preset, never a silent derivation.
 #'
-#' The `bing` preset is Bing's matcher (token `"Bingbot"`) under RFC 9309
-#' fetch rules, **not** Bing's own policy: Bing documents no robots.txt status
-#' policy, so `robotstxtr`'s `"bing"` policy ruleset declines to decide every
-#' fetched robots.txt, and the preset uses the explicit application policy
-#' `"assumed_rfc9309"` instead. The context records that value, so results
-#' never present the assumption as Bing's. The `yandex` preset keeps
+#' The `bing` preset is the Bing matcher (token `"Bingbot"`) under RFC 9309
+#' fetch rules, **not** a policy Bing documents: Bing publishes no robots.txt
+#' status policy, so `robotstxtr`'s `"bing"` policy ruleset declines to decide
+#' every fetched robots.txt, and the preset uses the explicit application
+#' policy `"assumed_rfc9309"` instead. The context records that value, so
+#' results never present the assumption as a Bing policy. The `yandex` preset keeps
 #' `"yandex"` as its policy ruleset because Yandex does document one: a 200
 #' uses the rules, and any other status allows everything.
 #'
