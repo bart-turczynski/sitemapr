@@ -287,7 +287,7 @@ test_that("an install without the contract accessor aborts loudly", {
     "robots_engine_contract_v1()",
     fixed = TRUE
   )
-  expect_match(conditionMessage(cnd), "0.2.0", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "0.3.0", fixed = TRUE)
   expect_match(conditionMessage(cnd), "pak::pak", fixed = TRUE)
 })
 

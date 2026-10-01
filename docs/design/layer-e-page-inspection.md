@@ -180,8 +180,9 @@ while carrying schema `2026-07-17.1` and **no `matcher_capability` field at
 all**. An id-only gate passes that build and then silently hands out a NULL
 capability. The gate therefore checks three things: the accessor exists, the
 `contract_id` matches, and `matcher_capability` is actually present. The
-known-good schema (`2026-07-18.2`) is recorded for the error message but is
-deliberately *not* an equality gate, since additive revisions stay compatible.
+known-good schema (`2026-07-18.2`, and `2026-08-25.1` since robotstxtr 0.3.0,
+SITE-bthekpqx) is recorded for the error message but is deliberately *not* an
+equality gate, since additive revisions stay compatible.
 
 Absence of `robotstxtr` remains a warning + graceful skip (a setup fact about
 the user's machine); a version that is present but **incompatible** aborts with

@@ -62,8 +62,8 @@ Follow the fleet checklist,
 sitemapr's deltas:
 
 - **Step 1: robotstxtr reaches CRAN first.** `DESCRIPTION` suggests
-  `robotstxtr (>= 0.2.0)` and pins it with
-  `Remotes: gitlab::bart-turczynski/robotstxtr@v0.2.0`. Once robotstxtr is on
+  `robotstxtr (>= 0.3.0)` and pins it with
+  `Remotes: gitlab::bart-turczynski/robotstxtr@v0.3.0`. Once robotstxtr is on
   CRAN, drop the pin and the `Remotes:` field with it (SEOR-jkmrvikj).
 - **Step 4: `cran-comments.md` describes robotstxtr in CRAN incoming.** Its
   `Remotes` and `Suggests` note items and its Dependencies section are

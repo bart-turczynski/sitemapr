@@ -645,7 +645,7 @@ against. sitemapr publishes both through one exported accessor,
 | `legacy_contract_version` | `1` | The ten pinned columns alone |
 | `registry_revision` | `2026-08-08` | Revision of `findings-registry.csv` |
 | `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
-| `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.2.0, < 0.3.0` | Ranges this build is known to work against |
+| `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.3.0, < 0.4.0` | Ranges this build is known to work against |
 
 Three decisions are embedded in that table and are the contract, not incidental:
 

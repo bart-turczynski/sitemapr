@@ -269,7 +269,7 @@ pages:
     # `dependencies = TRUE` pulls Suggests as well as Imports: pkgdown builds
     # the vignettes (knitr, rmarkdown) and evaluates the examples, some of
     # which reach for the optional `robotstxtr` engine. That one resolves via
-    # DESCRIPTION's `Remotes: gitlab::bart-turczynski/robotstxtr@v0.2.0`, so
+    # DESCRIPTION's `Remotes: gitlab::bart-turczynski/robotstxtr@v0.3.0`, so
     # this step needs the robotstxtr project to stay publicly readable — pak
     # reports a 403, not a missing package, if it is not.
     - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'

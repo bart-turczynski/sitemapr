@@ -33,12 +33,12 @@ Suggests:
     knitr,
     oysteR,
     rmarkdown,
-    robotstxtr (>= 0.2.0),
+    robotstxtr (>= 0.3.0),
     rosv,
     testthat (>= 3.0.0),
     withr
 Remotes:
-    gitlab::bart-turczynski/robotstxtr@v0.2.0
+    gitlab::bart-turczynski/robotstxtr@v0.3.0
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

@@ -111,14 +111,49 @@ test_that("presets retain their EXPANDED axis values", {
   expect_identical(b$matcher_backend, "bing")
 })
 
+test_that("a token its bounded backend refuses fails at construction", {
+  skip_if_not_installed("robotstxtr")
+  # The mistake the `yandex` preset shipped until SITE-fsawklnl: "YandexBot" is
+  # a crawler identity, and the bounded Yandex profile accepts only the group
+  # label "Yandex". It now fails here with robotstxtr's own error, which names
+  # the accepted selectors, instead of rendering every URL indeterminate.
+  expect_error(
+    robots_context("YandexBot", "yandex", "yandex"),
+    class = "robotstxtr_unresolvable_matcher_profile"
+  )
+  expect_error(
+    robots_context("YandexBot", "yandex", "yandex"),
+    "Yandex"
+  )
+  # An unbounded backend has no closed set, so any token passes.
+  expect_s3_class(
+    robots_context("AnyBot", "google", "google"),
+    "sitemapr_robots_context"
+  )
+})
+
+test_that("a robotstxtr without the profile resolver is rejected loudly", {
+  skip_if_not_installed("robotstxtr")
+  # A pre-0.3.0 build carries the v1 contract but not the resolver; letting it
+  # through would silently skip the construction check.
+  old <- new.env(parent = emptyenv())
+  old$robots_engine_contract_v1 <- robotstxtr::robots_engine_contract_v1
+  local_mocked_bindings(robotstxtr_namespace = function() old)
+  cnd <- expect_error(
+    robots_context_preset("google"),
+    class = "sitemapr_robotstxtr_contract"
+  )
+  expect_match(conditionMessage(cnd), "0.3.0", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "pak::pak", fixed = TRUE)
+})
+
 test_that("every preset's product token is honored by its own backend", {
   skip_if_not_installed("robotstxtr")
-  # A preset whose token its own backend refuses is silently useless: every row
-  # comes back `unsupported_product_token`, so the whole sitemap reads as
-  # indeterminate. That is exactly what the `yandex` preset did until
-  # SITE-fsawklnl — its token was "YandexBot", but the bounded Yandex profile
-  # accepts only "Yandex" — and nothing caught it, because no findings were
-  # ever derived under a non-Google context.
+  # The construction check above answers "does the backend accept this token".
+  # This one answers what it cannot: does each preset actually reach an
+  # `evaluated` decision end to end, through the availability skip and the
+  # fact plumbing into robots_evaluate_facts(). Kept deliberately thin
+  # (SITE-bthekpqx) rather than dropped.
   #
   # Backends the installed build cannot run are skipped rather than failed:
   # `capability_unavailable` is a fact about the sibling, not a broken preset.

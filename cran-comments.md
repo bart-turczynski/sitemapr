@@ -27,20 +27,19 @@ It covers five items:
   a development version. It is bumped to a release version before submission
   (see the checklist below).
 * **Unknown field `Remotes` in DESCRIPTION.** `sitemapr` optionally suggests
-  `robotstxtr (>= 0.2.0)`, which is not on CRAN yet, so a temporary `Remotes:`
+  `robotstxtr (>= 0.3.0)`, which is not on CRAN yet, so a temporary `Remotes:`
   field names its GitLab source. That is what lets the package and its
   documentation build with the optional dependency while it is in flight:
 
   ```
   Remotes:
-      gitlab::bart-turczynski/robotstxtr@v0.2.0
+      gitlab::bart-turczynski/robotstxtr@v0.3.0
   ```
 
-  `robotstxtr` is pinned to the tag `v0.2.0` because the engine-contract v1 API
-  this package calls (`robots_engine_contract_v1()` and the v1 evaluation
-  entry points) first exists at that tag; an earlier build advertises the same
-  contract id without the fields `sitemapr` reads. The entry goes away before
-  submission.
+  `robotstxtr` is pinned to the tag `v0.3.0`, the release in CRAN incoming,
+  because `sitemapr` calls `robots_resolve_matcher_profile_v1()`, which that
+  release first exports, alongside the engine-contract v1 API. The entry goes
+  away before submission.
 * **`Suggests` not in mainstream repositories: `robotstxtr`.** Same cause —
   `robotstxtr` is an optional (Suggests) dependency not yet on CRAN.
 * **`BugReports:` reported as a 404.**
@@ -77,7 +76,7 @@ accepted and `Remotes:` is removed, both items leave the note.
 ## Dependencies
 
 `sitemapr` imports `rurl (>= 3.0.1)`, which is on CRAN, and suggests
-`robotstxtr (>= 0.2.0)`, which is not yet. `robotstxtr` is by the same author
+`robotstxtr (>= 0.3.0)`, which is not yet. `robotstxtr` is by the same author
 and hosted on GitLab alongside `sitemapr` itself:
 
 - `robotstxtr` — <https://gitlab.com/bart-turczynski/robotstxtr>
@@ -94,7 +93,7 @@ Four things must be true before this file is accurate at submission time. None
 of them is done yet.
 
 1. **`robotstxtr` accepted on CRAN**, so the `Suggests` version floor
-   `robotstxtr (>= 0.2.0)` resolves from a mainstream repository.
+   `robotstxtr (>= 0.3.0)` resolves from a mainstream repository.
 2. **`Remotes:` removed from DESCRIPTION.** CRAN does not accept the field; it
    is present only so the package builds against `robotstxtr` from GitLab
    while that package is in flight, and is not part of the intended
