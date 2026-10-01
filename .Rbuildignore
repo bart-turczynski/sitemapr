@@ -19,6 +19,11 @@
 ^\.editorconfig$
 ^\.env$
 ^\.env\.example$
+# In a git worktree `.git` is a file pointing at the main repository, not a
+# directory. R CMD build drops a `.git` directory by default but not a file,
+# so a worktree build shipped it and --as-cran added a hidden-files NOTE
+# (SITE-bcxrscdd).
+^\.git$
 ^\.gitattributes$
 ^\.gitignore$
 ^\.gitlab-ci\.yml$
