@@ -872,9 +872,19 @@ The two value sets are **different axes** and are related by a documented
 |---|---|
 | `sitemaps.org` (baseline / "no engine") | `rfc9309` |
 | `google` | `google` |
-| `bing` | `bing` |
+| `bing` | `assumed_rfc9309`, with the `bing` matcher |
 | `yandex` | `yandex` |
-| *(no sitemap-side equivalent)* | `assumed_rfc9309` |
+
+**Bing's row is an assumption, on purpose** (SITE-ubnaeanf, 2026-10-01). Bing
+publishes no robots.txt status policy, so robotstxtr's `bing` policy ruleset is a
+`documentation_gap` for every fetched status, 200 included: a context on it
+never decides anything. robotstxtr sanctions `assumed_rfc9309` as the explicit
+application policy to pair with its Bing matcher, on the condition that it is
+never presented as Bing's own policy. The `bing` preset therefore matches with
+Bing's matcher and token (`Bingbot`) and treats the fetch under RFC 9309 rules,
+and the context records `policy_ruleset = "assumed_rfc9309"`. Yandex is not
+treated the same way because Yandex documents its own status policy, which
+robotstxtr implements as `yandex`. Provenance: `application_choice`.
 
 Selecting a sitemap ruleset does **not** select a robots policy. A Bing *sitemap*
 ruleset does not imply a Bing *robots* policy: the two are chosen independently,

@@ -101,6 +101,14 @@ test_that("presets retain their EXPANDED axis values", {
   expect_identical(y$product_token, "Yandex")
   expect_identical(y$policy_ruleset, "yandex")
   expect_identical(y$matcher_backend, "yandex")
+
+  # Bing documents no status policy, so robotstxtr's `bing` ruleset decides
+  # nothing on a fetched robots.txt. The preset pairs Bing's matcher with the
+  # explicit `assumed_rfc9309` policy, and the context says so (SITE-ubnaeanf).
+  b <- robots_context_preset("bing")
+  expect_identical(b$product_token, "Bingbot")
+  expect_identical(b$policy_ruleset, "assumed_rfc9309")
+  expect_identical(b$matcher_backend, "bing")
 })
 
 test_that("every preset's product token is honored by its own backend", {

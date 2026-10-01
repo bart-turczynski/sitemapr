@@ -121,6 +121,12 @@ robots_context <- function(
 # The preset table. Each entry is product_token / policy_ruleset /
 # matcher_backend, in that order.
 #
+# `bing` pairs Bing's matcher with `assumed_rfc9309`, not robotstxtr's `bing`
+# policy ruleset: Bing documents no robots.txt status policy, so `bing` is a
+# documentation gap for every fetched status and would never decide anything
+# (SITE-ubnaeanf). robotstxtr sanctions `assumed_rfc9309` for this pairing.
+# `yandex` keeps its own ruleset, because Yandex does document one.
+#
 # The tokens are not decorative: a `bounded_profiles` backend refuses anything
 # outside its own vendor profiles, and an unsupported token silently renders
 # every URL indeterminate. Yandex's bounded profile accepts `"Yandex"` and not
@@ -129,7 +135,7 @@ robots_context <- function(
 robots_preset_table <- function() {
   list(
     google = list("Googlebot", "google", "google"),
-    bing = list("Bingbot", "bing", "bing"),
+    bing = list("Bingbot", "assumed_rfc9309", "bing"),
     yandex = list("Yandex", "yandex", "yandex"),
     rfc9309 = list("*", "rfc9309", "rfc9309")
   )
@@ -168,6 +174,15 @@ robots_context_presets <- function() {
 #' A preset selects a robots engine only. It does **not** select a sitemap
 #' ruleset, and no sitemap ruleset selects it (ADR-009 §1): the bridge between
 #' the two value sets is this documented preset, never a silent derivation.
+#'
+#' The `bing` preset is Bing's matcher (token `"Bingbot"`) under RFC 9309
+#' fetch rules, **not** Bing's own policy: Bing documents no robots.txt status
+#' policy, so `robotstxtr`'s `"bing"` policy ruleset declines to decide every
+#' fetched robots.txt, and the preset uses the explicit application policy
+#' `"assumed_rfc9309"` instead. The context records that value, so results
+#' never present the assumption as Bing's. The `yandex` preset keeps
+#' `"yandex"` as its policy ruleset because Yandex does document one: a 200
+#' uses the rules, and any other status allows everything.
 #'
 #' Not every preset is runnable on every install. `robotstxtr` publishes a
 #' `matcher_availability` per backend, and one reporting

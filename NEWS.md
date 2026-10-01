@@ -69,7 +69,10 @@ related W3C and RFC standards.
   `robots_context()` carries the three independent robots axes — the matcher
   product token, the status-policy ruleset, and the matcher backend — and
   `robots_context_preset()` selects one engine's set of all three at once
-  (`robots_context_presets()` enumerates them). The context's expanded values
+  (`robots_context_presets()` enumerates them). The `bing` preset is Bing's
+  matcher under RFC 9309 fetch rules (`policy_ruleset = "assumed_rfc9309"`),
+  not Bing's own policy: Bing documents no robots.txt status policy. The
+  `yandex` preset uses Yandex's documented one. The context's expanded values
   are retained on the object and surfaced again in a `robots_context`
   list-column of the result, so a caller can read back exactly which engine
   decided each finding. The robots axes are independent of `sitemap_ruleset`
