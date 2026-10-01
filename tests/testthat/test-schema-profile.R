@@ -60,8 +60,9 @@ test_that("the wrapper references bundled schemas by absolute path", {
     "schemaLocation"
   )
   expect_true(all(startsWith(locs, schema_dir())))
-  # system.file gives an absolute path, so the locations are absolute.
-  expect_true(all(startsWith(locs, "/")))
+  # system.file gives an absolute path, so the locations are absolute: `/...`
+  # on POSIX, `D:/...` on Windows (SITE-gobjngna).
+  expect_true(all(grepl("^(/|[A-Za-z]:[/\\\\])", locs)))
 })
 
 test_that("repeated resolution of the same combo reuses one cached wrapper", {
