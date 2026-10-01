@@ -215,6 +215,20 @@ test_that("a failed source yields a coherent audit with the failure recorded", {
   )))
 })
 
+test_that("a missing single local file yields FETCH_FAILED, not an abort", {
+  # The drive-letter path reaches the read layer on every platform
+  # (SITE-oexcvvbn).
+  for (missing in c(
+    "/sitemapr-no-such-dir/missing-sitemap.xml",
+    "C:/sitemapr-no-such-dir/missing-sitemap.xml"
+  )) {
+    a <- suppressWarnings(audit_sitemap(missing))
+    expect_s3_class(a, "sitemap_audit")
+    expect_identical(audit_findings(a)$code, "FETCH_FAILED")
+    expect_identical(nrow(audit_urls(a)), 0L)
+  }
+})
+
 # ---- policy threading --------------------------------------------------------
 
 test_that("audit threads the request policy to root and index children", {
