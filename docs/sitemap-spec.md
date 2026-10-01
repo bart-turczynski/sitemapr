@@ -1098,9 +1098,11 @@ with its own `matcher_semantics`. This is §13.1's anti-laundering rule applied
 to the synthesis. Under `robotstxtr` v0.2.0 the Bing matcher reported
 `capability_unavailable`. Under v0.3.0 it is `available`, but robotstxtr's
 `bing` policy ruleset is a `documentation_gap` for every fetched status, so a
-fetched row under it never reaches a decision. Either way, although the Bing
-*mechanic* is `documented`, no Bing synthesis is emitted: a documented mechanic
-does not license borrowing another engine's verdict. Provenance:
+fetched row under it never reaches a decision, and the `bing` preset's
+`assumed_rfc9309` policy (§13.0) is not Bing's, so its axes do not both name
+Bing. Either way, although the Bing *mechanic* is `documented`, no Bing
+synthesis is emitted: a documented mechanic does not license borrowing another
+engine's verdict. Provenance:
 `application_choice`.
 
 **The evaluated robots group is named in the message.** A decision for the `*`
