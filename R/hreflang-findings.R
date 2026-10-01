@@ -156,7 +156,7 @@ hreflang_inconsistent_findings <- function(graph, base) {
   out <- list()
   for (key in targets) {
     tokens <- by_target[[key]]
-    if (length(unique(tolower(tokens))) < 2L) {
+    if (length(unique(ascii_lower(tokens))) < 2L) {
       next
     }
     out[[length(out) + 1L]] <-

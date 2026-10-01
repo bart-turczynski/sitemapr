@@ -241,6 +241,6 @@ page_header_values <- function(headers, name) {
   if (length(headers) == 0L) {
     return(character(0))
   }
-  hit <- tolower(names(headers)) == tolower(name)
+  hit <- ascii_lower(names(headers)) == ascii_lower(name)
   as.character(unlist(headers[hit], use.names = FALSE))
 }

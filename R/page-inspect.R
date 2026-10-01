@@ -69,7 +69,7 @@ page_inspection_budget <- function(
 page_inspection_dedup <- function(locs) {
   locs <- as.character(locs)
   parsed <- parse_url_adapter(locs)
-  scheme <- tolower(as.character(parsed$scheme))
+  scheme <- ascii_lower(as.character(parsed$scheme))
   status <- as.character(parsed$parse_status)
   keys <- build_loc_key(parsed)
   eligible <- !is.na(locs) &

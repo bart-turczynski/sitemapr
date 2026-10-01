@@ -593,7 +593,7 @@ throttle_state_new <- function(throttle, now = Sys.time, sleep = Sys.sleep) {
 # collapses to no port, so `https://h:443/` and `https://h/` share one bucket.
 throttle_host_key <- function(url) {
   parsed <- parse_url_adapter(url)
-  host <- tolower(as.character(parsed$host)[[1L]])
+  host <- ascii_lower(as.character(parsed$host)[[1L]])
   scheme <- as.character(parsed$scheme)[[1L]]
   port <- parsed$port[[1L]]
   defaults <- c(http = 80L, https = 443L)
@@ -788,7 +788,7 @@ fetch_connection_failure <- function(
   policy = request_policy(),
   throttle_state = NULL
 ) {
-  if (isTRUE(scheme_inferred) && startsWith(tolower(url_str), "https://")) {
+  if (isTRUE(scheme_inferred) && startsWith(ascii_lower(url_str), "https://")) {
     http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
     return(fetch_follow(
       url = http_url,
@@ -1316,8 +1316,8 @@ page_fetch_terminal <- function(resp, limits, page_body_cap) {
 # always carry an explicit scheme). So every page-fetch hop is a
 # non-inferred-scheme request.
 page_hop_is_downgrade <- function(from_url, to_url) {
-  startsWith(tolower(from_url), "https://") &&
-    startsWith(tolower(to_url), "http://")
+  startsWith(ascii_lower(from_url), "https://") &&
+    startsWith(ascii_lower(to_url), "http://")
 }
 
 # Manual redirect loop for page inspection. Ordering is load-bearing (ADR-003):

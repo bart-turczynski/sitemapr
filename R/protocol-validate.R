@@ -1159,7 +1159,7 @@ hreflang_roles_1 <- function(parts) {
   if (!hreflang_is_alpha2(parts[1])) {
     return(NULL)
   }
-  if (parts[1] == toupper(parts[1]) && parts[1] != tolower(parts[1])) {
+  if (parts[1] == ascii_upper(parts[1]) && parts[1] != ascii_lower(parts[1])) {
     return(NULL)
   }
   "lang"
@@ -1210,11 +1210,14 @@ hreflang_case_ok <- function(parts, roles) {
     p <- parts[i]
     ok <- switch(
       roles[i],
-      lang = identical(p, tolower(p)),
-      region = identical(p, toupper(p)),
+      lang = identical(p, ascii_lower(p)),
+      region = identical(p, ascii_upper(p)),
       script = identical(
         p,
-        paste0(toupper(substr(p, 1L, 1L)), tolower(substr(p, 2L, nchar(p))))
+        paste0(
+          ascii_upper(substr(p, 1L, 1L)),
+          ascii_lower(substr(p, 2L, nchar(p)))
+        )
       )
     )
     if (!ok) {
@@ -1237,7 +1240,9 @@ hreflang_case_ok <- function(parts, roles) {
 # `x-default`-like (case-folded, `_`->`-`): EXACTLY `x-default` is clean, any
 # near miss is invalid. Returns the code, or `NULL` when not `x-default`-like.
 hreflang_xdefault_code <- function(raw, trimmed) {
-  if (!identical(tolower(gsub("_", "-", trimmed, fixed = TRUE)), "x-default")) {
+  if (
+    !identical(ascii_lower(gsub("_", "-", trimmed, fixed = TRUE)), "x-default")
+  ) {
     return(NULL)
   }
   if (identical(raw, "x-default")) {
@@ -1363,7 +1368,7 @@ hreflang_token_outcome <- function(hl, base, i, m) {
   raw <- as.character(hl)
   code <- classify_hreflang_token(raw)
   is_xd <- identical(
-    tolower(gsub("_", "-", trimws(raw), fixed = TRUE)),
+    ascii_lower(gsub("_", "-", trimws(raw), fixed = TRUE)),
     "x-default"
   )
   finding <- NULL
@@ -1381,7 +1386,7 @@ hreflang_token_outcome <- function(hl, base, i, m) {
   # A blank/whitespace-only token normalizes to "" and is already reported as
   # HREFLANG_FORMAT_INVALID above; keep it out of the token-normal set so it
   # never becomes an empty duplicate-detection key (an env name of "" errors).
-  token_norm <- tolower(trimws(raw))
+  token_norm <- ascii_lower(trimws(raw))
   list(
     norm = if (is_xd || !nzchar(token_norm)) NA_character_ else token_norm,
     is_xdefault = is_xd,

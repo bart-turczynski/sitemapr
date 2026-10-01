@@ -117,7 +117,7 @@ sniff_markup_preview <- function(bytes, max_bytes = 4096L, lower = TRUE) {
     return("")
   }
   preview <- rawToChar(as.raw(ascii))
-  if (lower) tolower(preview) else preview
+  if (lower) ascii_lower(preview) else preview
 }
 
 # Strip a single `<! ... >` declaration (e.g. `<!DOCTYPE ...>`) from the front

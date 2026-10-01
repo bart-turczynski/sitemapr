@@ -196,7 +196,7 @@ ssrf_ipv6_candidate <- function(s) {
   if (length(s) != 1L || is.na(s) || !nzchar(s)) {
     return(NULL)
   }
-  low <- tolower(s)
+  low <- ascii_lower(s)
   if (!grepl(":", low, fixed = TRUE) || !grepl("^[0-9a-f:.]+$", low)) {
     return(NULL)
   }
@@ -435,7 +435,7 @@ ssrf_classify_literal <- function(bare) {
     ssrf_classify_ipv6(bare) # IPv6 literal (contains a colon)
   } else if (ssrf_is_dotted_quad(bare)) {
     ssrf_classify_ipv4(bare) # IPv4 dotted-quad
-  } else if (tolower(bare) == "metadata.google.internal") {
+  } else if (ascii_lower(bare) == "metadata.google.internal") {
     "cloud-metadata"
   } else {
     NA_character_
@@ -463,7 +463,7 @@ ssrf_classify_literal <- function(bare) {
 #' @noRd
 ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
   # 1. Scheme gate — only http/https allowed.
-  scheme_l <- if (is.na(scheme)) "" else tolower(scheme)
+  scheme_l <- if (is.na(scheme)) "" else ascii_lower(scheme)
   if (!scheme_l %in% c("http", "https")) {
     return(ssrf_result(FALSE, "scheme"))
   }
@@ -527,7 +527,7 @@ ssrf_raw_scheme_of <- function(url) {
   if (length(m) == 0L) {
     return(NA_character_)
   }
-  tolower(m)
+  ascii_lower(m)
 }
 
 # Extract the host substring from a raw URL string WITHOUT re-parsing semantics:

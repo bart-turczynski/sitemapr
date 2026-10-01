@@ -190,7 +190,7 @@ url_fast_set_resolved <- function(out, oi, keep, sch, h, p, pth, q, frag) {
   gi <- oi[kept]
   out$resolved[gi] <- TRUE
   out$scheme[gi] <- sch[kept]
-  out$host[gi] <- tolower(h[kept])
+  out$host[gi] <- ascii_lower(h[kept])
   out$port[gi] <- p[kept]
   out$path[gi] <- pth[kept]
   out$query[gi] <- q[kept]
@@ -202,7 +202,7 @@ url_fast_apply_matches <- function(out, u, mm, ok) {
   oi <- which(ok)
   uok <- u[ok]
   mat <- do.call(rbind, mm[ok]) # cols: full, scheme, authority, path
-  sch <- tolower(mat[, 2L])
+  sch <- ascii_lower(mat[, 2L])
   auth <- mat[, 3L]
   rawpath <- mat[, 4L]
 
