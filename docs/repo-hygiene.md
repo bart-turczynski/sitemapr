@@ -66,7 +66,7 @@ The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
 arguments. Run it directly rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, lint, urls, R CMD check
+Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, incoming, lint, urls, R CMD check
 Rscript tools/verify.R --all        # adds coverage and the README diff
 Rscript tools/verify.R lint check   # named stages only
 Rscript tools/verify.R --list       # list the stages
@@ -97,12 +97,19 @@ from the gate's own lint stage. Add a new `tools/` script and it is linted; that
 was not true before.
 
 `spelling` runs `spelling::spell_check_package()` over `DESCRIPTION`, `man/`,
-the vignettes, `README` and `NEWS.md`. `R CMD check` has a spelling check of its
-own, but it silently skips it on a machine with no English aspell or hunspell
-dictionary, so a typo first surfaced in win-builder's incoming NOTE
-(SEOR-mtbzfroz). spelling bundles its own dictionaries. A genuine term goes in
-`inst/WORDLIST`; a typo gets fixed at its source (the roxygen comment for
-`man/`, `README.Rmd` for `README.md`).
+the vignettes, `README` and `NEWS.md`. `R CMD check` has a DESCRIPTION spelling
+check of its own, but it runs only where `_R_CHECK_CRAN_INCOMING_USE_ASPELL_` is
+set, which is CRAN and not here, so a typo first surfaced in win-builder's
+incoming NOTE (SEOR-mtbzfroz). spelling bundles its own dictionaries. A genuine
+term goes in `inst/WORDLIST`; a typo gets fixed at its source (the roxygen
+comment for `man/`, `README.Rmd` for `README.md`).
+
+`incoming` repeats the two `checking CRAN incoming feasibility` checks that a
+local `R CMD check --as-cran` skips (see verification trap 7). It spell-checks
+`DESCRIPTION`'s Title and Description **without** `inst/WORDLIST`, because
+CRAN's aspell never reads it: reword, or quote a name as `'name'`. And it fails
+a relative link in `README.md` or `man/` whose target `.Rbuildignore` drops from
+the tarball: link it by repository URL instead.
 
 `urls` fetches every URL the package declares (`DESCRIPTION`, `man/`,
 `inst/CITATION`, `NEWS.md`, `README.md`) with `tools:::check_url_db()`, the

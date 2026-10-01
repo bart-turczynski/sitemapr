@@ -7,8 +7,8 @@ Authors@R:
            comment = c(ORCID = "0000-0002-8788-7980"))
 Description: A deterministic toolkit for reading and validating XML, text, and
     index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC
-    standards. It parses sitemap sources into tidy tibbles, expands sitemap
-    indexes, and reports schema and protocol findings with stable, reproducible
+    standards. It parses sitemap sources into tidy data frames, expands
+    sitemap indexes, and reports schema and protocol findings with stable, reproducible
     output.
 License: MIT + file LICENSE
 URL: https://gitlab.com/bart-turczynski/sitemapr,
