@@ -48,6 +48,11 @@ related W3C and RFC standards.
   strict-only findings.
 * RSS/Atom feeds are detected and reported as an unsupported-feed finding rather
   than misparsed.
+* A missing or unreadable local file given to `validate_sitemap()` as its only
+  source now aborts with a classed `sitemapr_local_read_error` that names the
+  path, instead of base R's bare "cannot open the connection" and a leaked
+  `file()` warning. A multi-source validation still reports it as a
+  `FETCH_FAILED` finding.
 
 ## Page and robots checking (Layer E)
 

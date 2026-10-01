@@ -293,6 +293,31 @@ test_that("an unreachable single URL source aborts with sitemapr_timeout", {
   )
 })
 
+test_that("a missing single local file aborts with sitemapr_local_read_error", {
+  # SITE-acedgjgj: a classed condition naming the path, not base R's bare
+  # "cannot open the connection" plus a leaked file() warning. The drive-letter
+  # path reaches the read layer on every platform (SITE-oexcvvbn).
+  for (missing in c(
+    "/sitemapr-no-such-dir/missing-sitemap.xml",
+    "C:/sitemapr-no-such-dir/missing-sitemap.xml"
+  )) {
+    expect_no_warning(
+      cnd <- expect_error(
+        validate_sitemap(missing),
+        class = "sitemapr_local_read_error"
+      )
+    )
+    expect_identical(cnd$path, missing)
+    expect_identical(
+      conditionMessage(cnd),
+      sprintf(
+        "Local sitemap file %s does not exist or is not readable.",
+        missing
+      )
+    )
+  }
+})
+
 test_that("an HTML masquerade source yields UNSUPPORTED_HTML_MASQUERADE", {
   out <- validate_sitemap(fixture("html-masquerade.html"))
   expect_named(out, contract_cols)
