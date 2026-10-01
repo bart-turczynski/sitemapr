@@ -337,6 +337,15 @@ test_that("inspect_pages = FALSE stays byte-identical with the sink live", {
   expect_identical(sum(off$code == "ROBOTS_DISALLOWED"), 1L)
 })
 
+test_that("the bing preset's assumed policy is never attributed to Bing", {
+  skip_if_not_installed("robotstxtr")
+  # Its verdict comes from the Bing matcher under RFC 9309 fetch rules, not a
+  # policy Bing documents (it documents none), so the Bing fold may not claim
+  # it.
+  facts <- prt_facts(context = robots_context_preset("bing"))
+  expect_false(page_trap_matcher_attributable("bing", facts))
+})
+
 test_that("a matcher backend other than the engine is not attributable", {
   # The policy ruleset matches, but the verdict came from a different matcher,
   # so the synthesis may not be attributed to this engine.
