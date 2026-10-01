@@ -379,6 +379,13 @@ related W3C and RFC standards.
 
 ## Internal
 
+* Case folding is ASCII-only. Base R's `tolower()` and `toupper()` follow the
+  locale, and under a Turkish or Azeri locale on glibc they map `I` to a
+  dotless `ı` and `i` to a dotted `İ`. Schemes, hosts, content types, header
+  and attribute names, `rel` tokens and hreflang tags could then silently fail
+  to match. Every such comparison now maps only A-Z and a-z, and `.lintr` bans
+  the locale-sensitive functions.
+
 * `.lintr` no longer carries a comment header, so `lintr::lint_package()` runs
   on R 4.5 and older instead of aborting with "Invalid DCF format":
   `read.dcf()` only skips comment lines from R 4.6. The rationale for the

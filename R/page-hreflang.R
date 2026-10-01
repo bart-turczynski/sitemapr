@@ -46,7 +46,7 @@ page_hreflang_severity <- function(code) {
 page_hreflang_norm_set <- function(links, base) {
   keys <- character(0)
   for (link in links) {
-    tag <- tolower(trimws(as.character(link$tag)))
+    tag <- ascii_lower(trimws(as.character(link$tag)))
     resolved <- page_canonical_resolve(link$href, base)
     if (!nzchar(tag) || is.na(resolved)) {
       next
@@ -85,7 +85,7 @@ page_hreflang_html_links <- function(body, final_url) {
   if (length(nodes) == 0L) {
     return(list(base = base, links = list()))
   }
-  rel <- tolower(trimws(xml2::xml_attr(nodes, "rel")))
+  rel <- ascii_lower(trimws(xml2::xml_attr(nodes, "rel")))
   keep <- rel == "alternate"
   tags <- xml2::xml_attr(nodes[keep], "hreflang")
   hrefs <- xml2::xml_attr(nodes[keep], "href")
@@ -179,7 +179,7 @@ page_hreflang_declared_set <- function(alt, loc) {
     if (is.null(a$href) || is.null(a$hreflang)) {
       next
     }
-    rel <- if (is.null(a$rel)) NA_character_ else tolower(trimws(a$rel))
+    rel <- if (is.null(a$rel)) NA_character_ else ascii_lower(trimws(a$rel))
     if (!is.na(rel) && rel != "alternate") {
       next
     }

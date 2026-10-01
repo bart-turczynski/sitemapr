@@ -117,7 +117,7 @@ norm_encoding <- function(x) {
   if (is.na(x) || !nzchar(x)) {
     return(NA_character_)
   }
-  gsub("[^a-z0-9]", "", tolower(x))
+  gsub("[^a-z0-9]", "", ascii_lower(x))
 }
 
 # One source-level classification finding (`subject_type = "source"`, the

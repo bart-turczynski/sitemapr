@@ -89,7 +89,7 @@ page_content_is_html <- function(art) {
   if (length(ctype) == 0L) {
     return(TRUE)
   }
-  any(grepl("html", tolower(ctype), fixed = TRUE))
+  any(grepl("html", ascii_lower(ctype), fixed = TRUE))
 }
 
 # Resolve a raw href against the response base (final_url, or a <base href> when
@@ -154,7 +154,7 @@ page_html_canonicals <- function(body, final_url) {
   if (length(links) == 0L) {
     return(list(base = base, targets = character(0)))
   }
-  rel <- tolower(trimws(xml2::xml_attr(links, "rel")))
+  rel <- ascii_lower(trimws(xml2::xml_attr(links, "rel")))
   href <- xml2::xml_attr(links[rel == "canonical"], "href")
   list(base = base, targets = as.character(href))
 }

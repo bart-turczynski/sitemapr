@@ -223,7 +223,7 @@ archive_parse_member <- function(
     display_name <- sub("\\.gz$", "", name, ignore.case = TRUE)
   }
 
-  ext <- tolower(tools::file_ext(display_name))
+  ext <- ascii_lower(tools::file_ext(display_name))
   fmt <- sniff_format(content)
   reason <- member_skip_reason(ext, fmt)
   if (!is.null(reason)) {

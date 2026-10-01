@@ -80,7 +80,7 @@ page_link_one_param <- function(chunk) {
   if (length(m) < 4L) {
     return(NULL)
   }
-  list(name = tolower(m[[2L]]), value = page_link_unquote(m[[4L]]))
+  list(name = ascii_lower(m[[2L]]), value = page_link_unquote(m[[4L]]))
 }
 
 # Undo the RFC 8288 quoted-string form of a parameter value, including
@@ -101,7 +101,7 @@ page_link_param_values <- function(entry, name) {
   }
   hit <- vapply(
     entry$params,
-    function(p) identical(p$name, tolower(name)),
+    function(p) identical(p$name, ascii_lower(name)),
     logical(1)
   )
   vapply(entry$params[hit], function(p) p$value, character(1))
@@ -115,7 +115,7 @@ page_link_rel_tokens <- function(entry) {
     return(character(0))
   }
   tokens <- strsplit(trimws(rels[[1L]]), "[[:space:]]+")[[1L]]
-  tolower(tokens[nzchar(tokens)])
+  ascii_lower(tokens[nzchar(tokens)])
 }
 
 # Does this link-value declare `rel` as ONE OF its relation types? Membership,

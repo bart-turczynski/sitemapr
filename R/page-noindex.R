@@ -71,7 +71,7 @@ page_directive_tokens <- function(value) {
     return(character(0))
   }
   parts <- unlist(strsplit(as.character(value), ",", fixed = TRUE))
-  parts <- tolower(trimws(parts))
+  parts <- ascii_lower(trimws(parts))
   parts[nzchar(parts)]
 }
 
@@ -90,7 +90,7 @@ page_meta_robots_facts <- function(body) {
   if (length(nodes) == 0L) {
     return(list())
   }
-  names_attr <- tolower(trimws(xml2::xml_attr(nodes, "name")))
+  names_attr <- ascii_lower(trimws(xml2::xml_attr(nodes, "name")))
   content <- xml2::xml_attr(nodes, "content")
   known <- c(
     "robots",
@@ -137,8 +137,8 @@ page_xrobots_facts <- function(headers) {
     scope <- "*"
     rest <- value
     m <- regmatches(value, regexec("^\\s*([^:,]+)\\s*:\\s*(.*)$", value))[[1L]]
-    if (length(m) == 3L && tolower(trimws(m[[2L]])) %in% known) {
-      scope <- tolower(trimws(m[[2L]]))
+    if (length(m) == 3L && ascii_lower(trimws(m[[2L]])) %in% known) {
+      scope <- ascii_lower(trimws(m[[2L]]))
       rest <- m[[3L]]
     }
     tokens <- page_directive_tokens(rest)

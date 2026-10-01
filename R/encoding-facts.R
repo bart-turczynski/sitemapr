@@ -149,7 +149,7 @@ charset_for_document <- function(charset, content_type, was_gzip) {
   if (is.na(content_type)) {
     return(NA_character_)
   }
-  if (tolower(trimws(content_type)) %in% binary_container_types) {
+  if (ascii_lower(trimws(content_type)) %in% binary_container_types) {
     return(NA_character_)
   }
   charset
