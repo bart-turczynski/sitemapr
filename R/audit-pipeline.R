@@ -89,6 +89,7 @@ audit_resolve_source <- function(
 audit_fetch_bytes <- function(source, is_local, user_agent, limits, policy) {
   if (is_local) {
     target <- source$normalized_url[[1L]]
+    assert_local_readable(target)
     size <- file.info(target)$size
     bytes <- readBin(target, what = "raw", n = size)
     # The read-side `sources` format for the document path is the raw sniff,

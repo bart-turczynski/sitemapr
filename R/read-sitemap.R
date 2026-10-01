@@ -87,6 +87,7 @@ combine_source_metadata <- function(parts) {
 # tar) goes to the bounded archive extractor by path; everything else is
 # dispatched from its bytes. Returns list(rows, sources, problems).
 read_sitemap_local <- function(path) {
+  assert_local_readable(path)
   size <- file.info(path)$size
   bytes <- readBin(path, what = "raw", n = size)
   fmt <- sniff_format(bytes)

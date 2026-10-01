@@ -113,6 +113,48 @@ test_that("a submitted-list read records partial failures as problems", {
   expect_identical(problems$subject_ref, bad)
 })
 
+test_that("a missing single local file aborts with sitemapr_local_read_error", {
+  # SITE-mrwvuchg: the same classed condition validate_sitemap() raises, not
+  # base R's bare "cannot open the connection" plus a leaked file() warning.
+  # The drive-letter path reaches the read layer on every platform
+  # (SITE-oexcvvbn).
+  for (missing in c(
+    "/sitemapr-no-such-dir/missing-sitemap.xml",
+    "C:/sitemapr-no-such-dir/missing-sitemap.xml"
+  )) {
+    expect_no_warning(
+      cnd <- expect_error(
+        read_sitemap(missing),
+        class = "sitemapr_local_read_error"
+      )
+    )
+    expect_identical(cnd$path, missing)
+    expect_identical(
+      conditionMessage(cnd),
+      sprintf(
+        "Local sitemap file %s does not exist or is not readable.",
+        missing
+      )
+    )
+  }
+})
+
+test_that("a local directory aborts with sitemapr_local_read_error", {
+  # A directory passes file.access(mode = 4) and would then fail in readBin().
+  dir <- withr::local_tempdir()
+  expect_no_warning(
+    cnd <- expect_error(
+      read_sitemap(dir),
+      class = "sitemapr_local_read_error"
+    )
+  )
+  expect_identical(cnd$path, dir)
+  expect_identical(
+    conditionMessage(cnd),
+    sprintf("Local sitemap file %s is a directory, not a file.", dir)
+  )
+})
+
 test_that("the columns are exactly the parse contract, with no findings code", {
   path <- write_tempfile(urlset_xml("https://a/1"), ".xml")
   res <- read_sitemap(path)
