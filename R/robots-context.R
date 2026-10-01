@@ -180,9 +180,9 @@ robots_context_presets <- function() {
 #' status policy, so `robotstxtr`'s `"bing"` policy ruleset declines to decide
 #' every fetched robots.txt, and the preset uses the explicit application
 #' policy `"assumed_rfc9309"` instead. The context records that value, so
-#' results never present the assumption as a Bing policy. The `yandex` preset keeps
-#' `"yandex"` as its policy ruleset because Yandex does document one: a 200
-#' uses the rules, and any other status allows everything.
+#' results never present the assumption as a Bing policy. The `yandex` preset
+#' keeps `"yandex"` as its policy ruleset because Yandex does document one: a
+#' 200 uses the rules, and any other status allows everything.
 #'
 #' Not every preset is runnable on every install. `robotstxtr` publishes a
 #' `matcher_availability` per backend, and one reporting

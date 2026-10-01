@@ -37,9 +37,9 @@ fetch rules, \strong{not} a policy Bing documents: Bing publishes no robots.txt
 status policy, so \code{robotstxtr}'s \code{"bing"} policy ruleset declines to decide
 every fetched robots.txt, and the preset uses the explicit application
 policy \code{"assumed_rfc9309"} instead. The context records that value, so
-results never present the assumption as a Bing policy. The \code{yandex} preset keeps
-\code{"yandex"} as its policy ruleset because Yandex does document one: a 200
-uses the rules, and any other status allows everything.
+results never present the assumption as a Bing policy. The \code{yandex} preset
+keeps \code{"yandex"} as its policy ruleset because Yandex does document one: a
+200 uses the rules, and any other status allows everything.
 
 Not every preset is runnable on every install. \code{robotstxtr} publishes a
 \code{matcher_availability} per backend, and one reporting
