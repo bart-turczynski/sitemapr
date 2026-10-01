@@ -59,7 +59,7 @@ test_that("the robotstxtr range covers the version DESCRIPTION pins", {
   # advertising compatibility it does not exercise.
   sib <- sitemap_contract()$sibling_versions
 
-  expect_identical(sib[["robotstxtr"]], ">= 0.2.0, < 0.3.0")
+  expect_identical(sib[["robotstxtr"]], ">= 0.3.0, < 0.4.0")
 })
 
 test_that("the published registry digest matches the shipped registry", {

@@ -63,17 +63,18 @@ findings_registry_digest <- function() {
 #                      line. A 2.0.0 would be a contract generation sitemapr has
 #                      not seen.
 #   robotstxtr         sitemapr pins the engine contract
-#                      "robotstxtr.engine-aware/v1" and gates on
-#                      `matcher_capability` (R/robots-validate.R), which is a
-#                      0.2.x build. 0.3.0 may carry the v2 contract, which
-#                      sitemapr does not consume yet.
+#                      "robotstxtr.engine-aware/v1", gates on
+#                      `matcher_capability` (R/robots-validate.R) and calls
+#                      robots_resolve_matcher_profile_v1(), first exported in
+#                      0.3.0 (SITE-bthekpqx). The 0.3.x line is the one
+#                      exercised here; a 0.4.0 would be unseen.
 #
 # Reciprocal by construction: both siblings declare sitemapr at
 # ">= 0.0.0.9000, < 0.1.0", which this build's DESCRIPTION Version satisfies.
 contract_sibling_versions <- function() {
   c(
     "sitemap-validator" = ">= 1.0.0, < 2.0.0",
-    "robotstxtr" = ">= 0.2.0, < 0.3.0"
+    "robotstxtr" = ">= 0.3.0, < 0.4.0"
   )
 }
 

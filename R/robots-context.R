@@ -9,8 +9,9 @@
 # robots axis from `sitemap_ruleset`, and nothing there derives one from these.
 #
 # Axis values are validated against the value sets the INSTALLED `robotstxtr`
-# publishes on its own contract, so an axis this build cannot honor fails here
-# rather than deep inside the engine. Reading the sibling's published sets also
+# publishes on its own contract, and a bounded backend's token against the
+# profiles it accepts, so an axis this build cannot honor fails here rather
+# than deep inside the engine. Reading the sibling's published sets also
 # means the accepted values follow it rather than a stale copy pinned here.
 
 robots_context_reject <- function(message) {
@@ -44,6 +45,39 @@ check_robots_axis_value <- function(value, arg, allowed) {
   value
 }
 
+# Ask the INSTALLED robotstxtr whether `matcher_backend` accepts
+# `product_token` (SITE-bthekpqx). A `bounded_profiles` backend refuses any
+# token outside its own vendor profiles, and at evaluation that refusal is
+# quiet: every row comes back undecided and reads as `ROBOTS_INDETERMINATE`.
+# That is how the `yandex` preset shipped "YandexBot" unnoticed (SITE-fsawklnl).
+# robotstxtr 0.3.0 publishes the check itself, so the mistake now fails here,
+# with the sibling's own classed error
+# (`robotstxtr_unresolvable_matcher_profile`) naming the accepted selectors.
+# For an unbounded backend the resolver has no closed set and accepts.
+#
+# An installed robotstxtr older than the resolver is incompatible rather than
+# merely old, so it aborts the way robotstxtr_engine_contract() does.
+check_robots_matcher_profile <- function(product_token, matcher_backend) {
+  ns <- robotstxtr_namespace()
+  if (
+    !exists("robots_resolve_matcher_profile_v1", envir = ns, inherits = FALSE)
+  ) {
+    rlang::abort(
+      sprintf(
+        paste0(
+          "the installed 'robotstxtr' does not expose ",
+          "robots_resolve_matcher_profile_v1(); sitemapr requires robotstxtr ",
+          "(>= 0.3.0). Update it with %s."
+        ),
+        robotstxtr_install_hint()
+      ),
+      class = "sitemapr_robotstxtr_contract"
+    )
+  }
+  robotstxtr::robots_resolve_matcher_profile_v1(matcher_backend, product_token)
+  invisible(product_token)
+}
+
 #' Construct a robots evaluation context (ADR-009 §1, sitemap-spec §13.0)
 #'
 #' Bundles the three **independent** robots axes one allow/disallow evaluation
@@ -67,11 +101,15 @@ check_robots_axis_value <- function(value, arg, allowed) {
 #' each axis is checked.
 #'
 #' A backend whose published `token_policy` is `bounded_profiles` (Bing,
-#' Yandex) accepts only its own vendor profile tokens, and the accepted set is
-#' not published, so it cannot be validated here. An unsupported token is not an
-#' error: every URL comes back undecided and surfaces as `ROBOTS_INDETERMINATE`.
-#' Prefer [robots_context_preset()], whose tokens are known-good for their
-#' backend.
+#' Yandex) accepts only its own vendor profile tokens. When `robotstxtr` is
+#' installed the token is checked here with
+#' `robotstxtr::robots_resolve_matcher_profile_v1()`, and a token the backend
+#' refuses is an error (class `robotstxtr_unresolvable_matcher_profile`) naming
+#' the accepted selectors. Without that check every URL would come back
+#' undecided and surface as `ROBOTS_INDETERMINATE`. A selector is a robots.txt
+#' `User-agent:` group label, not a crawler identity: Yandex accepts `"Yandex"`
+#' but not `"YandexBot"`. [robots_context_preset()] carries tokens known to be
+#' accepted.
 #'
 #' @param product_token The robots.txt group to match against; defaults to the
 #'   catch-all `"*"`.
@@ -107,6 +145,7 @@ robots_context <- function(
       "matcher_backend",
       contract$matcher_backends
     )
+    check_robots_matcher_profile(product_token, matcher_backend)
   }
   structure(
     list(
@@ -128,10 +167,10 @@ robots_context <- function(
 # `yandex` keeps its own ruleset, because Yandex does document one.
 #
 # The tokens are not decorative: a `bounded_profiles` backend refuses anything
-# outside its own vendor profiles, and an unsupported token silently renders
-# every URL indeterminate. Yandex's bounded profile accepts `"Yandex"` and not
-# `"YandexBot"` — a test asserts each preset's token is honored by its own
-# backend, for every backend the installed sibling reports as available.
+# outside its own vendor profiles. Yandex's bounded profile accepts `"Yandex"`
+# and not `"YandexBot"`. robots_context() checks each token against its backend
+# at construction, and a test also runs every preset end to end, for every
+# backend the installed sibling reports as available.
 robots_preset_table <- function() {
   list(
     google = list("Googlebot", "google", "google"),

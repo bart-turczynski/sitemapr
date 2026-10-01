@@ -48,11 +48,15 @@ build cannot honor is rejected here rather than deep inside the engine.
 each axis is checked.
 
 A backend whose published \code{token_policy} is \code{bounded_profiles} (Bing,
-Yandex) accepts only its own vendor profile tokens, and the accepted set is
-not published, so it cannot be validated here. An unsupported token is not an
-error: every URL comes back undecided and surfaces as \code{ROBOTS_INDETERMINATE}.
-Prefer \code{\link[=robots_context_preset]{robots_context_preset()}}, whose tokens are known-good for their
-backend.
+Yandex) accepts only its own vendor profile tokens. When \code{robotstxtr} is
+installed the token is checked here with
+\code{robotstxtr::robots_resolve_matcher_profile_v1()}, and a token the backend
+refuses is an error (class \code{robotstxtr_unresolvable_matcher_profile}) naming
+the accepted selectors. Without that check every URL would come back
+undecided and surface as \code{ROBOTS_INDETERMINATE}. A selector is a robots.txt
+\verb{User-agent:} group label, not a crawler identity: Yandex accepts \code{"Yandex"}
+but not \code{"YandexBot"}. \code{\link[=robots_context_preset]{robots_context_preset()}} carries tokens known to be
+accepted.
 }
 \examples{
 robots_context()

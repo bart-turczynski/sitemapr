@@ -77,7 +77,7 @@ robotstxtr_install_hint <- function() {
 }
 
 # The `robotstxtr` engine-aware contract sitemapr is built against
-# (docs/design/layer-e-page-inspection.md §0.9; robotstxtr v0.2.0). Pinned as a
+# (docs/design/layer-e-page-inspection.md §0.9; robotstxtr v0.3.0). Pinned as a
 # literal so a sibling that moved to an incompatible contract is caught at the
 # seam instead of silently producing robots findings under different matcher
 # semantics.
@@ -95,7 +95,7 @@ robotstxtr_contract_id <- function() {
 # below therefore checks for the capability field sitemapr consumes rather than
 # trusting the contract id by itself.
 robotstxtr_contract_schema <- function() {
-  "2026-07-18.2"
+  "2026-08-25.1"
 }
 
 # The public v1 contract object of the INSTALLED `robotstxtr`, gated before it
@@ -132,7 +132,7 @@ robotstxtr_engine_contract_raw <- function() {
         paste0(
           "the installed 'robotstxtr' does not expose ",
           "robots_engine_contract_v1(); sitemapr requires robotstxtr ",
-          "(>= 0.2.0) carrying engine contract '%s'. Update it with %s."
+          "(>= 0.3.0) carrying engine contract '%s'. Update it with %s."
         ),
         robotstxtr_contract_id(),
         robotstxtr_install_hint()

@@ -943,14 +943,16 @@ Two limits a caller should expect, both properties of the installed
 `robotstxtr` rather than of this bridge:
 
 - A backend whose published `matcher_availability` is `capability_unavailable`
-  (Bing and RFC 9309 as of robotstxtr v0.2.0) decides nothing: every advertised
-  URL surfaces as `ROBOTS_INDETERMINATE` rather than a guessed allow.
+  (RFC 9309 as of robotstxtr v0.3.0; Bing too under v0.2.0) decides nothing:
+  every advertised URL surfaces as `ROBOTS_INDETERMINATE` rather than a guessed
+  allow.
 - A backend whose `token_policy` is `bounded_profiles` accepts only its own
-  vendor profile tokens, and the accepted set is **not published**, so it cannot
-  be validated at construction. Yandex's bounded profile accepts `Yandex`, not
-  `YandexBot`. An unsupported token is not an error — it renders every URL
-  indeterminate — which is why `robots_context_preset()` carries a known-good
-  token per engine and a test asserts each one is honored by its own backend.
+  vendor profile tokens. robotstxtr v0.3.0 publishes the check as
+  `robots_resolve_matcher_profile_v1()`, and `robots_context()` calls it, so a
+  refused token is an error at construction (SITE-bthekpqx) rather than a run
+  in which every URL is indeterminate. Yandex's bounded profile accepts
+  `Yandex`, not `YandexBot`. `robots_context_preset()` carries an accepted
+  token per engine, and a test also runs each preset end to end.
 
 ### 13.1 Crawler-token model — steal the vocabulary, do not invoke the matcher
 
@@ -1093,10 +1095,13 @@ is obtained.
 engine whose **own** matcher produced it: both robots axes must name that
 engine, and `robots_engine_contract_v1()` must report that matcher `available`
 with its own `matcher_semantics`. This is §13.1's anti-laundering rule applied
-to the synthesis. Under `robotstxtr` v0.2.0 the Bing matcher reports
-`capability_unavailable`, so although the Bing *mechanic* is `documented`, no
-Bing synthesis is emitted — a documented mechanic does not license borrowing
-another engine's verdict. Provenance: `application_choice`.
+to the synthesis. Under `robotstxtr` v0.2.0 the Bing matcher reported
+`capability_unavailable`. Under v0.3.0 it is `available`, but robotstxtr's
+`bing` policy ruleset is a `documentation_gap` for every fetched status, so a
+fetched row under it never reaches a decision. Either way, although the Bing
+*mechanic* is `documented`, no Bing synthesis is emitted: a documented mechanic
+does not license borrowing another engine's verdict. Provenance:
+`application_choice`.
 
 **The evaluated robots group is named in the message.** A decision for the `*`
 group is not a claim about a crawler that may declare a group of its own, so

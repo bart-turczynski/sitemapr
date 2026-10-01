@@ -91,12 +91,15 @@ related W3C and RFC standards.
   `validate_sitemap_robots()` remains the shorthand for the robots axis alone.
   Supplying both `robots_context` and a non-default `robots_user_agent` is an
   error rather than a silent precedence rule: they select the same axis.
-* Two limits are worth knowing, both properties of the installed `robotstxtr`
-  rather than of sitemapr: a matcher backend it reports as
+* A matcher backend the installed `robotstxtr` reports as
   `capability_unavailable` decides nothing, so every URL comes back
-  `ROBOTS_INDETERMINATE` rather than a guessed allow; and a backend bounded to
-  its own vendor profiles accepts only its own tokens without publishing the
-  set, which is why the presets carry a known-good token per engine.
+  `ROBOTS_INDETERMINATE` rather than a guessed allow.
+* `robots_context()` checks the product token against its matcher backend
+  with `robotstxtr::robots_resolve_matcher_profile_v1()`. A backend bounded to
+  its own vendor profiles (Bing, Yandex) refuses any other token, and that is
+  now an error at construction naming the accepted selectors, instead of a run
+  in which every URL is indeterminate. The optional `robotstxtr` dependency is
+  therefore `>= 0.3.0`, the first release with the resolver.
 * `inspect_pages` opts into per-URL page inspection: a deduplicated,
   deterministically sampled, budgeted set of the advertised pages is fetched
   and each is checked for its transport outcome, its canonical, its
