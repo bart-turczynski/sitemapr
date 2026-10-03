@@ -108,7 +108,21 @@ default:
     # before: the cache archived and restored fine, it was just always empty,
     # because R never installed anything into it.
     - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
-    - Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
+    # pak from r-lib's own binary repository, not the image's repos. The
+    # runners are arm64, and p3m serves no arm64 binaries for the 4.5, devel
+    # and 4.1.3 deep-check images, so `install.packages("pak")` built pak from
+    # source there, compiled `curl` against libcurl headers those images lack,
+    # failed with only a warning, and the next step died on "there is no
+    # package called 'pak'" (schedule pipeline 2909390988; punycoder hit the
+    # same in pipeline 2894951198, and seor took this fix). The r-lib repo serves a
+    # self-contained build for every R version and architecture, so every job
+    # takes the same path. Once pak is in, PKG_SYSREQS below has it apt-install
+    # libcurl and the other headers the package's own dependencies need.
+    - >
+      Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
+      install.packages("pak", repos = sprintf(
+      "https://r-lib.github.io/p/pak/stable/%s/%s/%s",
+      .Platform$pkgType, R.Version()$os, R.Version()$arch))'
   cache:
     # Keyed on DESCRIPTION: the library only needs rebuilding when the declared
     # dependencies move.
