@@ -142,3 +142,71 @@ test_that("a corrupt stream raises a decompression error, not a ceiling", {
     class = "sitemapr_decompression_error"
   )
 })
+
+# ---- trailer check (truncated or mismatched gzip) ---------------------------
+
+# Before `memDecompress()` sees a gzip-wrapped stream, the guard checks its
+# trailer: at least 18 bytes (10-byte header, 8-byte CRC32 + ISIZE trailer),
+# and ISIZE (the last 4 bytes, little-endian, unsigned) equal to the count the
+# guard streamed, mod 2^32. A failure raises `sitemapr_decompression_error`
+# from the guard itself, so the condition carries the trailer fields and no
+# parent: `memDecompress()` never ran. On R < 4.4 (no libdeflate) a truncated
+# stream makes `memDecompress()` double its buffer until the OOM killer stops
+# R, so the trailer check is the only thing between such a stream and a crash.
+
+# Overwrite a gzip stream's ISIZE (its last 4 bytes) with `value`.
+set_isize <- function(gz, value) {
+  n <- length(gz)
+  gz[(n - 3L):n] <- as.raw(floor(value / 256^(0:3)) %% 256)
+  gz
+}
+
+test_that("a stream shorter than header plus trailer fails before inflating", {
+  gz <- gzip_stream(strrep("https://example.com/p\n", 100))
+  cnd <- rlang::catch_cnd(gzip_decompress(head(gz, 12L)))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+  expect_identical(cnd$compressed_bytes, 12L)
+})
+
+test_that("a stream cut inside the deflate body fails before inflating", {
+  payload <- strrep("https://example.com/p\n", 100)
+  gz <- gzip_stream(payload)
+  cut <- head(gz, length(gz) %/% 2L)
+  expect_gte(length(cut), 18L)
+  cnd <- rlang::catch_cnd(gzip_decompress(cut))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+  expect_lt(cnd$inflated, nchar(payload))
+  expect_false(identical(cnd$isize, cnd$inflated))
+})
+
+test_that("a stream whose ISIZE was altered fails before inflating", {
+  payload <- strrep("https://example.com/p\n", 100)
+  gz <- set_isize(gzip_stream(payload), nchar(payload) + 1)
+  cnd <- rlang::catch_cnd(gzip_decompress(gz))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+  expect_identical(cnd$isize, nchar(payload) + 1)
+  expect_identical(cnd$inflated, as.numeric(nchar(payload)))
+})
+
+test_that("a valid stream still decompresses identically", {
+  payload <- strrep("https://example.com/p\n", 1000L)
+  expect_identical(gzip_decompress(gzip_stream(payload)), charToRaw(payload))
+  # An empty payload has ISIZE 0 and inflates to nothing.
+  expect_identical(gzip_decompress(gzip_stream("")), raw())
+})
+
+test_that("a multi-member gzip stream now errors (accepted tradeoff)", {
+  # RFC 1952 allows concatenated members and gzip(1) inflates them all, but
+  # ISIZE describes only the last member, so the trailer check cannot vouch
+  # for the whole stream and rejects it; sitemaps are written as one member.
+  # The members differ in size on purpose: R < 4.4's gzcon() stops after the
+  # first member, so two equal-size members would match the last ISIZE there
+  # and inflate to the first member alone, as they did before the check.
+  two <- c(gzip_stream("aaa\n"), gzip_stream("bbbbbb\n"))
+  cnd <- rlang::catch_cnd(gzip_decompress(two))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+})
