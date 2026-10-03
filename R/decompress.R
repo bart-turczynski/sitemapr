@@ -52,8 +52,10 @@
 # The check catches truncation and a damaged trailer. It does not prove the
 # deflate body ends where the trailer begins: a stream crafted so that the last
 # four bytes of a truncated body spell the count `gzcon()` streamed still
-# passes, and R < 4.4 still loops on it. Only inflating without
-# `memDecompress()` on those versions would close that.
+# passes. Every R version still loops on such a stream: R < 4.4 until the OOM
+# killer stops it, R >= 4.4 when the truncated body claims more than ISIZE
+# bytes (a 35-byte stored-block stream does both). Only returning the bytes
+# the guard streams, instead of calling `memDecompress()`, would close that.
 
 # Ceiling on inflated bytes, resolved from the argument then
 # `getOption("sitemapr.max_decompressed")` then the default, mirroring the
