@@ -74,6 +74,34 @@ test_that("default_user_agent() omits the suffix when URL is unavailable", {
   expect_identical(default_user_agent(), "sitemapr/0.0.0.9000")
 })
 
+test_that("default_user_agent() picks the GitLab repo, not the first URL", {
+  ua_for <- function(url) {
+    fake_pd <- function(pkg, fields = NULL, ...) {
+      if (identical(fields, "Version")) {
+        return("0.0.0.9000")
+      }
+      list(URL = url)
+    }
+    testthat::local_mocked_bindings(
+      packageDescription = fake_pd,
+      .package = "utils"
+    )
+    default_user_agent()
+  }
+
+  expect_identical(
+    ua_for(
+      "https://o.gitlab.io/p/,\n    https://gitlab.com/o/p, https://r.example/p"
+    ),
+    "sitemapr/0.0.0.9000 (+https://gitlab.com/o/p)"
+  )
+  expect_identical(
+    ua_for("https://docs.example/p/, https://r.example/p"),
+    "sitemapr/0.0.0.9000 (+https://docs.example/p/)"
+  )
+  expect_identical(ua_for(" , "), "sitemapr/0.0.0.9000")
+})
+
 test_that("source_metadata() returns the 13 contract columns in order", {
   meta <- source_metadata()
 

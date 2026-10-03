@@ -61,3 +61,11 @@
 # Not part of the installable package; without this, --as-cran reports it
 # as a non-standard top-level directory.
 ^scripts$
+# Fleet-standard repository files (seor design/fleet-standard.md): the full
+# MIT text for the forge's license detector, the architecture entry point,
+# the OpenSSF Security Insights self-report and the GitLab issue and merge
+# request templates. None of them is package content.
+^LICENSE\.md$
+^ARCHITECTURE\.md$
+^SECURITY-INSIGHTS\.yml$
+^\.gitlab$

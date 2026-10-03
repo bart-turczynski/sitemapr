@@ -331,7 +331,7 @@ related W3C and RFC standards.
 
 ## Requirements
 
-* The declared R requirement is `R (>= 4.1)`, corrected from `R (>= 4.0.0)`.
+* The declared R requirement is `R (>= 4.1.0)`, corrected from `R (>= 4.0.0)`.
   The old floor was never installable: `httr2`, a hard dependency, itself
   declares `R (>= 4.1)`, so resolution failed on R 4.0 before any sitemapr code
   ran. sitemapr's own sources use no post-4.0 syntax — the floor comes entirely
@@ -348,9 +348,8 @@ related W3C and RFC standards.
   this project, because its GitLab Pages site uses a unique domain rather than
   the namespace path. `DESCRIPTION`, `inst/CITATION`, `CITATION.cff`,
   `.zenodo.json`, `codemeta.json`, `.bestpractices.json`, the README, the
-  introduction vignette and `_pkgdown.yml` all name the same address; the
-  repository URL stays first in `DESCRIPTION` because `default_user_agent()`
-  reads that entry as the crawler contact URL (SITE-rysgulhf).
+  introduction vignette and `_pkgdown.yml` all name the same address
+  (SITE-rysgulhf).
 * The documentation site has moved to the GitLab Pages namespace path,
   `https://bart-turczynski.gitlab.io/sitemapr/`, the address every package in
   the fleet now uses. The unique domain `https://sitemapr-eca867.gitlab.io/`
@@ -376,6 +375,13 @@ related W3C and RFC standards.
   and "canonicalizes" replace their British forms, and the spelling word list
   no longer accepts the British spellings. The `SCHEMA_UNKNOWN_NAMESPACE`
   finding's message now reads "not recognized" (SEOR-kfiqpymb).
+* Bart Turczynski is the copyright holder: `LICENSE` names him instead of
+  "sitemapr authors", `Authors@R` gives him the `cph` role, and `LICENSE.md`
+  carries the full MIT text. `URL:` now lists the documentation site first,
+  then the repository and r-universe, the order every package in the fleet
+  uses. The crawler User-Agent still names the GitLab repository as its
+  contact URL: `default_user_agent()` picks that entry by host rather than by
+  position (SEOR-dunwqfkj).
 
 ## Internal
 

@@ -39,10 +39,12 @@ set -eu
 target_dir="${AGENT_MD_DIR:-/tmp/agent-md}"
 mkdir -p "$target_dir"
 
-# Meant for the site's readers. LICENSE.md and THIRD_PARTY_NOTICES.md are not
-# present in this repository today (licensing lives in the extensionless
-# `LICENSE` file, which this *.md glob never touches) but are listed so
-# adding either later needs no second round of this. ACKNOWLEDGMENTS.md is a
+# Meant for the site's readers. LICENSE.md holds the full MIT text the fleet
+# standard requires (the extensionless `LICENSE` is the CRAN stub, which this
+# *.md glob never touches). THIRD_PARTY_NOTICES.md is not present today but is
+# listed so adding it later needs no second round of this. ARCHITECTURE.md is
+# deliberately NOT kept: it only points into docs/, which the site does not
+# publish. ACKNOWLEDGMENTS.md is a
 # per-repo addition: _pkgdown.yml's navbar links straight to it.
 #
 # cran-comments.md is listed for self-documentation only, not because it was

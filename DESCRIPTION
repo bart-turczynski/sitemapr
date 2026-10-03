@@ -3,7 +3,7 @@ Type: Package
 Title: Parse and Validate XML Sitemaps
 Version: 0.0.0.9000
 Authors@R:
-    person("Bart", "Turczynski", , "bartek@turczynski.pl", role = c("aut", "cre"),
+    person("Bart", "Turczynski", , "bartek@turczynski.pl", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0002-8788-7980"))
 Description: A deterministic toolkit for reading and validating XML, text, and
     index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC
@@ -11,8 +11,8 @@ Description: A deterministic toolkit for reading and validating XML, text, and
     sitemap indexes, and reports schema and protocol findings with stable, reproducible
     output.
 License: MIT + file LICENSE
-URL: https://gitlab.com/bart-turczynski/sitemapr,
-    https://bart-turczynski.gitlab.io/sitemapr/,
+URL: https://bart-turczynski.gitlab.io/sitemapr/,
+    https://gitlab.com/bart-turczynski/sitemapr,
     https://bart-turczynski.r-universe.dev/sitemapr
 BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/issues
 Imports:
@@ -27,7 +27,7 @@ Encoding: UTF-8
 Language: en-US
 Roxygen: list(markdown = TRUE)
 Depends:
-    R (>= 4.1)
+    R (>= 4.1.0)
 Suggests:
     cucumber (>= 2.0.0),
     knitr,
