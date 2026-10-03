@@ -210,3 +210,34 @@ test_that("a multi-member gzip stream now errors (accepted tradeoff)", {
   expect_s3_class(cnd, "sitemapr_decompression_error")
   expect_null(cnd$parent)
 })
+
+# The cases below hang `memDecompress()` on R >= 4.4 without the check: its
+# libdeflate path allocates ISIZE bytes, and when that is too small it retries
+# with the same ISIZE forever. Kept apart from the pins above for that reason.
+
+test_that("a stream whose ISIZE was lowered fails before inflating", {
+  payload <- strrep("https://example.com/p\n", 100)
+  gz <- set_isize(gzip_stream(payload), nchar(payload) - 1)
+  cnd <- rlang::catch_cnd(gzip_decompress(gz))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+  expect_identical(cnd$isize, nchar(payload) - 1)
+})
+
+test_that("a zero-padded gzip stream now errors (accepted tradeoff)", {
+  # Trailing zeros, as some writers pad to a block size, push the real trailer
+  # away from the end, so the last 4 bytes read as ISIZE 0.
+  gz <- c(gzip_stream("https://example.com/\n"), raw(8L))
+  cnd <- rlang::catch_cnd(gzip_decompress(gz))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_null(cnd$parent)
+  expect_identical(cnd$isize, 0)
+})
+
+test_that("ISIZE is read unsigned, so a high bit stays a large count", {
+  payload <- "https://example.com/\n"
+  gz <- set_isize(gzip_stream(payload), 2^31 + nchar(payload))
+  cnd <- rlang::catch_cnd(gzip_decompress(gz))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_identical(cnd$isize, 2^31 + nchar(payload))
+})

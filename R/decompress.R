@@ -33,6 +33,27 @@
 # `memDecompress()` raises on exactly those inputs. Running the guard first
 # keeps the corrupt-stream contract below unchanged and costs one extra inflate
 # of an already-bounded stream (measured at par with `memDecompress()` itself).
+#
+# TRAILER CHECK. `memDecompress()` raising on damage is not enough on its own:
+# built without libdeflate (every R < 4.4), it inflates a truncated stream into
+# a buffer it doubles each time zlib reports Z_BUF_ERROR, which a truncated
+# stream reports forever, until the OOM killer stops R. With libdeflate
+# (R >= 4.4) it sizes its buffer from the stream's ISIZE trailer, and when that
+# is too small it loops without end, re-reading the same ISIZE. So the guard
+# also checks the trailer before `memDecompress()` sees a gzip-wrapped stream:
+# the stream holds at least a header and a trailer, and ISIZE equals the count
+# the guard streamed, mod 2^32. A failure raises the same classed
+# `sitemapr_decompression_error`. ISIZE describes the last member alone, so a
+# multi-member or zero-padded stream is rejected, an accepted tradeoff for
+# sitemaps, which are written as one member. (R < 4.4's `gzcon()` stops after
+# the first member, so there two members of equal size still pass and inflate
+# to the first one, as they always did.)
+#
+# The check catches truncation and a damaged trailer. It does not prove the
+# deflate body ends where the trailer begins: a stream crafted so that the last
+# four bytes of a truncated body spell the count `gzcon()` streamed still
+# passes, and R < 4.4 still loops on it. Only inflating without
+# `memDecompress()` on those versions would close that.
 
 # Ceiling on inflated bytes, resolved from the argument then
 # `getOption("sitemapr.max_decompressed")` then the default, mirroring the
@@ -58,17 +79,57 @@ gzip_abort_ceiling <- function(max_bytes, bytes_read) {
   )
 }
 
+# A gzip member is at least a 10-byte header plus an 8-byte trailer (CRC32,
+# then ISIZE), RFC 1952 section 2.3.
+gzip_min_bytes <- 18L
+
+# Abort for a stream the trailer check rejects, with the class and message
+# style of the `memDecompress()` failure in gzip_decompress().
+gzip_abort_trailer <- function(detail, ...) {
+  rlang::abort(
+    paste("The gzip stream is corrupt or truncated:", detail),
+    class = "sitemapr_decompression_error",
+    ...
+  )
+}
+
+# ISIZE, the last 4 bytes of a gzip stream: the inflated size mod 2^32, stored
+# little-endian and unsigned. Computed in doubles from the raw bytes, so a
+# value of 2^31 or more stays positive (readBin() would return it signed).
+gzip_trailer_isize <- function(bytes) {
+  n <- length(bytes)
+  sum(as.integer(bytes[(n - 3L):n]) * 256^(0:3))
+}
+
 # Measure the inflated size of a gzip-wrapped stream without materializing it,
-# aborting as soon as the running total exceeds `max_bytes`.
+# aborting as soon as the running total exceeds `max_bytes`, then check the
+# stream's trailer against that total. Returns the total, or NULL for a stream
+# that is not gzip-wrapped and so was not measured.
 #
 # Only the gzip wrapper (magic 1f 8b) can be streamed: `gzcon()` passes a bare
 # zlib stream through unchanged, which would under-measure it. Every call site
 # reaches this function through a `sniff_format() == "gzip"` guard, which keys
 # on that same magic, so the streamed shape is the only one reachable in
 # practice; the bare-zlib shape is bounded after the fact by the caller instead.
+#
+# The ISIZE check also bounds the first allocation `memDecompress()` makes with
+# libdeflate (R >= 4.4), which is ISIZE bytes: ISIZE must equal the streamed
+# total mod 2^32, and the total never exceeds `max_bytes` here, so that
+# allocation is at most `max_bytes`. It is also exactly what gzcon() inflated,
+# so libdeflate does not report the shortfall it would loop on.
 gzip_size_guard <- function(bytes, max_bytes, chunk_size = 65536L) {
   if (!sniff_starts_with(bytes, c(0x1F, 0x8B))) {
-    return(invisible(FALSE))
+    return(NULL)
+  }
+  if (length(bytes) < gzip_min_bytes) {
+    gzip_abort_trailer(
+      sprintf(
+        "%d bytes is shorter than a %d-byte gzip header and trailer.",
+        length(bytes),
+        gzip_min_bytes
+      ),
+      compressed_bytes = length(bytes)
+    )
   }
   # A header gzcon() dislikes warns here; damage is memDecompress()'s to report.
   con <- suppressWarnings(gzcon(rawConnection(bytes, "rb")))
@@ -88,7 +149,20 @@ gzip_size_guard <- function(bytes, max_bytes, chunk_size = 65536L) {
       gzip_abort_ceiling(max_bytes, total)
     }
   }
-  invisible(TRUE)
+
+  isize <- gzip_trailer_isize(bytes)
+  if (isize != total %% 2^32) {
+    gzip_abort_trailer(
+      sprintf(
+        "its trailer records %.0f inflated bytes, but it inflates to %.0f.",
+        isize,
+        total
+      ),
+      isize = isize,
+      inflated = total
+    )
+  }
+  total
 }
 
 #' Decompress a single gzip stream to raw bytes
@@ -110,7 +184,7 @@ gzip_decompress <- function(bytes, max_bytes = default_max_decompressed()) {
     bytes <- as.raw(bytes)
   }
   max_bytes <- as.numeric(max_bytes)
-  streamed <- gzip_size_guard(bytes, max_bytes)
+  inflated <- gzip_size_guard(bytes, max_bytes)
 
   out <- tryCatch(
     memDecompress(bytes, type = "gzip"),
@@ -129,7 +203,7 @@ gzip_decompress <- function(bytes, max_bytes = default_max_decompressed()) {
   # A bare zlib stream could not be measured up front, so hold the ceiling as a
   # returned-size invariant instead: the memory is already spent, but an
   # over-ceiling body is still never handed back.
-  if (!streamed && length(out) > max_bytes) {
+  if (is.null(inflated) && length(out) > max_bytes) {
     gzip_abort_ceiling(max_bytes, length(out))
   }
   out
