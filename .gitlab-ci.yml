@@ -352,7 +352,13 @@ deep-check:
     matrix:
       - R_VERSION: ["4.6", "4.5", "devel", "4.1.3"]
   script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    # qpdf: R 4.5's --as-cran raises a WARNING, "'qpdf' is needed for checks
+    # on size reduction of PDFs", when the binary is absent, and the check
+    # stage's error_on = "warning" turns that red (pipeline 2909482009, the 4.5
+    # leg). R 4.6 does not ask, which is why `check` on the default image never
+    # needed it. No rocker/r-ver image ships qpdf; robotstxtr's and punycoder's
+    # full-check install it too.
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc qpdf
     - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
     - Rscript -e 'pak::pkg_install("rcmdcheck")'
     - Rscript tools/verify.R check
