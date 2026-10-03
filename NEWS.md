@@ -164,6 +164,14 @@ related W3C and RFC standards.
   `options(sitemapr.max_findings_per_code = )`; `Inf` opts out.
 * Robots findings are built in one vectorized pass instead of one tibble per
   URL, which dominated the cost of a high-cardinality robots result.
+* A truncated `.gz` sitemap, or one whose trailer does not match its contents,
+  now fails with the classed decompression error (an
+  `UNSUPPORTED_MALFORMED_GZIP` finding in a validation or audit). Before, on R
+  older than 4.4 it made R grow its decompression buffer until the operating
+  system killed the process, and a trailer recording too small a size could
+  hang R 4.4 and later. The trailer's recorded size must match the size the
+  bounded pre-pass measures, so a multi-member or zero-padded gzip file is now
+  rejected too.
 
 ## Per-engine rulesets
 

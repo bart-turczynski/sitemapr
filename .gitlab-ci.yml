@@ -116,7 +116,8 @@ default:
     # package called 'pak'" (schedule pipeline 2909390988; punycoder hit the
     # same in pipeline 2894951198, and seor took this fix). The r-lib repo serves a
     # self-contained build for every R version and architecture, so every job
-    # takes the same path. Once pak is in, PKG_SYSREQS below has it apt-install
+    # takes the same path (floor-check, which installs without pak, sets its
+    # own before_script). Once pak is in, PKG_SYSREQS below has it apt-install
     # libcurl and the other headers the package's own dependencies need.
     - >
       Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
@@ -320,10 +321,9 @@ coverage:
 
 # The weekly release-shaped check (seor design/fleet-standard.md,
 # "deep-check"): `R CMD check --as-cran` through the same `check` stage of
-# tools/verify.R, on R release, oldrel and devel, and at the declared floor,
-# `Depends: R (>= 4.1.0)`. 4.1.3 is the last 4.1 patch and the oldest minor
-# rocker publishes an arm64 image for; 4.0.5 has none. Bump the release and
-# oldrel tags when a new minor R ships.
+# tools/verify.R, on R release, oldrel and devel. Bump the release and oldrel
+# tags when a new minor R ships. The leg at the declared floor is its own job,
+# `floor-check` below.
 #
 # Only a schedule that sets SCHEDULE_KIND=deep-check runs it (a variable on
 # the schedule itself, never a project variable, which every schedule would
@@ -333,14 +333,12 @@ coverage:
 #
 # Each leg starts from an empty library (`cache: []`): the shared cache holds
 # binaries built for one R, and loading them under another fails in ways that
-# read like package bugs. The floor leg resolves from its image's dated p3m
-# snapshot with CRAN behind it (the default `before_script`), so it pins
-# nothing the other legs install.
+# read like package bugs.
 deep-check:
   stage: verify
   image: rocker/r-ver:$R_VERSION
   cache: []
-  rules:
+  rules: &deep-check-rules
     - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -350,12 +348,87 @@ deep-check:
     - when: never
   parallel:
     matrix:
-      - R_VERSION: ["4.6", "4.5", "devel", "4.1.3"]
+      - R_VERSION: ["4.6", "4.5", "devel"]
   script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    # qpdf: R 4.5's --as-cran raises a WARNING, "'qpdf' is needed for checks
+    # on size reduction of PDFs", when the binary is absent, and the check
+    # stage's error_on = "warning" turns that red (pipeline 2909482009, the 4.5
+    # leg). R 4.6 does not ask, which is why `check` on the default image never
+    # needed it. No rocker/r-ver image ships qpdf; robotstxtr's and punycoder's
+    # full-check install it too.
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc qpdf
     - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
     - Rscript -e 'pak::pkg_install("rcmdcheck")'
     - Rscript tools/verify.R check
+
+# The deep-check leg at the declared R floor, `Depends: R (>= 4.1.0)`, in
+# punycoder's and robotstxtr's floor-check shape (seor design/fleet-standard.md,
+# "A leg at the declared R floor"). 4.1.3 is the last 4.1 patch and the oldest
+# minor rocker publishes an arm64 image for, which the runner needs; 4.0.5 has
+# none. A separate job rather than a matrix row, because old R needs
+# old-enough dependencies: as a row it resolved through pak against the
+# image's snapshot with CRAN behind it, got curl 8.0.0, and that failed to
+# compile against Ubuntu 20.04's libcurl 7.68 with `CURLINFO_EFFECTIVE_METHOD
+# undeclared` (pipeline 2909482009).
+#
+# - Third-party packages come from one dated Posit Package Manager snapshot,
+#   FLOOR_SNAPSHOT, installed with base install.packages() (source builds; the
+#   runner is arm64 and that URL serves source). 2025-07-15, as in robotstxtr:
+#   the first snapshot carrying httr2 1.2.0, which robotstxtr (a Suggests the
+#   robots tests need) requires, while its curl is still 6.4.0, which builds
+#   against libcurl 7.68 (every curl since 7.0.0 wants libcurl >= 7.73), and
+#   its bit64 predates 4.8.0, which gcc 9 rejects. The snapshot lives in this
+#   job alone, so it cannot conflict with what the matrix legs install.
+# - The fleet packages postdate that snapshot, so they come after it: rurl
+#   (DESCRIPTION wants >= 3.0.1), punycoder and pslr from current CRAN,
+#   robotstxtr (>= 0.3.0, not on CRAN) from the fleet's r-universe. All declare
+#   R >= 4.1 or lower, and their own dependencies are already installed from
+#   the snapshot by then.
+# - Only what the check needs is installed: the Imports, the test and vignette
+#   Suggests, and rcmdcheck. oysteR and rosv serve only the scheduled audits,
+#   whose tests skip without them, so _R_CHECK_FORCE_SUGGESTS_=false lets
+#   --as-cran report them as a NOTE instead of stopping.
+# - Vignettes are neither built nor checked: no pandoc in this job, and the
+#   vignette exercises the same functions the tests do. Otherwise this is the
+#   `check` stage of tools/verify.R: --as-cran with CRAN incoming (the two
+#   R_CRAN_* variables point it at cloud.r-project.org rather than the
+#   snapshot), error_on = "warning", the same 300s download timeout, and a
+#   guard on R CMD check's own exit status, because rcmdcheck reads a check
+#   that halted partway as 0/0/0 and returns normally (SEOR-maavnxdm).
+# - Its own before_script: pak and the p3m/CRAN repos the default one sets up
+#   are what this job exists to avoid.
+floor-check:
+  stage: verify
+  image: rocker/r-ver:4.1.3
+  cache: []
+  rules: *deep-check-rules
+  variables:
+    FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/2025-07-15"
+    R_CRAN_SRC: "https://cloud.r-project.org"
+    R_CRAN_WEB: "https://cloud.r-project.org"
+    _R_CHECK_FORCE_SUGGESTS_: "false"
+  before_script:
+    - mkdir -p "$R_LIBS_USER"
+    - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends libcurl4-openssl-dev libssl-dev libxml2-dev zlib1g-dev pkg-config
+    - >
+      Rscript -e 'install.packages(c("htmltools", "httr2", "rlang", "tibble", "xml2",
+      "stringi", "digest", "cpp11", "Rcpp",
+      "cucumber", "testthat", "withr", "knitr", "rmarkdown", "rcmdcheck"),
+      repos = Sys.getenv("FLOOR_SNAPSHOT"), Ncpus = 4L);
+      install.packages(c("punycoder", "pslr", "rurl"),
+      repos = "https://cloud.r-project.org", Ncpus = 4L);
+      install.packages("robotstxtr",
+      repos = "https://bart-turczynski.r-universe.dev", Ncpus = 4L);
+      stopifnot(all(vapply(c("httr2", "xml2", "rurl", "robotstxtr", "cucumber", "testthat", "rcmdcheck"),
+      requireNamespace, NA, quietly = TRUE)));
+      print(R.version.string)'
+    - >
+      Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran", "--ignore-vignettes"),
+      build_args = c("--no-manual", "--no-build-vignettes"),
+      error_on = "warning", env = c(R_DEFAULT_INTERNET_TIMEOUT = "300"));
+      if (!identical(as.integer(res$status), 0L)) stop("R CMD check exited with status ", res$status, "; the run did not complete.", call. = FALSE)'
 
 # The docs site. Must be named `pages` and publish `public/` — that pairing is
 # what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
