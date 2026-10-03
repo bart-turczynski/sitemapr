@@ -44,7 +44,9 @@ repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but
 `origin` is GitLab and GitHub holds only a read-only mirror of it, so that tree
 was deleted rather than left to look like coverage it could not provide
-(SITE-kgpdfhoh; git history keeps it restorable).
+(SITE-kgpdfhoh; git history keeps it restorable). The README's pipeline and
+coverage badges read this GitLab CI, not those workflows: seor's ADR 0007
+reverses the old rule against CI badges (SEOR-dunwqfkj).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
 in front of `main`. `main` is a protected branch (Maintainer-only push and

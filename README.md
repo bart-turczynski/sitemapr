@@ -5,32 +5,22 @@
 
 <!-- badges: start -->
 
+[![r-universe](https://bart-turczynski.r-universe.dev/sitemapr/badges/version)](https://bart-turczynski.r-universe.dev/sitemapr)
+[![Pipeline](https://gitlab.com/bart-turczynski/sitemapr/badges/main/pipeline.svg)](https://gitlab.com/bart-turczynski/sitemapr/-/pipelines)
+[![Coverage](https://gitlab.com/bart-turczynski/sitemapr/badges/main/coverage.svg)](https://gitlab.com/bart-turczynski/sitemapr/-/pipelines)
+[![Docs](https://img.shields.io/website?url=https%3A%2F%2Fbart-turczynski.gitlab.io%2Fsitemapr%2F&label=docs&logo=gitlab&logoColor=white&up_message=pkgdown&up_color=1f75cb)](https://bart-turczynski.gitlab.io/sitemapr/)
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-<!-- No CI badges, permanently: R-CMD-check, Codecov, pkgcheck, Security audit
-     and OSV audit all rendered from GitHub Actions runs. `origin` is GitLab
-     and GitHub holds only a read-only mirror, so the workflows were deleted
-     rather than left dormant (SITE-kgpdfhoh). A badge for a workflow that
-     cannot run is a stale signal, not a missing one -- it reports the last
-     state before the lights went out. Do not re-add these: GitLab CI here runs
-     only on `main`, tags and hand-started pipelines, there is no server-side
-     branch protection, and tools/verify.R under the pre-push hook is the only
-     gate in front of `main`. See
-     docs/repo-hygiene.md. -->
-<!-- No DOI badge: zenodo.org/badge/latestdoi/1282558407 404s (re-measured
-     2026-10-01) and R CMD check --as-cran flags it as a possibly invalid URL
-     (SITE-ewcnqior, SITE-jyndiitx). That id is the GitHub repository's, now a
-     read-only mirror of `origin` on GitLab, and the badge resolves only
-     through Zenodo's GitHub archiving integration. Which DOI route to take is
-     open (SITE-knuqpfaf): a release archive deposited to Zenodo by hand with
-     the minted DOI linked directly, that integration enabled on the mirror,
-     or no DOI at all. Do not re-add the badge, or wait for a release to
-     archive itself, until that decision is made. .zenodo.json is the prepared
-     metadata for a deposit and is dormant until one is made. The all-software
-     search badge below is a different URL, resolves 200, and stays. -->
+[![Project Status:
+Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+<!-- The DOI badge (slot 11 of seor's design/fleet-standard.md) joins once a
+     Zenodo concept DOI exists and doi.org resolves it. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
+[![License](https://img.shields.io/gitlab/license/bart-turczynski%2Fsitemapr)](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/LICENSE.md)
+[![Last
+commit](https://img.shields.io/gitlab/last-commit/bart-turczynski%2Fsitemapr)](https://gitlab.com/bart-turczynski/sitemapr/-/commits/main)
 <!-- badges: end -->
 
 sitemapr is a deterministic toolkit for reading and validating XML,
