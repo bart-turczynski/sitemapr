@@ -52,7 +52,10 @@ created — so nothing verifies a feature branch but this hook, unless you open
 against it on the server. `pages` is pinned to `main` and is not reachable that
 way. A split pipeline with separate guard, lint, coverage and readme jobs was
 proposed (SITE-fxkbboia) and dropped: seor's ADR 0005 folds cheap jobs into one
-to cut per-job runner overhead. The
+to cut per-job runner overhead. The fleet standard (SEOR-dunwqfkj) added only
+what it requires: `check` also checks README drift, `citation-version` the
+NEWS heading, a `coverage` job fails below 95%, and a `deep-check` job runs
+`R CMD check` on R release, oldrel, devel and 4.1 on the weekly schedule. The
 repository once carried a GitHub Actions workflow tree, but `origin` is GitLab
 and GitHub holds only a read-only mirror of it, so the tree was deleted rather
 than left to rot (SITE-kgpdfhoh — git history keeps it restorable). `main` is a

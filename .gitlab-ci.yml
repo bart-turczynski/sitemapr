@@ -5,7 +5,12 @@
 # pipeline proved only that the docs site built — nothing about the package
 # itself. It is still deliberately NOT the whole ported pipeline; see below.
 # Since SEOR-fftbjnpl it also carries two schedule-only dependency audits,
-# `osv-audit` and `security-audit`, at the end of this file.
+# `osv-audit` and `security-audit`, at the end of this file. Since the fleet
+# standard (seor design/fleet-standard.md, ADR 0007; SEOR-dunwqfkj) every push
+# to `main` also runs a `coverage` job that fails below 95%, `check` also
+# checks README drift, `citation-version` also checks the NEWS heading, and
+# the weekly `deep-check` schedule runs R CMD check on R release, oldrel,
+# devel and the declared 4.1 floor.
 #
 # Scope of the `pages` job: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
 # documentation URL, `R CMD check --as-cran` fetches every declared URL, and
@@ -25,8 +30,9 @@
 # `guards`/`lint`/`docs`/`check` jobs plus `coverage` and `readme`) was
 # proposed on SITE-fxkbboia and dropped on 2026-09-30: seor's ADR 0005
 # (SEOR-pgammbgo) settled the fleet on folding cheap jobs into one, because
-# per-job runner pickup, not compute, dominated wall time. Coverage and the
-# README-sync check stay local-only `--all` extras (SITE-dzikrmnh).
+# per-job runner pickup, not compute, dominated wall time. So the README
+# check rides in `check` and the NEWS check in `citation-version`; only
+# coverage, which re-runs the whole test suite, is a job of its own.
 #
 # Runner: `seor-local-docker` IS attached to this project (confirmed via the
 # GitLab runners API 2026-09-22, `runner_type: project_type`, `status:
@@ -172,10 +178,9 @@ variables:
 #   `pages` is pinned to the default branch, so the hatch verifies a branch
 #   and never publishes one. This file never had a `web` rule of its own, so
 #   nothing is being restored here - it is being granted, to match the fleet.
-# - sitemapr has no coverage job (see the `check` job's comment below), so
-#   the MR-diff per-line coverage-annotation loss found on seor and
-#   pagerankr - whose coverage jobs fed GitLab's MR-widget annotations -
-#   does not apply here.
+# - The `coverage` job's cobertura report feeds GitLab's per-line diff
+#   annotations only on an MR pipeline, which this file never creates; the
+#   job still drives the coverage badge and fails `main` below 95%.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -199,6 +204,12 @@ workflow:
 # The same job runs scripts/check-bugreports.py, the equally offline gate that
 # keeps DESCRIPTION's BugReports: on the CRAN-incoming-safe /-/issues form and
 # every human-facing tracker link on /-/work_items (SEOR-ocbtrrnl).
+#
+# It also runs the news-version check, seor's job of that name folded in here
+# (ADR 0005 in seor: no runner pickup for a second of shell): the top NEWS.md
+# heading must read "(development version)" or exactly the DESCRIPTION
+# Version, which catches a stale heading left behind at release. busybox
+# grep and sed are enough.
 citation-version:
   stage: verify
   image: python:3.13-alpine
@@ -209,26 +220,36 @@ citation-version:
     - python3 scripts/check-citation.py
     - python3 scripts/check-bugreports.py --self-test
     - python3 scripts/check-bugreports.py
+    - |
+      set -eu
+      version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION | head -n 1)"
+      heading="$(grep -m 1 '^# ' NEWS.md | sed 's/^#[[:space:]]*sitemapr[[:space:]]*//')"
+      echo "DESCRIPTION Version : '$version'"
+      echo "Top NEWS.md heading : '$heading'"
+      if [ "$heading" != "(development version)" ] && [ "$heading" != "$version" ]; then
+        echo "The top NEWS.md heading is neither '(development version)' nor the DESCRIPTION Version. Update NEWS.md."
+        exit 1
+      fi
 
 # `R CMD check --as-cran` plus the whole DEFAULT `tools/verify.R` chain —
 # docs-reproducibility, the findings-registry guard, the R-floor guard, the
 # air/.lintr line-width agreement guard, spelling, the CRAN-incoming guard,
 # lintr, the URL check, then `check` itself — as ONE job, by running the bare `Rscript tools/verify.R` the pre-push hook
-# runs with no arguments. That is deliberate: `coverage` and `readme` are both
-# `default = FALSE` in tools/verify.R (off the pre-push gate too), so leaving
-# them out of this job keeps CI checking exactly what the gate checks, not
-# more and not less. Fleet-tier decision, recorded here rather than left
-# implicit: sitemapr's CI does NOT run coverage or the README-sync check —
-# both stay local-only `--all` extras, same as they are on the hook, and
-# turning either into a CI job is a separate ticket, not a byproduct of this
-# one (SITE-dzikrmnh).
+# runs with no arguments, so CI checks everything the gate checks.
+#
+# Then the README drift check the fleet standard puts on every push
+# (SEOR-dunwqfkj). tools/verify.R's own `readme` stage stays opt-in on the
+# hook, because it needs the network; here it runs as seor's `readme` job
+# does, after the chain, reusing this job's library and pandoc rather than
+# paying for a job of its own.
 check:
   stage: verify
   script:
     # R CMD check builds the vignettes through rmarkdown, which shells out to
     # pandoc; rocker/r-ver does not ship it (same requirement as `pages`
     # below).
-    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    # git for the README diff at the end; rocker/r-ver ships neither.
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc git
     # Full Suggests, not just Imports: the `check` stage runs the testthat
     # suite and builds the vignettes, both of which reach into Suggests.
     # rcmdcheck, lintr, spelling and the pinned roxygen2 are dev tooling the
@@ -238,12 +259,89 @@ check:
     - |
       Rscript -e '
       pak::pkg_install(c(
+        "devtools",
         "lintr",
         "rcmdcheck",
         "spelling",
         paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]])
       ))'
     - Rscript tools/verify.R
+    - Rscript -e 'devtools::build_readme()'
+    # Blank-line-only differences don't count: pandoc versions disagree about
+    # the blank line after `<!-- badges: start -->` (seor SEOR-oaqnafzs). The
+    # test reads the diff's output, not `--exit-code`, which git 2.43 still
+    # sets on a blank-only diff under --ignore-blank-lines (SEOR-kaqtnovh).
+    - |
+      readme_diff=$(git diff --ignore-blank-lines -- README.md)
+      if [ -n "$readme_diff" ]; then
+        printf '%s\n' "$readme_diff"
+        echo "README.md is out of sync with README.Rmd. Run devtools::build_readme() and commit the result."
+        exit 1
+      fi
+
+# Coverage, reported through GitLab natively: the `coverage:` regex drives the
+# badge, the cobertura artifact the diff annotations. The fleet floor is 95%
+# total coverage and is never lowered; a package under it adds tests (seor ADR
+# 0007). sitemapr holds 100%, which tools/verify.R's opt-in `coverage` stage
+# enforces line by line before a release; this job is the softer floor every
+# push must clear. Its own job, not a step of `check`: it re-runs the whole
+# test suite, so folding it in would double that job's wall time.
+coverage:
+  stage: verify
+  script:
+    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
+    - Rscript -e 'pak::pkg_install("covr")'
+    - >
+      Rscript -e 'cov <- covr::package_coverage(quiet = FALSE);
+      covr::to_cobertura(cov);
+      pct <- covr::percent_coverage(cov);
+      cat(sprintf("Coverage: %.2f%%\n", pct));
+      if (pct < 95) stop(sprintf("coverage %.2f%% is below the fleet floor of 95%%", pct), call. = FALSE)'
+  coverage: '/Coverage: (\d+\.\d+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: cobertura.xml
+
+# The weekly release-shaped check (seor design/fleet-standard.md,
+# "deep-check"): `R CMD check --as-cran` through the same `check` stage of
+# tools/verify.R, on R release, oldrel and devel, and at the declared floor,
+# `Depends: R (>= 4.1.0)`. 4.1.3 is the last 4.1 patch and the oldest minor
+# rocker publishes an arm64 image for; 4.0.5 has none. Bump the release and
+# oldrel tags when a new minor R ships.
+#
+# Only a schedule that sets SCHEDULE_KIND=deep-check runs it (a variable on
+# the schedule itself, never a project variable, which every schedule would
+# inherit); any other schedule falls to `when: never`. A scheduled run is
+# BLOCKING. A hand-started `web` pipeline offers it as a manual, non-blocking
+# job, as the audits below do.
+#
+# Each leg starts from an empty library (`cache: []`): the shared cache holds
+# binaries built for one R, and loading them under another fails in ways that
+# read like package bugs. The floor leg resolves from its image's dated p3m
+# snapshot with CRAN behind it (the default `before_script`), so it pins
+# nothing the other legs install.
+deep-check:
+  stage: verify
+  image: rocker/r-ver:$R_VERSION
+  cache: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+    - when: never
+  parallel:
+    matrix:
+      - R_VERSION: ["4.6", "4.5", "devel", "4.1.3"]
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends pandoc
+    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
+    - Rscript -e 'pak::pkg_install("rcmdcheck")'
+    - Rscript tools/verify.R check
 
 # The docs site. Must be named `pages` and publish `public/` — that pairing is
 # what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
