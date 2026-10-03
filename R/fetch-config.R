@@ -79,12 +79,14 @@ fetch_limits <- function(
 #'
 #' Assembles `sitemapr/<version> (+<contact-url>)` at runtime. `<version>`
 #' comes from the installed package version and `<contact-url>` from the
-#' package `URL` field, so no contact URL literal appears in package source
-#' (ADR-003 §5). Callers may override the UA via a `user_agent` argument to the
-#' public entrypoints; this function supplies the value used when they do not.
+#' package `URL` field (its GitLab repository entry, else its first entry), so
+#' no contact URL literal appears in package source (ADR-003 §5). Callers may
+#' override the UA via a `user_agent` argument to the public entrypoints; this
+#' function supplies the value used when they do not.
 #'
-#' If the `URL` field is unavailable (`NA` or missing), the `(+<contact-url>)`
-#' suffix is omitted and the bare `sitemapr/<version>` string is returned.
+#' If the `URL` field is unavailable (`NA`, missing or empty), the
+#' `(+<contact-url>)` suffix is omitted and the bare `sitemapr/<version>` string
+#' is returned.
 #'
 #' @return A length-1 character User-Agent string.
 #' @keywords internal
@@ -93,15 +95,19 @@ default_user_agent <- function() {
   version <- as.character(utils::packageVersion("sitemapr"))
   url <- utils::packageDescription("sitemapr")$URL
 
-  if (is.null(url) || is.na(url) || !nzchar(url)) {
+  # The URL field lists several URLs (comma/whitespace separated). The contact
+  # URL is the GitLab repository, so a site operator lands on the README and
+  # the issue tracker. The fleet standard puts the documentation site first in
+  # `URL:`, so the repository is picked by host, not by position; the first
+  # entry is the fallback.
+  urls <- if (is.null(url) || is.na(url)) character() else trimws(url)
+  urls <- unlist(strsplit(urls, "[,[:space:]]+"))
+  urls <- urls[nzchar(urls)]
+  if (!length(urls)) {
     return(sprintf("sitemapr/%s", version))
   }
-
-  # The URL field may list multiple URLs (comma/whitespace separated); the
-  # first entry is the canonical contact URL. DESCRIPTION deliberately lists the
-  # GitLab repo first (ahead of the pkgdown site) so the crawler contact URL
-  # points at the repo README/issues; keep that order.
-  contact <- trimws(strsplit(url, "[,[:space:]]+")[[1L]][[1L]])
+  repo <- urls[startsWith(urls, "https://gitlab.com/")]
+  contact <- if (length(repo)) repo[[1L]] else urls[[1L]]
   sprintf("sitemapr/%s (+%s)", version, contact)
 }
 

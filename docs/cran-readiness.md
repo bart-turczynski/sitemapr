@@ -39,12 +39,16 @@ SITE-rysgulhf) and schedule-only `osv-audit` and `security-audit`. Pipelines
 start only on pushes to `main`, tags and hand-started runs, so nothing runs on
 a branch or merge request. A split pipeline with separate guard, lint,
 coverage and readme jobs was proposed (SITE-fxkbboia) and dropped: seor's ADR
-0005 folds cheap jobs into one to cut per-job runner overhead. The
+0005 folds cheap jobs into one to cut per-job runner overhead. Since the fleet
+standard (SEOR-dunwqfkj), a `coverage` job fails below 95% and a weekly
+`deep-check` runs `R CMD check` on R release, oldrel, devel and 4.1. The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but
 `origin` is GitLab and GitHub holds only a read-only mirror of it, so that tree
 was deleted rather than left to look like coverage it could not provide
-(SITE-kgpdfhoh; git history keeps it restorable).
+(SITE-kgpdfhoh; git history keeps it restorable). The README's pipeline and
+coverage badges read this GitLab CI, not those workflows: seor's ADR 0007
+reverses the old rule against CI badges (SEOR-dunwqfkj).
 
 `Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
 in front of `main`. `main` is a protected branch (Maintainer-only push and

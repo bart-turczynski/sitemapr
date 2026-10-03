@@ -1,0 +1,120 @@
+header:
+  schema-version: 2.2.0
+  last-updated: '2026-10-03'
+  last-reviewed: '2026-10-03'
+  url: https://gitlab.com/bart-turczynski/sitemapr/-/raw/main/SECURITY-INSIGHTS.yml
+  comment: |
+    OpenSSF Security Insights self-report. Maintained alongside SECURITY.md
+    (human-readable policy) and .bestpractices.json (OpenSSF Best Practices
+    badge self-assessment). Refresh both header dates whenever anything below
+    is re-measured, not only when it changes.
+
+project:
+  name: sitemapr
+  homepage: https://bart-turczynski.gitlab.io/sitemapr/
+  administrators:
+    - name: Bart Turczynski
+      email: bartek@turczynski.pl
+      social: https://orcid.org/0000-0002-8788-7980
+      primary: true
+  documentation:
+    quickstart-guide: https://bart-turczynski.gitlab.io/sitemapr/
+    detailed-guide: https://bart-turczynski.gitlab.io/sitemapr/reference/index.html
+    release-process: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md
+  repositories:
+    - name: sitemapr
+      url: https://gitlab.com/bart-turczynski/sitemapr
+      comment: |
+        Sole repository for the sitemapr package. URL parsing and
+        normalization are delegated to the sibling rurl package.
+  vulnerability-reporting:
+    reports-accepted: true
+    bug-bounty-available: false
+    contact:
+      name: Bart Turczynski
+      email: bartek@turczynski.pl
+      primary: true
+    policy: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md
+    in-scope:
+      - Unsafe handling of untrusted sitemap XML, text, archive or URL input,
+        including XML external entities and unbounded archive extraction.
+      - A fetch made during discovery or validation that reaches a destination
+        the package's network-safety policy refuses.
+    out-of-scope:
+      - Vulnerabilities in dependencies (httr2, xml2, rurl); report those
+        upstream.
+    comment: |
+      Please do not report vulnerabilities through public issues. Email the
+      maintainer at bartek@turczynski.pl, or open a GitLab issue with the
+      "This issue is confidential" box ticked. Acknowledgment is targeted
+      within 7 days.
+
+repository:
+  url: https://gitlab.com/bart-turczynski/sitemapr
+  status: active
+  bug-fixes-only: false
+  accepts-change-request: true
+  accepts-automated-change-request: false
+  no-third-party-packages: false
+  core-team:
+    - name: Bart Turczynski
+      email: bartek@turczynski.pl
+      social: https://orcid.org/0000-0002-8788-7980
+      primary: true
+  documentation:
+    contributing-guide: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md
+    security-policy: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/SECURITY.md
+  license:
+    url: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/LICENSE.md
+    expression: MIT
+  release:
+    changelog: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/NEWS.md
+    automated-pipeline: false
+    distribution-points:
+      - uri: https://bart-turczynski.r-universe.dev/sitemapr
+        comment: |
+          Binary and source builds from the GitLab repository. sitemapr is not
+          on CRAN yet.
+      - uri: https://gitlab.com/bart-turczynski/sitemapr
+        comment: Install from source with pak::pak("gitlab::bart-turczynski/sitemapr").
+  security:
+    assessments:
+      self:
+        evidence: https://www.bestpractices.dev/projects/13552
+        date: '2026-10-03'
+        comment: |
+          Ongoing OpenSSF Best Practices badge self-assessment, tracked in
+          .bestpractices.json at the repository root.
+    champions:
+      - name: Bart Turczynski
+        email: bartek@turczynski.pl
+        primary: true
+    tools:
+      - name: rosv (OSV)
+        type: SCA
+        rulesets:
+          - default
+        integration:
+          adhoc: true
+          ci: true
+          release: false
+        results: {}
+        comment: |
+          The osv-audit job in .gitlab-ci.yml audits the runtime dependency
+          closure against the OSV database (osv.dev). It runs on the weekly
+          pipeline schedule that sets SCHEDULE_KIND=dependency-audit, or from
+          a hand-started pipeline. No account or secrets required.
+      - name: oysteR (Sonatype OSS Index)
+        type: SCA
+        rulesets:
+          - default
+        integration:
+          adhoc: true
+          ci: true
+          release: false
+        results: {}
+        comment: |
+          The security-audit job in .gitlab-ci.yml audits declared dependencies
+          against the Sonatype OSS Index, on the same dependency-audit schedule.
+          It needs the OSSINDEX_USER and OSSINDEX_TOKEN CI/CD variables and
+          fails, rather than skipping, when they are absent.
