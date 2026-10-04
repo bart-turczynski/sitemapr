@@ -177,7 +177,7 @@ related W3C and RFC standards.
   memory until the process was killed (R older than 4.4) or hanging (R 4.4 and
   later). A gzip stream is now inflated once, by the bounded streaming pass,
   and that pass's output is returned; the original stream no longer reaches
-  `memDecompress()`. Its CRC32 is still checked.
+  `memDecompress()`. Its checksum is still verified.
 
 ## Per-engine rulesets
 
