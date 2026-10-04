@@ -32,10 +32,12 @@ Suggests:
     cucumber (>= 2.0.0),
     knitr,
     oysteR,
+    parallel,
     rmarkdown,
     robotstxtr (>= 0.3.0),
     rosv,
     testthat (>= 3.0.0),
+    tools,
     withr
 Remotes:
     gitlab::bart-turczynski/robotstxtr@v0.3.0

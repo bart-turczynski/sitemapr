@@ -172,6 +172,12 @@ related W3C and RFC standards.
   hang R 4.4 and later. The trailer's recorded size must match the size the
   bounded pre-pass measures, so a multi-member or zero-padded gzip file is now
   rejected too.
+* A `.gz` sitemap crafted so that a truncated body ends in a matching trailer
+  now fails with the classed decompression error too, instead of growing R's
+  memory until the process was killed (R older than 4.4) or hanging (R 4.4 and
+  later). A gzip stream is now inflated once, by the bounded streaming pass,
+  and that pass's output is returned; the original stream no longer reaches
+  `memDecompress()`. Its CRC32 is still checked.
 
 ## Per-engine rulesets
 
