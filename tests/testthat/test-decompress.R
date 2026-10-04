@@ -64,6 +64,69 @@ test_that("a truncated gzip stream raises a classed decompression error", {
   )
 })
 
+# ---- crafted streams (SITE-xeeginso) -----------------------------------------
+
+# Evaluate `expr` in a forked child and give up after `seconds`. A regression
+# here hangs R (>= 4.4) or exhausts its memory (< 4.4) inside C code that
+# setTimeLimit() cannot interrupt, so only a separate process gives the test a
+# real wall-clock bound and keeps such a failure from killing the whole suite.
+in_child_within <- function(expr, seconds = 10) {
+  skip_on_os("windows") # no fork()
+  job <- parallel::mcparallel(expr, silent = TRUE)
+  res <- parallel::mccollect(job, wait = FALSE, timeout = seconds)
+  if (is.null(res)) {
+    tools::pskill(job$pid, tools::SIGKILL)
+    parallel::mccollect(job, wait = FALSE)
+    stop(sprintf("Still running after %d seconds; killed.", seconds))
+  }
+  if (is.null(res[[1]])) {
+    stop("The child process died without a result.")
+  }
+  res[[1]]
+}
+
+# A gzip header, then a non-final stored block that claims 100 bytes but is cut
+# after 20, whose last 4 bytes spell 20. gzcon() streams those 20 bytes and
+# ISIZE reads 20, so the trailer check passes; memDecompress() handed this
+# stream loops until the OOM killer stops R (< 4.4) or forever (>= 4.4).
+crafted_stream <- function() {
+  c(
+    as.raw(c(0x1F, 0x8B, 0x08, 0, 0, 0, 0, 0, 0, 0x03)),
+    as.raw(c(0x00, 100, 0, 0x9B, 0xFF)),
+    charToRaw(strrep("A", 16L)),
+    as.raw(c(20, 0, 0, 0))
+  )
+}
+
+test_that("a self-consistent truncated stream fails without hanging", {
+  crafted <- crafted_stream()
+  expect_length(crafted, 35L)
+  cnd <- in_child_within(rlang::catch_cnd(gzip_decompress(crafted)))
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+})
+
+test_that("a stream whose CRC32 was altered raises a decompression error", {
+  # gzcon() only prints a CRC mismatch to stderr; the check that raises is
+  # zlib's, run over the rebuilt stream that carries the source trailer.
+  payload <- strrep("https://example.com/p\n", 100)
+  gz <- gzip_stream(payload)
+  n <- length(gz)
+  gz[n - 7L] <- as.raw(bitwXor(as.integer(gz[n - 7L]), 1L))
+  utils::capture.output(
+    cnd <- rlang::catch_cnd(gzip_decompress(gz)),
+    type = "message"
+  )
+  expect_s3_class(cnd, "sitemapr_decompression_error")
+  expect_false(is.null(cnd$parent))
+})
+
+test_that("a stream spanning many stored blocks decompresses identically", {
+  # More than one 65535-byte block, and a length that is not a multiple of it.
+  payload <- strrep("https://example.com/some/path\n", 10000L)
+  expect_gt(nchar(payload), 3 * 65535)
+  expect_identical(gzip_decompress(gzip_stream(payload)), charToRaw(payload))
+})
+
 test_that("non-raw input is coerced before decompression", {
   gz <- gzip_stream("coerce me")
   expect_identical(
