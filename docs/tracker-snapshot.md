@@ -10984,7 +10984,7 @@ Accepted in ADR-007 (docs/decisions/ADR-007-api-entry-points.md). Implement prob
 
 ### Description
 
-Replace b.turczynski@tidio.net with bartek@turczynski.pl in project contact metadata and docs.
+Replace the former work address with bartek@turczynski.pl in project contact metadata and docs.
 
 ### Comments
 
