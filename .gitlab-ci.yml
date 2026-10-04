@@ -334,11 +334,11 @@ coverage:
 # Each leg starts from an empty library (`cache: []`): the shared cache holds
 # binaries built for one R, and loading them under another fails in ways that
 # read like package bugs.
-deep-check:
-  stage: verify
-  image: rocker/r-ver:$R_VERSION
-  cache: []
-  rules: &deep-check-rules
+# The rules both deep-check jobs share, as a template rather than a YAML
+# anchor: seor's fleet checker follows `extends:` but reads an anchor only as
+# a whole top-level block.
+.deep-check-rules:
+  rules:
     - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -346,6 +346,12 @@ deep-check:
       when: manual
       allow_failure: true
     - when: never
+
+deep-check:
+  extends: .deep-check-rules
+  stage: verify
+  image: rocker/r-ver:$R_VERSION
+  cache: []
   parallel:
     matrix:
       - R_VERSION: ["4.6", "4.5", "devel"]
@@ -398,10 +404,10 @@ deep-check:
 # - Its own before_script: pak and the p3m/CRAN repos the default one sets up
 #   are what this job exists to avoid.
 floor-check:
+  extends: .deep-check-rules
   stage: verify
   image: rocker/r-ver:4.1.3
   cache: []
-  rules: *deep-check-rules
   variables:
     FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/2025-07-15"
     R_CRAN_SRC: "https://cloud.r-project.org"
