@@ -443,11 +443,69 @@ verify_incoming_file_uris <- function(dir, ns) {
   out
 }
 
+# The generated-docs drift check: seor's scripts/check-docs-drift.R, vendored
+# byte for byte (never edit it here; anything sitemapr-specific goes in this
+# wrapper), run on a `git archive` export of the commit being pushed --
+# PRE_COMMIT_TO_REF under the pre-push hook, else HEAD (a manual run, or CI's
+# checkout of the pushed commit). Never on the working tree: roxygenise()
+# rewrites the directory it is given, so in place it would rewrite the
+# developer's checkout mid-push and judge uncommitted edits rather than the
+# commit. On the export, a fix left uncommitted does not rescue a stale
+# committed man/, and an untracked man/*.Rd does not count as present. The
+# script watches man/, NAMESPACE and DESCRIPTION, and refuses to run unless
+# the installed roxygen2 is exactly DESCRIPTION's Config/roxygen2/version (the
+# pin the retired tools/check-docs.R enforced). It runs the checkout's copy of
+# the script, and the export is removed on every exit (SEOR-zxyztpbr).
+verify_docs_drift <- function(ref = Sys.getenv("PRE_COMMIT_TO_REF")) {
+  if (!nzchar(ref)) {
+    ref <- "HEAD"
+  }
+  if (!nzchar(Sys.which("git")[[1L]])) {
+    stop(
+      "git is not on PATH; the docs stage exports the commit with it.",
+      call. = FALSE
+    )
+  }
+  work <- tempfile("sitemapr-docs-drift-")
+  dir.create(work)
+  on.exit(unlink(work, recursive = TRUE), add = TRUE)
+  tarball <- file.path(work, "export.tar")
+  export <- file.path(work, "export")
+  status <- system2(
+    "git",
+    c("archive", "--format=tar", "-o", shQuote(tarball), shQuote(ref))
+  )
+  if (status != 0L || !file.exists(tarball)) {
+    stop(sprintf("could not export %s with git archive", ref), call. = FALSE)
+  }
+  if (!identical(as.integer(utils::untar(tarball, exdir = export)), 0L)) {
+    stop(sprintf("could not unpack the export of %s", ref), call. = FALSE)
+  }
+  cat(sprintf("  generated docs at %s (scripts/check-docs-drift.R)\n", ref))
+  status <- system2(
+    file.path(R.home("bin"), "Rscript"),
+    c(shQuote(file.path("scripts", "check-docs-drift.R")), shQuote(export))
+  )
+  if (status != 0L) {
+    stop(
+      sprintf(
+        paste(
+          "the generated docs at %s are out of date, or the check could not",
+          "run (see the output above); if they are stale, run",
+          "devtools::document() and commit the result"
+        ),
+        ref
+      ),
+      call. = FALSE
+    )
+  }
+}
+
 verify_stages <- list(
   docs = list(
-    label = "docs reproducible",
+    label = "generated docs in sync at the pushed commit",
     default = TRUE,
-    run = function() source("tools/check-docs.R")
+    run = verify_docs_drift
   ),
   registry = list(
     label = "findings registry in sync",
