@@ -54,9 +54,12 @@ in `DESCRIPTION` under `Config/roxygen2/version`; install that exact version so
 Rscript -e 'pak::pak("roxygen2@8.0.0")'
 ```
 
-`tools/check-docs.R` (run by the pre-push verify gate) enforces this: it fails
-if the installed roxygen2 differs from the pin, or if regenerating the docs
-changes any committed file under `man/` or `NAMESPACE`.
+The pre-push verify gate's `docs` stage enforces this. It exports the commit
+being pushed with `git archive` and runs `scripts/check-docs-drift.R` (seor's
+copy, vendored byte for byte; change it in seor) on the export. It fails if the
+installed roxygen2 differs from the pin, or if regenerating the docs changes
+`man/`, `NAMESPACE` or `DESCRIPTION`. It judges the commit, not your working
+tree, so commit the output of `devtools::document()` before you push.
 
 Source lives in `R/`, tests and their Cucumber `.feature` files live in
 `tests/testthat/`, and durable project context lives in `docs/`.
