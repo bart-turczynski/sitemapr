@@ -484,7 +484,7 @@ verify_docs_drift <- function(ref = Sys.getenv("PRE_COMMIT_TO_REF")) {
   cat(sprintf("  generated docs at %s (scripts/check-docs-drift.R)\n", ref))
   status <- system2(
     file.path(R.home("bin"), "Rscript"),
-    c(shQuote(file.path("scripts", "check-docs-drift.R")), shQuote(export))
+    c(shQuote("scripts/check-docs-drift.R"), shQuote(export))
   )
   if (status != 0L) {
     stop(
