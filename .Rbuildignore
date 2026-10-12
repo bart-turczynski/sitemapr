@@ -35,6 +35,8 @@
 # sitemapr's own content. Ported from pagerankr's `.Rbuildignore`.
 ^\.cache$
 ^\.pre-commit-config\.yaml$
+# The OSS Scanner build and threat model; a hidden directory --as-cran notes.
+^\.oss-scanner$
 ^air\.toml$
 ^\.fp$
 ^\.claude$
