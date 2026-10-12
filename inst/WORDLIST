@@ -5,7 +5,10 @@ Bing
 CMS
 CRAN's
 CVE
+DNS
 Deterministically
+GCE
+GCP
 GSC
 GitLab
 IPv
@@ -26,6 +29,8 @@ TLS
 Teredo
 UA
 UNC
+UTS
+WHATWG
 XSD
 XSDs
 XXE
@@ -55,6 +60,7 @@ entrypoint
 epezowxs
 fetch's
 fftbjnpl
+fullwidth
 gitlab
 glibc
 goodpractice
@@ -65,12 +71,14 @@ hextet
 hextets
 hreflang
 httr
+ideographic
 ieajhiee
 inlined
 installable
 ipwcbcov
 kfiqpymb
 libcurl
+libidn
 libxml
 linter
 loopback
@@ -88,6 +96,7 @@ pkgdown
 pre
 preset's
 qfxolldq
+rafvyfvp
 renderer
 representable
 retryable

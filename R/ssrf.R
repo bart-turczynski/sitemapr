@@ -426,6 +426,27 @@ ssrf_numeric_literal_blocked <- function(raw_host) {
     grepl("^0[0-7]+(\\.0?[0-7]*){1,3}$", raw) # octal-style dotted form
 }
 
+# Drop the trailing dots of a fully qualified spelling. "metadata.google.
+# internal." and "169.254.169.254." name the same host as their undotted forms,
+# so every check below runs on the undotted form (SITE-rafvyfvp).
+ssrf_strip_trailing_dots <- function(x) {
+  if (length(x) != 1L || is.na(x)) {
+    return(x)
+  }
+  sub("[.]+$", "", x)
+}
+
+# Registered names that reach a cloud metadata server without a DNS answer an
+# attacker controls. GCE resolves the bare "metadata" through its
+# google.internal search domain, so it is blocked with the full name.
+ssrf_blocked_names <- c("metadata.google.internal", "metadata")
+
+# The form a registered name is compared in: ASCII-lowercased, with trailing
+# dots dropped.
+ssrf_name_key <- function(name) {
+  ssrf_strip_trailing_dots(ascii_lower(name))
+}
+
 # Range/name matching on the normalized host (brackets already stripped).
 # Returns an ssrf_result: blocked with a reason code for a matched IP range or
 # the well-known metadata hostname; allowed otherwise. Registered names other
@@ -435,7 +456,7 @@ ssrf_classify_literal <- function(bare) {
     ssrf_classify_ipv6(bare) # IPv6 literal (contains a colon)
   } else if (ssrf_is_dotted_quad(bare)) {
     ssrf_classify_ipv4(bare) # IPv4 dotted-quad
-  } else if (ascii_lower(bare) == "metadata.google.internal") {
+  } else if (ssrf_name_key(bare) %in% ssrf_blocked_names) {
     "cloud-metadata"
   } else {
     NA_character_
@@ -467,6 +488,12 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
   if (!scheme_l %in% c("http", "https")) {
     return(ssrf_result(FALSE, "scheme"))
   }
+
+  # A fully qualified spelling names the same host, so the checks below see
+  # it undotted: "0x7f000001." is a numeric literal, "169.254.169.254." the
+  # metadata address (SITE-rafvyfvp).
+  raw_host <- ssrf_strip_trailing_dots(raw_host)
+  host <- ssrf_strip_trailing_dots(host)
 
   # 2. Numeric-literal obfuscation (ADR-003): reject raw decimal/hex/octal
   #    encodings on the raw, pre-normalization host. Checked before the
@@ -507,12 +534,39 @@ ssrf_check_parsed <- function(parsed_row) {
     scheme <- ssrf_raw_scheme_of(original_url)
   }
   raw_host <- ssrf_raw_host_of(original_url)
-  ssrf_check(
+  verdict <- ssrf_check(
     host = host,
     scheme = scheme,
     is_ip_host = is_ip,
     raw_host = raw_host
   )
+  ssrf_whatwg_second_look(verdict, original_url, host, scheme)
+}
+
+# The host rurl reports by default is not always the host libcurl connects to.
+# rurl's default path ACE-encodes a host whole, while libcurl built with
+# libidn2 applies the UTS #46 mapping first: "metadata。google。
+# internal" (ideographic full stops) or a fullwidth spelling reaches
+# metadata.google.internal there. WHATWG's host parser applies the same
+# mapping, so a URL the default view allows is classified again on its WHATWG
+# host, and blocked if that view is (SITE-rafvyfvp).
+ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
+  if (!isTRUE(verdict$allowed) || length(url) != 1L || is.na(url)) {
+    return(verdict)
+  }
+  whatwg <- tryCatch(
+    rurl::safe_parse_url(url, url_standard = "whatwg")$host,
+    error = function(e) NA_character_
+  )
+  if (length(whatwg) != 1L || is.na(whatwg) || !nzchar(whatwg)) {
+    return(verdict)
+  }
+  whatwg <- ascii_lower(whatwg)
+  if (identical(whatwg, host)) {
+    return(verdict)
+  }
+  second <- ssrf_check(host = whatwg, scheme = scheme, raw_host = whatwg)
+  if (isTRUE(second$allowed)) verdict else second
 }
 
 # Recover the scheme from a raw URL string without full parsing, used only when

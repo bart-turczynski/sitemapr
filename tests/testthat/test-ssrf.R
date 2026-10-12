@@ -124,6 +124,58 @@ test_that("metadata.google.internal hostname is rejected", {
   expect_identical(res$reason, "cloud-metadata")
 })
 
+test_that("metadata hostname is rejected in its fully qualified spellings", {
+  # SITE-rafvyfvp: a trailing dot names the same host to DNS, so
+  # "metadata.google.internal." resolves to the metadata server on GCP. The
+  # name comparison must not let the dotted spelling through.
+  for (url in c(
+    "http://metadata.google.internal./",
+    "http://METADATA.google.internal./",
+    "http://metadata.google.internal.:80/",
+    "http://metadata.google.internal../"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  # A name that merely ends in the metadata name is not the metadata host.
+  expect_true(guard("http://notmetadata.google.internal./")$allowed)
+})
+
+test_that("the bare metadata name GCE resolves is rejected", {
+  # SITE-rafvyfvp: the google.internal search domain on GCE resolves the
+  # single label "metadata" to the metadata server.
+  for (url in c("http://metadata/", "http://Metadata./")) {
+    expect_identical(guard(url)$reason, "cloud-metadata", info = url)
+  }
+  expect_true(guard("http://metadata.example.com/")$allowed)
+})
+
+test_that("a trailing-dot literal is read as the undotted literal", {
+  # SITE-rafvyfvp: the dotted spelling of an IP literal names the same address.
+  expect_identical(guard("http://169.254.169.254./")$reason, "cloud-metadata")
+  expect_identical(guard("http://127.0.0.1./")$reason, "loopback")
+  expect_false(guard("http://0x7f000001./")$allowed)
+  expect_false(guard("http://2130706433./")$allowed)
+})
+
+test_that("UTS #46 spellings of the metadata name are rejected", {
+  # SITE-rafvyfvp: rurl's default host ACE-encodes these whole, but libcurl
+  # with libidn2 (and WHATWG) maps them to metadata.google.internal first.
+  for (url in c(
+    "http://metadata。google。internal/",
+    "http://metadata．google．internal/",
+    "http://metadata｡google｡internal/",
+    "http://ｍｅｔａｄａｔａ.google.internal/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  # A Unicode host that maps to an ordinary name stays allowed.
+  expect_true(guard("http://bücher.example/")$allowed)
+})
+
 test_that("AWS IPv6 metadata fd00:ec2::254 is rejected", {
   res <- guard("http://[fd00:ec2::254]/")
   expect_false(res$allowed)
