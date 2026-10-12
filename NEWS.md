@@ -329,12 +329,18 @@ related W3C and RFC standards.
   link-local despite lying far outside `fe80::/10`. Both are now decided by
   value — `fe80::/10` and `fd00:ec2::/32` — so every spelling agrees, matching
   the ADR-003 §1 matrix (SITE-mhfmtdxa).
-* The guard now blocks the GCP metadata host name in its fully qualified
-  spelling. `metadata.google.internal.`, with a trailing dot, names the same
-  host to DNS, but the guard compared names exactly, so that spelling (in any
-  case, with or without a port) was allowed under the default
-  `ssrf_guard = TRUE`. The name is now compared with trailing dots dropped
-  (SITE-rafvyfvp).
+* The guard now blocks the GCP metadata host name in every spelling that
+  reaches it. The guard compared names exactly, so under the default
+  `ssrf_guard = TRUE` it allowed
+  `metadata.google.internal.` (trailing dot, in any case, with or without a
+  port), the bare `metadata` that GCE resolves through its search domain, and
+  spellings that UTS #46 maps to the name: ideographic or fullwidth full stops
+  (`metadata\u3002google\u3002internal`) and fullwidth letters. libcurl built
+  with libidn2 applies that mapping, while the host rurl reports by default ACE-encodes such
+  a host whole, so the guard now also classifies the host the WHATWG host
+  parser reports and blocks the URL when either view is blocked. Trailing dots are
+  dropped before every check, so `169.254.169.254.` and `0x7f000001.` are
+  read as the literals they spell (SITE-rafvyfvp).
 
 ## Request customization
 
