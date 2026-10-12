@@ -16,11 +16,15 @@ Untrusted input:
 - **The contents of local files** passed to the readers (`.xml`, `.txt`, `.gz`, `.tar.gz`), and
   raw bytes passed to `sitemap_tree_from_bytes()`.
 - **The URL string `x` itself**: callers may pass a URL a third party chose, so the structural SSRF
-  guard runs on it as well as on every later hop.
+  guard runs on it as well as on every later hop. A path-like `x` (a `file://` URL, an absolute
+  path, or a schemeless name that exists on disk) is read as a local file instead
+  (`is_local_file_input()` in `R/input.R`), so callers must not pass an untrusted `x` that can take
+  one of those forms.
 
 Entry points: `read_sitemap()`, `read_sitemaps()`, `sitemap_tree()`, `sitemap_tree_from_bytes()`,
 `validate_sitemap()`, `validate_sitemaps()`, `validate_sitemap_robots()`,
-`validate_sitemap_ruleset()`, `audit_sitemap()`, `report_sitemap()`, `probe_url()`.
+`validate_sitemaps_robots()`, `validate_sitemap_ruleset()`, `validate_sitemaps_ruleset()`,
+`audit_sitemap()`, `report_sitemap()`, `probe_url()`.
 
 Trusted: the calling R code and every option it sets (`fetch_limits()`, `index_limits()`,
 `discovery_limits()`, the `sitemapr.*` options, a `request_policy()` with its headers, auth,
@@ -67,8 +71,11 @@ report.
 - Full suite: `Rscript -e 'testthat::test_local("/src")'`. One area:
   `Rscript -e 'testthat::test_local("/src", filter = "ssrf")'` (also `fetch`, `decompress`,
   `parse-archive`, `parse-xml`, `index-expansion`, `page-fetch`).
-- No native code, so `R -d gdb` or `R -d valgrind` are only useful to pin down a crash inside
-  libxml2 or zlib reached through sitemapr.
+- No native code, so gdb and valgrind (both in the image) are only useful to pin down a crash
+  inside libxml2 or zlib reached through sitemapr. Without a terminal, run gdb in batch mode:
+  `R -d gdb --debugger-args='-batch -ex run -ex bt' -e 'library(sitemapr); str(sitemapr:::parse_sitemap_xml(readBin("/src/tests/testthat/fixtures/xxe-attempt.xml", "raw", 1e6)))'`.
+  Valgrind:
+  `R -d valgrind -e 'library(sitemapr); str(sitemapr:::gzip_decompress(readBin("/src/tests/testthat/fixtures/corpus/compressed/valid.xml.gz", "raw", 1e6), max_bytes = 1e6))'`.
 - The guard without a network:
   `Rscript -e 'library(sitemapr); str(sitemapr:::ssrf_check_parsed(sitemapr:::parse_url_adapter("http://[::ffff:7f00:1]/")))'`.
   A blocked URL passed to a public reader aborts with class `sitemapr_ssrf_blocked` before any
@@ -78,7 +85,8 @@ report.
   header drives the manual redirect loop and the per-hop guard.
 - Parsers on raw bytes: `sitemapr:::parse_sitemap_xml(bytes)`, `sitemapr:::parse_feed(bytes)`,
   `sitemapr:::parse_sitemap_text(bytes)`, `sitemapr:::gzip_decompress(bytes, max_bytes = 1e6)`,
-  `sitemapr:::parse_sitemap_archive("/tmp/x.tar.gz")`, and the public
+  `sitemapr:::parse_sitemap_archive("/src/tests/testthat/fixtures/corpus/compressed/valid.tar.gz")`,
+  and the public
   `sitemap_tree_from_bytes(bytes, source_url = "https://example.com/sitemap.xml")`.
 - Fixtures: `tests/testthat/fixtures/` (`xxe-attempt.xml`, `index-cycle-ab.xml`,
   `index-over-cap.xml`, `index-deep.xml`, `html-masquerade.html`, ...) and the byte-sensitive
@@ -101,7 +109,9 @@ use of a dependency makes them reachable.
   external-entity loading, or an XSD import, include or `schemaLocation` taken from the document
   that reaches the filesystem or network; a tar member written outside memory or to disk.
 - **Medium**: denial of service from a small input: a gzip or archive inflating past its ceiling
-  (`sitemapr.max_decompressed`, `archive_limits()`), index expansion escaping its depth, child or
+  (`sitemapr.max_decompressed`, `sitemapr.archive.max_bytes`, `sitemapr.archive.max_files`,
+  `sitemapr.archive.max_decompressed`), memory use far out of proportion to the bytes received,
+  index expansion escaping its depth, child or
   total budgets or looping on a cycle, unbounded CPU or memory in a parser or validator
   (catastrophic regex backtracking, quadratic work on a large urlset, an infinite loop in a
   decoder), a crash of the R process (a segfault, not an R error); script injection into the
@@ -124,11 +134,19 @@ use of a dependency makes them reachable.
   `sitemapr.max_decompressed`; `sitemapr.archive.max_bytes`, `sitemapr.archive.max_files`,
   `sitemapr.archive.max_decompressed`; the page-inspection `page_budget`;
   `sitemapr.max_findings_per_code = Inf`.
-- Hostnames that resolve to private addresses, DNS rebinding, and deployment-specific NAT64
-  prefixes: the guard is structural only and never resolves names (ADR-003 §1).
-- The fetch is buffered: httr2 reads the whole response before the 500 MB per-resource ceiling
-  is checked (ADR-003 §3). Report a body that gets past the ceiling, not the buffering itself.
-- A local path or `file://` URL that the caller names in `x` is read as a local file, by design.
+- Hostnames whose answer depends on DNS (one that resolves to a private address, DNS rebinding)
+  and deployment-specific NAT64 prefixes: the guard is structural and never resolves names
+  (ADR-003 §1). Still in scope: a name that reaches loopback without DNS (RFC 6761 `localhost`
+  and `*.localhost`, which libcurl resolves locally) and any spelling of a blocked hostname that
+  gets past the guard.
+- Whole-body buffering: httr2 holds the full response in memory before `read_capped_body()`
+  checks the 500 MB per-resource ceiling (`sitemapr.max_bytes`), a documented choice (ADR-003
+  §3). Report a body that gets past the ceiling. Memory amplification from a small input, such as
+  a response whose in-memory body grows far beyond the bytes sent on the wire, stays in scope as
+  Medium.
+- A local path or `file://` URL in `x` is read as a local file by design (`R/input.R`); reading a
+  path the caller chose is not a finding. Callers must not pass an untrusted `x` that can take
+  that form.
 - An inferred `https://` for a bare host falls back to `http://` on a connection failure. That
   is the documented entry-point policy.
 - The `sitemapr.completion_order` and `sitemapr.inflight_probe` options are test seams.
