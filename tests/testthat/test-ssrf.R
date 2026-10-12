@@ -124,6 +124,24 @@ test_that("metadata.google.internal hostname is rejected", {
   expect_identical(res$reason, "cloud-metadata")
 })
 
+test_that("metadata hostname is rejected in its fully qualified spellings", {
+  # SITE-rafvyfvp: a trailing dot names the same host to DNS, so
+  # "metadata.google.internal." resolves to the metadata server on GCP. The
+  # name comparison must not let the dotted spelling through.
+  for (url in c(
+    "http://metadata.google.internal./",
+    "http://METADATA.google.internal./",
+    "http://metadata.google.internal.:80/",
+    "http://metadata.google.internal../"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  # A name that merely ends in the metadata name is not the metadata host.
+  expect_true(guard("http://notmetadata.google.internal./")$allowed)
+})
+
 test_that("AWS IPv6 metadata fd00:ec2::254 is rejected", {
   res <- guard("http://[fd00:ec2::254]/")
   expect_false(res$allowed)
