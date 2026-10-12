@@ -329,8 +329,8 @@ related W3C and RFC standards.
   link-local despite lying far outside `fe80::/10`. Both are now decided by
   value — `fe80::/10` and `fd00:ec2::/32` — so every spelling agrees, matching
   the ADR-003 §1 matrix (SITE-mhfmtdxa).
-* The guard now blocks the GCP metadata host name in every spelling that
-  reaches it. The guard compared names exactly, so under the default
+* The guard now blocks more spellings of the GCP metadata host name.
+  The guard compared names exactly, so under the default
   `ssrf_guard = TRUE` it allowed
   `metadata.google.internal.` (trailing dot, in any case, with or without a
   port), the bare `metadata` that GCE resolves through its search domain, and
