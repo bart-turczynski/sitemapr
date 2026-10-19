@@ -21,7 +21,7 @@ pre-commit install && pre-commit install --hook-type pre-push
 
 On every commit, lightweight hooks run: end-of-file fixer, trailing-whitespace
 trimming, merge-conflict detection, YAML and TOML validation, mixed-line-ending
-and case-conflict guards, `air-format` (posit-dev/air-pre-commit, pinned 0.8.2),
+and case-conflict guards, `air-format` (posit-dev/air-pre-commit, pinned 0.12.0),
 and `check-added-large-files` — a portable 5 MB size guard (`--maxkb=5120`) that
 blocks accidentally committing heavy blobs (a big blob bloats `.git` history even
 after deletion).

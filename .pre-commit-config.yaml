@@ -7,7 +7,7 @@
 # pushing, which matters while the remote is unreachable.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=5120']
@@ -39,7 +39,7 @@ repos:
   # of a local `air format` hook means contributors do not need air on PATH,
   # and the version is pinned here. https://posit-dev.github.io/air/
   - repo: https://github.com/posit-dev/air-pre-commit
-    rev: 0.8.2
+    rev: 0.12.0
     hooks:
       - id: air-format
   # British spellings in code, comments, string literals and tooling, which

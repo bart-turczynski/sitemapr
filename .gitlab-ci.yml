@@ -65,7 +65,7 @@ default:
 # until SEOR-dpjdwhbi, which moved it here because its before_script now
 # installs pandoc with apt and dpkg, and `default:` hands its before_script to
 # every job, whatever its image (seor design/fleet-standard.md, "CI on every
-# push to `main`"). `citation-version` (python:3.13-alpine) and `floor-check`
+# push to `main`"). `citation-version` (python:3.14-alpine) and `floor-check`
 # (its own before_script) do not extend it.
 .r:
   # Pinned to a minor R series rather than `latest`, so an upstream R release
@@ -285,7 +285,7 @@ workflow:
 #
 # Offline and stdlib-only, so it does not extend `.r`: neither the R image, the
 # R `before_script` nor the DESCRIPTION-keyed cache exists on
-# python:3.13-alpine. It costs seconds.
+# python:3.14-alpine. It costs seconds.
 #
 # The same job runs scripts/check-bugreports.py, the equally offline gate that
 # keeps DESCRIPTION's BugReports: on the CRAN-incoming-safe /-/issues form and
@@ -298,7 +298,7 @@ workflow:
 # grep and sed are enough.
 citation-version:
   stage: verify
-  image: python:3.13-alpine
+  image: python:3.14-alpine
   script:
     - python3 scripts/check-citation.py --self-test
     - python3 scripts/check-citation.py
