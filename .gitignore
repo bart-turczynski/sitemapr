@@ -4,7 +4,6 @@
 *.log
 .DS_Store
 
-.fp/
 _scratch/
 # Logs and build output (fleet convention, SEOR-jlwnvzoq).
 tmp/
