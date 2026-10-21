@@ -1,13 +1,13 @@
 # Zenodo deposit by hand
 
 sitemapr's releases are archived on Zenodo **by hand**, after each CRAN
-release. The fleet's other packages minted their DOIs through Zenodo's GitHub
-integration, which deposits when a GitHub Release is published on the
-read-only mirror (rurl's `design/zenodo-dois.md`; step 14 of seor's
-`design/release-checklist.md`). That route is closed for good. The GitHub
-account the integration was linked to is permanently suspended, so no webhook
-will ever deposit for this repository. The owner chose hand deposits on
-2026-10-21 (SITE-knuqpfaf). The first deposit is SITE-uyslxjrb.
+release. The owner chose hand deposits on 2026-10-21 (SITE-knuqpfaf). The
+fleet's other packages deposit through Zenodo's GitHub integration instead,
+which archives a GitHub Release published on the read-only mirror (rurl's
+`design/zenodo-dois.md`; step 14 of seor's `design/release-checklist.md`).
+Keep sitemapr's mirror switched off in Zenodo's GitHub settings, and publish
+no GitHub Release for it: either would mint a second, automatic record beside
+the hand-made one. The first deposit is SITE-uyslxjrb.
 
 The deposit is the owner's job. It needs the owner's Zenodo login, or a
 personal access token only the owner holds. An agent prepares the tarball and
@@ -186,5 +186,6 @@ stay as they are. Each new version gets its own version DOI.
 
 `.zenodo.json` stays under its own name. It is the metadata source of record
 for the form and for the REST call, and `check-citation.py` reads it by name.
-Renaming it would silently switch that check off. No webhook will read the
-file now, so leaving it in the tree costs nothing.
+Renaming it would silently switch that check off. With the GitHub integration
+off for this repository, no webhook reads the file, so leaving it in the tree
+costs nothing.
