@@ -43,14 +43,24 @@ findings with stable, reproducible output.
 
 ## Installation
 
-sitemapr and its URL-parsing dependency ([rurl](https://gitlab.com/bart-turczynski/rurl))
-are installed from GitLab. [pak](https://pak.r-lib.org) reads the `Remotes`
-field and resolves the chain for you:
+sitemapr is not on CRAN yet. Install it from r-universe:
+
+```r
+install.packages(
+  "sitemapr",
+  repos = c("https://bart-turczynski.r-universe.dev", "https://cloud.r-project.org")
+)
+```
+
+Or install the development version from GitLab:
 
 ```r
 # install.packages("pak")
 pak::pak("gitlab::bart-turczynski/sitemapr")
 ```
+
+Its URL-parsing dependency, [rurl](https://CRAN.R-project.org/package=rurl), is
+installed automatically from CRAN.
 
 ## Usage
 
@@ -124,11 +134,3 @@ sitemap_tree("https://example.com")
 
 - Full reference and articles: <https://bart-turczynski.gitlab.io/sitemapr/>
 - Getting-started vignette: `vignette("introduction", package = "sitemapr")`
-
-## Development
-
-See
-[`CONTRIBUTING.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md)
-for the dev setup, verification gate, and formatting conventions. Durable
-project context lives under
-[`docs/`](https://gitlab.com/bart-turczynski/sitemapr/-/tree/main/docs).
