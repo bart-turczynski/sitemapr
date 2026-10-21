@@ -36,7 +36,7 @@ cred_ok <- function(url, content_type = "application/xml") {
 
 # Names of the credential-bearing headers on a built request, lower-cased.
 cred_header_names <- function(req) {
-  nms <- tolower(names(req$headers))
+  nms <- ascii_lower(names(req$headers))
   intersect(nms, c("authorization", "proxy-authorization", "cookie"))
 }
 
@@ -251,4 +251,20 @@ test_that("batch and sequential paths build identical cross-origin hops", {
   reqs <- cred_batch_reqs("https://example.com/a.xml", routes, policy)
   expect_identical(reqs[[2]]$headers, seq_req$headers)
   expect_identical(reqs[[2]]$options, seq_req$options)
+})
+
+test_that("credential curl options in tls are dropped on a cross-origin hop", {
+  policy <- request_policy(
+    tls = list(USERPWD = "user:secret", ssl_verifypeer = 0L)
+  )
+  req <- fetch_build_request(
+    "https://other.example/b.xml",
+    fetch_limits(),
+    default_user_agent(),
+    policy,
+    origin_url = "https://example.com/a.xml"
+  )
+  expect_null(req$options$USERPWD)
+  expect_null(req$options$userpwd)
+  expect_identical(as.integer(req$options$ssl_verifypeer), 0L)
 })
