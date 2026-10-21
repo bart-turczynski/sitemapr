@@ -81,3 +81,6 @@ sitemapr's deltas:
   written for the state before robotstxtr is accepted. Once Step 1 is done,
   finalize them against `DESCRIPTION`, and update the check results to the
   final pre-submission runs (SITE-notumkrs).
+- **Step 14: deposit on Zenodo by hand, not through a GitHub Release.** No
+  GitHub integration exists for sitemapr. Follow
+  [docs/zenodo-deposit.md](docs/zenodo-deposit.md).
