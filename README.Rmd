@@ -22,8 +22,11 @@ knitr::opts_chunk$set(
 [![Docs](https://img.shields.io/website?url=https%3A%2F%2Fbart-turczynski.gitlab.io%2Fsitemapr%2F&label=docs&logo=gitlab&logoColor=white&up_message=pkgdown&up_color=1f75cb)](https://bart-turczynski.gitlab.io/sitemapr/)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-<!-- The DOI badge (slot 11 of seor's design/fleet-standard.md) joins once a
-     Zenodo concept DOI exists and doi.org resolves it. -->
+<!-- No DOI yet. Each CRAN release is deposited on Zenodo by hand, with no
+     GitHub link (docs/zenodo-deposit.md). The DOI badge (slot 11 of seor's
+     design/fleet-standard.md) joins after the first deposit, once doi.org
+     resolves the concept DOI. It links that DOI directly, never through
+     Zenodo's latestdoi badge. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13552/badge)](https://www.bestpractices.dev/projects/13552)
 [![License](https://img.shields.io/gitlab/license/bart-turczynski%2Fsitemapr)](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/LICENSE.md)
