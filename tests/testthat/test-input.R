@@ -1,5 +1,5 @@
 # Tests for the input-normalization slice (SITE-qebdxvlt).
-# Each block maps to a scenario in the input_normalization acceptance feature.
+# These blocks replaced the deleted input_normalization.feature scenarios.
 
 source_records <- function(...) {
   sitemapr_test_call("create_source_records", ...)

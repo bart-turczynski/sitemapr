@@ -18,22 +18,19 @@ tracer-bullet tickets add the package behavior and step definitions.
 
 ---
 
-## input_normalization.feature
+## Scenarios replaced by plain tests (SITE-mnbswkkr)
 
-| Scenario | Fixture | v1 issue |
-|---|---|---|
-| Direct sitemap URL accepted | `valid-minimal.xml` | SITE-qebdxvlt |
-| Explicit http scheme preserved | `valid-minimal.xml` (http variant) | SITE-qebdxvlt |
-| Schemeless input receives https | synthetic (bare domain input) | SITE-qebdxvlt |
-| Site root reduced to origin | synthetic | SITE-qebdxvlt |
-| Unicode host normalized via IDNA | `url-idna-host.xml` | SITE-qebdxvlt |
-| Host and scheme lowercased | synthetic | SITE-qebdxvlt |
-| Path dot-segments resolved | synthetic | SITE-qebdxvlt |
-| Local file accepted and classified | `valid-minimal.xml` (local path) | SITE-qebdxvlt |
-| URL vector produces multiple records | `valid-minimal.xml` × 2 | SITE-qebdxvlt |
-| URL vector deduplication | duplicate of `valid-minimal.xml` URL | SITE-qebdxvlt |
-| URL vector cap enforced | synthetic (26-element vector) | SITE-qebdxvlt |
-| Full-URL identity key is not clean_url | `url-duplicate-loc.xml` (port variant) | SITE-qebdxvlt |
+The feature files are frozen (AGENTS.md). These scenarios were deleted; the
+plain testthat files named here assert the same outcomes.
+
+| Deleted scenarios | Replaced by |
+|---|---|
+| `input_normalization.feature` (all 14) | `test-input.R` |
+| `fetch_classification.feature` (15 of 16; child 4xx stays) | `test-fetch.R`, `test-fetch-config.R`, `test-ssrf.R`, `test-sniff.R` |
+| `protocol_validation.feature` (all 30) | `test-finding-codes-mnbswkkr.R`, `test-validate-sitemap.R` |
+| `discovery.feature`: guessed paths tried in catalog order | `test-discovery-engine.R` |
+| `schema_validation.feature`: invalid XML → SCHEMA_INVALID | `test-schema-validate.R` |
+| `schema_validation.feature`: unknown namespace → SCHEMA_UNKNOWN_NAMESPACE | `test-schema-validate.R`, `test-finding-codes-mnbswkkr.R` |
 
 ---
 
@@ -41,7 +38,6 @@ tracer-bullet tickets add the package behavior and step definitions.
 
 | Scenario | Fixture | v1 issue |
 |---|---|---|
-| Generic guessed paths tried in catalog order | synthetic (httptest2 stub) | SITE-avdanhik |
 | CMS-specific paths included | synthetic | SITE-avdanhik |
 | Candidate deduplication | synthetic | SITE-avdanhik |
 | 200 response promotes candidate | synthetic | SITE-avdanhik |
@@ -57,20 +53,6 @@ tracer-bullet tickets add the package behavior and step definitions.
 
 | Scenario | Fixture | v1 issue |
 |---|---|---|
-| Default User-Agent pattern | synthetic (header echo stub) | SITE-efrzatkb |
-| Custom User-Agent | synthetic | SITE-efrzatkb |
-| Timeout enforced | synthetic (slow server stub) | SITE-efrzatkb |
-| Mid-stream timeout discards partial body | synthetic (stalling body stub) | SITE-efrzatkb |
-| Redirects followed up to limit | synthetic | SITE-efrzatkb |
-| Redirects exceeding limit | synthetic | SITE-efrzatkb |
-| SSRF guard on redirect target | synthetic | SITE-veptsgbs |
-| Loopback rejected | synthetic | SITE-veptsgbs |
-| IPv4-mapped IPv6 rejected | synthetic | SITE-veptsgbs |
-| Cloud metadata rejected | synthetic | SITE-veptsgbs |
-| SSRF guard disabled via flag | synthetic | SITE-veptsgbs |
-| XML classified by bytes, not extension | `valid-minimal.xml` (renamed) | SITE-efrzatkb |
-| Gzip classified regardless of extension | `valid.xml.gz` (renamed) | SITE-efrzatkb |
-| Fetch metadata on sources attribute | `valid-minimal.xml` | SITE-efrzatkb |
 | Child 4xx → warning + partial result | synthetic (stub child 404) | SITE-efrzatkb |
 
 ---
@@ -117,52 +99,14 @@ tracer-bullet tickets add the package behavior and step definitions.
 |---|---|---|
 | Valid urlset passes | `valid-minimal.xml` | SITE-qcjvesdw |
 | Valid sitemapindex passes | `valid-index.xml` | SITE-qcjvesdw |
-| Invalid XML → SCHEMA_INVALID | `schema-invalid-urlset.xml` | SITE-qcjvesdw |
 | Image profile validates | `ns-image.xml` | SITE-qcjvesdw |
 | News profile validates | `ns-news.xml` | SITE-qcjvesdw |
 | Video profile validates | `ns-video.xml` | SITE-qcjvesdw |
 | Hreflang profile validates | `ns-hreflang.xml` | SITE-qcjvesdw |
 | Mixed all-four validates | `ns-all-four.xml` | SITE-qcjvesdw |
 | Broken extension in mixed → SCHEMA_INVALID | `ns-video-invalid-in-mixed.xml` | SITE-qcjvesdw |
-| Unknown namespace → SCHEMA_UNKNOWN_NAMESPACE | `ns-unknown.xml` | SITE-qcjvesdw |
 | XXE entity expansion blocked | `xxe-attempt.xml` | SITE-qcjvesdw |
 | No Java subprocess | `valid-minimal.xml` (process check) | SITE-qcjvesdw |
-
----
-
-## protocol_validation.feature
-
-| Scenario | Fixture | v1 issue |
-|---|---|---|
-| Relative loc | `url-relative.xml` | SITE-nsixzwux |
-| Non-http(s) scheme | `url-non-https.xml` | SITE-nsixzwux |
-| Out-of-scope loc | `url-out-of-scope.xml` | SITE-nsixzwux |
-| Duplicate loc | `url-duplicate-loc.xml` | SITE-nsixzwux |
-| Default port stripped for dedup | `url-default-port.xml` | SITE-nsixzwux |
-| Fragment info finding | `url-fragment.xml` | SITE-nsixzwux |
-| Invalid percent-encoding | `url-invalid-escape.xml` | SITE-nsixzwux |
-| IRI accepted, URI identity used | `url-iri-path.xml` | SITE-nsixzwux |
-| URL count at cap | `url-count-at-cap.xml` | SITE-nsixzwux |
-| URL count over cap | `url-count-over-cap.xml` | SITE-nsixzwux |
-| Priority boundaries | `priority-boundary.xml` | SITE-nsixzwux |
-| Priority out of range | `priority-out-of-range.xml` | SITE-nsixzwux |
-| Invalid changefreq | `changefreq-invalid.xml` | SITE-nsixzwux |
-| Date-only lastmod strict info | `lastmod-date-only.xml` | SITE-nsixzwux |
-| Date-only lastmod non-strict silent | `lastmod-date-only.xml` | SITE-nsixzwux |
-| Invalid lastmod | `lastmod-invalid.xml` | SITE-nsixzwux |
-| Valid hreflang | `hreflang-valid.xml` | SITE-nsixzwux |
-| Invalid hreflang separator | `hreflang-invalid-sep.xml` | SITE-nsixzwux |
-| x-default missing | `hreflang-no-xdefault.xml` | SITE-nsixzwux |
-| Duplicate hreflang | `hreflang-duplicate.xml` | SITE-nsixzwux |
-| Relative href strict | `hreflang-relative-href.xml` | SITE-nsixzwux |
-| Relative href non-strict silent | `hreflang-relative-href.xml` | SITE-nsixzwux |
-| Valid text sitemap | `valid-text.txt` | SITE-nsixzwux |
-| Blank line strict info | `text-blank-lines.txt` | SITE-nsixzwux |
-| Blank line non-strict silent | `text-blank-lines.txt` | SITE-nsixzwux |
-| Text URL too long | `text-long-url.txt` | SITE-nsixzwux |
-| HTML masquerade | `html-masquerade.html` | SITE-nsixzwux |
-| Unsupported root | `unsupported-root.xml` | SITE-nsixzwux |
-| Sitemap index → unsupported feed dialect | `index-rss-child.xml` | SITE-nsixzwux |
 
 ---
 
@@ -222,8 +166,9 @@ and **escaping nothing else**. So any regex metacharacter in the wording —
 Consequences and the two ways to handle it:
 
 1. **Keep step wording metachar-free** (preferred when you control the feature
-   text). Example: `input_normalization.feature` says "scheme.host.path" and the
-   step description uses `.` to match the literal `+` in the underlying concept.
+   text). Example: the deleted `input_normalization.feature` said
+   "scheme.host.path", and the step description used `.` to match the literal
+   `+` in the underlying concept.
 2. **Escape the metacharacter** in the registration when the feature wording
    must keep it. Example (`setup-steps-discovery.R`): the feature step
    `When I call sitemap_tree("https://example.com")` carries literal parentheses,
