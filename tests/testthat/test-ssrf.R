@@ -810,3 +810,33 @@ test_that("ssrf_raw_host_of returns NA for non-scalar / NA / empty input", {
   expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of(NA_character_)))
   expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of("")))
 })
+
+# ---- bracketed hosts rurl cannot parse fail closed (SITE-jtluuybg) -----------
+# rurl reports no host for an IPv6 literal carrying a zone ID, in both its
+# default and WHATWG views, while libcurl drops the zone and dials the bare
+# address. The guard therefore classifies the bracketed raw host itself.
+
+test_that("a zone ID does not hide a blocked IPv6 literal", {
+  cases <- c(
+    "http://[::1%25lo0]/" = "loopback",
+    "http://[fd00:ec2::254%25lo0]/" = "cloud-metadata",
+    "http://[::ffff:127.0.0.1%25lo0]/" = "ipv4-mapped",
+    "http://[fe80::1%25eth0]/" = "link-local",
+    "http://[::1%lo0]/" = "loopback"
+  )
+  for (url in names(cases)) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, cases[[url]], info = url)
+  }
+})
+
+test_that("a bracketed host that is no IPv6 literal is refused", {
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "[not-an-address%25x]"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
