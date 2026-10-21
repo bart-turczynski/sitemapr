@@ -1,499 +1,88 @@
 # sitemapr 0.0.0.9000
 
-First development release. `sitemapr` is a deterministic toolkit for reading and
-validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and
-related W3C and RFC standards.
+First development release: a deterministic toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards.
 
 ## Reading
 
-* `read_sitemap()` reads a sitemap from a URL or a local file (`.xml`, `.txt`,
-  `.gz`, `.tar.gz`) into one tidy tibble row per URL, with `lastmod`,
-  `changefreq`, `priority`, and list-columns for the image, video, news, and
-  hreflang-alternate extensions.
-* XML `urlset`/`sitemapindex` and one-URL-per-line text sitemaps are supported,
-  with transparent gzip decompression and bounded, safe local `.tar.gz`
-  extraction.
-* A top-level sitemap index is expanded recursively — cycle-safe, depth- and
-  count-capped — so every reachable child sitemap's rows carry provenance.
-* `max_active` opts into bounded-concurrency index expansion in `read_sitemap()`,
-  `audit_sitemap()`, and `sitemap_tree()`: up to that many child sitemaps are
-  fetched at once while the per-host pace is respected. It is a scheduling
-  optimization only — the rows, findings, tree, and budget-truncation point are
-  byte-identical to the sequential default (ADR-008).
+* `read_sitemap()` reads a sitemap from a URL or a local file (`.xml`, `.txt`, `.gz`, `.tar.gz`) into one tidy tibble row per URL, with list-columns for the image, video, news, and hreflang extensions.
+* XML `urlset`/`sitemapindex` and one-URL-per-line text sitemaps are supported, with transparent gzip decompression and bounded, safe local `.tar.gz` extraction.
+* A top-level sitemap index is expanded recursively, cycle-safe and capped, and every child sitemap's rows carry provenance.
+* `max_active` opts into bounded-concurrency index expansion in `read_sitemap()`, `audit_sitemap()`, and `sitemap_tree()`, with results identical to the sequential default (ADR-008).
 * XML parsing is XXE-safe: external entities are never expanded.
-* Windows drive-letter paths (`C:\...`, `C:/...`) and UNC paths
-  (`\\server\share\...`) are recognized as local files on every platform,
-  whether or not the file exists. A missing one now fails when it is read,
-  like any other missing file (a `FETCH_FAILED` finding in a multi-source
-  validation or audit), instead of aborting with "Could not parse input as
-  a URL".
+* Windows drive-letter and UNC paths are recognized as local files on every platform, so a missing one fails as a missing file rather than an invalid URL.
+* Case folding is ASCII-only, so scheme, host, header and hreflang matching survives a Turkish or Azeri locale (SITE-rkstwdsr).
 
 ## Validation
 
-* `validate_sitemap()` returns a stable findings tibble — one row per issue with
-  a `code`, `severity`, and the `layer` that produced it. The same source and
-  mode always yield a row-for-row identical result.
-* Schema validation (Layer C) against bundled, clean-room XSD profiles for the
-  core protocol and the image, video, news, pagemap, and xhtml-hreflang
-  extensions. Wrapper XSDs for arbitrary namespace combinations are synthesized
-  and cached on demand.
-* Protocol validation (Layer D): `<loc>` URL rules with IRI identity, `<loc>`
-  equivalence and RFC-3986/3987 encoding conformance, count and field-value
-  rules, hreflang token policy, extension field rules, per-line text-sitemap
-  rules, and unsupported-input/encoding diagnostics.
-* Whole-sitemap hreflang cluster findings surface across the corpus: a missing
-  self-referencing alternate, a non-reciprocal return link, and inconsistent
-  language annotations for the same target URL.
-* `mode = "non-strict"` downgrades schema violations to warnings and drops
-  strict-only findings.
-* RSS/Atom feeds are detected and reported as an unsupported-feed finding rather
-  than misparsed.
-* A missing or unreadable local file, or a directory, given to
-  `validate_sitemap()` or `read_sitemap()` as its only source now aborts with a
-  classed `sitemapr_local_read_error` that names the path, instead of base R's
-  bare "cannot open the connection" and a leaked `file()` warning. A
-  multi-source validation and `audit_sitemap()` still report it as a
-  `FETCH_FAILED` finding, now carrying that message and no warning.
+* `validate_sitemap()` returns a stable, deterministic findings tibble, one row per issue with a `code`, `severity`, and `layer`.
+* Schema validation (Layer C) runs against bundled XSD profiles for the core protocol and the image, video, news, pagemap, and xhtml-hreflang extensions.
+* Protocol validation (Layer D) checks `<loc>` URL rules, encoding conformance, counts, field values, hreflang tokens, extension fields, and text-sitemap lines.
+* Hreflang cluster findings flag a missing self-reference, a non-reciprocal return link, and inconsistent language annotations across the corpus.
+* `mode = "non-strict"` downgrades schema violations to warnings and drops strict-only findings.
+* RSS/Atom feeds are reported as an unsupported-feed finding rather than misparsed.
+* A missing or unreadable local file given as the only source aborts with a classed `sitemapr_local_read_error` naming the path; with several sources it is a `FETCH_FAILED` finding.
 
 ## Page and robots checking (Layer E)
 
-* `validate_sitemap()` and `validate_sitemaps()` gained `check_robots`, an
-  opt-in check of whether the advertised URLs are crawlable under the target
-  host's `robots.txt`. `robots_user_agent` selects the group to match against
-  (`"*"`, the catch-all, by default; or a token such as `"Googlebot"`). Three
-  `robots`-layer codes ship with it: `ROBOTS_DISALLOWED`,
-  `ROBOTS_SITEMAP_DISALLOWED`, and `ROBOTS_INDETERMINATE` for the case where
-  the fetch could not establish an answer either way.
-* `validate_sitemap_robots()` and `validate_sitemaps_robots()` run that check
-  under an explicit **robots context** instead of a bare user-agent string.
-  `robots_context()` carries the three independent robots axes — the matcher
-  product token, the status-policy ruleset, and the matcher backend — and
-  `robots_context_preset()` selects one engine's set of all three at once
-  (`robots_context_presets()` enumerates them). The `bing` preset is the
-  Bing matcher under RFC 9309 fetch rules (`policy_ruleset =
-  "assumed_rfc9309"`), not a policy Bing documents: Bing publishes no
-  robots.txt status policy. The `yandex` preset uses the policy Yandex
-  documents. The context's expanded values
-  are retained on the object and surfaced again in a `robots_context`
-  list-column of the result, so a caller can read back exactly which engine
-  decided each finding. The robots axes are independent of `sitemap_ruleset`
-  (ADR-009 §1): selecting a Bing *sitemap* ruleset does not select Bing
-  *robots* semantics, and vice versa. `validate_sitemap(robots_user_agent =)`
-  is unchanged and remains the string shorthand for the Google defaults.
-* Both engine-aware axes can be selected in a **single call**:
-  `validate_sitemap_ruleset(x, sitemap_ruleset, robots_context =)` validates
-  under one engine's sitemap rules while deciding robots under another's, and
-  runs the pipeline once instead of the two passes a caller previously needed.
-  Independence is unchanged — neither axis derives the other, so a `"bing"`
-  sitemap ruleset paired with a Yandex robots context is honored on both sides
-  — and each axis still governs its own columns, so a baseline call carrying a
-  robots context returns exactly what `validate_sitemap_robots()` returns.
-  `validate_sitemap_robots()` remains the shorthand for the robots axis alone.
-  Supplying both `robots_context` and a non-default `robots_user_agent` is an
-  error rather than a silent precedence rule: they select the same axis.
-* A matcher backend the installed `robotstxtr` reports as
-  `capability_unavailable` decides nothing, so every URL comes back
-  `ROBOTS_INDETERMINATE` rather than a guessed allow.
-* `robots_context()` checks the product token against its matcher backend
-  with `robotstxtr::robots_resolve_matcher_profile_v1()`. A backend bounded to
-  its own vendor profiles (Bing, Yandex) refuses any other token, and that is
-  now an error at construction naming the accepted selectors, instead of a run
-  in which every URL is indeterminate. The optional `robotstxtr` dependency is
-  therefore `>= 0.3.0`, the first release with the resolver.
-* `inspect_pages` opts into per-URL page inspection: a deduplicated,
-  deterministically sampled, budgeted set of the advertised pages is fetched
-  and each is checked for its transport outcome, its canonical, its
-  `noindex` signals, and its hreflang reciprocity. Eleven `page`-layer codes
-  ship with it — `PAGE_FETCH_FAILED`, `PAGE_SSRF_BLOCKED`,
-  `PAGE_STATUS_ERROR`, `PAGE_STATUS_REDIRECT`, `PAGE_REDIRECT_CHAIN`,
-  `PAGE_CANONICAL_MISMATCH`, `PAGE_CANONICAL_MISSING`,
-  `PAGE_CANONICAL_RELATIVE`, `PAGE_META_ROBOTS_NOINDEX`,
-  `PAGE_XROBOTSTAG_NOINDEX`, and `PAGE_HREFLANG_MISMATCH`.
-* `page_mode` chooses `"sample"` (the default, inspecting `page_sample`
-  deduplicated URLs picked by a stable hash order so re-runs pick the same set)
-  or `"full"`. `page_budget` caps the run's pages, requests, aggregate bytes,
-  per-page body size, and wall time; `page_user_agent` sets the UA the
-  inspector sends. Page inspection fetches **sequentially** and `max_active`
-  does not apply to it. That is deliberate, not an unfinished half of the
-  concurrency work: its byte and time caps cannot be reserved before dispatch,
-  so a concurrent run would either sample a different set of pages — changing
-  the findings — or issue requests it then discards, against the very site the
-  budgets exist to be polite to. Recorded as an amendment to ADR-008.
-* **Network expansion is never implicit.** Both checks default to `FALSE`, and
-  with them off the result is byte-identical to a call without them — the
-  pinned ten-column findings surface and no extra attributes.
-* A run with `inspect_pages = TRUE` carries a `page_coverage` attribute
-  (`attr(x, "page_coverage")`): a versioned, batch-wide report of what was
-  actually covered (`eligible`, `deduplicated`, `selected`, `attempted`,
-  `completed`, `partial`, and which caps bit), so a sampled or budget-capped
-  run can never be misread as a clean bill of health for the whole corpus.
+* `check_robots` in `validate_sitemap()` and `validate_sitemaps()` opts into checking the advertised URLs against the host's `robots.txt`, as `robots_user_agent` (`"*"` by default).
+* `validate_sitemap_robots()` and `validate_sitemaps_robots()` run that check under a `robots_context()`, with engine presets from `robots_context_preset()` (ADR-009).
+* `validate_sitemap_ruleset(x, sitemap_ruleset, robots_context =)` selects both engine-aware axes in a single call, and passing both `robots_context` and a non-default `robots_user_agent` is an error.
+* A matcher backend `robotstxtr` reports as unavailable yields `ROBOTS_INDETERMINATE` for every URL rather than a guessed allow.
+* `robots_context()` rejects a product token its matcher backend does not accept, which needs `robotstxtr` >= 0.3.0.
+* `inspect_pages` opts into budgeted, deterministically sampled page inspection of transport outcome, canonical, `noindex` signals, and hreflang reciprocity, under eleven `page`-layer codes.
+* `page_mode`, `page_sample`, `page_budget`, and `page_user_agent` control page inspection, which always fetches sequentially (ADR-008).
+* Both checks default to `FALSE`, and with them off the result is identical to a call without them.
+* A run with `inspect_pages = TRUE` carries a `page_coverage` attribute reporting what was actually covered and which caps bit.
 
 ## Discovery
 
-* `sitemap_tree()` discovers a site's sitemaps from a root URL, returning a
-  discovery tree (one row per candidate, marked `accepted` or `rejected`).
-* Candidates come from robots.txt `Sitemap:` directives (ADR-006), explicit
-  seed entry points, and an ordered catalog of generic and CMS-oriented guessed
-  paths; results are deduped and capped. `sitemap_tree_from_bytes()` classifies
-  an already-fetched document.
-* `probe_url()` inspects a single URL **without resolving it** — it reports
-  what the URL is (a sitemap, an index, a feed, `robots.txt`, an HTML page, or
-  an error state) and never expands an index or fetches a child; for an index it
-  counts the direct `<sitemap>` children by parsing locally. It is the
-  diagnostic counterpart to `read_sitemap()`: probe to diagnose, read to
-  resolve. A fetch or parse failure is reported in the returned
-  `sitemapr_probe` record rather than raised, so only invalid input errors.
+* `sitemap_tree()` discovers a site's sitemaps from a root URL as a tree of accepted and rejected candidates.
+* Candidates come from robots.txt `Sitemap:` directives, explicit seeds, and an ordered catalog of guessed paths; `sitemap_tree_from_bytes()` classifies an already-fetched document (ADR-006).
+* `probe_url()` reports what a single URL is without expanding it, and returns fetch or parse failures in a `sitemapr_probe` record rather than raising them.
 
 ## Resource bounds
 
-* The traversal-wide aggregate budgets in `index_limits()` are now **finite by
-  default**: `max_total_sitemaps` is 50 000 (was `Inf`) and `max_total_urls` is
-  25 000 000 (was `Inf`). Only `max_depth` and the per-index `max_children` were
-  bounded before, so a pathological index graph could drive an unbounded
-  traversal in an embedding caller. Both ceilings sit above what a traversal of
-  protocol-legal sitemaps reaches in practice, and reaching one stops the
-  traversal and returns the accumulated partial result with an
-  `INDEX_TOTAL_SITEMAPS_EXCEEDED` / `INDEX_TOTAL_URLS_EXCEEDED` finding. Pass
-  `Inf` explicitly, or set `options(sitemapr.max_total_sitemaps = Inf)`, to keep
-  the previous unbounded behavior.
-* Each finding code now contributes at most 100 individual rows to an assembled
-  report; the remainder are accounted for in a single report-scoped
-  `REPORT_TRUNCATED` row naming each capped code and its omitted count. A
-  blanket `Disallow: /` over a 50 000-URL sitemap previously produced 50 000
-  near-identical `ROBOTS_DISALLOWED` rows. Configure with
-  `options(sitemapr.max_findings_per_code = )`; `Inf` opts out.
-* Robots findings are built in one vectorized pass instead of one tibble per
-  URL, which dominated the cost of a high-cardinality robots result.
-* A truncated `.gz` sitemap, or one whose trailer does not match its contents,
-  now fails with the classed decompression error (an
-  `UNSUPPORTED_MALFORMED_GZIP` finding in a validation or audit). Before, on R
-  older than 4.4 it made R grow its decompression buffer until the operating
-  system killed the process, and a trailer recording too small a size could
-  hang R 4.4 and later. The trailer's recorded size must match the size the
-  bounded pre-pass measures, so a multi-member or zero-padded gzip file is now
-  rejected too.
-* A `.gz` sitemap crafted so that a truncated body ends in a matching trailer
-  now fails with the classed decompression error too, instead of growing R's
-  memory until the process was killed (R older than 4.4) or hanging (R 4.4 and
-  later). A gzip stream is now inflated once, by the bounded streaming pass,
-  and that pass's output is returned; the original stream no longer reaches
-  `memDecompress()`. Its checksum is still verified.
+* `index_limits()` now caps a traversal by default at 50 000 sitemaps and 25 000 000 URLs, returning a partial result with an `INDEX_TOTAL_*_EXCEEDED` finding; pass `Inf` to opt out.
+* Each finding code contributes at most 100 rows to a report, the rest counted in one `REPORT_TRUNCATED` row; set `options(sitemapr.max_findings_per_code = )` to change it.
+* Robots findings are built in one vectorized pass, so a high-cardinality robots result is much faster.
+* A truncated, crafted, or size-mismatched `.gz` sitemap fails with the classed decompression error instead of exhausting memory or hanging R.
 
 ## Per-engine rulesets
 
-* `validate_sitemap_ruleset()` and `validate_sitemaps_ruleset()` validate a
-  sitemap under a named search engine's rules instead of the sitemaps.org
-  baseline, via a `sitemap_ruleset` argument. `sitemap_rulesets()` enumerates
-  the selectable values (`"sitemaps.org"`, `"google"`, `"bing"`, `"yandex"`).
-  Selecting an engine is always explicit — nothing falls through to an overlay,
-  and the default stays `"sitemaps.org"` (ADR-009).
-* `validate_sitemap_ruleset(context =)` now rejects anything that is not a
-  `ruleset_context()`, matching the check `validate_sitemap_robots()` has
-  always applied to its own context. Previously a `robots_context()` passed
-  there was accepted in silence and then discarded, so the call appeared to
-  succeed while validating under nothing the caller had asked for. With both
-  contexts now reachable from one signature, that confusion had to be closed.
-* The result gains four **additive** columns under an engine ruleset:
-  `ruleset`, `ruleset_revision`, `context`, and `provenance`. A baseline call
-  returns exactly the pinned ten-column schema v1, byte-for-byte unchanged, so
-  existing callers see nothing new.
-* `provenance` records how each rule's authority was established and, crucially,
-  whether the finding may be a hard verdict: `documented`,
-  `inherited_protocol` and `application_choice` are executable, while
-  `inferred`, `documentation_gap`, `documentation_conflict` and `advisory` are
-  diagnostic and never produce an engine-specific validity failure. One fact,
-  one tag.
-* `ruleset_context()` and `ruleset_context_for_child()` build the independent
-  context axes a finding is evaluated under (`submission_channel`,
-  `discovery_provenance`, `property_scope`, and structured
-  `authority_evidence`). Context is per source: a sitemap-index child inherits
-  nothing implicitly.
-* `gsc_submission()` and `robots_cross_submission()` are construction-time
-  presets over `ruleset_context()` for the two common cases, each bundling the
-  axes its channel implies: a verified Search Console submission
-  (`submission_channel = "search_console_api"` plus the verified property), and
-  a sitemap both discovered through and trusted via a target host's
-  `robots.txt` (which keeps the discovery and authority senses distinct and
-  sets no `property_scope`, that trust being blanket rather than
-  property-bound). Every axis stays independently overridable via
-  `ruleset_context()`.
-* **Breaking:** the `subject_ref` grammar changed. A ref now keeps the
-  document's own scheme (`https://example.com/s.xml`, not
-  `sitemap://example.com/s.xml`), every URL or path inside a fragment is
-  percent-encoded, and `#index-child` carries a one-based ordinal alongside the
-  child URL (`#index-child:3:https%3A%2F%2F…`). The old form collapsed `http`
-  and `https` documents onto one ref, could not be parsed back apart when a
-  child URL contained a `#`, and could not tell two duplicate children apart.
-  Refs are composed, never parsed, by this package; a consumer holding persisted
-  reports in the old form has to migrate them, and the two forms are
-  distinguishable because only the old one begins `sitemap://`.
-* `ENCODING_NOT_UTF8` (`error`) reports a sitemap that is not the UTF-8 the
-  protocol requires, and `ENCODING_BOM_DETECTED` (`info`) reports a leading
-  byte-order mark of any kind. The UTF-8 check reads the highest-priority
-  encoding *signal* — a non-UTF-8 BOM, then a non-UTF-8 XML-declaration label,
-  then the HTTP charset, then bytes that do not decode — rather than testing the
-  bytes alone, which cannot see a UTF-16 document at all. A UTF-16 sitemap is
-  read correctly and now also reported as non-conformant; reading a document is
-  not the same as approving it.
-* `ruleset_revision()` returns a ruleset's published revision string, so a
-  cross-repo consumer can pin against a known version of the rules.
-* `sitemap_contract()` publishes the rest of what ADR-009 §7 requires: the
-  findings-contract generation this build speaks, the dated revision of
-  `findings-registry.csv`, and the **supported sibling-version ranges** for
-  `sitemap-validator` and `robotstxtr`. The `sibling_versions` map has the same
-  shape the two sibling repos already publish, so all three are read the same
-  way. Editing the registry without advancing its published revision fails the
-  verify gate, so the revision cannot go stale.
-* Three engine-specific finding codes ship with the surface, all Yandex and all
-  emitted only under that overlay: `PROTOCOL_URL_DECODED_TOO_LONG` (the decoded
-  whole-URL length limit, distinct from the 2 048-character raw
-  `PROTOCOL_URL_TOO_LONG`), `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED` (the per-tag byte
-  guard, distinct from the whole-file `PROTOCOL_SIZE_EXCEEDED`), and
-  `ENGINE_UNSUPPORTED_SITEMAP_FORMAT` (a format sitemapr parses but the selected
-  engine does not accept). Every other code applies under every ruleset by
-  inheritance.
+* `validate_sitemap_ruleset()` and `validate_sitemaps_ruleset()` validate under a named engine's rules via `sitemap_ruleset`, enumerated by `sitemap_rulesets()` (ADR-009).
+* `validate_sitemap_ruleset(context =)` rejects anything that is not a `ruleset_context()`.
+* An engine ruleset adds four columns, `ruleset`, `ruleset_revision`, `context`, and `provenance`; a baseline call keeps the ten-column schema unchanged.
+* `provenance` tags whether a finding is an executable verdict or diagnostic only.
+* `ruleset_context()` and `ruleset_context_for_child()` build the per-source context axes a finding is evaluated under.
+* `gsc_submission()` and `robots_cross_submission()` are presets over `ruleset_context()` for Search Console and `robots.txt` submissions.
+* **Breaking:** `subject_ref` keeps the document's own scheme, percent-encodes fragment URLs, and numbers `#index-child` refs; refs persisted in the old `sitemap://` form need migrating.
+* `ENCODING_NOT_UTF8` reports a sitemap that is not UTF-8, judged from its encoding signals, and `ENCODING_BOM_DETECTED` reports a byte-order mark.
+* `ruleset_revision()` returns a ruleset's published revision string.
+* `sitemap_contract()` reports the findings-contract generation, the registry revision, and the supported `sitemap-validator` and `robotstxtr` version ranges (ADR-009).
+* Three Yandex-only codes ship: `PROTOCOL_URL_DECODED_TOO_LONG`, `PROTOCOL_TAG_DATA_LIMIT_EXCEEDED`, and `ENGINE_UNSUPPORTED_SITEMAP_FORMAT`.
 
 ## Reporting
 
-* `report_sitemap()` now renders four per-finding columns it previously
-  computed and dropped: the producer's `remediation_hint` (as a "Fix" line —
-  the robots-by-`noindex` trap synthesis exists to produce these), the
-  `context` payload (as a collapsible block), and the `ruleset` /
-  `ruleset_revision` and `provenance` of a finding produced under an engine
-  overlay (as badges). Executable and diagnostic provenance are visually
-  distinct, so a `documentation_gap` or `advisory` finding cannot read as a
-  hard verdict (ADR-009). Baseline runs carry none of the additive columns and
-  render exactly as before.
-* A new **Checks** section enumerates the checks the run performed with their
-  outcome — passed, reported an issue, or not exercised by this run. A clean
-  report previously said only "No issues found.", which cannot distinguish
-  "checked and found nothing" from "never checked at all". The enumeration is
-  driven by the findings registry rather than a hand-kept list, so it cannot
-  drift from the shipped codes, and two rules keep it from overstating: only
-  `active` codes are eligible, so a code this port does not implement can never
-  be reported as passed; and a layer counts as run only on **positive
-  evidence** of its execution. Anything unproven is reported as not exercised
-  — the table deliberately understates rather than advertise a check that may
-  not have run.
-* A new **Recommendations** section makes the report prescriptive rather than
-  purely diagnostic: absent `lastmod`, a majority-stale `lastmod` corpus,
-  `priority` and `changefreq` the major engines ignore, and the 50 000-URL /
-  50 MB / 50 000-child bounds as a document approaches them. Every input was
-  already computed for another section, so nothing re-parses or re-fetches.
-  Each recommendation carries exactly one provenance tag for the fact it rests
-  on, and where sitemapr chose the trigger point rather than citing a source,
-  the rendered prose says so instead of presenting a product decision as
-  documented authority.
-* The findings tibble may carry a `layers_run` attribute
-  (`attr(x, "layers_run")`) — a run manifest naming layers a call exercised
-  whose execution the rows cannot otherwise evidence, which is what lets the
-  Checks section tell "ran and found nothing" from "never ran". It records
-  `"robots"` for `check_robots = TRUE`, since a run where every URL is allowed
-  emits no findings at all, and `"schema"` when XSD validation ran on the
-  parsed document — so a gzip-compressed sitemap no longer reports schema
-  validation as unexercised when it did run. It is advisory and not part of the
-  row contract, and is present only when there was something to record.
+* `report_sitemap()` now renders each finding's remediation hint, context, ruleset and provenance, with diagnostic provenance visually distinct (ADR-009).
+* A new **Checks** section lists each check as passed, reported an issue, or not exercised, counting a layer as run only on positive evidence.
+* A new **Recommendations** section flags absent or stale `lastmod`, ignored `priority` and `changefreq`, and documents nearing protocol size bounds.
+* The findings tibble may carry a `layers_run` attribute naming layers that ran without leaving rows, such as `"robots"` and `"schema"`.
 
 ## Network safety
 
-* SSRF guard blocks requests to private, loopback, link-local, and
-  cloud-metadata addresses, including decoding of NAT64, IPv4-translated, and
-  IPv4-compatible IPv6 embeddings.
-* The guard also decodes the three IPv6 transition mechanisms — 6to4
-  (`2002::/16`), Teredo (`2001::/32`, whose embedded IPv4 is XOR-obfuscated),
-  and ISATAP (a `*:5efe` marker under any prefix) — and classifies the IPv4
-  address each one wraps. All three pack that address outside the low 32 bits,
-  so the previous decoders missed them and, for example,
-  `2002:a9fe:a9fe::` (6to4-wrapped `169.254.169.254`) was allowed. A wrapped
-  *public* address still passes: these prefixes are globally reachable, so only
-  what they carry decides the outcome.
-* An IPv6 literal that cannot be expanded to exactly 8 hextets (`fe80:::1`,
-  `::12345`) is now refused with the reason `malformed-address` instead of
-  reaching the default allow. Such literals never survived URL parsing, so no
-  reachable fetch changes; the guard simply no longer depends on the parser
-  rejecting them first.
-* The guard classifies the IPv6 unspecified and loopback addresses on the
-  expanded address rather than the literal string, so every spelling of those
-  128 bits is treated alike: `0::1`, `::0:1`, `0:0:0:0:0:0:0:1` and
-  `::0.0.0.1` are all recognized as loopback, and the matching forms of `::`
-  as unspecified. Previously only the exact literals `::1` and `::` matched,
-  and every other spelling was classified as neither special nor embedded
-  IPv4 and reached the default allow. Fetches were not affected, because
-  `rurl` canonicalizes such literals before the guard sees them; the guard is
-  now correct on its own rather than relying on that (SITE-vovtwvuh).
-* The guard's IPv6 link-local and AWS cloud-metadata rules now match on the
-  expanded address too, completing the change above. Because a hextet may be
-  written with leading zeros, matching the literal string mis-decided both
-  rules: `fd00:0ec2::254` was allowed through while the identical
-  `fd00:ec2::254` was blocked, and addresses such as `fe8::` were reported as
-  link-local despite lying far outside `fe80::/10`. Both are now decided by
-  value — `fe80::/10` and `fd00:ec2::/32` — so every spelling agrees, matching
-  the ADR-003 §1 matrix (SITE-mhfmtdxa).
-* The guard now blocks more spellings of the GCP metadata host name.
-  The guard compared names exactly, so under the default
-  `ssrf_guard = TRUE` it allowed
-  `metadata.google.internal.` (trailing dot, in any case, with or without a
-  port), the bare `metadata` that GCE resolves through its search domain, and
-  spellings that UTS #46 maps to the name: ideographic or fullwidth full stops
-  (`metadata\u3002google\u3002internal`) and fullwidth letters. libcurl built
-  with libidn2 applies that mapping, while the host rurl reports by default ACE-encodes such
-  a host whole, so the guard now also classifies the host the WHATWG host
-  parser reports and blocks the URL when either view is blocked. Trailing dots are
-  dropped before every check, so `169.254.169.254.` and `0x7f000001.` are
-  read as the literals they spell (SITE-rafvyfvp).
+* An SSRF guard blocks requests to private, loopback, link-local, and cloud-metadata addresses, including NAT64, IPv4-translated, and IPv4-compatible IPv6 embeddings.
+* The guard also decodes 6to4, Teredo, and ISATAP addresses and classifies the IPv4 address each one wraps.
+* An IPv6 literal that does not expand to 8 hextets is refused as `malformed-address`.
+* The guard decides IPv6 unspecified and loopback addresses by value, so every spelling of `::1` and `::` is caught (SITE-vovtwvuh).
+* The guard decides IPv6 link-local and AWS metadata addresses by value, so leading-zero spellings agree (SITE-mhfmtdxa).
+* The guard blocks more spellings of the GCP metadata host, including a trailing dot, the bare `metadata`, and UTS #46 equivalents (SITE-rafvyfvp).
 
 ## Request customization
 
-* `request_policy()` configures the HTTP requests sitemapr issues on every hop
-  and is accepted by every reading, validation, and discovery entry point via
-  the `policy` argument. Configure custom headers, authentication
-  (`request_auth_basic()` / `request_auth_bearer()`), a proxy (`request_proxy()`),
-  TLS options, bounded retry with backoff (`request_retry()`), and host-aware
-  throttling (`request_throttle()`).
-* Safety controls are never overridable: the per-hop SSRF guard, redirect
-  control, and non-2xx error policy are re-asserted after all caller
-  customization, so a policy can add headers or auth but cannot re-enable
-  redirect following or defeat the SSRF re-check.
+* `request_policy()`, accepted as `policy` by every reading, validation, and discovery entry point, sets headers, auth, proxy, TLS, retry, and throttling.
+* A request policy cannot override the per-hop SSRF guard, redirect control, or non-2xx error policy.
 
 ## Requirements
 
-* The declared R requirement is `R (>= 4.1.0)`, corrected from `R (>= 4.0.0)`.
-  The old floor was never installable: `httr2`, a hard dependency, itself
-  declares `R (>= 4.1)`, so resolution failed on R 4.0 before any sitemapr code
-  ran. sitemapr's own sources use no post-4.0 syntax — the floor comes entirely
-  from the dependency chain, and no supported configuration is lost.
-* `rurl` now resolves from CRAN. The declared floor is `rurl (>= 3.0.1)`,
-  corrected from `rurl (>= 2.1.0)` — a version that exists on no repository and
-  no tag — and the `Remotes:` entry pointing at GitLab has been dropped
-  (SITE-ieajhiee).
-
-## Documentation
-
-* The documentation URL is now `https://sitemapr-eca867.gitlab.io/`, corrected
-  from `https://bart-turczynski.gitlab.io/sitemapr/` — a host that never served
-  this project, because its GitLab Pages site uses a unique domain rather than
-  the namespace path. `DESCRIPTION`, `inst/CITATION`, `CITATION.cff`,
-  `.zenodo.json`, `codemeta.json`, `.bestpractices.json`, the README, the
-  introduction vignette and `_pkgdown.yml` all name the same address
-  (SITE-rysgulhf).
-* The documentation site has moved to the GitLab Pages namespace path,
-  `https://bart-turczynski.gitlab.io/sitemapr/`, the address every package in
-  the fleet now uses. The unique domain `https://sitemapr-eca867.gitlab.io/`
-  is being retired and will stop resolving, with no redirect. The same files
-  listed above name the new address (SEOR-hcmtspmv).
-* A `pages` job in `.gitlab-ci.yml` builds the pkgdown site on the default
-  branch and deploys it, so the declared documentation URL is published rather
-  than merely advertised (SITE-rysgulhf).
-* The `BugReports:` field in `DESCRIPTION` now reads
-  `https://gitlab.com/bart-turczynski/sitemapr/-/issues`, corrected from the
-  `/-/work_items` form. `tools:::.check_package_CRAN_incoming()` accepts a
-  gitlab.com bug tracker only when its path ends in `/-/issues`, and the
-  `/-/work_items` form is what got a sibling package archived at the CRAN
-  incoming pretest. GitLab answers `/-/issues` with 404 to a signed-out,
-  non-browser client and redirects a browser to the work-items view, so the
-  address a reader clicks still resolves; `cran-comments.md` explains the
-  resulting URL note. The check reads no file but `DESCRIPTION`, so the two
-  human-facing metadata files that name the tracker — `codemeta.json` and
-  `.bestpractices.json` — deliberately keep the `/-/work_items` address, which
-  returns 200 (SITE-wpxlhijx).
-* The help pages and these release notes are spelled in US English, matching
-  the package's declared `Language: en-US`: "honor", "recognized", "signaled"
-  and "canonicalizes" replace their British forms, and the spelling word list
-  no longer accepts the British spellings. The `SCHEMA_UNKNOWN_NAMESPACE`
-  finding's message now reads "not recognized" (SEOR-kfiqpymb).
-* Bart Turczynski is the copyright holder: `LICENSE` names him instead of
-  "sitemapr authors", `Authors@R` gives him the `cph` role, and `LICENSE.md`
-  carries the full MIT text. `URL:` now lists the documentation site first,
-  then the repository and r-universe, the order every package in the fleet
-  uses. The crawler User-Agent still names the GitLab repository as its
-  contact URL: `default_user_agent()` picks that entry by host rather than by
-  position (SEOR-dunwqfkj).
-
-## Internal
-
-* Case folding is ASCII-only. Base R's `tolower()` and `toupper()` follow the
-  locale, and under a Turkish or Azeri locale on glibc they map `I` to a
-  dotless `ı` and `i` to a dotted `İ`. Schemes, hosts, content types, header
-  and attribute names, `rel` tokens and hreflang tags could then silently fail
-  to match. Every such comparison now maps only A-Z and a-z, and `.lintr` bans
-  the locale-sensitive functions.
-
-* `.lintr` no longer carries a comment header, so `lintr::lint_package()` runs
-  on R 4.5 and older instead of aborting with "Invalid DCF format":
-  `read.dcf()` only skips comment lines from R 4.6. The rationale for the
-  linter set and its deviations from goodpractice moved to
-  `docs/repo-hygiene.md` (SEOR-qfxolldq).
-
-* The agent instructions no longer import `FP_AGENTS.md`, and it and
-  `FP_CLAUDE.md`, the files the `fp` tracker generates, are deleted.
-  `AGENTS.md` points at the house `agent-workflow` and `fp` skills for the git
-  workflow, and `docs/repo-hygiene.md` describes the `pages` keep-list the job
-  actually uses (SEOR-ipwcbcov).
-
-* `DESCRIPTION`'s `URL:` now lists the package's r-universe page. r-universe
-  records this repository's upstream owner as `gitlab-bart-turczynski` because
-  it is hosted on GitLab, which does not match the `bart-turczynski` universe,
-  so the package was built and served but hidden from r-universe search. The
-  URL claims it (SEOR-zfamoutf).
-
-* The pkgdown site no longer publishes the repository's agent instruction
-  files. pkgdown renders every top-level `.md`, so `AGENTS.html`,
-  `CLAUDE.html`, `FP_AGENTS.html` and `FP_CLAUDE.html` were being served next
-  to the function reference; the `pages` job now strips them with a glob
-  before `build_site` (SEOR-pibdjanz).
-* `.gitlab-ci.yml` gained a `check` job that runs `Rscript tools/verify.R` —
-  the exact chain the pre-push hook runs — so a green pipeline now verifies
-  the package, not only the citation metadata and the docs site
-  (SITE-dzikrmnh).
-* The OSS Index dependency audit in `tests/testthat/test-security.R` scopes to
-  hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, and
-  allow-lists by ID the two `curl` advisories the narrower scope still reports.
-  `curl` is a genuine hard dependency here, reached through `httr2`, and both
-  CVE-2026-18924 and CVE-2026-3783 name libcurl ranges covering CRAN's current
-  `curl` 8.0.0 — there is no version to upgrade to, so the gate had been
-  blocking every push since 2026-09-06. Each allow-list row carries a written
-  reason and a review date, and `helper-security.R` enforces three rules: an
-  advisory that is reported and not allow-listed fails, an allow-listed
-  advisory that is no longer reported fails, and drift past a review date or a
-  package version warns (SITE-epezowxs).
-* `.gitlab-ci.yml`'s `workflow:` rules now suppress both the branch pipeline
-  and the merge-request pipeline, leaving exactly one pipeline per merge, on
-  `main`; CI on a feature branch or an open MR no longer runs of its own
-  accord. A pipeline started by hand from Build > Pipelines > Run pipeline is
-  admitted on any ref and runs `check` there, so a branch can still be verified
-  on the server before it merges (SEOR-bmgkzhvy).
-* The OSS Index allow-list is now checked by a validator,
-  `oss_index_allowlist_violations()`, that a fixture test proves rejects
-  malformed rows, instead of a loop of expectations over whatever rows exist.
-  The audit test also gains `OSSINDEX_AUDIT_REQUIRED=true`: under that flag a
-  missing `oysteR` or missing credentials fails with a message naming what is
-  absent, instead of skipping to a green that audited nothing. An audit that
-  resolves no packages now fails too. The two `curl` rows are unchanged
-  (SEOR-fftbjnpl).
-* `scripts/check-bugreports.py` pins the `BugReports:` split on the pre-push
-  hook and in the `citation-version` CI job: `DESCRIPTION` must keep the
-  CRAN-safe `/-/issues` form, while `codemeta.json` and `.bestpractices.json`
-  must name `/-/work_items`, and no other human-facing file may link a
-  `/-/issues` address (SEOR-ocbtrrnl).
-* `.gitlab-ci.yml` gains `osv-audit` and `security-audit` jobs, so the
-  dependency audits in `test-osv.R` and `test-security.R` now have a runner.
-  Both run only on a pipeline schedule that sets
-  `SCHEDULE_KIND=dependency-audit`, or by hand from a web pipeline;
-  `security-audit` sets `OSSINDEX_AUDIT_REQUIRED=true`, so missing OSS Index
-  credentials fail the job instead of skipping it (SEOR-fftbjnpl).
-* `scripts/bestpractices-url.py`, vendored from seor, turns
-  `.bestpractices.json` into bestpractices.dev edit links and checks the live
-  entry against it, because the site never imports the file from a GitLab
-  repository. `.bestpractices.json` now names GitLab, with GitHub only as the
-  read-only mirror, and describes today's CI: the GitLab pipeline runs the
-  verify chain on every push to `main`, so continuous integration is met, while
-  vulnerability-focused static analysis and dynamic analysis are recorded as
-  unmet (SEOR-grrcptww).
-* The verify gate has a `urls` stage, on by default, that fetches every URL
-  the package declares with base R's own URL checker (`tools`, as `R CMD check`
-  uses it). The `check` stage's `--as-cran` run fetches the same URLs, but it
-  reports a dead one as a NOTE and fails only on warnings, so a dead link
-  passed the gate and surfaced at CRAN incoming. A URL that answers HTTP 4xx or
-  5xx fails the stage; one that cannot be reached at all only warns, so a
-  network blip never rejects a push. The `BugReports:` 404 is exempt by design
-  (SEOR-ocbtrrnl).
+* sitemapr requires R >= 4.1.0, as its dependency `httr2` does.
+* `rurl` now resolves from CRAN, at `rurl` >= 3.0.1 (SITE-ieajhiee).
