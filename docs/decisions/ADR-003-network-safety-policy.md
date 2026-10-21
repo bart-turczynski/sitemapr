@@ -5,7 +5,10 @@
   amended 2026-07-25 — two corrections, see Consequences and Revisit
   conditions; no decision changed; amended 2026-07-25 — §1 covers the three
   IPv6 transition embeddings (SITE-uxxdadsa) and malformed IPv6 literals now
-  fail closed with `malformed-address` (SITE-zgufvkks))
+  fail closed with `malformed-address` (SITE-zgufvkks); amended 2026-10-21 —
+  §1 blocks further cloud-metadata endpoints (SITE-lezsbcbg), and the guard
+  fails closed on zone IDs, on hosts `rurl` cannot parse, and in the WHATWG
+  second look (SITE-jtluuybg, SITE-trviouoh))
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
@@ -49,7 +52,13 @@ any of the following:
 - **RFC-1918 private ranges:** `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
 - **Link-local:** `169.254.0.0/16` (IPv4), `fe80::/10` (IPv6)
 - **Cloud metadata:** well-known metadata endpoints — `169.254.169.254`,
-  `metadata.google.internal`, `fd00:ec2::254`
+  `metadata.google.internal` and the bare `metadata`, `fd00:ec2::/32`,
+  `fd20:ce::254` (GCP's IPv6 address, matched as that one address: GCP hands
+  out VPC ranges from `fd20::/20`), and AWS's `instance-data` names: the bare
+  name, `instance-data.ec2.internal` (the us-east-1 search domain), and
+  `instance-data.<region>.compute.internal` (every other region's). Names are
+  compared case-insensitively and without trailing dots (amended 2026-10-21,
+  SITE-lezsbcbg).
 - **Shared address space:** `100.64.0.0/10` (CGNAT, RFC 6598). Blocked, but
   reported as `shared`, not `cloud-metadata`: it is not a metadata range, it
   merely contains one provider's endpoint (SITE-ghazltut).
@@ -125,6 +134,33 @@ reserves for this case (`ssrf-guard-spec.md` §5, INV-11), so the eventual
 extraction does not have to rename a published value. Refusing before any rule
 runs is also what lets every IPv6 rule assume 8 numeric hextets, which removed
 three defensive `is.null()` branches from the matcher.
+
+**Hosts the guard cannot read fail closed** (amended 2026-10-21, SITE-jtluuybg,
+SITE-trviouoh). The same argument extends from malformed IPv6 literals to every
+host the guard is not handed in a form it can classify, because the fetch may
+still dial one:
+
+- **Unparsed hosts.** When the URL's raw host is non-empty but `rurl` reports no
+  host, the request is refused as `malformed-address`. Previously it reached the
+  default allow.
+- **Zone IDs.** `rurl` reports no host for an IPv6 literal with a zone ID
+  (`%25` or a bare `%`), while libcurl drops the zone and dials the address.
+  The address without its zone is classified first, so a blocked range keeps
+  its own reason (`loopback`, `link-local`, `cloud-metadata`, ...); any other
+  zoned literal, a public one included, is refused as `malformed-address`. A
+  zone only scopes a non-global address, so no ordinary URL carries one. The
+  same classify-first rule applies to a bracketed literal with junk after the
+  bracket.
+- **The WHATWG second look.** A URL the default view allows is classified again
+  on its WHATWG host, which applies the UTS #46 mapping libcurl applies. When
+  that view yields no host for a spelling libcurl could map (a non-ASCII code
+  point, a percent-escape, or an ACE label in the default view), the URL is
+  refused as `malformed-address` rather than left on the default allow. The
+  WHATWG host is also checked when it equals the default host, since the check
+  drops trailing dots first.
+
+`malformed-address` therefore now covers three cases: an IPv6 literal that does
+not expand, a host `rurl` cannot parse, and a second-look refusal.
 
 **DNS resolve-then-check is deferred to post-v1.** Resolving hostnames before
 fetching would catch DNS-rebinding attacks and hosts that resolve to private
@@ -266,6 +302,15 @@ contact URL is assembled at runtime from `utils::packageDescription()`.
   rejects such hosts before the guard sees them, so no reachable behavior
   changes; the cost is that the guard is stricter than the parse layer rather
   than the other way round, which is the intended direction.
+- Failing closed on unparsed hosts and in the second look changes reachable
+  behavior (amended 2026-10-21): a URL whose host `rurl` cannot parse, which
+  previously went on to the fetch and usually failed there, now raises
+  `sitemapr_ssrf_blocked` with `malformed-address`. Some such URLs had a more
+  specific reason through the WHATWG view before (a short IPv4 form of a
+  loopback address read as `loopback`); they are still refused, under the
+  generic code. The `%` trigger of the second look can likewise relabel a URL
+  libcurl would itself reject as `malformed-address`. Ordinary hosts, IDN
+  hosts and their ACE forms included, are unaffected.
 - Reason codes are additive here (`6to4`, `teredo`, `isatap`,
   `malformed-address`). They widen the stable vocabulary a caller may see in a
   `sitemapr_ssrf_blocked` condition, but rename nothing.

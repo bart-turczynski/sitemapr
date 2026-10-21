@@ -76,6 +76,7 @@ First development release: a deterministic toolkit for reading and validating XM
 * The guard decides IPv6 unspecified and loopback addresses by value, so every spelling of `::1` and `::` is caught (SITE-vovtwvuh).
 * The guard decides IPv6 link-local and AWS metadata addresses by value, so leading-zero spellings agree (SITE-mhfmtdxa).
 * The guard blocks more spellings of the GCP metadata host, including a trailing dot, the bare `metadata`, and UTS #46 equivalents (SITE-rafvyfvp).
+* The guard fails closed on hosts it cannot parse and blocks further cloud-metadata endpoints (SITE-jtluuybg).
 
 ## Request customization
 
