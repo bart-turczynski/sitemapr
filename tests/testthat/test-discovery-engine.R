@@ -210,3 +210,28 @@ test_that("discover_candidates caps the combined robots and catalog set", {
   expect_true("https://example.com/from-robots.xml" %in% log_env$urls)
   expect_false("https://example.com/sitemap_index.xml" %in% log_env$urls)
 })
+
+# ---- request order through sitemap_tree() (from discovery.feature) ---------
+# local_index_server() (helper-concurrency.R) 404s every URL and logs each
+# request, so these pin the order sitemap_tree() fetches the guessed paths in.
+
+test_that("sitemap_tree requests the guessed paths in catalog order", {
+  root <- "https://example.com"
+  server <- local_index_server(list())
+  tree <- sitemap_tree(root, use_robots = FALSE)
+  expect_true(any(endsWith(tree$sitemap_url, "/sitemap.xml")))
+  expect_true(any(endsWith(tree$sitemap_url, "/sitemap_index.xml")))
+  expect_identical(server$urls, discovery_candidates(root)$candidate_url)
+})
+
+test_that("with robots.txt on, the guessed paths keep catalog order", {
+  root <- "https://example.com"
+  server <- local_index_server(list())
+  sitemap_tree(root)
+  robots <- "https://example.com/robots.txt"
+  expect_identical(sum(server$urls == robots), 1L)
+  expect_identical(
+    server$urls[server$urls != robots],
+    discovery_candidates(root)$candidate_url
+  )
+})
