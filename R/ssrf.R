@@ -455,9 +455,8 @@ ssrf_blocked_names <- c(
   "instance-data.ec2.internal",
   "instance-data"
 )
-ssrf_blocked_name_patterns <- c(
+ssrf_blocked_name_patterns <-
   "^instance-data\\.[a-z0-9-]+\\.compute\\.internal$"
-)
 
 # The form a registered name is compared in: ASCII-lowercased, with trailing
 # dots dropped.
