@@ -352,10 +352,10 @@ ssrf_ipv6_special <- function(h) {
   if (h[8L] == 1) "loopback" else "unspecified"
 }
 
-# The two prefix-matched IPv6 blocks, decided on the EXPANDED hextets for the
-# same reason the specials are (SITE-vovtwvuh): a hextet may be written with
-# leading zeros, so matching the literal string mis-decides the prefix in BOTH
-# directions.
+# The IPv6 prefix blocks and the one single-address block, decided on the
+# EXPANDED hextets for the same reason the specials are (SITE-vovtwvuh): a
+# hextet may be written with leading zeros, so matching the literal string
+# mis-decides the prefix in BOTH directions.
 #   link-local     fe80::/10     -> first hextet 0xfe80..0xfebf
 #   cloud-metadata fd00:ec2::/32 -> first two hextets exactly (AWS metadata)
 #   cloud-metadata fd20:ce::254  -> all 8 hextets (GCP metadata, SITE-lezsbcbg)
@@ -365,7 +365,7 @@ ssrf_ipv6_special <- function(h) {
 # through unblocked, a real bypass of the metadata block. The old
 # "^fe[89ab][0-9a-f]?:" made the 4th hex digit optional, so the 3-digit hextet
 # "fe8" (0x0fe8) matched despite being nowhere near fe80::/10. Returns NA when
-# `h` is in neither block.
+# `h` is in none of these blocks.
 ssrf_ipv6_prefix_block <- function(h) {
   if (bitwAnd(h[1L], 0xffc0) == 0xfe80) {
     return("link-local")
@@ -445,20 +445,34 @@ ssrf_strip_trailing_dots <- function(x) {
 # Registered names that reach a cloud metadata server without a DNS answer an
 # attacker controls. GCE resolves the bare "metadata" through its
 # google.internal search domain, so it is blocked with the full name. AWS's
-# "instance-data" resolves the same way through the ec2.internal search domain
-# (SITE-lezsbcbg). "localhost" is deliberately absent: it stays allowed until
-# ssrfr replaces this guard.
+# "instance-data" resolves the same way through the VPC search domain: that is
+# ec2.internal in us-east-1 and <region>.compute.internal everywhere else, so
+# the regional form is matched as a pattern (SITE-lezsbcbg). "localhost" is
+# deliberately absent: it stays allowed until ssrfr replaces this guard.
 ssrf_blocked_names <- c(
   "metadata.google.internal",
   "metadata",
   "instance-data.ec2.internal",
   "instance-data"
 )
+ssrf_blocked_name_patterns <- c(
+  "^instance-data\\.[a-z0-9-]+\\.compute\\.internal$"
+)
 
 # The form a registered name is compared in: ASCII-lowercased, with trailing
 # dots dropped.
 ssrf_name_key <- function(name) {
   ssrf_strip_trailing_dots(ascii_lower(name))
+}
+
+# Is the registered name `bare` a cloud metadata name, by exact match or by
+# one of the anchored patterns? Both compare the normalized key.
+ssrf_is_blocked_name <- function(bare) {
+  key <- ssrf_name_key(bare)
+  if (key %in% ssrf_blocked_names) {
+    return(TRUE)
+  }
+  any(vapply(ssrf_blocked_name_patterns, grepl, logical(1L), x = key))
 }
 
 # Range/name matching on the normalized host (brackets already stripped).
@@ -470,7 +484,7 @@ ssrf_classify_literal <- function(bare) {
     ssrf_classify_ipv6(bare) # IPv6 literal (contains a colon)
   } else if (ssrf_is_dotted_quad(bare)) {
     ssrf_classify_ipv4(bare) # IPv4 dotted-quad
-  } else if (ssrf_name_key(bare) %in% ssrf_blocked_names) {
+  } else if (ssrf_is_blocked_name(bare)) {
     "cloud-metadata"
   } else {
     NA_character_
