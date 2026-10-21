@@ -13,7 +13,7 @@
 # The returned value is ONE string from this closed set:
 #   "empty", "gzip", "tar", "xml-urlset", "xml-sitemapindex", "feed", "xml",
 #   "html", "text", "binary"
-# The feature `fetch_classification.feature` pins "xml-urlset" and "gzip" as
+# tests/testthat/test-sniff.R pins "xml-urlset" and "gzip" as
 # non-negotiable; the remaining names follow docs/architecture.md / docs/PRD.md.
 #
 # Detection order (first match wins):
