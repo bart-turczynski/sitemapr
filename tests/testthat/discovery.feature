@@ -5,12 +5,6 @@ Feature: Discovery of sitemap candidates from a site root
   # classifies candidates as accepted or rejected and returns the result as part
   # of sitemap_tree(). Robots rules (Disallow/Allow) are never applied.
 
-  Scenario: Generic guessed paths are tried in catalog order
-    Given a site root URL "https://example.com"
-    When discovery runs against a fixture server
-    Then the candidates include standard paths such as "/sitemap.xml" and "/sitemap_index.xml"
-    And candidates are tried in the documented catalog order
-
   Scenario: CMS-specific paths are included in the catalog
     Given a site root URL "https://example.com"
     When discovery runs

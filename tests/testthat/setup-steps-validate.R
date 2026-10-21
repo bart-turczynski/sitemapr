@@ -1,9 +1,8 @@
 # Cucumber step definitions for the validate_sitemap() acceptance features
 # (SITE-rpoholfa): findings_contract.feature and schema_validation.feature.
 #
-# These are the SHARED validate_sitemap steps. F.4 (feed/RSS classification)
-# reuses this file verbatim and only ADDS its feature-unique steps; the steps
-# here are kept generic/parameterized so they need no re-registration.
+# The fixture-to-code mappings these features once carried live in plain
+# testthat now (test-finding-codes-mnbswkkr.R, test-schema-validate.R).
 #
 # testthat sources `setup-*.R` before the test files, so these register before
 # `cucumber::run()` runs the active top-level features. cucumber's step registry
@@ -105,10 +104,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     function(name, context) validate_set_source(name, context)
   )
   given(
-    "fixture {string} with a misplaced element",
-    function(name, context) validate_set_source(name, context)
-  )
-  given(
     paste(
       "fixture {string} using image, news, video, and hreflang namespaces",
       "simultaneously"
@@ -120,10 +115,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       "fixture {string} with an invalid video element alongside valid",
       "others"
     ),
-    function(name, context) validate_set_source(name, context)
-  )
-  given(
-    "fixture {string} with a namespace not in the bundled catalog",
     function(name, context) validate_set_source(name, context)
   )
 
@@ -336,26 +327,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     expect_identical(nrow(validate_schema_rows(context)), 0L)
   })
 
-  # Parameterized code+layer assertion reused across features.
-  then(
-    "a finding with code {word} and layer {string} is produced",
-    function(code, layer, context) {
-      r <- context$result
-      hits <- r[r$code == code & r$layer == layer, , drop = FALSE]
-      expect_gt(nrow(hits), 0L)
-    }
-  )
-
-  then(
-    'the finding severity is "error" or "fatal"',
-    function(context) {
-      r <- context$result
-      sev <- r$severity[r$code == "SCHEMA_INVALID"]
-      expect_gt(length(sev), 0L)
-      expect_true(all(sev %in% c("error", "fatal")))
-    }
-  )
-
   then(
     "a SCHEMA_INVALID finding is produced scoped to the video extension",
     function(context) {
@@ -394,10 +365,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
       expect_true(any(!is.na(excerpts) & nzchar(excerpts)))
     }
   )
-
-  then("a SCHEMA_UNKNOWN_NAMESPACE finding is produced", function(context) {
-    expect_true("SCHEMA_UNKNOWN_NAMESPACE" %in% context$result$code)
-  })
 
   # ---- THEN: XXE safety + in-process ----------------------------------------
 

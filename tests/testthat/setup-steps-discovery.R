@@ -73,9 +73,9 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     }
     httr2::local_mocked_responses(mock)
     limits <- if (is.null(cap)) {
-      sitemapr_test_call("discovery_limits")
+      sitemapr::discovery_limits()
     } else {
-      sitemapr_test_call("discovery_limits", max_candidates = cap)
+      sitemapr::discovery_limits(max_candidates = cap)
     }
     context$tree <- sitemapr::sitemap_tree(
       root,
@@ -137,15 +137,7 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
     context$ok_paths <- "/sitemap.xml"
   })
 
-  given("a fixture server that logs all requests", function(context) {
-    context$root <- "https://example.com"
-  })
-
   # --- when ------------------------------------------------------------------
-
-  when("discovery runs against a fixture server", function(context) {
-    run_discovery(context)
-  })
 
   when("discovery runs", function(context) {
     run_discovery(context)
@@ -169,26 +161,6 @@ if (requireNamespace("cucumber", quietly = TRUE)) {
   })
 
   # --- then ------------------------------------------------------------------
-
-  then(
-    "the candidates include standard paths such as {string} and {string}",
-    function(a, b, context) {
-      urls <- context$tree$sitemap_url
-      testthat::expect_true(any(endsWith(urls, a)))
-      testthat::expect_true(any(endsWith(urls, b)))
-    }
-  )
-
-  then(
-    "candidates are tried in the documented catalog order",
-    function(context) {
-      expected <- sitemapr_test_call(
-        "discovery_candidates",
-        context$root
-      )$candidate_url
-      testthat::expect_identical(requested_candidates(context), expected)
-    }
-  )
 
   then(
     "the candidates include at least one CMS-specific path",

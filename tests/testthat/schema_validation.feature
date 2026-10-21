@@ -14,12 +14,6 @@ Feature: Layer C — XSD schema validation
     When I call validate_sitemap on the fixture
     Then no schema-layer findings are produced
 
-  Scenario: Invalid XML structure produces a SCHEMA_INVALID finding
-    Given fixture "schema-invalid-urlset.xml" with a misplaced element
-    When I call validate_sitemap on the fixture in strict mode
-    Then a finding with code SCHEMA_INVALID and layer "schema" is produced
-    And the finding severity is "error" or "fatal"
-
   Scenario: Image extension document validates against the bundled image profile
     Given fixture "ns-image.xml"
     When I call validate_sitemap on the fixture
@@ -50,11 +44,6 @@ Feature: Layer C — XSD schema validation
     When I call validate_sitemap on the fixture
     Then a SCHEMA_INVALID finding is produced scoped to the video extension
     And the finding evidence identifies the invalid element
-
-  Scenario: An unknown namespace is flagged
-    Given fixture "ns-unknown.xml" with a namespace not in the bundled catalog
-    When I call validate_sitemap on the fixture
-    Then a SCHEMA_UNKNOWN_NAMESPACE finding is produced
 
   Scenario: XXE attempt via entity expansion has no effect
     Given a fixture XML document containing an external entity declaration
