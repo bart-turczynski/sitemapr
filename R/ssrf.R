@@ -358,6 +358,9 @@ ssrf_ipv6_special <- function(h) {
 # directions.
 #   link-local     fe80::/10     -> first hextet 0xfe80..0xfebf
 #   cloud-metadata fd00:ec2::/32 -> first two hextets exactly (AWS metadata)
+#   cloud-metadata fd20:ce::254  -> all 8 hextets (GCP metadata, SITE-lezsbcbg)
+# GCP's is matched as one address, not a prefix: GCP allocates VPC ULA ranges
+# from fd20::/20, so its neighbors are ordinary internal addresses.
 # The old "^fd00:ec2:" string match let "fd00:0ec2::254" — the same 128 bits —
 # through unblocked, a real bypass of the metadata block. The old
 # "^fe[89ab][0-9a-f]?:" made the 4th hex digit optional, so the 3-digit hextet
@@ -368,6 +371,9 @@ ssrf_ipv6_prefix_block <- function(h) {
     return("link-local")
   }
   if (h[1L] == 0xfd00 && h[2L] == 0x0ec2) {
+    return("cloud-metadata")
+  }
+  if (all(h == c(0xfd20, 0x00ce, 0, 0, 0, 0, 0, 0x0254))) {
     return("cloud-metadata")
   }
   NA_character_
@@ -438,8 +444,16 @@ ssrf_strip_trailing_dots <- function(x) {
 
 # Registered names that reach a cloud metadata server without a DNS answer an
 # attacker controls. GCE resolves the bare "metadata" through its
-# google.internal search domain, so it is blocked with the full name.
-ssrf_blocked_names <- c("metadata.google.internal", "metadata")
+# google.internal search domain, so it is blocked with the full name. AWS's
+# "instance-data" resolves the same way through the ec2.internal search domain
+# (SITE-lezsbcbg). "localhost" is deliberately absent: it stays allowed until
+# ssrfr replaces this guard.
+ssrf_blocked_names <- c(
+  "metadata.google.internal",
+  "metadata",
+  "instance-data.ec2.internal",
+  "instance-data"
+)
 
 # The form a registered name is compared in: ASCII-lowercased, with trailing
 # dots dropped.
