@@ -840,3 +840,39 @@ test_that("a bracketed host that is no IPv6 literal is refused", {
   expect_false(res$allowed)
   expect_identical(res$reason, "malformed-address")
 })
+
+# ---- the WHATWG second look fails closed (SITE-trviouoh) ---------------------
+# libcurl with libidn2 maps these spellings to the metadata host, but rurl's
+# WHATWG view reports no host for them, so the second look had nothing to
+# classify and the default view's allow stood.
+
+test_that("a host the WHATWG view cannot parse is refused when non-ASCII", {
+  for (url in c(
+    "http://metadata.google.internal%E3%80%82/",
+    "http://169.254.169.254%E3%80%82/",
+    "http://metadata%E3%80%82/",
+    "http://metadata﹒google﹒internal/",
+    "http://metadata․google․internal/",
+    "http://meta‍data.google.internal/",
+    "http://meta‌data.google.internal/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+})
+
+test_that("an encoded trailing dot does not hide a numeric literal", {
+  # Both views report "0x7f000001.." here, so the second look skipped it as
+  # identical; undotted, it is the hex spelling of 127.0.0.1.
+  res <- guard("http://0x7f000001%2e%2e/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "numeric-literal")
+})
+
+test_that("the fail-closed second look does not refuse ordinary hosts", {
+  expect_true(guard("http://example.com/")$allowed)
+  expect_true(guard("http://bücher.example/")$allowed)
+  expect_true(guard("http://xn--bcher-kva.example/")$allowed)
+  expect_true(guard("http://[2606:2800::]/")$allowed)
+})
