@@ -86,10 +86,13 @@ BEFORE sitemapr asserts its own transport controls.
 \strong{Credentials stay on the first origin.} A redirect hop whose origin
 (scheme, host and port) differs from the first request's gets no \code{auth}, and
 none of the \code{Authorization}, \code{Proxy-Authorization} or \code{Cookie} headers or
-the credential curl options (\code{userpwd}, \code{username}, \code{password}, \code{cookie},
-\code{xoauth2_bearer}) in \code{tls}. A same-host move from \code{http} to \code{https}, or to
-another port, counts as another origin. A hop back on the first origin
-carries them again. The \code{prepare} hook still runs on every hop: it is told
+the credential curl options in \code{tls} (\code{userpwd}, \code{username}, \code{password},
+\code{cookie}, \code{xoauth2_bearer}, the client-certificate and TLS-SRP options). A
+same-host move from \code{http} to \code{https}, or to another port, counts as another
+origin, and so does the \code{http} retry of a URL given without a scheme. A hop
+back on the first origin carries them again. Other custom headers, such as
+\code{X-Api-Key}, travel to every hop; pass proxy credentials through \code{proxy},
+which every hop keeps. The \code{prepare} hook still runs on every hop: it is told
 whether the hop is cross-origin and must drop any credential it adds itself.
 
 \strong{What sitemapr always owns (callers cannot override).} Redirect control

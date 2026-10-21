@@ -131,10 +131,13 @@ fetch_is_timeout <- function(cnd) {
 #' **Credentials stay on the first origin.** A redirect hop whose origin
 #' (scheme, host and port) differs from the first request's gets no `auth`, and
 #' none of the `Authorization`, `Proxy-Authorization` or `Cookie` headers or
-#' the credential curl options (`userpwd`, `username`, `password`, `cookie`,
-#' `xoauth2_bearer`) in `tls`. A same-host move from `http` to `https`, or to
-#' another port, counts as another origin. A hop back on the first origin
-#' carries them again. The `prepare` hook still runs on every hop: it is told
+#' the credential curl options in `tls` (`userpwd`, `username`, `password`,
+#' `cookie`, `xoauth2_bearer`, the client-certificate and TLS-SRP options). A
+#' same-host move from `http` to `https`, or to another port, counts as another
+#' origin, and so does the `http` retry of a URL given without a scheme. A hop
+#' back on the first origin carries them again. Other custom headers, such as
+#' `X-Api-Key`, travel to every hop; pass proxy credentials through `proxy`,
+#' which every hop keeps. The `prepare` hook still runs on every hop: it is told
 #' whether the hop is cross-origin and must drop any credential it adds itself.
 #'
 #' **What sitemapr always owns (callers cannot override).** Redirect control
@@ -664,13 +667,21 @@ credential_curl_options <- c(
   "username",
   "password",
   "cookie",
-  "xoauth2_bearer"
+  "xoauth2_bearer",
+  "sslcert",
+  "sslcert_blob",
+  "sslkey",
+  "sslkey_blob",
+  "keypasswd",
+  "tlsauth_username",
+  "tlsauth_password"
 )
 
 # The policy a cross-origin hop gets: no `auth`, and no credential-bearing
 # header or curl option. Header and option names compare case-insensitively.
-# The proxy's own credentials stay: they authenticate to the proxy, which is
-# the same for every hop.
+# The `proxy` field's credentials stay: they authenticate to the proxy, which
+# is the same for every hop. A `Proxy-Authorization` header does not, because
+# through an https tunnel libcurl sends custom headers to the origin server.
 request_policy_cross_origin <- function(policy) {
   policy$auth <- NULL
   policy["headers"] <- list(
@@ -864,13 +875,16 @@ fetch_connection_failure <- function(
 ) {
   if (isTRUE(scheme_inferred) && startsWith(ascii_lower(url_str), "https://")) {
     http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
+    # The chain's origin stays the https URL, so the cleartext fallback is a
+    # cross-origin hop and carries no credentials.
     return(fetch_follow(
       url = http_url,
       limits = limits,
       user_agent = user_agent,
       ssrf_guard = ssrf_guard,
       policy = policy,
-      throttle_state = throttle_state
+      throttle_state = throttle_state,
+      origin_url = url_str
     ))
   }
   if (fetch_is_timeout(cnd)) {
@@ -1083,7 +1097,8 @@ fetch_follow <- function(
   user_agent,
   ssrf_guard,
   policy = request_policy(),
-  throttle_state = NULL
+  throttle_state = NULL,
+  origin_url = url
 ) {
   start <- Sys.time()
   current_url <- url
@@ -1102,7 +1117,7 @@ fetch_follow <- function(
       user_agent,
       policy,
       throttle_state,
-      origin_url = url
+      origin_url = origin_url
     )
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.

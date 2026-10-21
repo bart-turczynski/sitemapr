@@ -169,7 +169,12 @@ headers, and without the credential curl options in `tls`. A same-host
 `http`→`https` move counts as another origin, as in libcurl, which keeps
 credentials only for the same host and port. A hop back on the first origin
 carries them again, and a host the parser cannot read counts as another origin.
-The proxy's own credentials stay: every hop goes through the same proxy. The
+The `http` retry of a URL given without a scheme keeps the `https` URL as its
+origin, so it carries none either: an attacker who resets the TLS connection
+must not get the credentials in cleartext. Credentials in the `proxy` field
+stay: every hop goes through the same proxy. A `Proxy-Authorization` header is
+dropped, because through an `https` tunnel libcurl sends custom headers to the
+origin server. Other custom headers (`X-Api-Key`, ...) travel to every hop. The
 `prepare` hook runs on every hop and is told `cross_origin`; what it adds is
 the caller's to drop. All three hop loops (`fetch_follow()`,
 `page_fetch_follow()`, the batch path) build the hop through
