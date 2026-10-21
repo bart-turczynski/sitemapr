@@ -890,3 +890,36 @@ test_that("the fail-closed trigger names each mappable spelling", {
   expect_false(may_map(NA_character_, NA_character_))
   expect_false(may_map("axn--b.example", "axn--b.example"))
 })
+
+# ---- further cloud metadata endpoints (SITE-lezsbcbg) ------------------------
+
+test_that("GCP's IPv6 metadata address fd20:ce::254 is rejected", {
+  expect_identical(guard("http://[fd20:ce::254]/")$reason, "cloud-metadata")
+  classify <- sitemapr_test_ns$ssrf_classify_ipv6
+  # Every spelling of the same 128 bits.
+  expect_identical(classify("fd20:00ce::0254"), "cloud-metadata")
+  expect_identical(classify("FD20:CE:0:0:0:0:0:254"), "cloud-metadata")
+  # Its neighbors are ordinary ULA addresses (GCP hands out VPC ranges from
+  # fd20::/20), so only the one address is blocked.
+  expect_true(is.na(classify("fd20:ce::253")))
+  expect_true(is.na(classify("fd20:ce::1:254")))
+  expect_true(is.na(classify("fd20:cf::254")))
+})
+
+test_that("AWS's instance-data names are rejected as cloud-metadata", {
+  for (url in c(
+    "http://instance-data/",
+    "http://instance-data./",
+    "http://INSTANCE-DATA.ec2.internal/",
+    "http://instance-data.ec2.internal./"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  expect_true(guard("http://instance-data.example.com/")$allowed)
+})
+
+test_that("localhost stays allowed until ssrfr replaces this guard", {
+  expect_true(guard("http://localhost/")$allowed)
+})
