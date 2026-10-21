@@ -973,6 +973,29 @@ test_that("AWS's instance-data names are rejected as cloud-metadata", {
   expect_true(guard("http://instance-data.example.com/")$allowed)
 })
 
+test_that("instance-data under a regional search domain is rejected", {
+  # Outside us-east-1 the VPC search domain is <region>.compute.internal, so
+  # the bare name resolves there in that form.
+  for (url in c(
+    "http://instance-data.us-west-2.compute.internal/",
+    "http://instance-data.eu-central-1.compute.internal./",
+    "http://INSTANCE-DATA.AP-SOUTHEAST-2.COMPUTE.INTERNAL/",
+    "http://Instance-Data.us-gov-west-1.Compute.Internal./"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  # The match is on the whole name: a prefixed name or a suffix-spoof under a
+  # public domain stays allowed.
+  for (url in c(
+    "http://x.instance-data.us-west-2.compute.internal/",
+    "http://instance-data.us-west-2.compute.internal.example.com/"
+  )) {
+    expect_true(guard(url)$allowed, info = url)
+  }
+})
+
 test_that("localhost stays allowed until ssrfr replaces this guard", {
   expect_true(guard("http://localhost/")$allowed)
 })
