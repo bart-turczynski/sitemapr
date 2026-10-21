@@ -464,6 +464,24 @@ ssrf_classify_literal <- function(bare) {
   ssrf_result(is.na(reason), reason)
 }
 
+ssrf_is_bracketed <- function(s) {
+  length(s) == 1L && !is.na(s) && grepl("^\\[.*\\]$", s)
+}
+
+# A bracketed host rurl reports no host for — in practice an IPv6 literal with
+# a zone ID, "[::1%25lo0]", which rurl refuses in both its views while libcurl
+# drops the zone and dials the bare address (SITE-jtluuybg). The zone, in
+# either the "%25" or the bare "%" spelling, is dropped and the address that
+# remains is classified like any IPv6 literal, so the verdict is the one the
+# unzoned spelling gets. Anything that does not expand to an IPv6 address
+# (an IPvFuture form, garbage) is refused as "malformed-address": an
+# unparseable host fails closed rather than reaching the default allow.
+ssrf_unparsed_bracketed <- function(raw_host) {
+  bare <- sub("%.*$", "", ssrf_strip_brackets(raw_host))
+  reason <- ssrf_classify_ipv6(bare)
+  ssrf_result(is.na(reason), reason)
+}
+
 #' Structural SSRF check on already-parsed URL components
 #'
 #' Pure, no-network, no-DNS. Returns a list with `allowed` (TRUE/FALSE) and a
@@ -504,6 +522,11 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
   }
 
   if (length(host) != 1L || is.na(host) || !nzchar(host)) {
+    # A bracketed raw host means the URL names an IP literal rurl declined to
+    # parse, which the fetch may still dial (SITE-jtluuybg); classify it here.
+    if (ssrf_is_bracketed(raw_host)) {
+      return(ssrf_unparsed_bracketed(raw_host))
+    }
     # No host to evaluate — nothing to block here; let downstream rules decide.
     return(ssrf_result(TRUE))
   }
