@@ -841,6 +841,59 @@ test_that("a bracketed host that is no IPv6 literal is refused", {
   expect_identical(res$reason, "malformed-address")
 })
 
+test_that("a zoned IPv6 literal is refused even when its address is public", {
+  # A zone ID is only meaningful for a scoped (non-global) address, so a zoned
+  # literal is refused outright; a blocked range keeps its own reason above.
+  for (url in c(
+    "http://[2606:4700::1111%25en0]/",
+    "http://[2606:4700::1111%en0]/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+  # The unparsed-bracketed rule decides it on its own, not only via the
+  # WHATWG second look.
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "[2606:4700::1111%25en0]"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
+
+# ---- any raw host rurl cannot parse fails closed (SITE-jtluuybg) -------------
+# A non-empty raw host for which rurl reports no host is not one the guard can
+# reason about, so it is refused rather than reaching the default allow.
+
+test_that("a raw host rurl cannot parse is refused as malformed-address", {
+  for (url in c(
+    "http://[2606::1]x/",
+    "http://[2606::1]:80x/",
+    "http://example.com:8080abc/",
+    "http://1.2.3/",
+    "http://exa<mple.com/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "exa mple.com"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
+
+test_that("an unparsed bracketed host keeps a blocked range's own reason", {
+  res <- guard("http://[::1]x/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "loopback")
+})
+
 # ---- the WHATWG second look fails closed (SITE-trviouoh) ---------------------
 # libcurl with libidn2 maps these spellings to the metadata host, but rurl's
 # WHATWG view reports no host for them, so the second look had nothing to
