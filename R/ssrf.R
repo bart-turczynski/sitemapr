@@ -573,6 +573,15 @@ ssrf_check_parsed <- function(parsed_row) {
 # metadata.google.internal there. WHATWG's host parser applies the same
 # mapping, so a URL the default view allows is classified again on its WHATWG
 # host, and blocked if that view is (SITE-rafvyfvp).
+#
+# The second look FAILS CLOSED (SITE-trviouoh). When the WHATWG view yields no
+# host for a spelling libcurl would map — the raw host is non-ASCII or carries
+# a percent-escape, or the default view had to ACE-encode a label — there is no
+# mapped host to classify, yet libcurl may still reach one ("metadata%E3%80%82",
+# U+FE52 or U+2024 as a dot, a ZWJ inside a label). Such a URL is refused as
+# "malformed-address" rather than left on the default view's allow. The WHATWG
+# host is checked even when it equals the default host: the check undots it
+# first, which a byte comparison of the two views skipped ("0x7f000001%2e%2e").
 ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
   if (!isTRUE(verdict$allowed) || length(url) != 1L || is.na(url)) {
     return(verdict)
@@ -582,14 +591,24 @@ ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
     error = function(e) NA_character_
   )
   if (length(whatwg) != 1L || is.na(whatwg) || !nzchar(whatwg)) {
+    if (ssrf_host_may_map(ssrf_raw_host_of(url), host)) {
+      return(ssrf_result(FALSE, "malformed-address"))
+    }
     return(verdict)
   }
   whatwg <- ascii_lower(whatwg)
-  if (identical(whatwg, host)) {
-    return(verdict)
-  }
   second <- ssrf_check(host = whatwg, scheme = scheme, raw_host = whatwg)
   if (isTRUE(second$allowed)) verdict else second
+}
+
+# Could libcurl's UTS #46 mapping turn this host into a different one? TRUE
+# when the raw host has a non-ASCII code point or a percent-escape, or the
+# default view's host carries an ACE ("xn--") label.
+ssrf_host_may_map <- function(raw_host, host) {
+  raw <- if (length(raw_host) == 1L && !is.na(raw_host)) raw_host else ""
+  def <- if (length(host) == 1L && !is.na(host)) ascii_lower(host) else ""
+  grepl("[^\\x{00}-\\x{7f}]|%", raw, perl = TRUE) ||
+    grepl("(^|\\.)xn--", def)
 }
 
 # Recover the scheme from a raw URL string without full parsing, used only when

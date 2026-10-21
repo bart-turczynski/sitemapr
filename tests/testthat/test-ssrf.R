@@ -875,4 +875,18 @@ test_that("the fail-closed second look does not refuse ordinary hosts", {
   expect_true(guard("http://bücher.example/")$allowed)
   expect_true(guard("http://xn--bcher-kva.example/")$allowed)
   expect_true(guard("http://[2606:2800::]/")$allowed)
+  # A percent-escape the WHATWG view decodes to an ordinary host is classified
+  # on that host, not refused.
+  expect_true(guard("http://ex%61mple.com/")$allowed)
+})
+
+test_that("the fail-closed trigger names each mappable spelling", {
+  may_map <- sitemapr_test_ns$ssrf_host_may_map
+  expect_true(may_map("metadata。", "xn--metadata-vm3g"))
+  expect_true(may_map("metadata%E3%80%82", NA_character_))
+  expect_true(may_map("plain.example", "xn--bcher-kva.example"))
+  expect_true(may_map(NA_character_, "a.XN--bcher-kva.example"))
+  expect_false(may_map("example.com", "example.com"))
+  expect_false(may_map(NA_character_, NA_character_))
+  expect_false(may_map("axn--b.example", "axn--b.example"))
 })
