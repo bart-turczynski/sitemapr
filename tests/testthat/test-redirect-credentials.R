@@ -268,3 +268,29 @@ test_that("credential curl options in tls are dropped on a cross-origin hop", {
   expect_null(req$options$userpwd)
   expect_identical(as.integer(req$options$ssl_verifypeer), 0L)
 })
+
+# ---- https -> http fallback --------------------------------------------------
+
+test_that("the inferred-scheme http fallback carries no credentials", {
+  seen <- new.env(parent = emptyenv())
+  seen$reqs <- list()
+  httr2::local_mocked_responses(function(req) {
+    seen$reqs[[length(seen$reqs) + 1L]] <- req
+    if (startsWith(req$url, "https://")) {
+      rlang::abort(
+        "Could not connect",
+        class = c("httr2_failure", "httr2_error")
+      )
+    }
+    cred_ok(req$url)
+  })
+  fetch_source(
+    "https://example.com/sitemap.xml",
+    scheme_inferred = TRUE,
+    policy = cred_policy()
+  )
+
+  expect_length(seen$reqs, 2L)
+  expect_length(cred_header_names(seen$reqs[[1]]), 3L)
+  expect_identical(cred_header_names(seen$reqs[[2]]), character(0))
+})
