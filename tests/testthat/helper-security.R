@@ -5,9 +5,12 @@
 #
 # Narrowing the audit to hard dependencies cleared five of the seven repos in
 # this fleet. It does NOT clear sitemapr: `curl` is a genuine hard dependency
-# here, reached through httr2. The two advisories below name libcurl version
-# ranges that include CRAN's current `curl` 8.0.0, so there is no version to
-# upgrade to and no local change that makes the audit clean. Suppressing the
+# here, reached through httr2. The advisories below name libcurl (or curl
+# tool) version ranges that include CRAN's current `curl` 8.1.0 (OSS Index
+# matches the R package's version number against those ranges), so there is
+# no version to upgrade to and no local change that makes the audit clean. Each
+# row says whether the advisory reaches a fetch sitemapr makes, citing the
+# transport in R/fetch.R. Suppressing the
 # whole gate to get past them would retire it for every OTHER dependency too,
 # so each advisory is allow-listed BY ID with the reason it is permitted
 # (SITE-epezowxs, deciding SEOR-feqgnbwt route (a)).
@@ -33,12 +36,12 @@ oss_index_allowlist <- list(
   list(
     id = "CVE-2026-18924",
     package = "curl",
-    version_seen = "8.0.0",
+    version_seen = "8.1.0",
     review = as.Date("2026-12-01"),
     reason = paste(
       "CWE-416 use-after-free on HTTP/2 server push over a shared",
       "connection handle (CVSS 9.1, published 2026-09-06). Names a libcurl",
-      "range covering CRAN's current curl 8.0.0, so no available version",
+      "range covering CRAN's current curl 8.1.0, so no available version",
       "clears it. The vulnerable path is also unreachable from R:",
       "curl::curl_options() exposes no option matching `push`, and",
       "curl::multi_set() takes only total_con, host_con, max_streams,",
@@ -51,18 +54,56 @@ oss_index_allowlist <- list(
   list(
     id = "CVE-2026-3783",
     package = "curl",
-    version_seen = "8.0.0",
+    version_seen = "8.1.0",
     review = as.Date("2026-12-01"),
     reason = paste(
       "CWE-522: an OAuth2 bearer token is leaked to a redirect target when",
       ".netrc carries a machine/default entry (CVSS 6.9). Names a libcurl",
-      "range covering CRAN's current curl 8.0.0, so no available version",
-      "clears it. This one IS reachable here -- request_auth_bearer() sets",
-      "a token via httr2::req_auth_bearer_token(), and httr2 follows",
-      "redirects -- so it is allow-listed as unfixable, NOT as harmless.",
-      "The precondition is a .netrc machine/default entry on the calling",
-      "machine; a caller combining a bearer token with such a .netrc",
-      "should pin the fetch to a single host until libcurl ships a fix."
+      "range covering CRAN's current curl 8.1.0, so no available version",
+      "clears it. The leak is in libcurl's own redirect following, which",
+      "sitemapr never uses: fetch_build_request() (R/fetch.R) sets",
+      "followlocation = 0 and maxredirs = 0 AFTER every policy field and",
+      "the prepare hook, so no tls option can re-enable it, and redirects",
+      "are followed manually, one fresh request per hop. Separate from this",
+      "CVE and by design: that manual loop re-applies the policy's auth on",
+      "every hop, cross-origin included. Re-check fetch_build_request()",
+      "before renewing this row."
+    )
+  ),
+  list(
+    id = "CVE-2026-86410",
+    package = "curl",
+    version_seen = "8.1.0",
+    review = as.Date("2026-12-01"),
+    reason = paste(
+      "CWE-297: the curl command-line tool sets its SSH host verification",
+      "options only for a direct SFTP or SCP transfer, not for one reached",
+      "by a redirect (CVSS 5.1). curl.se: only the command line tool is",
+      "affected, not libcurl; the tool's range covers CRAN's current curl",
+      "8.1.0, so no available version clears it. Unreachable through",
+      "sitemapr: it drives libcurl through httr2 and never runs the curl",
+      "tool, and it follows no redirect inside libcurl (followlocation = 0",
+      "in fetch_build_request(), R/fetch.R). Re-check that sitemapr still",
+      "shells out to no curl binary before renewing this row."
+    )
+  ),
+  list(
+    id = "CVE-2026-87865",
+    package = "curl",
+    version_seen = "8.1.0",
+    review = as.Date("2026-12-01"),
+    reason = paste(
+      "CWE-295: libcurl built on libssh2, with a hashed known_hosts file,",
+      "can report a host-key mismatch as a missing key to a",
+      "CURLOPT_SSH_KEYFUNCTION callback; SFTP and SCP only (CVSS 6.9).",
+      "Names a libcurl range covering CRAN's current curl 8.1.0, so no",
+      "available version clears it. Unreachable through sitemapr: R/ sets",
+      "no SSH option, the per-hop SSRF guard (ssrf_check(), R/ssrf.R)",
+      "admits only http and https, and the callback the flaw needs cannot",
+      "be installed from R -- curl 8.1.0's handle_setopt() rejects",
+      "ssh_keyfunction as an unsupported option type, so neither a",
+      "request_policy() tls list nor a prepare hook can set it, even with",
+      "ssrf_guard = FALSE. Re-check that rejection before renewing."
     )
   )
 )
