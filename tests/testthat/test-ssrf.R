@@ -810,3 +810,192 @@ test_that("ssrf_raw_host_of returns NA for non-scalar / NA / empty input", {
   expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of(NA_character_)))
   expect_true(is.na(sitemapr_test_ns$ssrf_raw_host_of("")))
 })
+
+# ---- bracketed hosts rurl cannot parse fail closed (SITE-jtluuybg) -----------
+# rurl reports no host for an IPv6 literal carrying a zone ID, in both its
+# default and WHATWG views, while libcurl drops the zone and dials the bare
+# address. The guard therefore classifies the bracketed raw host itself.
+
+test_that("a zone ID does not hide a blocked IPv6 literal", {
+  cases <- c(
+    "http://[::1%25lo0]/" = "loopback",
+    "http://[fd00:ec2::254%25lo0]/" = "cloud-metadata",
+    "http://[::ffff:127.0.0.1%25lo0]/" = "ipv4-mapped",
+    "http://[fe80::1%25eth0]/" = "link-local",
+    "http://[::1%lo0]/" = "loopback"
+  )
+  for (url in names(cases)) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, cases[[url]], info = url)
+  }
+})
+
+test_that("a bracketed host that is no IPv6 literal is refused", {
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "[not-an-address%25x]"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
+
+test_that("a zoned IPv6 literal is refused even when its address is public", {
+  # A zone ID is only meaningful for a scoped (non-global) address, so a zoned
+  # literal is refused outright; a blocked range keeps its own reason above.
+  for (url in c(
+    "http://[2606:4700::1111%25en0]/",
+    "http://[2606:4700::1111%en0]/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+  # The unparsed-bracketed rule decides it on its own, not only via the
+  # WHATWG second look.
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "[2606:4700::1111%25en0]"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
+
+# ---- any raw host rurl cannot parse fails closed (SITE-jtluuybg) -------------
+# A non-empty raw host for which rurl reports no host is not one the guard can
+# reason about, so it is refused rather than reaching the default allow.
+
+test_that("a raw host rurl cannot parse is refused as malformed-address", {
+  for (url in c(
+    "http://[2606::1]x/",
+    "http://[2606::1]:80x/",
+    "http://example.com:8080abc/",
+    "http://1.2.3/",
+    "http://exa<mple.com/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+  res <- sitemapr_test_ns$ssrf_check(
+    host = NA_character_,
+    scheme = "http",
+    raw_host = "exa mple.com"
+  )
+  expect_false(res$allowed)
+  expect_identical(res$reason, "malformed-address")
+})
+
+test_that("an unparsed bracketed host keeps a blocked range's own reason", {
+  res <- guard("http://[::1]x/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "loopback")
+})
+
+# ---- the WHATWG second look fails closed (SITE-trviouoh) ---------------------
+# libcurl with libidn2 maps these spellings to the metadata host, but rurl's
+# WHATWG view reports no host for them, so the second look had nothing to
+# classify and the default view's allow stood.
+
+test_that("a host the WHATWG view cannot parse is refused when non-ASCII", {
+  for (url in c(
+    "http://metadata.google.internal%E3%80%82/",
+    "http://169.254.169.254%E3%80%82/",
+    "http://metadata%E3%80%82/",
+    "http://metadata﹒google﹒internal/",
+    "http://metadata․google․internal/",
+    "http://meta‍data.google.internal/",
+    "http://meta‌data.google.internal/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+})
+
+test_that("an encoded trailing dot does not hide a numeric literal", {
+  # Both views report "0x7f000001.." here, so the second look skipped it as
+  # identical; undotted, it is the hex spelling of 127.0.0.1.
+  res <- guard("http://0x7f000001%2e%2e/")
+  expect_false(res$allowed)
+  expect_identical(res$reason, "numeric-literal")
+})
+
+test_that("the fail-closed second look does not refuse ordinary hosts", {
+  expect_true(guard("http://example.com/")$allowed)
+  expect_true(guard("http://bücher.example/")$allowed)
+  expect_true(guard("http://xn--bcher-kva.example/")$allowed)
+  expect_true(guard("http://[2606:2800::]/")$allowed)
+  # A percent-escape the WHATWG view decodes to an ordinary host is classified
+  # on that host, not refused.
+  expect_true(guard("http://ex%61mple.com/")$allowed)
+})
+
+test_that("the fail-closed trigger names each mappable spelling", {
+  may_map <- sitemapr_test_ns$ssrf_host_may_map
+  expect_true(may_map("metadata。", "xn--metadata-vm3g"))
+  expect_true(may_map("metadata%E3%80%82", NA_character_))
+  expect_true(may_map("plain.example", "xn--bcher-kva.example"))
+  expect_true(may_map(NA_character_, "a.XN--bcher-kva.example"))
+  expect_false(may_map("example.com", "example.com"))
+  expect_false(may_map(NA_character_, NA_character_))
+  expect_false(may_map("axn--b.example", "axn--b.example"))
+})
+
+# ---- further cloud metadata endpoints (SITE-lezsbcbg) ------------------------
+
+test_that("GCP's IPv6 metadata address fd20:ce::254 is rejected", {
+  expect_identical(guard("http://[fd20:ce::254]/")$reason, "cloud-metadata")
+  classify <- sitemapr_test_ns$ssrf_classify_ipv6
+  # Every spelling of the same 128 bits.
+  expect_identical(classify("fd20:00ce::0254"), "cloud-metadata")
+  expect_identical(classify("FD20:CE:0:0:0:0:0:254"), "cloud-metadata")
+  # Its neighbors are ordinary ULA addresses (GCP hands out VPC ranges from
+  # fd20::/20), so only the one address is blocked.
+  expect_true(is.na(classify("fd20:ce::253")))
+  expect_true(is.na(classify("fd20:ce::1:254")))
+  expect_true(is.na(classify("fd20:cf::254")))
+})
+
+test_that("AWS's instance-data names are rejected as cloud-metadata", {
+  for (url in c(
+    "http://instance-data/",
+    "http://instance-data./",
+    "http://INSTANCE-DATA.ec2.internal/",
+    "http://instance-data.ec2.internal./"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  expect_true(guard("http://instance-data.example.com/")$allowed)
+})
+
+test_that("instance-data under a regional search domain is rejected", {
+  # Outside us-east-1 the VPC search domain is <region>.compute.internal, so
+  # the bare name resolves there in that form.
+  for (url in c(
+    "http://instance-data.us-west-2.compute.internal/",
+    "http://instance-data.eu-central-1.compute.internal./",
+    "http://INSTANCE-DATA.AP-SOUTHEAST-2.COMPUTE.INTERNAL/",
+    "http://Instance-Data.us-gov-west-1.Compute.Internal./"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "cloud-metadata", info = url)
+  }
+  # The match is on the whole name: a prefixed name or a suffix-spoof under a
+  # public domain stays allowed.
+  for (url in c(
+    "http://x.instance-data.us-west-2.compute.internal/",
+    "http://instance-data.us-west-2.compute.internal.example.com/"
+  )) {
+    expect_true(guard(url)$allowed, info = url)
+  }
+})
+
+test_that("localhost stays allowed until ssrfr replaces this guard", {
+  expect_true(guard("http://localhost/")$allowed)
+})

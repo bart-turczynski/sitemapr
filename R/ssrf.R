@@ -352,22 +352,28 @@ ssrf_ipv6_special <- function(h) {
   if (h[8L] == 1) "loopback" else "unspecified"
 }
 
-# The two prefix-matched IPv6 blocks, decided on the EXPANDED hextets for the
-# same reason the specials are (SITE-vovtwvuh): a hextet may be written with
-# leading zeros, so matching the literal string mis-decides the prefix in BOTH
-# directions.
+# The IPv6 prefix blocks and the one single-address block, decided on the
+# EXPANDED hextets for the same reason the specials are (SITE-vovtwvuh): a
+# hextet may be written with leading zeros, so matching the literal string
+# mis-decides the prefix in BOTH directions.
 #   link-local     fe80::/10     -> first hextet 0xfe80..0xfebf
 #   cloud-metadata fd00:ec2::/32 -> first two hextets exactly (AWS metadata)
+#   cloud-metadata fd20:ce::254  -> all 8 hextets (GCP metadata, SITE-lezsbcbg)
+# GCP's is matched as one address, not a prefix: GCP allocates VPC ULA ranges
+# from fd20::/20, so its neighbors are ordinary internal addresses.
 # The old "^fd00:ec2:" string match let "fd00:0ec2::254" — the same 128 bits —
 # through unblocked, a real bypass of the metadata block. The old
 # "^fe[89ab][0-9a-f]?:" made the 4th hex digit optional, so the 3-digit hextet
 # "fe8" (0x0fe8) matched despite being nowhere near fe80::/10. Returns NA when
-# `h` is in neither block.
+# `h` is in none of these blocks.
 ssrf_ipv6_prefix_block <- function(h) {
   if (bitwAnd(h[1L], 0xffc0) == 0xfe80) {
     return("link-local")
   }
   if (h[1L] == 0xfd00 && h[2L] == 0x0ec2) {
+    return("cloud-metadata")
+  }
+  if (all(h == c(0xfd20, 0x00ce, 0, 0, 0, 0, 0, 0x0254))) {
     return("cloud-metadata")
   }
   NA_character_
@@ -438,13 +444,34 @@ ssrf_strip_trailing_dots <- function(x) {
 
 # Registered names that reach a cloud metadata server without a DNS answer an
 # attacker controls. GCE resolves the bare "metadata" through its
-# google.internal search domain, so it is blocked with the full name.
-ssrf_blocked_names <- c("metadata.google.internal", "metadata")
+# google.internal search domain, so it is blocked with the full name. AWS's
+# "instance-data" resolves the same way through the VPC search domain: that is
+# ec2.internal in us-east-1 and <region>.compute.internal everywhere else, so
+# the regional form is matched as a pattern (SITE-lezsbcbg). "localhost" is
+# deliberately absent: it stays allowed until ssrfr replaces this guard.
+ssrf_blocked_names <- c(
+  "metadata.google.internal",
+  "metadata",
+  "instance-data.ec2.internal",
+  "instance-data"
+)
+ssrf_blocked_name_patterns <-
+  "^instance-data\\.[a-z0-9-]+\\.compute\\.internal$"
 
 # The form a registered name is compared in: ASCII-lowercased, with trailing
 # dots dropped.
 ssrf_name_key <- function(name) {
   ssrf_strip_trailing_dots(ascii_lower(name))
+}
+
+# Is the registered name `bare` a cloud metadata name, by exact match or by
+# one of the anchored patterns? Both compare the normalized key.
+ssrf_is_blocked_name <- function(bare) {
+  key <- ssrf_name_key(bare)
+  if (key %in% ssrf_blocked_names) {
+    return(TRUE)
+  }
+  any(vapply(ssrf_blocked_name_patterns, grepl, logical(1L), x = key))
 }
 
 # Range/name matching on the normalized host (brackets already stripped).
@@ -456,12 +483,38 @@ ssrf_classify_literal <- function(bare) {
     ssrf_classify_ipv6(bare) # IPv6 literal (contains a colon)
   } else if (ssrf_is_dotted_quad(bare)) {
     ssrf_classify_ipv4(bare) # IPv4 dotted-quad
-  } else if (ssrf_name_key(bare) %in% ssrf_blocked_names) {
+  } else if (ssrf_is_blocked_name(bare)) {
     "cloud-metadata"
   } else {
     NA_character_
   }
   ssrf_result(is.na(reason), reason)
+}
+
+ssrf_is_bracketed <- function(s) {
+  length(s) == 1L && !is.na(s) && grepl("^\\[.*\\]$", s)
+}
+
+# A raw host rurl reports no host for is never allowed (SITE-jtluuybg): the
+# guard cannot reason about a host it was not given, and the fetch may still
+# dial one. It is refused as "malformed-address", with one refinement for a
+# bracketed host: in practice an IPv6 literal with a zone ID, "[::1%25lo0]",
+# which rurl refuses in both its views while libcurl drops the zone and dials
+# the bare address, or a literal with junk after the bracket, "[::1]x". The
+# zone, in either the "%25" or the bare "%" spelling, is dropped and the
+# address that remains is classified first, so a blocked range keeps its own
+# reason ("loopback", "link-local", "cloud-metadata", ...). Every other case,
+# a public address included, is refused as "malformed-address": a zone ID only
+# scopes a non-global address, and an IPvFuture form or garbage is no address.
+ssrf_unparsed_host <- function(raw_host) {
+  if (ssrf_is_bracketed(raw_host)) {
+    bare <- sub("%.*$", "", ssrf_strip_brackets(raw_host))
+    reason <- ssrf_classify_ipv6(bare)
+    if (!is.na(reason)) {
+      return(ssrf_result(FALSE, reason))
+    }
+  }
+  ssrf_result(FALSE, "malformed-address")
 }
 
 #' Structural SSRF check on already-parsed URL components
@@ -478,8 +531,9 @@ ssrf_classify_literal <- function(bare) {
 #' @param is_ip_host Logical flag from `parse_url_adapter()`; TRUE when the host
 #'   is an IP literal. Used only as a hint; classification ignores it.
 #' @param raw_host The pre-normalization host string (typically the host portion
-#'   of `original_url`). Used solely to detect numeric/hex/octal IPv4 literal
-#'   obfuscation, which rurl normalizes away. Optional; defaults to `host`.
+#'   of `original_url`). Used to detect numeric/hex/octal IPv4 literal
+#'   obfuscation, which rurl normalizes away, and to refuse a host rurl could
+#'   not parse at all. Optional; defaults to `host`.
 #' @return A list: `list(allowed = <logical>, reason = <character>)`.
 #' @noRd
 ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
@@ -504,6 +558,11 @@ ssrf_check <- function(host, scheme, is_ip_host = FALSE, raw_host = host) {
   }
 
   if (length(host) != 1L || is.na(host) || !nzchar(host)) {
+    # The URL names a host rurl declined to parse, which the fetch may still
+    # dial: fail closed (SITE-jtluuybg).
+    if (length(raw_host) == 1L && !is.na(raw_host) && nzchar(raw_host)) {
+      return(ssrf_unparsed_host(raw_host))
+    }
     # No host to evaluate — nothing to block here; let downstream rules decide.
     return(ssrf_result(TRUE))
   }
@@ -550,6 +609,15 @@ ssrf_check_parsed <- function(parsed_row) {
 # metadata.google.internal there. WHATWG's host parser applies the same
 # mapping, so a URL the default view allows is classified again on its WHATWG
 # host, and blocked if that view is (SITE-rafvyfvp).
+#
+# The second look FAILS CLOSED (SITE-trviouoh). When the WHATWG view yields no
+# host for a spelling libcurl would map — the raw host is non-ASCII or carries
+# a percent-escape, or the default view had to ACE-encode a label — there is no
+# mapped host to classify, yet libcurl may still reach one ("metadata%E3%80%82",
+# U+FE52 or U+2024 as a dot, a ZWJ inside a label). Such a URL is refused as
+# "malformed-address" rather than left on the default view's allow. The WHATWG
+# host is checked even when it equals the default host: the check undots it
+# first, which a byte comparison of the two views skipped ("0x7f000001%2e%2e").
 ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
   if (!isTRUE(verdict$allowed) || length(url) != 1L || is.na(url)) {
     return(verdict)
@@ -559,14 +627,24 @@ ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
     error = function(e) NA_character_
   )
   if (length(whatwg) != 1L || is.na(whatwg) || !nzchar(whatwg)) {
+    if (ssrf_host_may_map(ssrf_raw_host_of(url), host)) {
+      return(ssrf_result(FALSE, "malformed-address"))
+    }
     return(verdict)
   }
   whatwg <- ascii_lower(whatwg)
-  if (identical(whatwg, host)) {
-    return(verdict)
-  }
   second <- ssrf_check(host = whatwg, scheme = scheme, raw_host = whatwg)
   if (isTRUE(second$allowed)) verdict else second
+}
+
+# Could libcurl's UTS #46 mapping turn this host into a different one? TRUE
+# when the raw host has a non-ASCII code point or a percent-escape, or the
+# default view's host carries an ACE ("xn--") label.
+ssrf_host_may_map <- function(raw_host, host) {
+  raw <- if (length(raw_host) == 1L && !is.na(raw_host)) raw_host else ""
+  def <- if (length(host) == 1L && !is.na(host)) ascii_lower(host) else ""
+  grepl("[^\\x{00}-\\x{7f}]|%", raw, perl = TRUE) ||
+    grepl("(^|\\.)xn--", def)
 }
 
 # Recover the scheme from a raw URL string without full parsing, used only when
