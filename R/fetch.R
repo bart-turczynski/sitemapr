@@ -128,6 +128,20 @@ fetch_is_timeout <- function(cnd) {
 #' are all applied to each hop's request AFTER the per-hop SSRF guard and
 #' BEFORE sitemapr asserts its own transport controls.
 #'
+#' **Credentials stay on the first origin.** A redirect hop whose origin
+#' (scheme, host and port) differs from the first request's gets no `auth`, and
+#' none of the `Authorization`, `Proxy-Authorization` or `Cookie` headers or
+#' the credential curl options in `tls` (`userpwd`, `username`, `password`,
+#' `cookie`, `xoauth2_bearer`, the client-certificate and TLS-SRP options, and
+#' the cookie and `.netrc` sources `cookielist`, `cookiefile`, `netrc` and
+#' `netrc_file`). A
+#' same-host move from `http` to `https`, or to another port, counts as another
+#' origin, and so does the `http` retry of a URL given without a scheme. A hop
+#' back on the first origin carries them again. Other custom headers, such as
+#' `X-Api-Key`, travel to every hop; pass proxy credentials through `proxy`,
+#' which every hop keeps. The `prepare` hook still runs on every hop: it is told
+#' whether the hop is cross-origin and must drop any credential it adds itself.
+#'
 #' **What sitemapr always owns (callers cannot override).** Redirect control
 #' (`followlocation = 0`, `maxredirs = 0`) and the non-2xx error policy are
 #' re-applied *after* all caller customization, and the
@@ -137,7 +151,8 @@ fetch_is_timeout <- function(cnd) {
 #' via `tls`/`prepare` — because sitemapr's controls win last.
 #'
 #' @param prepare Optional `function(req, ctx)` receiving the built httr2
-#'   request plus a hop-context list (currently the resolved hop `url`) and
+#'   request plus a hop-context list (the resolved hop `url`, and
+#'   `cross_origin`, `TRUE` when the hop left the first request's origin) and
 #'   returning the possibly-modified request. Applied last of the caller-facing
 #'   steps, so it composes on top of the typed fields.
 #' @param headers Optional named list or named character vector of HTTP headers
@@ -646,6 +661,68 @@ request_policy_apply <- function(policy, req) {
   req
 }
 
+# Credential-bearing request headers and curl options, lower-cased. A redirect
+# hop onto another origin carries none of them (SITE-vquagswr).
+credential_headers <- c("authorization", "proxy-authorization", "cookie")
+credential_curl_options <- c(
+  "userpwd",
+  "username",
+  "password",
+  "cookie",
+  "xoauth2_bearer",
+  "sslcert",
+  "sslcert_blob",
+  "sslkey",
+  "sslkey_blob",
+  "keypasswd",
+  "tlsauth_username",
+  "tlsauth_password",
+  "cookielist",
+  "cookiefile",
+  "netrc",
+  "netrc_file"
+)
+
+# The policy a cross-origin hop gets: no `auth`, and no credential-bearing
+# header or curl option. Header and option names compare case-insensitively.
+# The `proxy` field's credentials stay: they authenticate to the proxy, which
+# is the same for every hop. A `Proxy-Authorization` header does not, because
+# through an https tunnel libcurl sends custom headers to the origin server.
+request_policy_cross_origin <- function(policy) {
+  policy$auth <- NULL
+  policy["headers"] <- list(
+    drop_named(policy$headers, credential_headers)
+  )
+  policy["tls"] <- list(drop_named(policy$tls, credential_curl_options))
+  policy
+}
+
+# `x` without its elements named (case-insensitively) in `drop`; NULL when
+# nothing is left, so an emptied field stays the no-op NULL.
+drop_named <- function(x, drop) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  x <- x[!ascii_lower(names(x)) %in% drop]
+  if (length(x) == 0L) NULL else x
+}
+
+# TRUE when two URLs share an origin: scheme, host and port, with a scheme's
+# default port the same as no port and the host compared case-insensitively.
+fetch_same_origin <- function(url, origin_url) {
+  if (identical(url, origin_url)) {
+    return(TRUE)
+  }
+  parsed <- parse_url_adapter(c(url, origin_url))
+  scheme <- ascii_lower(as.character(parsed$scheme))
+  host <- ascii_lower(as.character(parsed$host))
+  port <- as.integer(parsed$port)
+  defaults <- c(http = 80L, https = 443L)
+  port[is.na(port)] <- defaults[scheme[is.na(port)]]
+  key <- paste(scheme, host, port, sep = "\r")
+  !anyNA(c(scheme, host)) && identical(key[[1L]], key[[2L]])
+}
+
 # Attach the retry-and-backoff policy to one hop's request via httr2::req_retry.
 # `is_transient` inspects the RESPONSE STATUS, which works even though the
 # fetcher sets req_error(is_error = FALSE): httr2's retry loop evaluates
@@ -691,7 +768,7 @@ request_apply_proxy <- function(req, proxy) {
 #
 # @keywords internal
 # @noRd
-request_policy_prepare <- function(policy, req, url) {
+request_policy_prepare <- function(policy, req, url, cross_origin = FALSE) {
   if (!inherits(policy, "sitemapr_request_policy")) {
     rlang::abort(
       "`policy` must be a sitemapr_request_policy (see request_policy()).",
@@ -701,7 +778,7 @@ request_policy_prepare <- function(policy, req, url) {
   if (is.null(policy$prepare)) {
     return(req)
   }
-  out <- policy$prepare(req, list(url = url))
+  out <- policy$prepare(req, list(url = url, cross_origin = cross_origin))
   if (!inherits(out, "httr2_request")) {
     rlang::abort(
       "The request-policy `prepare` hook must return an httr2 request.",
@@ -726,9 +803,10 @@ fetch_perform_one <- function(
   limits,
   user_agent,
   policy = request_policy(),
-  throttle_state = NULL
+  throttle_state = NULL,
+  origin_url = url
 ) {
-  req <- fetch_build_request(url, limits, user_agent, policy)
+  req <- fetch_build_request(url, limits, user_agent, policy, origin_url)
   # Pace this hop against its host bucket (after the SSRF guard ran in the
   # caller and after our transport controls above); a NULL state is a no-op.
   throttle_before_request(throttle_state, url)
@@ -740,14 +818,27 @@ fetch_perform_one <- function(
 # batch path (`fetch_batch_follow()`) build byte-identical requests from one
 # definition -- a request that carried different transport controls depending
 # on which scheduler dispatched it would break the ADR-008 §0 invariant.
-fetch_build_request <- function(url, limits, user_agent, policy) {
+#
+# `origin_url` is the first request of this redirect chain. A hop on another
+# origin gets the policy without its credentials, and the prepare hook is told.
+fetch_build_request <- function(
+  url,
+  limits,
+  user_agent,
+  policy,
+  origin_url = url
+) {
+  cross_origin <- !fetch_same_origin(url, origin_url)
+  if (cross_origin) {
+    policy <- request_policy_cross_origin(policy)
+  }
   req <- httr2::request(url)
   req <- httr2::req_user_agent(req, user_agent)
   # Caller-supplied customization (after the SSRF guard, before our own
   # transport controls): typed fields first, then the generic prepare hook.
   # No-ops for the default policy.
   req <- request_policy_apply(policy, req)
-  req <- request_policy_prepare(policy, req, url)
+  req <- request_policy_prepare(policy, req, url, cross_origin)
   req <- httr2::req_timeout(req, limits$timeout)
   # sitemapr always owns redirect control: re-assert AFTER all caller
   # customization so headers/auth/proxy/tls/prepare cannot re-enable httr2's
@@ -790,13 +881,16 @@ fetch_connection_failure <- function(
 ) {
   if (isTRUE(scheme_inferred) && startsWith(ascii_lower(url_str), "https://")) {
     http_url <- sub("^https://", "http://", url_str, ignore.case = TRUE)
+    # The chain's origin stays the https URL, so the cleartext fallback is a
+    # cross-origin hop and carries no credentials.
     return(fetch_follow(
       url = http_url,
       limits = limits,
       user_agent = user_agent,
       ssrf_guard = ssrf_guard,
       policy = policy,
-      throttle_state = throttle_state
+      throttle_state = throttle_state,
+      origin_url = url_str
     ))
   }
   if (fetch_is_timeout(cnd)) {
@@ -1009,7 +1103,8 @@ fetch_follow <- function(
   user_agent,
   ssrf_guard,
   policy = request_policy(),
-  throttle_state = NULL
+  throttle_state = NULL,
+  origin_url = url
 ) {
   start <- Sys.time()
   current_url <- url
@@ -1027,7 +1122,8 @@ fetch_follow <- function(
       limits,
       user_agent,
       policy,
-      throttle_state
+      throttle_state,
+      origin_url = origin_url
     )
 
     # 3. Redirect? Resolve Location, bound the hop count, loop.
@@ -1167,7 +1263,13 @@ fetch_batch_round <- function(
       states[[i]]$done <- TRUE
       next
     }
-    req <- fetch_build_request(url, limits, user_agent, policy)
+    req <- fetch_build_request(
+      url,
+      limits,
+      user_agent,
+      policy,
+      origin_url = states[[i]]$url
+    )
     # Same ordering the sequential path uses: guard, transport controls, then
     # pace against the host bucket immediately before dispatch. Pacing runs
     # per request here, so the throttle still bounds per-host RATE while the
@@ -1353,7 +1455,8 @@ page_fetch_follow <- function(
       limits,
       user_agent,
       policy,
-      throttle_state
+      throttle_state,
+      origin_url = url
     )
     status <- httr2::resp_status(resp)
     next_url <- fetch_redirect_target(resp, current_url)

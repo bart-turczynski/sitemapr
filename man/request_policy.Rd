@@ -17,7 +17,8 @@ request_policy(
 }
 \arguments{
 \item{prepare}{Optional \verb{function(req, ctx)} receiving the built httr2
-request plus a hop-context list (currently the resolved hop \code{url}) and
+request plus a hop-context list (the resolved hop \code{url}, and
+\code{cross_origin}, \code{TRUE} when the hop left the first request's origin) and
 returning the possibly-modified request. Applied last of the caller-facing
 steps, so it composes on top of the typed fields.}
 
@@ -81,6 +82,20 @@ existing callers behave exactly as before.
 \strong{What callers may set.} \code{headers}, \code{auth}, \code{proxy}, \code{tls}, and \code{prepare}
 are all applied to each hop's request AFTER the per-hop SSRF guard and
 BEFORE sitemapr asserts its own transport controls.
+
+\strong{Credentials stay on the first origin.} A redirect hop whose origin
+(scheme, host and port) differs from the first request's gets no \code{auth}, and
+none of the \code{Authorization}, \code{Proxy-Authorization} or \code{Cookie} headers or
+the credential curl options in \code{tls} (\code{userpwd}, \code{username}, \code{password},
+\code{cookie}, \code{xoauth2_bearer}, the client-certificate and TLS-SRP options, and
+the cookie and \code{.netrc} sources \code{cookielist}, \code{cookiefile}, \code{netrc} and
+\code{netrc_file}). A
+same-host move from \code{http} to \code{https}, or to another port, counts as another
+origin, and so does the \code{http} retry of a URL given without a scheme. A hop
+back on the first origin carries them again. Other custom headers, such as
+\code{X-Api-Key}, travel to every hop; pass proxy credentials through \code{proxy},
+which every hop keeps. The \code{prepare} hook still runs on every hop: it is told
+whether the hop is cross-origin and must drop any credential it adds itself.
 
 \strong{What sitemapr always owns (callers cannot override).} Redirect control
 (\code{followlocation = 0}, \code{maxredirs = 0}) and the non-2xx error policy are

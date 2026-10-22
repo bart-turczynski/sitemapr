@@ -195,6 +195,27 @@ host is rejected at the same point a literal private IP would be.
 redirect target is passed through the structural SSRF guard before the next
 request is issued.
 
+**Credentials stay on the first origin** (amended 2026-10-21, SITE-vquagswr).
+sitemapr follows redirects itself, one fresh request per hop, so libcurl's own
+rule (drop credentials on a redirect to another host) never applies. sitemapr
+applies it instead: a hop whose origin (scheme, host, port; a scheme's default
+port equals no port) differs from the first request's gets the request policy
+without `auth`, without the `Authorization`, `Proxy-Authorization` and `Cookie`
+headers, and without the credential curl options in `tls`. A same-host
+`http`→`https` move counts as another origin, as in libcurl, which keeps
+credentials only for the same host and port. A hop back on the first origin
+carries them again, and a host the parser cannot read counts as another origin.
+The `http` retry of a URL given without a scheme keeps the `https` URL as its
+origin, so it carries none either: an attacker who resets the TLS connection
+must not get the credentials in cleartext. Credentials in the `proxy` field
+stay: every hop goes through the same proxy. A `Proxy-Authorization` header is
+dropped, because through an `https` tunnel libcurl sends custom headers to the
+origin server. Other custom headers (`X-Api-Key`, ...) travel to every hop. The
+`prepare` hook runs on every hop and is told `cross_origin`; what it adds is
+the caller's to drop. All three hop loops (`fetch_follow()`,
+`page_fetch_follow()`, the batch path) build the hop through
+`fetch_build_request()`, so they apply the rule identically (ADR-008 §0).
+
 ### 3. Configurable limits and hard caps
 
 All limits are configurable via arguments to `read_sitemap()`,
