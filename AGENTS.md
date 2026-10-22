@@ -33,6 +33,11 @@ Planning notes go in `_scratch/` (gitignored). `.fp/` is gitignored too, so the
 house `agent-workflow` skill, and fp status changes stay decoupled from git
 (the `fp` skill's `references/decoupling.md`).
 
+The `.feature` files in `tests/testthat/` are frozen: no new `.feature` file or
+scenario. New tests are plain testthat files in `tests/testthat/`. When a
+scenario gets in the way of a change, replace it with a plain test that checks
+the same outcome, then delete it.
+
 For the verify gate, hook setup and tracker snapshots, see docs/repo-hygiene.md.
 For the layer model and output contracts, see docs/architecture.md.
 For finding codes and the layer vocabulary, see docs/findings-contract.md.

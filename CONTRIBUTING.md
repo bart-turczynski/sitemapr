@@ -81,6 +81,8 @@ sitemapr's deltas:
   written for the state before robotstxtr is accepted. Once Step 1 is done,
   finalize them against `DESCRIPTION`, and update the check results to the
   final pre-submission runs (SITE-notumkrs).
-- **Step 14: deposit on Zenodo by hand, not through a GitHub Release.** No
-  GitHub Release and no Zenodo GitHub integration for sitemapr. Follow
-  [docs/zenodo-deposit.md](docs/zenodo-deposit.md).
+- **Step 14: the first release creates sitemapr's first Zenodo record.** No
+  sitemapr record exists yet (Zenodo search, 2026-10-22), so the GitHub
+  Release starts a new concept DOI. Before it, the owner checks that the
+  mirror is ON in Zenodo's GitHub settings. No record is linked to the
+  mirror's repository id: `zenodo.org/badge/latestdoi/1282558407` answers 404.

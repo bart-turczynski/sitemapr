@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- A sitemapindex whose only child <loc> is fetched (offline mock) and sniffed
-     as a feed. Supported dialects (RSS 2.0 / Atom) now parse into rows; the
-     cucumber step serves an UNSUPPORTED dialect (a <feed> in a non-Atom
-     namespace) so the child still yields UNSUPPORTED_FEED. Expansion only runs
-     for a URL source, so the step drives validate_sitemap() on the index URL,
-     not this local file. -->
+<!-- A sitemapindex whose only child <loc> is a feed. Supported dialects
+     (RSS 2.0 / Atom) parse into rows; an unsupported one (a <feed> in a
+     non-Atom namespace) yields UNSUPPORTED_FEED. No test reads this file now:
+     test-validate-sitemap.R covers both cases with an index built in memory
+     (vs_feed_index_mock()), since expansion only runs for a URL source. -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap><loc>https://example.com/feed.xml</loc></sitemap>
 </sitemapindex>
