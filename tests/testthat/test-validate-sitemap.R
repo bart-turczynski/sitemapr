@@ -162,6 +162,8 @@ test_that("a sitemapindex unsupported feed child yields UNSUPPORTED_FEED", {
   expect_identical(nrow(row), 1L)
   expect_identical(row$layer, "classification")
   expect_identical(row$subject_type, "index-child")
+  # An unsupported child never fails the whole run.
+  expect_false(row$severity == "fatal")
 })
 
 test_that("validation is deterministic for a fixture and mode", {

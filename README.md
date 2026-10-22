@@ -13,9 +13,10 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![Project Status:
 Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-<!-- No DOI yet. Each CRAN release is deposited on Zenodo by hand, with no
-     GitHub link (docs/zenodo-deposit.md). The DOI badge (slot 11 of seor's
-     design/fleet-standard.md) joins after the first deposit, once doi.org
+<!-- No DOI yet. Each CRAN release is archived on Zenodo through a GitHub
+     Release on the read-only mirror (step 14 of seor's
+     design/release-checklist.md). The DOI badge (slot 11 of seor's
+     design/fleet-standard.md) joins after the first archive, once doi.org
      resolves the concept DOI. It links that DOI directly, never through
      Zenodo's latestdoi badge. -->
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
