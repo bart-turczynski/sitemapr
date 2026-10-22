@@ -132,7 +132,9 @@ fetch_is_timeout <- function(cnd) {
 #' (scheme, host and port) differs from the first request's gets no `auth`, and
 #' none of the `Authorization`, `Proxy-Authorization` or `Cookie` headers or
 #' the credential curl options in `tls` (`userpwd`, `username`, `password`,
-#' `cookie`, `xoauth2_bearer`, the client-certificate and TLS-SRP options). A
+#' `cookie`, `xoauth2_bearer`, the client-certificate and TLS-SRP options, and
+#' the cookie and `.netrc` sources `cookielist`, `cookiefile`, `netrc` and
+#' `netrc_file`). A
 #' same-host move from `http` to `https`, or to another port, counts as another
 #' origin, and so does the `http` retry of a URL given without a scheme. A hop
 #' back on the first origin carries them again. Other custom headers, such as
@@ -674,7 +676,11 @@ credential_curl_options <- c(
   "sslkey_blob",
   "keypasswd",
   "tlsauth_username",
-  "tlsauth_password"
+  "tlsauth_password",
+  "cookielist",
+  "cookiefile",
+  "netrc",
+  "netrc_file"
 )
 
 # The policy a cross-origin hop gets: no `auth`, and no credential-bearing

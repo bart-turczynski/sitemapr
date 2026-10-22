@@ -87,7 +87,9 @@ BEFORE sitemapr asserts its own transport controls.
 (scheme, host and port) differs from the first request's gets no \code{auth}, and
 none of the \code{Authorization}, \code{Proxy-Authorization} or \code{Cookie} headers or
 the credential curl options in \code{tls} (\code{userpwd}, \code{username}, \code{password},
-\code{cookie}, \code{xoauth2_bearer}, the client-certificate and TLS-SRP options). A
+\code{cookie}, \code{xoauth2_bearer}, the client-certificate and TLS-SRP options, and
+the cookie and \code{.netrc} sources \code{cookielist}, \code{cookiefile}, \code{netrc} and
+\code{netrc_file}). A
 same-host move from \code{http} to \code{https}, or to another port, counts as another
 origin, and so does the \code{http} retry of a URL given without a scheme. A hop
 back on the first origin carries them again. Other custom headers, such as
