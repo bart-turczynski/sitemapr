@@ -264,3 +264,25 @@ run after midnight commits a one-line date change.
 
 The scripts and the snapshot live on `main`. If they are absent from the branch
 you are on, merge or rebase onto `main` rather than adding a second copy.
+
+## Keeping a commit without a tag
+
+Tags are public: r-universe lists every tag on the GitLab project as if it
+were a release, and the GitHub mirror carries them too. So `refs/tags/` holds
+release tags (`vX.Y.Z`) and nothing else. To keep a commit that no branch
+reaches, such as a pre-rebase state or a dropped stash, put it under
+`refs/archive/`:
+
+```bash
+git push origin <sha>:refs/archive/<date>/<name>
+```
+
+GitLab keeps the ref, and nothing that lists tags or releases shows it. An
+ordinary clone doesn't fetch it, so a clone that should have it, including the
+one `data-raw/backup.sh` runs from, adds the refspec once:
+
+```bash
+git config --add remote.origin.fetch '+refs/archive/*:refs/archive/*'
+```
+
+The three `prerebase-2026-07-31/*` anchors moved there in SITE-tbrzwoqw.
