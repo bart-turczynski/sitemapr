@@ -294,3 +294,28 @@ test_that("the inferred-scheme http fallback carries no credentials", {
   expect_length(cred_header_names(seen$reqs[[1]]), 3L)
   expect_identical(cred_header_names(seen$reqs[[2]]), character(0))
 })
+
+test_that("cookie and netrc sources in tls are dropped on a cross-origin hop", {
+  policy <- request_policy(
+    tls = list(
+      cookielist = "Set-Cookie: session=secret; Path=/",
+      COOKIEFILE = "cookies.txt",
+      netrc = 1L,
+      netrc_file = "netrc.txt",
+      ssl_verifypeer = 0L
+    )
+  )
+  req <- fetch_build_request(
+    "https://other.example/b.xml",
+    fetch_limits(),
+    default_user_agent(),
+    policy,
+    origin_url = "https://example.com/a.xml"
+  )
+  opts <- ascii_lower(names(req$options))
+  expect_length(
+    intersect(opts, c("cookielist", "cookiefile", "netrc", "netrc_file")),
+    0L
+  )
+  expect_identical(as.integer(req$options$ssl_verifypeer), 0L)
+})
