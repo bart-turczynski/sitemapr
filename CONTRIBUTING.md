@@ -84,5 +84,5 @@ sitemapr's deltas:
 - **Step 14: the first release creates sitemapr's first Zenodo record.** No
   sitemapr record exists yet (Zenodo search, 2026-10-22), so the GitHub
   Release starts a new concept DOI. Before it, the owner checks that the
-  mirror is ON in Zenodo's GitHub settings: the account's old link to it
-  lapsed, and `zenodo.org/badge/latestdoi/1282558407` answers 404.
+  mirror is ON in Zenodo's GitHub settings. No record is linked to the
+  mirror's repository id: `zenodo.org/badge/latestdoi/1282558407` answers 404.
