@@ -764,6 +764,11 @@ page_sink_new <- function() {
   # when the source declares none / carries no such column). Consumed by the
   # E.4 page-hreflang reconciliation; ignored by transport / canonical.
   sink$alt <- list()
+  # Parallel to loc: the entry URL of the source that advertised it, NA for a
+  # local file. Set per source by page_sink_set_origin(); page inspection
+  # sends credentials only to a page on one of these origins (SITE-ksiytozz).
+  sink$origin <- character(0)
+  sink$current_origin <- NA_character_
   # The per-source robots facts objects this call evaluated (E.3b). They ride
   # the PAGE sink rather than a sink of their own because the §5.4 synthesis is
   # the only consumer and it runs only when page inspection is on — so a
@@ -771,6 +776,15 @@ page_sink_new <- function() {
   # call site has to thread a second argument.
   sink$robots <- list()
   sink
+}
+
+# Name the entry URL whose locs the sink records next. A no-op when page
+# inspection is off (NULL sink).
+page_sink_set_origin <- function(sink, origin) {
+  if (!is.null(sink)) {
+    sink$current_origin <- origin
+  }
+  invisible(NULL)
 }
 
 # Record one source's evaluated robots facts into the sink. A no-op when page
@@ -818,6 +832,7 @@ page_sink_add <- function(sink, locs, base, alternates = NULL) {
   }
   sink$loc <- c(sink$loc, locs)
   sink$base <- c(sink$base, rep(base, length(locs)))
+  sink$origin <- c(sink$origin, rep(sink$current_origin, length(locs)))
   sink$alt <- c(sink$alt, alts)
   invisible(NULL)
 }
@@ -864,6 +879,10 @@ validate_sitemap_source <- function(
   page_sink = NULL
 ) {
   policy <- request_policy_pin(policy, source)
+  page_sink_set_origin(
+    page_sink,
+    if (validation_target(source)$is_local) NA_character_ else policy$origin_url
+  )
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
   # surface UNSUPPORTED_MALFORMED_GZIP rather than propagating the condition. A

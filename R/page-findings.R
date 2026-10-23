@@ -323,6 +323,7 @@ page_inspection_finalize <- function(
 ) {
   run <- page_inspection_run(
     locs = sink$loc,
+    origins = sink$origin,
     budget = budget,
     sample_size = sample_size,
     mode = page_mode,
