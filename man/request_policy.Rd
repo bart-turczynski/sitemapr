@@ -103,7 +103,9 @@ sitemap index, or a robots.txt \verb{Sitemap:} URL, on another origin than the
 URL you passed gets no credentials either, and neither does anything it
 leads to. The origin is the URL you passed, not where its redirects end. To
 send credentials to another host you trust, such as \code{www} next to the apex,
-add them in \code{prepare}.
+add them in \code{prepare}. Pages fetched for page inspection
+(\code{inspect_pages = TRUE}) are not covered yet: each keeps the credentials
+unless it is redirected to another origin.
 
 \strong{What sitemapr always owns (callers cannot override).} Redirect control
 (\code{followlocation = 0}, \code{maxredirs = 0}) and the non-2xx error policy are

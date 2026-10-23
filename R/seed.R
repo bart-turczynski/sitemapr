@@ -240,6 +240,7 @@ sitemap_tree_from_bytes <- function(
   bytes <- seed_bytes_input(bytes)
   source_url <- seed_source_url_input(source_url)
   index_limits <- resolve_index_limits(index_limits)
+  policy <- request_policy_pin(policy, source_url)
 
   gzip <- identical(sniff_format(bytes), "gzip")
   parsed <- seed_parse_bytes(bytes, source_url)

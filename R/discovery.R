@@ -342,6 +342,8 @@ discover_candidates <- function(
   use_robots = TRUE,
   throttle_state = NULL
 ) {
+  # Entry points pin first; this is the backstop for one that forgets.
+  policy <- request_policy_pin(policy, create_source_records(root, as = "site"))
   # One per-host throttle state shared across robots + every candidate fetch of
   # this discovery pass. A NULL policy throttle yields a NULL state (no pacing).
   if (is.null(throttle_state)) {

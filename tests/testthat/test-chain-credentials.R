@@ -182,6 +182,46 @@ test_that("a cross-origin child is credential-free in audits and trees", {
   )
 })
 
+test_that("a cross-origin child is credential-free in audits and reports", {
+  seen <- chain_mock(chain_index_routes())
+  audit_sitemap("https://example.com/index.xml", policy = chain_policy())
+  expect_setequal(
+    chain_cred_names(seen$reqs[["https://example.com/a.xml"]]),
+    c("authorization", "cookie")
+  )
+  expect_identical(
+    chain_cred_names(seen$reqs[["https://other.example/b.xml"]]),
+    character(0)
+  )
+
+  seen <- chain_mock(chain_index_routes())
+  report_sitemap("https://example.com/index.xml", policy = chain_policy())
+  expect_identical(
+    chain_cred_names(seen$reqs[["https://other.example/b.xml"]]),
+    character(0)
+  )
+})
+
+test_that("index bytes pin the source_url's origin", {
+  routes <- chain_index_routes()
+  index_bytes <- routes[["https://example.com/index.xml"]]$body
+  seen <- chain_mock(routes)
+  sitemap_tree_from_bytes(
+    index_bytes,
+    source_url = "https://example.com/index.xml",
+    policy = chain_policy()
+  )
+
+  expect_setequal(
+    chain_cred_names(seen$reqs[["https://example.com/a.xml"]]),
+    c("authorization", "cookie")
+  )
+  expect_identical(
+    chain_cred_names(seen$reqs[["https://other.example/b.xml"]]),
+    character(0)
+  )
+})
+
 # ---- robots.txt Sitemap: lines -----------------------------------------------
 
 chain_robots_routes <- function() {
