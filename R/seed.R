@@ -112,7 +112,7 @@ seed_tree_from_url <- function(
   user_agent,
   net_limits,
   index_limits,
-  policy
+  policy = request_policy()
 ) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(
@@ -123,6 +123,7 @@ seed_tree_from_url <- function(
 
   rec_row <- create_source_records(x, as = "sitemap")
   url <- rec_row$normalized_url[[1L]]
+  policy <- request_policy_pin(policy, rec_row)
 
   fetched <- seed_fetch(rec_row, user_agent, net_limits, policy)
   if (identical(fetched$status, "rejected")) {

@@ -8,7 +8,9 @@
   fail closed with `malformed-address` (SITE-zgufvkks); amended 2026-10-21 —
   §1 blocks further cloud-metadata endpoints (SITE-lezsbcbg), and the guard
   fails closed on zone IDs, on hosts `rurl` cannot parse, and in the WHATWG
-  second look (SITE-jtluuybg, SITE-trviouoh))
+  second look (SITE-jtluuybg, SITE-trviouoh); amended 2026-10-23 — §2
+  credentials stay on the origin of the URL the caller passed, across the
+  fetch chains one call starts (SITE-ylpbrfyo))
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
@@ -215,6 +217,20 @@ origin server. Other custom headers (`X-Api-Key`, ...) travel to every hop. The
 the caller's to drop. All three hop loops (`fetch_follow()`,
 `page_fetch_follow()`, the batch path) build the hop through
 `fetch_build_request()`, so they apply the rule identically (ADR-008 §0).
+
+**The rule spans every chain a call starts** (amended 2026-10-23,
+SITE-ylpbrfyo). An index `<loc>` or a robots.txt `Sitemap:` line on another
+host starts a new chain with no redirect involved, and its first request would
+otherwise count as its own origin. So each read, audit, tree or discovery
+source pins the request policy to the URL the caller passed
+(`request_policy_pin()`; for a discovery root, the site's normalized origin),
+and a hop carries credentials only when it shares an origin with both that URL
+and its own chain's first request. The pin is the entry URL, not the URL a
+redirect lands on, and a nested step never moves it: a cross-origin child of a
+discovered cross-origin index stays credential-free. Exact origin only: `www`
+and the apex, or a CDN host, are other origins; a caller who trusts one adds
+its credentials in `prepare`, which sees `ctx$url` and `ctx$cross_origin`.
+Inspected pages (ADR-010) are not covered yet (SITE-ksiytozz).
 
 ### 3. Configurable limits and hard caps
 

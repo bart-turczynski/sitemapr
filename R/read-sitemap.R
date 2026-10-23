@@ -121,6 +121,7 @@ read_sitemap_local <- function(path) {
 # the root's own fetch record is prepended to the engine's per-child source
 # records.
 read_sitemap_url <- function(source, user_agent, limits, idx_limits, policy) {
+  policy <- request_policy_pin(policy, source)
   rec <- fetch_source(
     source,
     user_agent = user_agent,
