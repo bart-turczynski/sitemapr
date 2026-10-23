@@ -10,7 +10,8 @@
   fails closed on zone IDs, on hosts `rurl` cannot parse, and in the WHATWG
   second look (SITE-jtluuybg, SITE-trviouoh); amended 2026-10-23 — §2
   credentials stay on the origin of the URL the caller passed, across the
-  fetch chains one call starts (SITE-ylpbrfyo))
+  fetch chains one call starts (SITE-ylpbrfyo), inspected pages included
+  (SITE-ksiytozz))
 - Date: 2026-06-28
 - Deciders: Bart Turczyński
 - Related: `docs/PRD.md` (§2 scope — fetch & safety, §9 open decisions);
@@ -230,7 +231,12 @@ redirect lands on, and a nested step never moves it: a cross-origin child of a
 discovered cross-origin index stays credential-free. Exact origin only: `www`
 and the apex, or a CDN host, are other origins; a caller who trusts one adds
 its credentials in `prepare`, which sees `ctx$url` and `ctx$cross_origin`.
-Inspected pages (ADR-010) are not covered yet (SITE-ksiytozz).
+Inspected pages (ADR-010) follow the same rule (SITE-ksiytozz): the page sink
+records the entry URL of the source that advertised each loc, and a page is
+fetched pinned to the advertising entry URL that shares its origin, else to
+the first, so a page carries credentials only when some advertising source's
+entry is on its origin. A page a local file advertised keeps them: the caller
+chose the file's contents, and no remote party picked the destination.
 
 ### 3. Configurable limits and hard caps
 

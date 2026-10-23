@@ -66,7 +66,9 @@ page_inspection_budget <- function(
 # fetched). Returns the per-key entries in first-seen order -- each entry keeps
 # every raw advertised loc that mapped to it, so E.1f can still anchor a finding
 # to each advertising subject_ref -- plus the pre-dedup eligible count.
-page_inspection_dedup <- function(locs) {
+# `origins`, parallel to `locs` when given, collects each entry's advertising
+# entry URLs (see page_entry_policy()).
+page_inspection_dedup <- function(locs, origins = NULL) {
   locs <- as.character(locs)
   parsed <- parse_url_adapter(locs)
   scheme <- ascii_lower(as.character(parsed$scheme))
@@ -84,6 +86,9 @@ page_inspection_dedup <- function(locs) {
       entries[[key]] <- list(fetch_url = key, advertised = locs[[i]])
     } else {
       entries[[key]]$advertised <- c(entries[[key]]$advertised, locs[[i]])
+    }
+    if (!is.null(origins)) {
+      entries[[key]]$origins <- unique(c(entries[[key]]$origins, origins[[i]]))
     }
   }
   list(entries = entries, eligible = sum(eligible))
@@ -177,6 +182,20 @@ page_inspection_fetch_one <- function(
   )
 }
 
+# The policy for one page: pinned to the advertising source's entry URL that
+# shares the page's origin, else to the first, so a page no source's origin
+# vouches for carries no credentials (ADR-003 §2). A page a local file
+# advertised (origin NA), or a run that recorded no origins, keeps `policy`.
+page_entry_policy <- function(policy, entry) {
+  origins <- entry$origins
+  if (is.null(origins) || anyNA(origins)) {
+    return(policy)
+  }
+  same <- vapply(origins, fetch_same_origin, logical(1), url = entry$fetch_url)
+  policy$origin_url <- if (any(same)) origins[same][[1L]] else origins[[1L]]
+  policy
+}
+
 # Fold one artifact's contribution into the running budget/coverage tallies.
 # `completed` counts a usable_body or partial outcome (a usable head region);
 # every other outcome is a `failed` fetch; `partial` is also counted on its own.
@@ -237,7 +256,7 @@ page_inspection_fetch_loop <- function(
       limits,
       user_agent,
       ssrf_guard,
-      policy,
+      page_entry_policy(policy, entry),
       throttle_state,
       fetch
     )
@@ -259,6 +278,9 @@ page_inspection_fetch_loop <- function(
 # coverage metadata (§6.2) and its transport findings.
 #
 # @param locs Character vector of advertised page URLs.
+# @param origins Optional character vector parallel to `locs`: the entry URL
+#   of the source that advertised each, NA for a local file. NULL keeps
+#   `policy` for every page.
 # @param budget A page_inspection_budget().
 # @param sample_size Default sample N (caller-overridable); ignored in `full`.
 # @param mode "sample" (default N) or "full" (all deduped locs, subject to the
@@ -277,6 +299,7 @@ page_inspection_fetch_loop <- function(
 # @param fetch The acquisition primitive; defaults to page_fetch (injectable).
 page_inspection_run <- function(
   locs,
+  origins = NULL,
   budget = page_inspection_budget(),
   sample_size = 50L,
   mode = c("sample", "full"),
@@ -289,7 +312,7 @@ page_inspection_run <- function(
   fetch = page_fetch
 ) {
   mode <- match.arg(mode)
-  dedup <- page_inspection_dedup(locs)
+  dedup <- page_inspection_dedup(locs, origins)
   entries <- dedup$entries
   selected <- page_inspection_select(names(entries), sample_size, mode)
 

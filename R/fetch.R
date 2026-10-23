@@ -147,9 +147,10 @@ fetch_is_timeout <- function(cnd) {
 #' URL you passed gets no credentials either, and neither does anything it
 #' leads to. The origin is the URL you passed, not where its redirects end. To
 #' send credentials to another host you trust, such as `www` next to the apex,
-#' add them in `prepare`. Pages fetched for page inspection
-#' (`inspect_pages = TRUE`) are not covered yet: each keeps the credentials
-#' unless it is redirected to another origin.
+#' add them in `prepare`. A page fetched for page inspection
+#' (`inspect_pages = TRUE`) carries them only when it shares an origin with
+#' the URL you passed whose sitemap, or one of its index children, lists it. A
+#' local sitemap file vouches for every page it lists.
 #'
 #' **What sitemapr always owns (callers cannot override).** Redirect control
 #' (`followlocation = 0`, `maxredirs = 0`) and the non-2xx error policy are
