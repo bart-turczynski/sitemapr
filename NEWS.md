@@ -83,6 +83,7 @@ First development release: a deterministic toolkit for reading and validating XM
 * `request_policy()`, accepted as `policy` by every reading, validation, and discovery entry point, sets headers, auth, proxy, TLS, retry, and throttling.
 * A request policy cannot override the per-hop SSRF guard, redirect control, or non-2xx error policy.
 * A redirect to another origin, and the `http` retry of a URL given without a scheme, carry no `auth`, `Authorization`, `Proxy-Authorization` or `Cookie` header, or credential `tls` option from the request policy (SITE-vquagswr).
+* A sitemap index child or a robots.txt `Sitemap:` URL on another origin than the URL passed is fetched without those credentials too.
 
 ## Requirements
 

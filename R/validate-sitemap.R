@@ -863,6 +863,7 @@ validate_sitemap_source <- function(
   ruleset = NULL,
   page_sink = NULL
 ) {
+  policy <- request_policy_pin(policy, source)
   # A corrupt/truncated gzip stream (the `.xml.gz`/`.txt.gz` case, or a
   # `.tar.gz` with a bad outer gzip) makes source resolution raise; catch it and
   # surface UNSUPPORTED_MALFORMED_GZIP rather than propagating the condition. A

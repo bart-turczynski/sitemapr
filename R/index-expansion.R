@@ -885,6 +885,8 @@ expand_index <- function(
   throttle_state = NULL,
   max_active = policy_max_active(policy)
 ) {
+  # Entry points pin first; this is the backstop for one that forgets.
+  policy <- request_policy_pin(policy, root_url)
   acc <- new.env(parent = emptyenv())
   acc$rows <- list()
   acc$sources <- list()

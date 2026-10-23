@@ -38,6 +38,7 @@ audit_resolve_source <- function(
   policy,
   strm = NULL
 ) {
+  policy <- request_policy_pin(policy, source)
   is_local <- isTRUE(source$is_local_file[[1L]])
   target <- source$normalized_url[[1L]]
 

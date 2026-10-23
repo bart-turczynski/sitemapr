@@ -148,6 +148,9 @@ sitemap_tree_from_root <- function(
   if (is.null(throttle_state)) {
     throttle_state <- throttle_state_new(policy$throttle)
   }
+  # Credentials stay on the site's origin, through discovery and every
+  # expansion of what it finds.
+  policy <- request_policy_pin(policy, create_source_records(x, as = "site"))
   disc <- discover_candidates(
     x,
     limits = limits,

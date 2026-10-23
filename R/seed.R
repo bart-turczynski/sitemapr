@@ -112,7 +112,7 @@ seed_tree_from_url <- function(
   user_agent,
   net_limits,
   index_limits,
-  policy
+  policy = request_policy()
 ) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
     rlang::abort(
@@ -123,6 +123,7 @@ seed_tree_from_url <- function(
 
   rec_row <- create_source_records(x, as = "sitemap")
   url <- rec_row$normalized_url[[1L]]
+  policy <- request_policy_pin(policy, rec_row)
 
   fetched <- seed_fetch(rec_row, user_agent, net_limits, policy)
   if (identical(fetched$status, "rejected")) {
@@ -239,6 +240,7 @@ sitemap_tree_from_bytes <- function(
   bytes <- seed_bytes_input(bytes)
   source_url <- seed_source_url_input(source_url)
   index_limits <- resolve_index_limits(index_limits)
+  policy <- request_policy_pin(policy, source_url)
 
   gzip <- identical(sniff_format(bytes), "gzip")
   parsed <- seed_parse_bytes(bytes, source_url)

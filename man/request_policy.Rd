@@ -18,7 +18,8 @@ request_policy(
 \arguments{
 \item{prepare}{Optional \verb{function(req, ctx)} receiving the built httr2
 request plus a hop-context list (the resolved hop \code{url}, and
-\code{cross_origin}, \code{TRUE} when the hop left the first request's origin) and
+\code{cross_origin}, \code{TRUE} when the hop is on another origin than the URL the
+call was given or than its chain's first request) and
 returning the possibly-modified request. Applied last of the caller-facing
 steps, so it composes on top of the typed fields.}
 
@@ -96,6 +97,15 @@ back on the first origin carries them again. Other custom headers, such as
 \code{X-Api-Key}, travel to every hop; pass proxy credentials through \code{proxy},
 which every hop keeps. The \code{prepare} hook still runs on every hop: it is told
 whether the hop is cross-origin and must drop any credential it adds itself.
+
+The same holds across every fetch chain one call starts: a child of a
+sitemap index, or a robots.txt \verb{Sitemap:} URL, on another origin than the
+URL you passed gets no credentials either, and neither does anything it
+leads to. The origin is the URL you passed, not where its redirects end. To
+send credentials to another host you trust, such as \code{www} next to the apex,
+add them in \code{prepare}. Pages fetched for page inspection
+(\code{inspect_pages = TRUE}) are not covered yet: each keeps the credentials
+unless it is redirected to another origin.
 
 \strong{What sitemapr always owns (callers cannot override).} Redirect control
 (\code{followlocation = 0}, \code{maxredirs = 0}) and the non-2xx error policy are

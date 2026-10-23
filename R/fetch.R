@@ -142,6 +142,15 @@ fetch_is_timeout <- function(cnd) {
 #' which every hop keeps. The `prepare` hook still runs on every hop: it is told
 #' whether the hop is cross-origin and must drop any credential it adds itself.
 #'
+#' The same holds across every fetch chain one call starts: a child of a
+#' sitemap index, or a robots.txt `Sitemap:` URL, on another origin than the
+#' URL you passed gets no credentials either, and neither does anything it
+#' leads to. The origin is the URL you passed, not where its redirects end. To
+#' send credentials to another host you trust, such as `www` next to the apex,
+#' add them in `prepare`. Pages fetched for page inspection
+#' (`inspect_pages = TRUE`) are not covered yet: each keeps the credentials
+#' unless it is redirected to another origin.
+#'
 #' **What sitemapr always owns (callers cannot override).** Redirect control
 #' (`followlocation = 0`, `maxredirs = 0`) and the non-2xx error policy are
 #' re-applied *after* all caller customization, and the
@@ -152,7 +161,8 @@ fetch_is_timeout <- function(cnd) {
 #'
 #' @param prepare Optional `function(req, ctx)` receiving the built httr2
 #'   request plus a hop-context list (the resolved hop `url`, and
-#'   `cross_origin`, `TRUE` when the hop left the first request's origin) and
+#'   `cross_origin`, `TRUE` when the hop is on another origin than the URL the
+#'   call was given or than its chain's first request) and
 #'   returning the possibly-modified request. Applied last of the caller-facing
 #'   steps, so it composes on top of the typed fields.
 #' @param headers Optional named list or named character vector of HTTP headers
@@ -697,6 +707,17 @@ request_policy_cross_origin <- function(policy) {
   policy
 }
 
+# Pin `policy` to the origin of the URL the caller passed, so every chain the
+# call starts (an index child, a robots.txt `Sitemap:` line) carries
+# credentials on that origin only. A policy already pinned keeps its origin, so
+# a nested step never moves it.
+request_policy_pin <- function(policy, source) {
+  if (is.null(policy$origin_url)) {
+    policy$origin_url <- fetch_source_input(source, FALSE)$url
+  }
+  policy
+}
+
 # `x` without its elements named (case-insensitively) in `drop`; NULL when
 # nothing is left, so an emptied field stays the no-op NULL.
 drop_named <- function(x, drop) {
@@ -819,8 +840,10 @@ fetch_perform_one <- function(
 # definition -- a request that carried different transport controls depending
 # on which scheduler dispatched it would break the ADR-008 §0 invariant.
 #
-# `origin_url` is the first request of this redirect chain. A hop on another
-# origin gets the policy without its credentials, and the prepare hook is told.
+# `origin_url` is the first request of this redirect chain, and
+# `policy$origin_url` the URL the call was given (`request_policy_pin()`). A
+# hop on another origin than either gets the policy without its credentials,
+# and the prepare hook is told.
 fetch_build_request <- function(
   url,
   limits,
@@ -828,7 +851,9 @@ fetch_build_request <- function(
   policy,
   origin_url = url
 ) {
-  cross_origin <- !fetch_same_origin(url, origin_url)
+  pinned <- policy$origin_url
+  cross_origin <- !fetch_same_origin(url, origin_url) ||
+    (!is.null(pinned) && !fetch_same_origin(url, pinned))
   if (cross_origin) {
     policy <- request_policy_cross_origin(policy)
   }
