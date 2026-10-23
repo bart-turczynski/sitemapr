@@ -128,6 +128,57 @@ test_that("a page any advertising source shares an origin with keeps them", {
   expect_length(page_cred_names(seen$reqs[["https://other.example/q"]]), 2L)
 })
 
+test_that("pages from a cross-origin index child follow the entry origin", {
+  index <- paste0(
+    "<?xml version=\"1.0\"?>",
+    "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    "<sitemap><loc>https://other.example/c.xml</loc></sitemap>",
+    "</sitemapindex>"
+  )
+  seen <- page_cred_mock(list(
+    "https://example.com/index.xml" = httr2::response(
+      status_code = 200L,
+      url = "https://example.com/index.xml",
+      headers = list("Content-Type" = "application/xml"),
+      body = charToRaw(index)
+    ),
+    "https://other.example/c.xml" = page_cred_urlset(
+      "https://other.example/c.xml",
+      c("https://example.com/p", "https://other.example/q")
+    )
+  ))
+  page_cred_validate("https://example.com/index.xml")
+
+  expect_length(page_cred_names(seen$reqs[["https://example.com/p"]]), 2L)
+  expect_identical(
+    page_cred_names(seen$reqs[["https://other.example/q"]]),
+    character(0)
+  )
+})
+
+test_that("the prepare hook is told a page is cross-origin", {
+  seen_ctx <- new.env(parent = emptyenv())
+  policy <- request_policy(prepare = function(req, ctx) {
+    seen_ctx[[ctx$url]] <- ctx$cross_origin
+    req
+  })
+  page_cred_mock(list(
+    "https://example.com/s.xml" = page_cred_urlset(
+      "https://example.com/s.xml",
+      c("https://example.com/p", "https://other.example/q")
+    )
+  ))
+  suppressWarnings(validate_sitemap(
+    "https://example.com/s.xml",
+    policy = policy,
+    inspect_pages = TRUE,
+    page_mode = "full"
+  ))
+
+  expect_false(seen_ctx[["https://example.com/p"]])
+  expect_true(seen_ctx[["https://other.example/q"]])
+})
+
 test_that("pages a local sitemap advertises keep the credentials", {
   path <- withr::local_tempfile(fileext = ".xml")
   writeBin(page_cred_urlset("file", "https://example.com/p")$body, path)

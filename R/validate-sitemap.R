@@ -767,8 +767,10 @@ page_sink_new <- function() {
   # Parallel to loc: the entry URL of the source that advertised it, NA for a
   # local file. Set per source by page_sink_set_origin(); page inspection
   # sends credentials only to a page on one of these origins (SITE-ksiytozz).
+  # Until a source sets it, the origin is "", which matches no page: a loc
+  # recorded without one fails closed.
   sink$origin <- character(0)
-  sink$current_origin <- NA_character_
+  sink$current_origin <- ""
   # The per-source robots facts objects this call evaluated (E.3b). They ride
   # the PAGE sink rather than a sink of their own because the §5.4 synthesis is
   # the only consumer and it runs only when page inspection is on — so a
