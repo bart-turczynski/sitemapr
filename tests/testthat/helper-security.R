@@ -65,8 +65,8 @@ oss_index_allowlist <- list(
       "followlocation = 0 and maxredirs = 0 AFTER every policy field and",
       "the prepare hook, so no tls option can re-enable it, and redirects",
       "are followed manually, one fresh request per hop. Separate from this",
-      "CVE and by design: that manual loop re-applies the policy's auth on",
-      "every hop, cross-origin included. Re-check fetch_build_request()",
+      "CVE: that manual loop drops the policy's credentials on a hop to",
+      "another origin (SITE-vquagswr). Re-check fetch_build_request()",
       "before renewing this row."
     )
   ),
@@ -104,6 +104,41 @@ oss_index_allowlist <- list(
       "ssh_keyfunction as an unsupported option type, so neither a",
       "request_policy() tls list nor a prepare hook can set it, even with",
       "ssrf_guard = FALSE. Re-check that rejection before renewing."
+    )
+  ),
+  list(
+    id = "CVE-2026-86414",
+    package = "curl",
+    version_seen = "8.1.0",
+    review = as.Date("2026-12-01"),
+    reason = paste(
+      "CWE-201: an HTTP proxy answering a CONNECT with 401 instead of 407",
+      "makes libcurl send the origin's credentials (Basic password or a",
+      "Negotiate ticket) to the proxy (CVSS 6.5). Names a libcurl range",
+      "covering CRAN's current curl 8.1.0, so no available version clears",
+      "it. sitemapr's own auth does not reach it: request_auth_basic() and",
+      "request_auth_bearer() go through httr2, which sends a plain",
+      "Authorization header, not libcurl's CURLOPT_USERPWD, and libcurl",
+      "keeps custom headers off the CONNECT request. Reachable only when a",
+      "caller puts userpwd/username/password in `tls` AND routes through a",
+      "proxy that is itself hostile. Re-check that httr2 still applies",
+      "basic auth as a header before renewing this row."
+    )
+  ),
+  list(
+    id = "CVE-2026-87864",
+    package = "curl",
+    version_seen = "8.1.0",
+    review = as.Date("2026-12-01"),
+    reason = paste(
+      "CWE-130: with CURLOPT_CRLF set, curl advertises the raw byte count",
+      "in an IMAP APPEND literal but sends the expanded data, so the",
+      "overflow runs as pipelined IMAP commands (CVSS 3.7). Names a libcurl",
+      "range covering CRAN's current curl 8.1.0, so no available version",
+      "clears it. Unreachable through sitemapr: it never uploads, and the",
+      "per-hop SSRF guard (ssrf_check(), R/ssrf.R) admits only http and",
+      "https, so no imap:// request is made. Re-check that the guard still",
+      "rejects every non-http(s) scheme before renewing this row."
     )
   )
 )
