@@ -263,7 +263,7 @@ test_that("a robots.txt Sitemap: line on another origin gets no credentials", {
   )
 })
 
-test_that("a discovered cross-origin index keeps its children credential-free", {
+test_that("a discovered cross-origin index keeps children credential-free", {
   routes <- chain_robots_routes()
   routes[["https://other.example/b.xml"]] <- chain_index(
     "https://other.example/b.xml",
