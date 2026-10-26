@@ -32,10 +32,8 @@ WHAT IT CHECKS.
 
 WHAT IT DOES NOT CHECK, ON PURPOSE.
 
-* `codemeta.json` is out of scope: it is generated rather than authored, so a
-  drift gate over it would assert facts about a generator's output.
-  `scripts/check-bugreports.py` holds its `issueTracker` equal to
-  `DESCRIPTION`'s `BugReports:` (seor's ADR 0011).
+* `codemeta.json` is out of scope here. `scripts/check-bugreports.py` holds
+  its `issueTracker` equal to `BugReports:` (seor's ADR 0011).
 * Nothing here touches the network. Whether a declared URL resolves is a fact
   about the rest of the world; `R CMD check --as-cran` already fetches declared
   URLs, and wiring a network call into a pre-push gate makes every push fail on

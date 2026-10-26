@@ -50,9 +50,7 @@ in `DESCRIPTION` under `Config/roxygen2/version`; install that exact version so
 Rscript -e 'pak::pak("roxygen2@8.0.0")'
 ```
 
-The pre-push verify gate's `docs` stage enforces this. It exports the commit
-being pushed with `git archive` and runs `scripts/check-docs-drift.R` (seor's
-copy, vendored byte for byte; change it in seor) on the export. It fails if the
+The pre-push verify gate's `docs` stage enforces this. It fails if the
 installed roxygen2 differs from the pin, or if regenerating the docs changes
 `man/`, `NAMESPACE` or `DESCRIPTION`. It judges the commit, not your working
 tree, so commit the output of `devtools::document()` before you push.

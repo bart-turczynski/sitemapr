@@ -99,7 +99,9 @@ of them is done yet.
    top `NEWS.md` heading (`# sitemapr 0.0.0.9000`) renamed to match. This
    clears the large-components item from the note.
 4. **Pre-submission checks rerun** on the final tree, and the check results at
-   the top of this file updated to what they report.
+   the top of this file updated to what they report, with the BugReports
+   item's paraphrase replaced by the rerun's verbatim NOTE text (the runs
+   above predate the `/-/work_items` change).
 
 ---
 

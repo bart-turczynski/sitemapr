@@ -85,6 +85,10 @@ merely untested, and `--as-cran` never cross-checks the two. It reads the
 rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
 offline, and enough to catch the class that shipped once already.
 
+The `docs` stage exports the commit being pushed with `git archive` and runs
+`scripts/check-docs-drift.R` (seor's copy, vendored byte for byte; change it in
+seor) on the export.
+
 `linewidth` (`tools/check-line-width.R`) compares `air.toml`'s `line-width`
 against the width `.lintr` passes to `line_length_linter()`. Both files claim
 in comments to mirror the other, and nothing enforced it: lintr never reads
