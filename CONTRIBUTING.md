@@ -47,7 +47,7 @@ in `DESCRIPTION` under `Config/roxygen2/version`; install that exact version so
 `devtools::document()` is reproducible and contributors don't get spurious diffs:
 
 ```sh
-Rscript -e 'pak::pak("roxygen2@8.0.0")'
+Rscript -e 'pak::pak("roxygen2@8.1.1")'
 ```
 
 The pre-push verify gate's `docs` stage enforces this. It fails if the
