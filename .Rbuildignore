@@ -47,6 +47,9 @@
 ^tmp$
 ^data-raw$
 ^docs$
+# Maintainer notes moved out of CONTRIBUTING.md (seor design/fleet-standard.md,
+# "Files every package carries"); not package content.
+^design$
 ^CLAUDE\.md$
 ^AGENTS\.md$
 ^CONTRIBUTING\.md$
