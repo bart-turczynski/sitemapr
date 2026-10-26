@@ -14,7 +14,7 @@ License: MIT + file LICENSE
 URL: https://bart-turczynski.gitlab.io/sitemapr/,
     https://gitlab.com/bart-turczynski/sitemapr,
     https://bart-turczynski.r-universe.dev/sitemapr
-BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/issues
+BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/work_items
 Imports:
     htmltools,
     httr2 (>= 1.1.1),

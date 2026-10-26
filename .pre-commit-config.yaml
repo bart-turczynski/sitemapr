@@ -78,13 +78,13 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
-      # DESCRIPTION's BugReports: keeps the CRAN-incoming-safe /-/issues form
-      # (CRAN string-tests that one field; pslr 1.2.1's first upload was
-      # archived for /-/work_items), while every human-facing file points at
-      # /-/work_items, which does not 404 for a signed-out visitor. Offline,
-      # stdlib-only and instant, like check-citation above (SEOR-ocbtrrnl).
+      # DESCRIPTION's BugReports:, codemeta.json and every tracker link
+      # (.bestpractices.json, CONTRIBUTING.md, SECURITY.md) name /-/work_items,
+      # and no human-facing file may carry a /-/issues link (seor's ADR 0011:
+      # https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md).
+      # Offline, stdlib-only and instant, like check-citation above.
       - id: check-bugreports
-        name: BugReports split (DESCRIPTION vs human-facing files)
+        name: BugReports and tracker links name /-/work_items
         entry: python3 scripts/check-bugreports.py
         language: system
         pass_filenames: false
