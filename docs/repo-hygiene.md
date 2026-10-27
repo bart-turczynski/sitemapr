@@ -85,6 +85,10 @@ merely untested, and `--as-cran` never cross-checks the two. It reads the
 rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
 offline, and enough to catch the class that shipped once already.
 
+The `docs` stage exports the commit being pushed with `git archive` and runs
+`scripts/check-docs-drift.R` (seor's copy, vendored byte for byte; change it in
+seor) on the export.
+
 `linewidth` (`tools/check-line-width.R`) compares `air.toml`'s `line-width`
 against the width `.lintr` passes to `line_length_linter()`. Both files claim
 in comments to mirror the other, and nothing enforced it: lintr never reads
@@ -122,11 +126,10 @@ before this stage a dead link passed the gate and surfaced at CRAN incoming
 (SITE-dpmutjii). A URL that answers HTTP 4xx or 5xx fails the stage. A URL that
 could not be reached at all (DNS failure, refused connection, timeout: no HTTP
 status) is printed as a warning and the stage passes, because a network blip
-must not reject a push (the lesson of SITE-xolykhjm in `check`). Exactly one URL
-is exempt: `DESCRIPTION`'s `BugReports:` in its `/-/issues` form, which 404s for
-a signed-out client since GitLab moved issues to `/-/work_items` but is the only
-form CRAN's incoming check accepts (SEOR-ocbtrrnl); the stage prints it as
-exempted. It fails rather than passes when it finds no URLs at all, and it
+must not reject a push (the lesson of SITE-xolykhjm in `check`). Nothing is
+exempt: `DESCRIPTION`'s `BugReports:` names `/-/work_items`, which answers 200
+([seor's ADR 0011](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md)).
+It fails rather than passes when it finds no URLs at all, and it
 prints how many it checked, so a lookup that read nothing cannot report clean.
 Its classifier runs an offline self-test first on every run;
 `Rscript tools/verify.R --self-test` runs that alone.

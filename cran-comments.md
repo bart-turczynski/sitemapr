@@ -49,29 +49,17 @@ It covers five items:
   away before submission.
 * **`Suggests` not in mainstream repositories: `robotstxtr`.** Same cause —
   `robotstxtr` is an optional (Suggests) dependency not yet on CRAN.
-* **`BugReports:` reported as a 404.**
-
-      Found the following (possibly) invalid URLs:
-        URL: https://gitlab.com/bart-turczynski/sitemapr/-/issues
-          From: DESCRIPTION
-          Status: 404
-
-  This is the address the incoming check itself asks for. GitLab has migrated
-  issues to work items and answers `/-/issues` with 404 to any signed-out,
-  non-browser client, on every project on the site: GitLab's own tracker,
-  `https://gitlab.com/gitlab-org/gitlab/-/issues`, answers 404 identically. A
-  browser is redirected (302) to `/-/work_items`, so the link works for a
-  reader.
-
-  No gitlab.com address clears both checks.
-  `tools:::.check_package_CRAN_incoming()` accepts a gitlab.com `BugReports:`
-  only when its path ends in `/-/issues`, and every such path, with or without
-  a query string, is the 404 above. A sibling package's first upload declared
-  `/-/work_items`, which returns 200, and was archived at the pretest for that
-  reason; it was accepted on resubmission with `/-/issues`. The field here
-  follows the check's suggestion, as the dependency `rurl` 3.0.1 does on CRAN.
-  The `NEWS.md` bullet gives the address as code rather than as a link, so the
-  404 is reported once, from `DESCRIPTION` only.
+* **`BugReports:` "which should likely be" an `/issues` address.**
+  `BugReports:` is `https://gitlab.com/bart-turczynski/sitemapr/-/work_items`.
+  The incoming check suggests an `/issues` path instead ("which should likely
+  be ..."; R 4.6.1 proposes `.../-/work_items/issues`). On gitlab.com,
+  `/-/issues` answers 404 to a non-browser client, `tools::check_url_db()`
+  included, while `/-/work_items` answers 200. On 2026-10-23 Uwe Ligges called
+  this NOTE a bug in the check for GitLab and invited the `/-/work_items` form
+  on the pslr 1.2.2 submission, which CRAN then published. Quote the local
+  check's wording of the NOTE here when submitting, and keep this item in the
+  submission comments
+  ([seor ADR 0011](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md)).
 
 The `Remotes` and `Suggests` items above, and the Dependencies section below,
 describe `robotstxtr` while it waits in CRAN incoming. They are the part of
@@ -111,7 +99,9 @@ of them is done yet.
    top `NEWS.md` heading (`# sitemapr 0.0.0.9000`) renamed to match. This
    clears the large-components item from the note.
 4. **Pre-submission checks rerun** on the final tree, and the check results at
-   the top of this file updated to what they report.
+   the top of this file updated to what they report, with the BugReports
+   item's paraphrase replaced by the rerun's verbatim NOTE text (the runs
+   above predate the `/-/work_items` change).
 
 ---
 

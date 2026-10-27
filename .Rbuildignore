@@ -47,6 +47,9 @@
 ^tmp$
 ^data-raw$
 ^docs$
+# Maintainer notes moved out of CONTRIBUTING.md under the fleet standard
+# (seor design/fleet-standard.md); not package content.
+^design$
 ^CLAUDE\.md$
 ^AGENTS\.md$
 ^CONTRIBUTING\.md$

@@ -20,7 +20,7 @@ project:
   documentation:
     quickstart-guide: https://bart-turczynski.gitlab.io/sitemapr/
     detailed-guide: https://bart-turczynski.gitlab.io/sitemapr/reference/index.html
-    release-process: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/CONTRIBUTING.md
+    release-process: https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/release-deltas.md
   repositories:
     - name: sitemapr
       url: https://gitlab.com/bart-turczynski/sitemapr

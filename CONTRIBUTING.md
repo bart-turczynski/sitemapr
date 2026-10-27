@@ -22,13 +22,9 @@ Rscript tools/verify.R
 
 That is the same chain the pre-push hook runs — docs, findings registry, lint,
 `R CMD check --as-cran` — and the same chain `origin`'s `check` job runs on
-every push to `main` (SITE-dzikrmnh). It is the first gate, and on a branch the
-only one that runs on its own: branch and merge-request pipelines are no longer
-created (SEOR-bmgkzhvy), so nothing runs between your push and the merge unless
-you ask for it. You can — start a pipeline at **Build > Pipelines > Run
-pipeline**, pick the branch, and the same `check` runs on the server. See
-[docs/repo-hygiene.md](docs/repo-hygiene.md) for the individual stages and for
-`--all`.
+every push to `main` (SITE-dzikrmnh). See
+[docs/repo-hygiene.md](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/docs/repo-hygiene.md)
+for the individual stages and for `--all`.
 
 ## Formatting
 
@@ -51,38 +47,20 @@ in `DESCRIPTION` under `Config/roxygen2/version`; install that exact version so
 `devtools::document()` is reproducible and contributors don't get spurious diffs:
 
 ```sh
-Rscript -e 'pak::pak("roxygen2@8.0.0")'
+Rscript -e 'pak::pak("roxygen2@8.1.1")'
 ```
 
-The pre-push verify gate's `docs` stage enforces this. It exports the commit
-being pushed with `git archive` and runs `scripts/check-docs-drift.R` (seor's
-copy, vendored byte for byte; change it in seor) on the export. It fails if the
+The pre-push verify gate's `docs` stage enforces this. It fails if the
 installed roxygen2 differs from the pin, or if regenerating the docs changes
 `man/`, `NAMESPACE` or `DESCRIPTION`. It judges the commit, not your working
 tree, so commit the output of `devtools::document()` before you push.
 
 Source lives in `R/`, tests and their Cucumber `.feature` files live in
 `tests/testthat/`, and durable project context lives in `docs/`.
+`ARCHITECTURE.md` is the entry point to it, and `design/` holds the maintainer
+notes this file does not: the CRAN release deltas in
+[`design/release-deltas.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/release-deltas.md),
+and what CI runs on a branch in
+[`design/ci-on-branches.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/ci-on-branches.md).
 
 Keep local-only planning state in `_scratch/`. Do not commit `_scratch/`, `.fp/`, secrets, dependency folders, build outputs, or generated caches.
-
-## CRAN release checklist
-
-Follow the fleet checklist,
-[seor `design/release-checklist.md`](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/release-checklist.md).
-sitemapr's deltas:
-
-- **Step 1: robotstxtr reaches CRAN first.** `DESCRIPTION` suggests
-  `robotstxtr (>= 0.3.0)` and pins it with
-  `Remotes: gitlab::bart-turczynski/robotstxtr@v0.3.0`. Once robotstxtr is on
-  CRAN, drop the pin and the `Remotes:` field with it (SEOR-jkmrvikj).
-- **Step 4: `cran-comments.md` describes robotstxtr in CRAN incoming.** Its
-  `Remotes` and `Suggests` note items and its Dependencies section are
-  written for the state before robotstxtr is accepted. Once Step 1 is done,
-  finalize them against `DESCRIPTION`, and update the check results to the
-  final pre-submission runs (SITE-notumkrs).
-- **Step 14: the first release creates sitemapr's first Zenodo record.** No
-  sitemapr record exists yet (Zenodo search, 2026-10-22), so the GitHub
-  Release starts a new concept DOI. Before it, the owner checks that the
-  mirror is ON in Zenodo's GitHub settings. No record is linked to the
-  mirror's repository id: `zenodo.org/badge/latestdoi/1282558407` answers 404.
