@@ -38,6 +38,12 @@ scenario. New tests are plain testthat files in `tests/testthat/`. When a
 scenario gets in the way of a change, replace it with a plain test that checks
 the same outcome, then delete it.
 
+A `NEWS.md` bullet is one terse line, only for a change a package user acts on
+or notices. Where a standard decides it, cite the clause in a few words
+("(RFC 3986 §2.2)"); add at most one issue or MR reference. No housekeeping
+bullets (CI, gates, lint, spelling, metadata, agent files) and no Internal
+section. The `news-terse` pre-push hook (`scripts/check-news.py`) enforces it.
+
 For the verify gate, hook setup and tracker snapshots, see docs/repo-hygiene.md.
 For the layer model and output contracts, see docs/architecture.md.
 For finding codes and the layer vocabulary, see docs/findings-contract.md.
