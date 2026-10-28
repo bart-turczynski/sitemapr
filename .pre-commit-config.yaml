@@ -90,6 +90,26 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # check-news.py refuses a NEWS.md bullet that wraps, runs past its word
+      # limit or names only housekeeping, and any Internal heading (seor's
+      # design/fleet-standard.md, "NEWS.md bullets"; SEOR-skfshchx). Ported
+      # byte for byte from seor. The check runs on every push, like
+      # check-citation: it takes milliseconds. Its self-test runs when the
+      # script changes.
+      - id: news-terse
+        name: NEWS.md bullets are one terse line
+        entry: python3 scripts/check-news.py NEWS.md
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: news-terse-self-test
+        name: check-news self-test
+        entry: python3 scripts/check-news.py --self-test
+        language: system
+        pass_filenames: false
+        files: ^scripts/check-news\.py$
+        stages: [pre-push]
       # Toolchain drift makes the gate red on a tree nobody changed, and it
       # arrives disguised as a code defect: a roxygen2 skew aborts the docs
       # guard, and a package built under a newer R than this one surfaces as an

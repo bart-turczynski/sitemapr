@@ -292,6 +292,10 @@ workflow:
 # /-/work_items (seor's ADR 0011:
 # https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md).
 #
+# It also runs scripts/check-news.py, the news-terse pre-push hook: NEWS.md
+# bullets are one terse line, user-facing changes only (seor's
+# design/fleet-standard.md, "NEWS.md bullets").
+#
 # It also runs the news-version check, seor's job of that name folded in here
 # (ADR 0005 in seor: no runner pickup for a second of shell): the top NEWS.md
 # heading must read "(development version)" or exactly the DESCRIPTION
@@ -305,6 +309,8 @@ citation-version:
     - python3 scripts/check-citation.py
     - python3 scripts/check-bugreports.py --self-test
     - python3 scripts/check-bugreports.py
+    - python3 scripts/check-news.py --self-test
+    - python3 scripts/check-news.py NEWS.md
     - |
       set -eu
       version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION | head -n 1)"
