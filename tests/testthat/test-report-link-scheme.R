@@ -88,6 +88,17 @@ test_that("a hostile sitemap produces no script link in the report HTML", {
   expect_no_match(html, "href=\"javascript:", fixed = TRUE)
   expect_no_match(html, "href=\"java\tscript:", fixed = TRUE)
   expect_no_match(html, "href=\"data:", fixed = TRUE)
-  expect_match(html, ">javascript:alert(document.domain)<", fixed = TRUE)
+  expect_match(
+    html,
+    '<span class="smr-url smr-url-text">javascript:alert(document.domain)</span>',
+    fixed = TRUE
+  )
   expect_match(html, '<a href="https://example.com/ok"', fixed = TRUE)
+})
+
+test_that("a loc that is not valid UTF-8 does not stop the link check", {
+  # An unmarked string holding a lone Latin-1 byte: invalid UTF-8.
+  bad <- "http:\xe9"
+  expect_true(report_link_scheme_ok(bad))
+  expect_false(report_link_scheme_ok(paste0("javascript:", bad)))
 })

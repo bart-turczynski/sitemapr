@@ -833,10 +833,18 @@ report_link_scheme_ok <- function(url) {
   if (!is.character(url) || length(url) != 1L || is.na(url)) {
     return(FALSE)
   }
-  s <- gsub("^[\\x00-\\x20]+|[\\x00-\\x20]+$", "", url, perl = TRUE)
-  s <- gsub("[\\t\\n\\r]", "", s, perl = TRUE)
+  # useBytes: a caller-supplied loc need not be valid UTF-8, and the scheme
+  # is ASCII either way.
+  s <- gsub(
+    "^[\\x00-\\x20]+|[\\x00-\\x20]+$",
+    "",
+    url,
+    perl = TRUE,
+    useBytes = TRUE
+  )
+  s <- gsub("[\\t\\n\\r]", "", s, perl = TRUE, useBytes = TRUE)
   scheme_re <- "^[A-Za-z][A-Za-z0-9+.-]*(?=:)"
-  scheme <- regmatches(s, regexpr(scheme_re, s, perl = TRUE))
+  scheme <- regmatches(s, regexpr(scheme_re, s, perl = TRUE, useBytes = TRUE))
   length(scheme) == 1L && ascii_lower(scheme) %in% c("http", "https")
 }
 
