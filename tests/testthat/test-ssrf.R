@@ -900,10 +900,22 @@ test_that("an unparsed bracketed host keeps a blocked range's own reason", {
 # classify and the default view's allow stood.
 
 test_that("a host the WHATWG view cannot parse is refused when non-ASCII", {
+  # rurl's fix for a percent-encoded trailing U+3002 (RURL-esztpdhx) gives the
+  # WHATWG view a host for these, classified as cloud-metadata. Tighten to
+  # "cloud-metadata" once sitemapr's rurl floor carries that fix.
   for (url in c(
     "http://metadata.google.internal%E3%80%82/",
     "http://169.254.169.254%E3%80%82/",
-    "http://metadata%E3%80%82/",
+    "http://metadata%E3%80%82/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_true(
+      res$reason %in% c("malformed-address", "cloud-metadata"),
+      info = url
+    )
+  }
+  for (url in c(
     "http://metadata﹒google﹒internal/",
     "http://metadata․google․internal/",
     "http://meta‍data.google.internal/",
