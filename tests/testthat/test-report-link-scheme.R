@@ -36,3 +36,58 @@ test_that("http and https locs render as links in the report HTML", {
   expect_match(html, '<a href="http://example.com/a"', fixed = TRUE)
   expect_match(html, '<a href="https://example.com/b"', fixed = TRUE)
 })
+
+test_that("the scheme match ignores ASCII case and edge whitespace", {
+  for (url in c("HTTPS://example.com/c", " https://example.com/d\n")) {
+    html <- url_cell_html(url)
+    expect_match(html, "<a href=", fixed = TRUE)
+  }
+})
+
+# ---- any other value renders as escaped text ---------------------------------
+
+hostile_locs <- c(
+  "javascript:alert(1)",
+  "JavaScript:alert(1)",
+  "  javascript:alert(1)",
+  "java\tscript:alert(1)",
+  "data:text/html,<script>alert(1)</script>",
+  "vbscript:x",
+  "\x01javascript:alert(1)",
+  "java\nscript:alert(1)",
+  "/relative/path",
+  "http\u017f://example.com/" # a non-ASCII lookalike is not a scheme match
+)
+
+test_that("a loc whose scheme is not http(s) renders as text, not a link", {
+  for (url in hostile_locs) {
+    html <- url_cell_html(url)
+    expect_no_match(html, "href", fixed = TRUE, info = url)
+    expect_no_match(html, "<a", fixed = TRUE, info = url)
+    # Same cell, same base class: the table layout and search still hold.
+    expect_match(html, "<td>", fixed = TRUE, info = url)
+    expect_match(html, "class=\"smr-url", fixed = TRUE, info = url)
+    expect_match(html, htmltools::htmlEscape(url), fixed = TRUE, info = url)
+  }
+})
+
+test_that("the text rendering of a non-link loc is HTML-escaped", {
+  html <- url_cell_html("data:text/html,<script>alert(1)</script>")
+  expect_match(html, "&lt;script&gt;alert(1)&lt;/script&gt;", fixed = TRUE)
+  expect_no_match(html, "<script>", fixed = TRUE)
+})
+
+test_that("a hostile sitemap produces no script link in the report HTML", {
+  path <- local_sitemap(c(
+    "javascript:alert(document.domain)",
+    "java&#9;script:alert(1)",
+    "data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;",
+    "https://example.com/ok"
+  ))
+  html <- render_string(path)
+  expect_no_match(html, "href=\"javascript:", fixed = TRUE)
+  expect_no_match(html, "href=\"java\tscript:", fixed = TRUE)
+  expect_no_match(html, "href=\"data:", fixed = TRUE)
+  expect_match(html, ">javascript:alert(document.domain)<", fixed = TRUE)
+  expect_match(html, '<a href="https://example.com/ok"', fixed = TRUE)
+})

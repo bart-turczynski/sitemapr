@@ -822,7 +822,33 @@ report_findings_section <- function(findings) {
 
 # ---- section: URL table ------------------------------------------------------
 
+# TRUE when `url` may be an href: its scheme is http or https (SITE-qmndjnmt).
+# htmltools escapes markup, not schemes, so a sitemap <loc> such as
+# `javascript:...` would otherwise become a script link. The scheme is read the
+# way a browser reads an href (WHATWG URL): strip leading and trailing C0
+# controls and spaces, drop every tab and newline, then match the scheme
+# ASCII-only and case-insensitively. An allow-list on that parsed scheme also
+# covers `java<TAB>script:`; anything without a scheme is not a link either.
+report_link_scheme_ok <- function(url) {
+  if (!is.character(url) || length(url) != 1L || is.na(url)) {
+    return(FALSE)
+  }
+  s <- gsub("^[\\x00-\\x20]+|[\\x00-\\x20]+$", "", url, perl = TRUE)
+  s <- gsub("[\\t\\n\\r]", "", s, perl = TRUE)
+  scheme_re <- "^[A-Za-z][A-Za-z0-9+.-]*(?=:)"
+  scheme <- regmatches(s, regexpr(scheme_re, s, perl = TRUE))
+  length(scheme) == 1L && ascii_lower(scheme) %in% c("http", "https")
+}
+
+# A loc that fails report_link_scheme_ok() renders as escaped text in the same
+# cell, sharing the `smr-url` class so the table layout and search hold.
 report_url_cell <- function(url) {
+  if (!report_link_scheme_ok(url)) {
+    return(htmltools::tags$td(htmltools::tags$span(
+      class = "smr-url smr-url-text",
+      url
+    )))
+  }
   htmltools::tags$td(htmltools::tags$a(
     href = url,
     target = "_blank",
