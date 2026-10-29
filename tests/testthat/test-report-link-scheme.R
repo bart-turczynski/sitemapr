@@ -90,7 +90,10 @@ test_that("a hostile sitemap produces no script link in the report HTML", {
   expect_no_match(html, "href=\"data:", fixed = TRUE)
   expect_match(
     html,
-    '<span class="smr-url smr-url-text">javascript:alert(document.domain)</span>',
+    paste0(
+      '<span class="smr-url smr-url-text">',
+      "javascript:alert(document.domain)</span>"
+    ),
     fixed = TRUE
   )
   expect_match(html, '<a href="https://example.com/ok"', fixed = TRUE)
