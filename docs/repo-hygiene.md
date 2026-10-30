@@ -112,7 +112,10 @@ textually to stay dependency-free and offline.
 second call is not redundant: `tools/` is `.Rbuildignore`d, so `lint_package()`
 skips it, and until SITE-pzrosmkn every script the gate is *made of* was exempt
 from the gate's own lint stage. Add a new `tools/` script and it is linted; that
-was not true before.
+was not true before. It lints `scripts/check-urls.R` and
+`scripts/check-news-version.R` by name too, for the same reason; the other R
+scripts there, `check-docs-drift.R` and `check-toolchain.R`, are seor's copies
+and change only in seor.
 
 `spelling` (the docs tier) runs `spelling::spell_check_package()` over `DESCRIPTION`, `man/`,
 the vignettes, `README` and `NEWS.md`. `R CMD check` has a DESCRIPTION spelling
@@ -254,10 +257,13 @@ Four properties are deliberate and worth knowing:
 - **The bundle is written before the mirror.** The bundle is local and needs no
   network; the mirror can fail. Ordering it this way means a run that ends in an
   error still leaves a verified archive behind.
-- **The mirror push skips the gate.** Gating a backup on a green tree is
-  backwards — a broken tree is when the copy matters most, and a lint failure
-  must never be able to stop one. fleet-ci's hook skips a push whose URL is a
-  local path, as `backup`'s is, so the script needs no `--no-verify`.
+- **The mirror push skips every pre-push hook.** Gating a backup on a green
+  tree is backwards — a broken tree is when the copy matters most, and a lint
+  failure must never be able to stop one. fleet-ci's hook already skips the
+  gate for a push to a local path, as `backup`'s is, but pre-commit's own
+  pre-push hooks can still refuse it (under pre-commit's migration mode, or a
+  clone with pre-commit's hook alone), and they may reach the network. So
+  that one push keeps `--no-verify`.
 - **The mirror is not an archive.** `--mirror` makes the remote match this
   repository exactly, so a ref deleted here is deleted there on the next run.
   The bundles are the half that remembers.
@@ -265,7 +271,12 @@ Four properties are deliberate and worth knowing:
   on `main`, and the next merge leaves local and `origin` diverged over a
   generated file long after the run that caused it. It goes through the gate,
   whose classifier calls a change to `docs/tracker-snapshot.md` alone
-  docs-only, so it costs the docs tier's seconds. The script pushes it *only*
+  docs-only, so it costs the docs tier's seconds. The gate runs in fleet-ci's
+  Docker image, so this push needs a running Docker daemon and a
+  `docker login registry.gitlab.com` (fleet-ci's images are private, [seor
+  ADR 0013](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0013-fleet-ci-is-private.md));
+  without them it fails, and the run ends with `PUBLISH FAILED` after a
+  complete bundle and mirror. The script pushes it *only*
   when it is the single unpushed commit and is exactly the one the run just
   made, so a backup never carries other work out to `origin`. In any other
   state the commit is left for a normal push to carry through the gate, and

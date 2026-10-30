@@ -11,7 +11,7 @@
 # same SHA, in one merge request: .fleet-ci/VERSION must equal `ref:`.
 include:
   - project: bart-turczynski/fleet-ci
-    ref: 1857bf8d669dce324ab0d2b4a67732a2cb9e3903
+    ref: 864e5386511de38b0dff594ba3118a800f662cc7
     file: templates/r-package.yml
 
 variables:
@@ -49,11 +49,12 @@ variables:
 #   report them as a NOTE instead of stopping.
 # - Vignettes are neither built nor checked: no pandoc in this image, and the
 #   vignette exercises the same functions the tests do. The check is --as-cran
-#   with CRAN incoming (the two R_CRAN_* variables point it at
-#   cloud.r-project.org rather than the snapshot), error_on = "warning", a
-#   300s download timeout, and a guard on R CMD check's own exit status,
-#   because rcmdcheck reads a check that halted partway as 0/0/0 and returns
-#   normally (SEOR-maavnxdm).
+#   with CRAN incoming off (_R_CHECK_CRAN_INCOMING_ below; the two R_CRAN_*
+#   variables point any CRAN metadata read at cloud.r-project.org rather than
+#   the snapshot), error_on = "warning", a 300s download timeout (the
+#   archive.rds stall, SITE-xolykhjm), and a guard on R CMD check's own exit
+#   status, because rcmdcheck reads a check that halted partway as 0/0/0 and
+#   returns normally (SEOR-maavnxdm).
 #
 # BLOCKING, like every T2 leg: a scheduled detector that cannot go red is
 # worthless.
@@ -65,6 +66,11 @@ x-floor:
     R_CRAN_SRC: "https://cloud.r-project.org"
     R_CRAN_WEB: "https://cloud.r-project.org"
     _R_CHECK_FORCE_SUGGESTS_: "false"
+    # Incoming off: .t2-job runs this leg in v* tag pipelines too, where the
+    # incoming feasibility check's "Insufficient package version" (the tag's
+    # version already on CRAN) would fail it and so block `pages`. t2-ascran
+    # runs the incoming checks, on R release.
+    _R_CHECK_CRAN_INCOMING_: "false"
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends libcurl4-openssl-dev libssl-dev libxml2-dev zlib1g-dev pkg-config
     - >

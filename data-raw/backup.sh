@@ -29,6 +29,13 @@
 # backup succeeds while the GitHub remote is unreachable -- which it has been
 # since the account suspension, and which is precisely when having a copy
 # matters most.
+#
+# THE PUBLISH STEP DOES NEED MORE. Step 4 pushes a fresh snapshot commit to
+# origin through the pre-push gate, which runs in fleet-ci's Docker image: it
+# needs a running Docker daemon and a `docker login registry.gitlab.com`, as
+# fleet-ci's images are private (seor ADR 0013). Without them that push fails,
+# the run ends with PUBLISH FAILED, and the bundle and the mirror are still
+# complete; push the commit later with the rest.
 set -eu
 
 SNAPSHOT="docs/tracker-snapshot.md"
@@ -122,14 +129,17 @@ mirror_failed=0
 
 if git remote get-url "$MIRROR_REMOTE" >/dev/null 2>&1; then
 	echo "==> mirroring to $MIRROR_REMOTE ($(git remote get-url "$MIRROR_REMOTE"))"
-	# No --no-verify: fleet-ci's pre-push hook skips a push whose URL is a
-	# local path, as the backup mirror's is, without running the gate or the
-	# pre-commit pre-push stage (fleet-ci README, "Local mirrors are not
-	# gated"). That matters because gating a backup on a green tree is
-	# backwards: a broken tree is exactly when the copy matters, and a lint
-	# failure must never be able to stop one. Under pre-commit's migration
-	# mode the pre-commit pre-push stage still runs (design/ci.md).
-	git push --mirror "$MIRROR_REMOTE" || mirror_failed=1
+	# --no-verify skips every pre-push hook, on purpose and on this push
+	# only. Gating a backup on a green tree is backwards: a broken tree is
+	# exactly when the copy matters, and a lint failure must never be able to
+	# stop one. fleet-ci's gate already skips a push to a local path, as the
+	# mirror's is, but pre-commit's own pre-push hooks (codespell, the
+	# citation and NEWS checks) can still refuse it: under pre-commit's
+	# migration mode the skip ends only the gate (design/ci.md), and a clone
+	# with pre-commit's hook alone runs them all. Those hooks may also fetch
+	# their environments over the network, which the NO NETWORK REQUIRED
+	# promise above rules out. The publish push in step 4 keeps every hook.
+	git push --mirror --no-verify "$MIRROR_REMOTE" || mirror_failed=1
 else
 	echo "==> no '$MIRROR_REMOTE' remote configured, skipping the mirror" >&2
 fi

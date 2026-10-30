@@ -11,7 +11,7 @@ template's.
 | --- | --- | --- |
 | hygiene hooks | pre-commit, at commit and at push | `.pre-commit-config.yaml`. At commit: the hygiene fixers (end of file, trailing whitespace, line endings; the byte-sensitive corpus excluded), the large-file, merge-conflict, YAML, TOML and case-conflict checks, `air-format`, and codespell. At push: codespell again, the citation, BugReports, NEWS and toolchain checks, the `check-news.py` and `bestpractices-url.py` self-tests when those scripts change, and the warn-only `fleet-ci-hook-installed` check |
 | T0 | every push whose diff against `main` is docs-only (`docs/**/*.md`, `design/**/*.md`, `_pkgdown.yml` and the like), locally, the pre-push hook | the gate's docs tier, `.fleet-ci/gate` in the fleet image: spelling and `pkgdown::check_pkgdown()` |
-| T1 | every other push, locally, the pre-push hook | the gate's full tier: T0's checks, then docs drift (`scripts/check-docs-drift.R`), the findings registry, the R floor and line-width guards (`tools/check-*.R`), the CRAN incoming spelling and file-URI checks (`tools/check-incoming.R`), lintr on the package and `tools/`, the URL check (`scripts/check-urls.R`), README drift (`scripts/check-readme-drift.sh`), the NEWS heading (`scripts/check-news-version.R`), and one `R CMD check --as-cran` (`NOT_CRAN=true`, incoming checks off) |
+| T1 | every other push, locally, the pre-push hook | the gate's full tier: T0's checks, then docs drift (`scripts/check-docs-drift.R`), the findings registry, the R floor and line-width guards (`tools/check-*.R`), the CRAN incoming spelling and file-URI checks (`tools/check-incoming.R`), lintr on the package, `tools/`, `scripts/check-urls.R` and `scripts/check-news-version.R`, the URL check (`scripts/check-urls.R`), README drift (`scripts/check-readme-drift.sh`), the NEWS heading (`scripts/check-news-version.R`), and one `R CMD check --as-cran` (`NOT_CRAN=true`, incoming checks off) |
 | T2 | the weekly `deep-check` schedule; every T3 run | `t2-check-release`, `t2-check-oldrel`, `t2-check-devel`, `x-floor` (R 4.1.3, in place of `t2-floor`), `t2-locale`, `t2-ascran` (incoming and URLs on), `coverage` (fails below 95%), `osv-audit`, `security-audit`, `citation-version` |
 | T3 | a `RELEASE=1` web pipeline on `main`; a `v*` tag | all of T2 plus `t3-manual` (the PDF manual); the tag, or `RELEASE=1` on a tag, adds `pages` |
 
@@ -49,10 +49,13 @@ merge.
 
 The gate skips a push to a local mirror: when the push URL is local by
 git's rule (the `backup` remote's path, or `file:///` with an empty host) it
-prints `gate: skipped, <remote> is a local mirror` and exits 0, so
-`data-raw/backup.sh` mirrors to `backup` without `--no-verify`. Under
+prints `gate: skipped, <remote> is a local mirror` and exits 0. Under
 pre-commit's migration mode the skip ends only the gate's hook, and the
-pre-commit pre-push stage still runs.
+pre-commit pre-push stage still runs, so `data-raw/backup.sh` still mirrors
+to `backup` with `--no-verify`: a backup must never be stopped by a lint
+failure or need the network. Its publish push to `origin` goes through the
+gate, which needs a running Docker daemon and the registry login (seor ADR
+0013).
 
 R CMD check NOTEs don't fail the gate, as before: the former verify failed on
 an ERROR or a WARNING only, so `.fleet-ci.yml` sets no `allowed_notes`.
@@ -75,21 +78,16 @@ These live in GitLab's project settings, so a clone does not carry them:
   passing having audited nothing.
 - **`pages_access_level: enabled`** and **Pages unique domain off**: the site
   lives at `https://bart-turczynski.gitlab.io/sitemapr/`, which
-  `_pkgdown.yml` and `DESCRIPTION` name. `pages` publishes only the
-  top-level `.md` files on `.fleet-ci.yml`'s `pages_keep`.
+  `_pkgdown.yml` and `DESCRIPTION` name. `pages` publishes pkgdown's
+  `destination`, `site/` (`docs/` is hand-written project context, never
+  the site), with only the top-level `.md` files on `.fleet-ci.yml`'s
+  `pages_keep`; the gate's docs tier checks that destination too.
 
 Never set `SCHEDULE_KIND` as a project or group variable: every schedule
 would inherit it.
 
 ## Gaps accepted in the fleet-ci migration
 
-- **OPEN: `pages` publishes the wrong directory.** fleet-ci v1.2.0's `pages`
-  ends with `mv docs public`, but sitemapr's `docs/` is hand-written project
-  context and `_pkgdown.yml` builds the site into `site/`
-  (`destination: site`). From a `v*` tag the job would publish the raw
-  `docs/` tree as the site. fleet-ci is to read pkgdown's destination in
-  `pages`, and sitemapr re-pins before its first tag; until then, do not
-  push a `v*` tag or run `PAGES=1`.
 - **The floor leg is `x-floor`, not the template's `t2-floor`
   (`FLEET_FLOOR: "false"`).** `t2-floor` installs every dependency from one
   dated snapshot, and sitemapr's floor closure cannot come from one: rurl
@@ -132,19 +130,41 @@ would inherit it.
   enforces 100% any more.
 - **`NOT_CRAN=true` in T1 and the T2 check legs.** The former verify's
   check ran with `NOT_CRAN` unset, so `skip_on_cran()` tests
-  (`test-url.R`'s differential test) now run in it. The T2 check legs also
-  run `test-osv.R` (network) and `test-security.R` (which skips there
-  without the OSS Index credentials); T1 excludes both
-  (`.fleet-ci.yml`'s `exclude_tests`), so `test-security.R`'s offline
-  allow-list tests run only in `security-audit` (T2, T3). Moving them to a
-  file of their own needs a `tests/` change, a follow-up.
+  (`test-url.R`'s differential test) now run in it. T1 excludes
+  `test-osv.R` (network) and `test-security.R` (`.fleet-ci.yml`'s
+  `exclude_tests`), so the gate runs neither. The T2 legs that run the
+  suite with `NOT_CRAN=true` (`t2-check-release`, `t2-check-oldrel`,
+  `t2-check-devel`, `t2-locale`) run both, and `test-security.R` does not
+  skip there: `OSSINDEX_USER` and `OSSINDEX_TOKEN` are project variables
+  that every job on the protected `main` gets, and `NOT_CRAN=true` defeats
+  its `skip_on_cran()`, so the live OSS Index audit runs in each of those
+  legs as well as in `security-audit`, and an OSS Index outage or a new
+  advisory fails them too. Its offline allow-list tests run in the same
+  places. Splitting the live audit from them needs a `tests/` change, a
+  follow-up.
 - **`pages` deploys from a `v*` tag only**, not on every push to `main`, so
   the site documents the release CRAN serves.
 - **No CI run of a branch.** The former web pipeline on any ref ran `check`
   against a branch; the template admits a web pipeline only with
   `RELEASE=1` on `main` or a tag.
-- **Comments in `R/`, `tests/` and `cran-comments.md` still name
-  `tools/verify.R`**; a CI migration edits none of them.
+- **Comments in `R/` and `tests/` still name `tools/verify.R`**; a CI
+  migration edits neither.
+- **`--as-cran` runs on R release only.** The former `deep-check` ran
+  `tools/verify.R check`, `R CMD check --as-cran`, on R 4.6, 4.5 and devel.
+  The template's `t2-check-oldrel` and `t2-check-devel` run `--no-manual`
+  without `--as-cran` (as does `t2-check-release`), so `t2-ascran` (R
+  release) is the only CI leg with `--as-cran`; `x-floor` (R 4.1.3) runs it
+  with incoming off. An `--as-cran`-only finding on oldrel or devel now
+  surfaces at win-builder, or at CRAN.
+- **`t2-ascran` has no download timeout.** The former check passed
+  `R_DEFAULT_INTERNET_TIMEOUT=300` to R CMD check, the fix for the
+  incoming check stalling on CRAN's `archive.rds` (SITE-xolykhjm).
+  `t2-ascran` is the template's, and sets none, so the stall can come back
+  there; `x-floor` keeps the 300s timeout.
+- **No runner tag.** The former CI's `default: tags: [local-docker]` is
+  gone: the template sets no `tags`, and the project runner accepts untagged
+  jobs, so they run there today. If shared runners were ever enabled on the
+  project, jobs could land on GitLab's SaaS runners instead.
 - **Pandoc** comes from the fleet image (`.fleet-ci/toolchain`, 3.10), which
   reproduces the committed `README.md`. `scripts/check-toolchain.R` checks a
   local pandoc against it, so a local `build_readme()` writes what the gate

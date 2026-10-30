@@ -27,8 +27,10 @@ docs_gates:
 # man/, NAMESPACE and DESCRIPTION against a fresh roxygen2 run
 # (SEOR-zxyztpbr), the findings registry, the declared R floor against the
 # dependency closure, air.toml against .lintr's line width, the CRAN
-# incoming spelling and file-URI checks, lintr on the package and tools/,
-# and every declared URL (the gate's R CMD check runs with remote incoming,
+# incoming spelling and file-URI checks, lintr on the package, tools/ and
+# two gate scripts in scripts/, check-urls.R and check-news-version.R (the
+# other R scripts there, check-docs-drift.R and check-toolchain.R, are
+# seor's copies and change only in seor), and every declared URL (the gate's R CMD check runs with remote incoming,
 # and so its URL check, off). Then README.md against a fresh knit, which
 # the former verify left opt-in and CI's `check` job ran on main, and the
 # NEWS heading against the version, which CI's `citation-version` ran.
@@ -38,7 +40,7 @@ cheap_gates:
   - Rscript tools/check-r-floor.R
   - Rscript tools/check-line-width.R
   - Rscript tools/check-incoming.R
-  - Rscript -e 'n <- 0L; for (l in list(lintr::lint_package(), lintr::lint_dir("tools"))) if (length(l)) { print(l); n <- n + length(l) }; if (n) quit(status = 1)'
+  - Rscript -e 'n <- 0L; for (l in list(lintr::lint_package(), lintr::lint_dir("tools"), lintr::lint("scripts/check-urls.R"), lintr::lint("scripts/check-news-version.R"))) if (length(l)) { print(l); n <- n + length(l) }; if (n) quit(status = 1)'
   - Rscript scripts/check-urls.R
   - sh scripts/check-readme-drift.sh
   - Rscript scripts/check-news-version.R

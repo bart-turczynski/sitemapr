@@ -14,12 +14,14 @@ Checked with `R CMD check --as-cran` on:
 
 Result: **0 errors | 0 warnings | 1 note** (local run; the note is below)
 
-The GitLab CI `check` job runs the same `Rscript tools/verify.R` chain as the
-local pre-push hook. Its last stage is `R CMD check --no-manual --as-cran`,
-which fails the job on an error or a warning but not on a note, so a passing
-job does not report a note count. The job runs on every push to `main` and
-passed there at the commit checked locally. CI does not run on branches or
-merge requests. The win-builder and mac-builder runs were on the final
+The local gate, run by the pre-push hook before every push, ends with one
+`R CMD check --as-cran` with the CRAN incoming checks off. It fails on an
+error or a warning but not on a note, so a passing gate does not report a
+note count. T2, the weekly deep check and part of every release pipeline,
+checks on R release, oldrel, devel and the declared 4.1 floor; its
+`t2-ascran` leg, on R release, is the one run of `--as-cran` with the
+incoming feasibility and URL checks on. CI does not run on branches or merge
+requests. The win-builder and mac-builder runs were on the final
 pre-submission commit of the package code.
 
 ---
