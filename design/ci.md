@@ -152,10 +152,10 @@ would inherit it.
 - **`--as-cran` runs on R release only.** The former `deep-check` ran
   `tools/verify.R check`, `R CMD check --as-cran`, on R 4.6, 4.5 and devel.
   The template's `t2-check-oldrel` and `t2-check-devel` run `--no-manual`
-  without `--as-cran` (as does `t2-check-release`), so `t2-ascran` (R
-  release) is the only CI leg with `--as-cran`; `x-floor` (R 4.1.3) runs it
-  with incoming off. An `--as-cran`-only finding on oldrel or devel now
-  surfaces at win-builder, or at CRAN.
+  without `--as-cran` (as does `t2-check-release`), so on a current R only
+  `t2-ascran` (release) runs `--as-cran`; besides it, only `x-floor` (R
+  4.1.3) does, with incoming off. An `--as-cran`-only finding on oldrel or
+  devel now surfaces at win-builder, or at CRAN.
 - **`t2-ascran` has no download timeout.** The former check passed
   `R_DEFAULT_INTERNET_TIMEOUT=300` to R CMD check, the fix for the
   incoming check stalling on CRAN's `archive.rds` (SITE-xolykhjm).
