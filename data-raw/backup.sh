@@ -29,6 +29,13 @@
 # backup succeeds while the GitHub remote is unreachable -- which it has been
 # since the account suspension, and which is precisely when having a copy
 # matters most.
+#
+# THE PUBLISH STEP DOES NEED MORE. Step 4 pushes a fresh snapshot commit to
+# origin through the pre-push gate, which runs in fleet-ci's Docker image: it
+# needs a running Docker daemon and a `docker login registry.gitlab.com`, as
+# fleet-ci's images are private (seor ADR 0013). Without them that push fails,
+# the run ends with PUBLISH FAILED, and the bundle and the mirror are still
+# complete; push the commit later with the rest.
 set -eu
 
 SNAPSHOT="docs/tracker-snapshot.md"
@@ -122,10 +129,16 @@ mirror_failed=0
 
 if git remote get-url "$MIRROR_REMOTE" >/dev/null 2>&1; then
 	echo "==> mirroring to $MIRROR_REMOTE ($(git remote get-url "$MIRROR_REMOTE"))"
-	# --no-verify skips the pre-push verify gate on purpose. That gate runs
-	# `R CMD check` and takes minutes, but the deeper reason is that gating a
-	# backup on a green tree is backwards: a broken tree is exactly when the
-	# copy matters, and a lint failure must never be able to stop one.
+	# --no-verify skips every pre-push hook, on purpose and on this push
+	# only. Gating a backup on a green tree is backwards: a broken tree is
+	# exactly when the copy matters, and a lint failure must never be able to
+	# stop one. fleet-ci's gate already skips a push to a local path, as the
+	# mirror's is, but pre-commit's own pre-push hooks (codespell, the
+	# citation and NEWS checks) can still refuse it: under pre-commit's
+	# migration mode the skip ends only the gate (design/ci.md), and a clone
+	# with pre-commit's hook alone runs them all. Those hooks may also fetch
+	# their environments over the network, which the NO NETWORK REQUIRED
+	# promise above rules out. The publish push in step 4 keeps every hook.
 	git push --mirror --no-verify "$MIRROR_REMOTE" || mirror_failed=1
 else
 	echo "==> no '$MIRROR_REMOTE' remote configured, skipping the mirror" >&2
@@ -137,16 +150,14 @@ fi
 # unpushed, so the next merge leaves local and origin diverged over a generated
 # file, long after the run that caused it.
 #
-# Pushing it through the pre-push gate costs ~200s and buys provably nothing.
-# `^docs$` is in .Rbuildignore, so R CMD check never sees this file; the docs
-# stage reads man/ + NAMESPACE, registry reads docs/findings-registry.csv, and
-# lint reads R/. No stage of the gate can observe it.
+# It goes through the pre-push gate like any push. The commit touches only
+# docs/tracker-snapshot.md, which fleet-ci's classifier calls docs-only, so
+# the gate runs its docs tier, seconds rather than the full R CMD check.
 #
-# THE EXEMPTION IS BOUNDED ON PURPOSE. A bare `git push --no-verify` would carry
-# out every other unpushed commit ungated too -- real code riding out on the
-# back of a snapshot refresh. So the push happens only when the snapshot commit
-# is the single unpushed commit and is exactly the one made above. Anything else
-# leaves it for a normal push to carry through the gate.
+# THE PUSH IS BOUNDED ON PURPOSE. It happens only when the snapshot commit is
+# the single unpushed commit and is exactly the one made above, so a backup
+# run never carries other work out to origin on the back of a snapshot
+# refresh. Anything else leaves it for a normal push with the rest.
 #
 # HOW THE GUARD IS TESTED, and not in place. Copy this script into a throwaway
 # repository whose `origin` and `backup` are local bare repos, stub
@@ -179,11 +190,11 @@ if [ -n "$snapshot_commit" ] && git remote get-url "$ORIGIN_REMOTE" >/dev/null 2
 		ahead=$(git rev-list --count "$upstream..HEAD")
 		if [ "$ahead" = "1" ] && [ "$(git rev-parse HEAD)" = "$snapshot_commit" ]; then
 			echo "==> publishing the snapshot commit to $upstream"
-			git push --no-verify "$ORIGIN_REMOTE" "$branch" || publish_failed=1
+			git push "$ORIGIN_REMOTE" "$branch" || publish_failed=1
 		else
 			echo "==> $ahead unpushed commit(s) on $branch, so the snapshot"
 			echo "    commit is not pushed. A normal push will carry it"
-			echo "    through the verify gate with the rest."
+			echo "    through the gate with the rest."
 		fi
 	fi
 fi

@@ -12,10 +12,11 @@ SITE-nveyjkps review. That recommendation is accepted as advisory for now.
 The package already has broad unit, cucumber, fixture-corpus, and CRAN-check
 coverage. The remaining uncovered branches are mostly defensive fallback paths
 or generated report markup where extra tests would add maintenance cost without
-meaningfully changing release risk. Nothing archives coverage automatically any
-more — the CI `check` job does not run coverage (see below) — so a drop is only
-visible if someone runs `Rscript tools/verify.R coverage`, which prints the full
-covr summary and fails on any uncovered line.
+meaningfully changing release risk. CI's `coverage` job, in the weekly T2
+deep check and every T3 release run, reports the figure and fails below the
+fleet floor of 95%; nothing fails on a smaller drop or an uncovered line any
+more (the former verify's opt-in `coverage` stage did; design/ci.md, "Gaps
+accepted").
 
 ## White-Box Test Access
 
@@ -31,17 +32,14 @@ helpers whose edge cases would be obscured through the public entry points.
 
 ## Continuous Integration
 
-**CI checks the package only after the fact.** `origin`'s `.gitlab-ci.yml`
-has a `check` job that runs bare `Rscript tools/verify.R`, the same chain as the
-pre-push hook. It also has `citation-version`, `pages` (builds and publishes the
-pkgdown site so the documentation URL that `DESCRIPTION` declares resolves,
-SITE-rysgulhf) and schedule-only `osv-audit` and `security-audit`. Pipelines
-start only on pushes to `main`, tags and hand-started runs, so nothing runs on
-a branch or merge request. A split pipeline with separate guard, lint,
-coverage and readme jobs was proposed (SITE-fxkbboia) and dropped: seor's ADR
-0005 folds cheap jobs into one to cut per-job runner overhead. Since the fleet
-standard (SEOR-dunwqfkj), a `coverage` job fails below 95% and a weekly
-`deep-check` runs `R CMD check` on R release, oldrel, devel and 4.1. The
+**CI checks the package on a schedule and at release, never per change.**
+`origin`'s `.gitlab-ci.yml` includes fleet-ci's template (seor ADR 0012): the
+weekly T2 deep check runs `R CMD check` on R release, oldrel, devel and the
+4.1 floor, a locale leg, `--as-cran` with CRAN incoming, `coverage` (fails
+below 95%), `osv-audit`, `security-audit` and `citation-version`; T3, a
+`RELEASE=1` web pipeline or a `v*` tag, adds the PDF manual, and the tag
+publishes the pkgdown site (SITE-rysgulhf). No push, branch or merge request
+starts a pipeline (design/ci.md). The
 repository once held a GitHub Actions workflow tree covering `R-CMD-check`,
 pkgcheck, security and OSV audits, pkgdown and cross-platform checks, but
 `origin` is GitLab and GitHub holds only a read-only mirror of it, so that tree
@@ -50,17 +48,18 @@ was deleted rather than left to look like coverage it could not provide
 coverage badges read this GitLab CI, not those workflows: seor's ADR 0007
 reverses the old rule against CI badges (SEOR-dunwqfkj).
 
-`Rscript tools/verify.R`, run by the pre-push hook, is therefore the only gate
-in front of `main`. `main` is a protected branch (Maintainer-only push and
-merge), but nothing on the server requires a passing pipeline
-(`only_allow_merge_if_pipeline_succeeds` is off). Treat a red gate as a red
-build: CI's `check` job reruns the chain only once the change is on `main`.
+fleet-ci's local gate (`.fleet-ci/gate`), run by the pre-push hook in the
+fleet Docker image, is therefore the only gate in front of `main`. `main` is a
+protected branch (Maintainer-only push and merge), but nothing on the server
+requires a passing pipeline (`only_allow_merge_if_pipeline_succeeds` is off).
+Treat a red gate as a red build.
 
 This changes how one pkgcheck message must be read. `pkgcheck::pkgcheck()`
 reports "Package has no continuous integration checks". That report is
-stale in part: the `check` job now runs the tests and `R CMD check` on `main`.
-It remains true that no CI runs on branches or merge requests, so treat the
-message as a known, deliberate gap rather than a defect to explain away.
+stale in part: the weekly T2 pipeline runs the tests and `R CMD check` on
+`main`. It remains true that no CI runs on branches or merge requests, so
+treat the message as a known, deliberate gap rather than a defect to explain
+away.
 
 ## Citation Metadata Names The Release
 
@@ -74,7 +73,7 @@ also appear in `DESCRIPTION`'s `URL:` field.
 **Move both files at the `DESCRIPTION` bump that opens a release cycle, not at
 the tag.** They are part of the release, not a record of it.
 `scripts/check-citation.py` enforces this from the pre-push hook and from the
-`citation-version` CI job. The reasoning lives in seor's `design/adr/`, as
+`citation-version` CI job (T2 and T3). The reasoning lives in seor's `design/adr/`, as
 `0001-citation-metadata-names-the-release.md` and
 `0002-citation-urls-are-the-ones-about-this-package.md`.
 

@@ -27,6 +27,14 @@
 ^\.gitattributes$
 ^\.gitignore$
 ^\.gitlab-ci\.yml$
+# fleet-ci's vendored local gate and its settings, per fleet-ci's README,
+# "Adopting the template"; and the library t2-sanitizers installs into
+# before it runs `R CMD build .`. R CMD build reads every line here as a
+# perl regex, comments included, so a comment line must be one: no
+# parenthesis or bracket left open at the end of a line.
+^\.fleet-ci$
+^\.fleet-ci\.yml$
+^\.fleet-lib$
 # The GitLab CI dependency library (SITE-dzikrmnh). Cache paths must live
 # inside CI_PROJECT_DIR, so pak's library sits in the package directory and
 # `R CMD build` would otherwise sweep it into the tarball -- a 69 MB tarball

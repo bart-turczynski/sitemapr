@@ -7,8 +7,9 @@ This file is the fixed entry point every package in the fleet carries.
 - Settled design decisions: [`docs/decisions/`](docs/decisions/).
 - Finding codes and the layer vocabulary:
   [`docs/findings-contract.md`](docs/findings-contract.md).
-- The verify gate and repository hooks:
+- The repository hooks and the gate's checks:
   [`docs/repo-hygiene.md`](docs/repo-hygiene.md).
 - Maintainer notes kept out of `CONTRIBUTING.md`: the CRAN release deltas,
-  [`design/release-deltas.md`](design/release-deltas.md), and what CI runs on
-  a branch, [`design/ci-on-branches.md`](design/ci-on-branches.md).
+  [`design/release-deltas.md`](design/release-deltas.md), and the CI tiers,
+  the local gate and the gaps the fleet-ci migration accepted,
+  [`design/ci.md`](design/ci.md).
