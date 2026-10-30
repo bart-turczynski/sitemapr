@@ -1,0 +1,82 @@
+# The fleet-ci local gate's settings: T0 (docs) and T1 (full) before every
+# push, run by .fleet-ci/gate in the fleet image (fleet-ci README, "The
+# .fleet-ci.yml file"; seor ADR 0012). Read from the pushed commit. The
+# t2-locale and pages CI jobs read it too.
+version: 1
+
+# The image the gate runs in. It must be .gitlab-ci.yml's
+# FLEET_RELEASE_VARIANT (default fleet-r).
+variant: fleet-r
+
+# No docs_exclude: no full-tier gate reads a docs-allowlisted path's
+# content. tools/check-findings-registry.R reads docs/findings-registry.csv,
+# which is not on the allowlist (only docs/**/*.md is), so a change to it is
+# full anyway. tools/check-incoming.R only asks whether a linked file exists,
+# which an added or modified file (the only docs-tier changes) never alters.
+# The pre-push hooks that read _pkgdown.yml or docs/**/*.md
+# (scripts/check-bugreports.py, codespell) run on every push whatever the
+# tier, and the docs tier runs check_pkgdown() itself.
+
+# T0, and the start of T1. Genuine terms go in inst/WORDLIST (SEOR-mtbzfroz).
+docs_gates:
+  - Rscript -e 'bad <- spelling::spell_check_package(); if (nrow(bad)) { print(bad); quit(status = 1) }'
+
+# T1, in the container after the dependency install, each run whatever the
+# others report. The default stages of the former tools/verify.R, bar
+# `check` (the gate's own R CMD check) and spelling (docs_gates above):
+# man/, NAMESPACE and DESCRIPTION against a fresh roxygen2 run
+# (SEOR-zxyztpbr), the findings registry, the declared R floor against the
+# dependency closure, air.toml against .lintr's line width, the CRAN
+# incoming spelling and file-URI checks, lintr on the package and tools/,
+# and every declared URL (the gate's R CMD check runs with remote incoming,
+# and so its URL check, off). Then README.md against a fresh knit, which
+# the former verify left opt-in and CI's `check` job ran on main, and the
+# NEWS heading against the version, which CI's `citation-version` ran.
+cheap_gates:
+  - Rscript scripts/check-docs-drift.R .
+  - Rscript tools/check-findings-registry.R
+  - Rscript tools/check-r-floor.R
+  - Rscript tools/check-line-width.R
+  - Rscript tools/check-incoming.R
+  - Rscript -e 'n <- 0L; for (l in list(lintr::lint_package(), lintr::lint_dir("tools"))) if (length(l)) { print(l); n <- n + length(l) }; if (n) quit(status = 1)'
+  - Rscript scripts/check-urls.R
+  - sh scripts/check-readme-drift.sh
+  - Rscript scripts/check-news-version.R
+
+# test-ascii.R switches LC_CTYPE to tr_TR.UTF-8 (the dotless-i case fold)
+# and skips when the locale is missing. The gate runs as the invoking user
+# and reads compiled locales from its own LOCPATH only (fleet-ci README, "A
+# known local/CI difference: locales"), so it is built here; t2-locale
+# builds the same list. No locale_legs: t2-locale runs its default C leg,
+# and the gate none (design/ci.md, "Gaps accepted").
+locales:
+  - tr_TR.UTF-8
+
+# The gate runs R CMD check with NOT_CRAN=true, so skip_on_cran() no longer
+# keeps these out of it. T2 runs both, as osv-audit and security-audit.
+exclude_tests:
+  - path: tests/testthat/test-osv.R
+    why: queries osv.dev over the network; the osv-audit job runs it in T2
+  - path: tests/testthat/test-security.R
+    why: queries Sonatype OSS Index with credentials the gate does not have; the security-audit job runs it in T2
+
+# Every skip R CMD check's test run may report; any other fails the gate.
+allowed_skips: []
+
+# The top-level .md files the pkgdown site publishes; every other one (the
+# agent files among them) is moved out before build_site() (SEOR-wqxhftpv).
+# The former scripts/filter-agent-md.sh keep list, less
+# THIRD_PARTY_NOTICES.md, which does not exist (a pages_keep entry whose
+# file is missing fails the job). CHANGELOG.md is grandfathered: its page
+# was live when the keep list landed (SEOR-wqxhftpv). cran-comments.md is on
+# pkgdown's own skip list either way.
+pages_keep:
+  - README.md
+  - NEWS.md
+  - LICENSE.md
+  - CONTRIBUTING.md
+  - SECURITY.md
+  - CODE_OF_CONDUCT.md
+  - ACKNOWLEDGMENTS.md
+  - cran-comments.md
+  - CHANGELOG.md
