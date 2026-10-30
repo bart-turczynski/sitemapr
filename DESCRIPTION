@@ -15,6 +15,8 @@ URL: https://bart-turczynski.gitlab.io/sitemapr/,
     https://gitlab.com/bart-turczynski/sitemapr,
     https://bart-turczynski.r-universe.dev/sitemapr
 BugReports: https://gitlab.com/bart-turczynski/sitemapr/-/work_items
+X-schema.org-keywords: sitemap, xml-sitemap, sitemap-index, text-sitemap,
+    sitemap-protocol, sitemap-validation, xml-schema, web-crawling
 Imports:
     htmltools,
     httr2 (>= 1.1.1),
