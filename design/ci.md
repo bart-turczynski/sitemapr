@@ -103,9 +103,12 @@ would inherit it.
   `.fleet-ci.yml`'s `locales` builds it for the local gate and `t2-locale`;
   the other T2 legs skip that test, as the former CI's legs all did.
 - **`t2-locale`'s leg runs under `LC_ALL=C`**, the template's default, which
-  the former CI never ran. It passed when run once locally through the gate
-  (`locale_legs: [C]`, SEOR-stasqeuk); the gate itself runs no locale leg,
-  to keep T1 at one `R CMD check`.
+  the former CI never ran. It passed, tests included, when run once through
+  the gate on a throwaway commit (`locale_legs: [C]`, SEOR-stasqeuk). That
+  run needed `en_US.UTF-8` in `locales` too: under `C`, `R CMD check`'s
+  syntax check switches to it for the UTF-8 sources, and the gate's own
+  locale directory holds only what `locales` lists, while CI's image ships
+  it. The gate itself runs no locale leg, to keep T1 at one `R CMD check`.
 - **No server-side cheap gates.** The former `check` and `citation-version`
   jobs ran the whole verify chain (docs drift, the registry, R-floor and
   line-width guards, spelling, incoming, lintr, URLs), README drift,
@@ -118,6 +121,11 @@ would inherit it.
   the former verify's `--as-cran` ran on every push run in `t2-ascran` (T2
   and T3). `tools/check-incoming.R` still runs the offline aspell and
   file-URI halves, and `scripts/check-urls.R` every declared URL, in T1.
+- **A NOTE fails nothing, as before.** The former verify failed on an
+  ERROR or a WARNING only (`error_on = "warning"`, no NOTE list), so
+  `.fleet-ci.yml` sets no `allowed_notes`, and neither the gate nor the T2
+  check legs fail on a NOTE. Read `t2-ascran`'s NOTEs, the only leg with
+  the incoming feasibility and URL checks, before a submission.
 - **The 100% coverage stage is gone.** The former verify's opt-in
   `coverage` stage failed on any uncovered line before a release; the
   template's `coverage` fails below 95%, the fleet floor, and nothing
