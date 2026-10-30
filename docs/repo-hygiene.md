@@ -1,18 +1,25 @@
 # Repository hygiene
 
-How this repository verifies a tree before it reaches `origin` — the pre-push
-hook is the only gate in front of `main`; CI reruns the same chain after the
-fact — and how the issue tracker survives leaving this machine.
+How this repository verifies a tree before it reaches `origin` — fleet-ci's
+local gate, run by the pre-push hook, is the only gate in front of `main`; CI
+runs only on the weekly schedule and at release ([design/ci.md](../design/ci.md))
+— and how the issue tracker survives leaving this machine.
 
 ## Hooks
 
-This project uses the [pre-commit](https://pre-commit.com) framework. Its config
-(`.pre-commit-config.yaml`) is cloned with the repo; each clone enables the hooks
-once:
+This project uses the [pre-commit](https://pre-commit.com) framework for its
+hygiene hooks, and fleet-ci's pre-push hook for the gate. Both configs are
+cloned with the repo; each clone installs them once, in this order:
 
 ```bash
-pre-commit install && pre-commit install --hook-type pre-push
+pre-commit install
+.fleet-ci/pre-push --install
 ```
+
+`pre-commit install` writes both hook types (`default_install_hook_types`);
+`.fleet-ci/pre-push --install` then replaces the pre-push one with fleet-ci's,
+which runs the gate and then the pre-commit pre-push stage.
+[design/ci.md](../design/ci.md) says which commands drop it again.
 
 `pre-commit` is a Python tool. For non-Python templates, install it with
 `uv tool install pre-commit` or `pipx install pre-commit`.
@@ -33,61 +40,65 @@ as a formatter failure on someone else's machine.
 The whitespace, end-of-file and line-ending hooks all exclude
 `tests/testthat/fixtures/corpus/`. Those fixtures deliberately carry trailing
 whitespace, CR/CRLF/CR line endings, BOMs and UTF-16, and normalizing them
-destroys what they test.
+destroys what they test. They, codespell and air also exclude `.fleet-ci/`,
+fleet-ci's vendored gate, which must stay byte for byte what `bin/vendor`
+writes.
 
-### Pre-push verify gate
+### The pre-push gate
 
-On `git push`, the `verify` hook runs the project's verify command.
+On `git push`, fleet-ci's hook runs `.fleet-ci/gate` on each pushed ref's
+tip, in the fleet Docker image, against an export of the commit (never the
+working tree), and then the pre-commit pre-push hooks: codespell, the
+citation, BugReports, NEWS and toolchain checks, and a warn-only check that
+the fleet-ci hook is installed.
 
-**It is the first gate, and on a branch it is the only one.** `origin` is
-GitLab and its `.gitlab-ci.yml` holds three jobs: `citation-version`; `check`,
-which runs this same `tools/verify.R` chain on every push to `main`
-(SITE-dzikrmnh); and `pages`, which publishes the pkgdown site and verifies
-nothing (SITE-rysgulhf). It strips the agent instruction files first — pkgdown renders every top-level `.md`, so `AGENTS.md`, `CLAUDE.md` and the `FP_*.md` files were being published next to the function reference as `AGENTS.html`, `CLAUDE.html` and friends: internal working notes served as if they were user documentation (SEOR-pibdjanz). The job runs `scripts/filter-agent-md.sh` immediately before `build_site`. It is a **keep-list**, not a glob: every top-level `.md` not named in its `keep` variable is moved out of the tree, so a new agent file of any name stays private (SEOR-wqxhftpv). A new top-level `.md` meant for the public site is not published until it is added to `keep` in the same commit. Until SITE-dzikrmnh landed, `pages` was the only job,
-and a green pipeline here meant the docs built, not that the package was sound.
-CI now runs only on pushes to `main`, on tags, and on a pipeline someone
-starts by hand (SEOR-bmgkzhvy) — branch and merge-request pipelines are not
-created — so nothing verifies a feature branch but this hook, unless you open
-**Build > Pipelines > Run pipeline** and select the branch, which runs `check`
-against it on the server. `pages` is pinned to `main` and is not reachable that
-way. A split pipeline with separate guard, lint, coverage and readme jobs was
-proposed (SITE-fxkbboia) and dropped: seor's ADR 0005 folds cheap jobs into one
-to cut per-job runner overhead. The fleet standard (SEOR-dunwqfkj) added only
-what it requires: `check` also checks README drift, `citation-version` the
-NEWS heading, a `coverage` job fails below 95%, and a `deep-check` job runs
-`R CMD check` on R release, oldrel, devel and 4.1 on the weekly schedule. The
+**It is the only gate in front of `main`.** `origin` is GitLab, and since the
+fleet-ci migration no push, merge request or push to `main` creates a
+pipeline: CI runs the weekly T2 deep check and the T3 release runs only
+([design/ci.md](../design/ci.md)). The pkgdown site is published from a `v*`
+tag by fleet-ci's `pages` job, which moves every top-level `.md` not on
+`.fleet-ci.yml`'s `pages_keep` out of the tree first, so `AGENTS.md`,
+`CLAUDE.md` and any new agent file stay private (SEOR-pibdjanz,
+SEOR-wqxhftpv). A new top-level `.md` meant for the public site is not
+published until it is added to `pages_keep` in the same commit. The
 repository once carried a GitHub Actions workflow tree, but `origin` is GitLab
 and GitHub holds only a read-only mirror of it, so the tree was deleted rather
 than left to rot (SITE-kgpdfhoh — git history keeps it restorable). `main` is a
 protected branch (Maintainer-only push and merge, force-push refused), but that
-governs who may write to it, not whether the tree is sound. Treat a red
-pre-push gate as a red build: on a branch, no second opinion is coming.
+governs who may write to it, not whether the tree is sound. Treat a red gate
+as a red build: no second opinion is coming before the merge.
 
-## Running the checks locally
+## The gate's checks
 
-The chain lives in `tools/verify.R`, which the pre-push hook invokes with no
-arguments. Run it directly rather than waiting for a push:
+`.fleet-ci.yml` lists them. A diff against `main` that fleet-ci's classifier
+calls docs-only (`docs/**/*.md`, `design/**/*.md`, `_pkgdown.yml`) runs the
+docs tier: spelling and `pkgdown::check_pkgdown()`. Anything else runs the
+full tier: spelling, then the cheap gates below, each run whatever the others
+report, then one `R CMD check --as-cran` with `NOT_CRAN=true` and the CRAN
+incoming checks off. Run it by hand rather than waiting for a push:
 
 ```bash
-Rscript tools/verify.R              # the pre-push gate: docs, registry, rfloor, linewidth, spelling, incoming, lint, urls, R CMD check
-Rscript tools/verify.R --all        # adds coverage and the README diff
-Rscript tools/verify.R lint check   # named stages only
-Rscript tools/verify.R --list       # list the stages
-Rscript tools/verify.R --self-test  # the gate's own offline self-tests
+.fleet-ci/gate auto     # the tier the classifier picks, on HEAD
+.fleet-ci/gate full     # the full tier, whatever the diff
 ```
+
+The cheap gates were the default stages of the former `tools/verify.R`; their
+names below are those stages'.
 
 `rfloor` (`tools/check-r-floor.R`) has no counterpart in
 `R CMD check`: it walks the hard-dependency closure, takes the maximum
 `R (>= x.y)` any of them declares, and fails when `DESCRIPTION`'s own floor
 sits below it. A floor that a dependency contradicts is *uninstallable*, not
 merely untested, and `--as-cran` never cross-checks the two. It reads the
-**installed** dependency DESCRIPTIONs, so it checks this machine's versions
-rather than the minimums `DESCRIPTION` permits — the price of keeping the stage
-offline, and enough to catch the class that shipped once already.
+**installed** dependency DESCRIPTIONs, so it checks the versions the gate just
+installed rather than the minimums `DESCRIPTION` permits — the price of keeping
+the stage offline, and enough to catch the class that shipped once already.
 
-The `docs` stage exports the commit being pushed with `git archive` and runs
-`scripts/check-docs-drift.R` (seor's copy, vendored byte for byte; change it in
-seor) on the export.
+`docs` runs `scripts/check-docs-drift.R` (seor's copy, vendored byte for byte;
+change it in seor) on the gate's export of the pushed commit.
+
+`registry` (`tools/check-findings-registry.R`) holds
+`inst/findings-registry.csv` byte-identical to `docs/findings-registry.csv`.
 
 `linewidth` (`tools/check-line-width.R`) compares `air.toml`'s `line-width`
 against the width `.lintr` passes to `line_length_linter()`. Both files claim
@@ -101,9 +112,12 @@ textually to stay dependency-free and offline.
 second call is not redundant: `tools/` is `.Rbuildignore`d, so `lint_package()`
 skips it, and until SITE-pzrosmkn every script the gate is *made of* was exempt
 from the gate's own lint stage. Add a new `tools/` script and it is linted; that
-was not true before.
+was not true before. It lints `scripts/check-urls.R` and
+`scripts/check-news-version.R` by name too, for the same reason; the other R
+scripts there, `check-docs-drift.R` and `check-toolchain.R`, are seor's copies
+and change only in seor.
 
-`spelling` runs `spelling::spell_check_package()` over `DESCRIPTION`, `man/`,
+`spelling` (the docs tier) runs `spelling::spell_check_package()` over `DESCRIPTION`, `man/`,
 the vignettes, `README` and `NEWS.md`. `R CMD check` has a DESCRIPTION spelling
 check of its own, but it runs only where `_R_CHECK_CRAN_INCOMING_USE_ASPELL_` is
 set, which is CRAN and not here, so a typo first surfaced in win-builder's
@@ -111,46 +125,48 @@ incoming NOTE (SEOR-mtbzfroz). spelling bundles its own dictionaries. A genuine
 term goes in `inst/WORDLIST`; a typo gets fixed at its source (the roxygen
 comment for `man/`, `README.Rmd` for `README.md`).
 
-`incoming` repeats the two `checking CRAN incoming feasibility` checks that a
-local `R CMD check --as-cran` skips (see verification trap 7). It spell-checks
+`incoming` (`tools/check-incoming.R`) repeats the two `checking CRAN incoming
+feasibility` checks that a local `R CMD check --as-cran` skips (see
+verification trap 7). It spell-checks
 `DESCRIPTION`'s Title and Description **without** `inst/WORDLIST`, because
 CRAN's aspell never reads it: reword, or quote a name as `'name'`. And it fails
 a relative link in `README.md` or `man/` whose target `.Rbuildignore` drops from
 the tarball: link it by repository URL instead.
 
-`urls` fetches every URL the package declares (`DESCRIPTION`, `man/`,
-`inst/CITATION`, `NEWS.md`, `README.md`) with `tools:::check_url_db()`, the
-function `R CMD check` itself uses. The `check` stage's `--as-cran` run fetches
-them too, but it reports a dead link as a NOTE and fails only on warnings, so
-before this stage a dead link passed the gate and surfaced at CRAN incoming
-(SITE-dpmutjii). A URL that answers HTTP 4xx or 5xx fails the stage. A URL that
+`urls` (`scripts/check-urls.R`) fetches every URL the package declares
+(`DESCRIPTION`, `man/`, `inst/CITATION`, `NEWS.md`, `README.md`) with
+`tools:::check_url_db()`, the function `R CMD check` itself uses. The gate's
+`R CMD check` runs with CRAN incoming off, so it fetches none of them; and
+where `--as-cran` does (`t2-ascran`), it reports a dead link as a NOTE and
+fails only on warnings, so before this stage a dead link passed the gate and
+surfaced at CRAN incoming (SITE-dpmutjii). A URL that answers HTTP 4xx or 5xx fails the stage. A URL that
 could not be reached at all (DNS failure, refused connection, timeout: no HTTP
 status) is printed as a warning and the stage passes, because a network blip
-must not reject a push (the lesson of SITE-xolykhjm in `check`). Nothing is
+must not reject a push (the lesson of SITE-xolykhjm). Nothing is
 exempt: `DESCRIPTION`'s `BugReports:` names `/-/work_items`, which answers 200
 ([seor's ADR 0011](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md)).
 It fails rather than passes when it finds no URLs at all, and it
 prints how many it checked, so a lookup that read nothing cannot report clean.
 Its classifier runs an offline self-test first on every run;
-`Rscript tools/verify.R --self-test` runs that alone.
+`Rscript scripts/check-urls.R --self-test` runs that alone.
 
-Stages run in declared order, cheapest first, and the chain stops at the first
-failure. Because the hook and a manual run share one definition, they cannot
-disagree about what "verified" means.
+`readme` (`scripts/check-readme-drift.sh`) installs the package into a
+throwaway library, knits `README.Rmd` under the image's pinned pandoc and
+fails when `README.md` differs, blank lines aside. `news-version`
+(`scripts/check-news-version.R`) holds the top `NEWS.md` heading to
+`(development version)` or the `DESCRIPTION` Version.
 
-Three stages reach the network: `urls` fetches every URL the package declares;
-`check` (`--as-cran`) queries CRAN for incoming feasibility, and its incoming
-step fetches the declared URLs too; and `readme`, where
-`devtools::build_readme()` installs the package and resolves the dependency
-chain (`sitemapr` → `rurl`) through pak. `readme` is why `--all` is not the
-default. It also needs every `Remotes:` target to be publicly readable — a
-private GitLab project fails the stage with a pak 403 rather than a README
-problem. Everything else is offline.
+Besides `urls`, the dependency install reaches the network (pak resolves the
+dependency chain, `sitemapr` → `rurl`, and the `Remotes:` pin, which must stay
+publicly readable — a private GitLab project fails it with a pak 403). Every
+cheap gate runs after that install, whatever the others report, so one run
+names every failing check.
 
 **Do not rely on the pre-push hook as the only trigger.** It fires on `git push`,
 so it never runs while the remote is unreachable — and the per-commit hooks only
 see *staged* files, so whole-tree problems stay invisible. To check the tree the
-way pre-push would:
+way pre-push would, run `.fleet-ci/gate auto` for the gate, and for the
+hygiene hooks:
 
 ```bash
 pre-commit run --all-files --hook-stage pre-push
@@ -241,23 +257,30 @@ Four properties are deliberate and worth knowing:
 - **The bundle is written before the mirror.** The bundle is local and needs no
   network; the mirror can fail. Ordering it this way means a run that ends in an
   error still leaves a verified archive behind.
-- **The mirror push skips the pre-push gate.** Gating a backup on a green tree
-  is backwards — a broken tree is when the copy matters most, and a lint failure
-  must never be able to stop one.
+- **The mirror push skips every pre-push hook.** Gating a backup on a green
+  tree is backwards — a broken tree is when the copy matters most, and a lint
+  failure must never be able to stop one. fleet-ci's hook already skips the
+  gate for a push to a local path, as `backup`'s is, but pre-commit's own
+  pre-push hooks can still refuse it (under pre-commit's migration mode, or a
+  clone with pre-commit's hook alone), and they may reach the network. So
+  that one push keeps `--no-verify`.
 - **The mirror is not an archive.** `--mirror` makes the remote match this
   repository exactly, so a ref deleted here is deleted there on the next run.
   The bundles are the half that remembers.
 - **The snapshot commit is published, under a bound.** Left unpushed it strands
   on `main`, and the next merge leaves local and `origin` diverged over a
-  generated file long after the run that caused it. Pushing it through the
-  pre-push gate would cost ~200s and buy nothing: `^docs$` is in
-  `.Rbuildignore`, so `R CMD check` never sees this file, and no other stage
-  reads it either. So the script pushes it with `--no-verify` — but *only* when
-  it is the single unpushed commit and is exactly the one the run just made. A
-  bare `--no-verify` push would carry every other unpushed commit out ungated,
-  which is the failure this bound exists to prevent. In any other state the
-  commit is left for a normal push to carry through the gate, and the script
-  says so. On a detached HEAD it refuses too — the commit it already made rides
+  generated file long after the run that caused it. It goes through the gate,
+  whose classifier calls a change to `docs/tracker-snapshot.md` alone
+  docs-only, so it costs the docs tier's seconds. The gate runs in fleet-ci's
+  Docker image, so this push needs a running Docker daemon and a
+  `docker login registry.gitlab.com` (fleet-ci's images are private, [seor
+  ADR 0013](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0013-fleet-ci-is-private.md));
+  without them it fails, and the run ends with `PUBLISH FAILED` after a
+  complete bundle and mirror. The script pushes it *only*
+  when it is the single unpushed commit and is exactly the one the run just
+  made, so a backup never carries other work out to `origin`. In any other
+  state the commit is left for a normal push to carry through the gate, and
+  the script says so. On a detached HEAD it refuses too — the commit it already made rides
   out in that run's bundle and is re-made by the next run from a branch, so
   nothing is lost.
 

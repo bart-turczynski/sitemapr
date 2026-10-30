@@ -14,17 +14,36 @@ Install dependencies:
 Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
 ```
 
-Run verification:
+Verification is fleet-ci's local gate, which runs in the fleet Docker image
+(settings in `.fleet-ci.yml`). Install the hooks once per clone, from the
+package root:
 
 ```sh
-Rscript tools/verify.R
+pre-commit install
+.fleet-ci/pre-push --install
 ```
 
-That is the same chain the pre-push hook runs — docs, findings registry, lint,
-`R CMD check --as-cran` — and the same chain `origin`'s `check` job runs on
-every push to `main` (SITE-dzikrmnh). See
+From then on the gate runs on every push, on each pushed ref's tip, followed
+by the pre-commit pre-push hooks. `pre-commit install -f` (which installs
+both hook types, from `.pre-commit-config.yaml`'s
+`default_install_hook_types`) and `pre-commit install -f --hook-type
+pre-push` replace that hook and drop the gate; re-run
+`.fleet-ci/pre-push --install` after either. Without `-f`,
+`pre-commit install` keeps the gate (pre-commit's migration mode). To run the
+gate by hand on `HEAD`:
+
+```sh
+.fleet-ci/gate auto
+```
+
+The gate checks the committed tree, never uncommitted edits. A docs-only
+change runs spelling and `pkgdown::check_pkgdown()`; any other runs the docs
+drift, findings-registry, R-floor, line-width, CRAN incoming, lint, URL,
+README and NEWS checks, then `R CMD check --as-cran`. See
+[design/ci.md](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/ci.md)
+for the tiers and
 [docs/repo-hygiene.md](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/docs/repo-hygiene.md)
-for the individual stages and for `--all`.
+for the individual checks.
 
 ## Formatting
 
@@ -50,17 +69,18 @@ in `DESCRIPTION` under `Config/roxygen2/version`; install that exact version so
 Rscript -e 'pak::pak("roxygen2@8.1.1")'
 ```
 
-The pre-push verify gate's `docs` stage enforces this. It fails if the
-installed roxygen2 differs from the pin, or if regenerating the docs changes
-`man/`, `NAMESPACE` or `DESCRIPTION`. It judges the commit, not your working
-tree, so commit the output of `devtools::document()` before you push.
+The gate's docs drift check (`scripts/check-docs-drift.R`) enforces this. It
+fails if the roxygen2 in the fleet image differs from the pin, or if
+regenerating the docs changes `man/`, `NAMESPACE` or `DESCRIPTION`. It judges
+the commit, not your working tree, so commit the output of
+`devtools::document()` before you push.
 
 Source lives in `R/`, tests and their Cucumber `.feature` files live in
 `tests/testthat/`, and durable project context lives in `docs/`.
 `ARCHITECTURE.md` is the entry point to it, and `design/` holds the maintainer
 notes this file does not: the CRAN release deltas in
 [`design/release-deltas.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/release-deltas.md),
-and what CI runs on a branch in
-[`design/ci-on-branches.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/ci-on-branches.md).
+and the CI tiers and the local gate in
+[`design/ci.md`](https://gitlab.com/bart-turczynski/sitemapr/-/blob/main/design/ci.md).
 
 Keep local-only planning state in `_scratch/`. Do not commit `_scratch/`, `.fp/`, secrets, dependency folders, build outputs, or generated caches.

@@ -1,459 +1,35 @@
-# GitLab CI for sitemapr: publish the pkgdown site, an offline
-# citation-metadata check, and (since SITE-dzikrmnh) a `check` job that runs
-# the same `tools/verify.R` chain the pre-push hook runs. Before SITE-dzikrmnh
-# this file defined exactly two jobs (`citation-version`, `pages`), so a green
-# pipeline proved only that the docs site built — nothing about the package
-# itself. It is still deliberately NOT the whole ported pipeline; see below.
-# Since SEOR-fftbjnpl it also carries two schedule-only dependency audits,
-# `osv-audit` and `security-audit`, at the end of this file. Since the fleet
-# standard (seor design/fleet-standard.md, ADR 0007; SEOR-dunwqfkj) every push
-# to `main` also runs a `coverage` job that fails below 95%, `check` also
-# checks README drift, `citation-version` also checks the NEWS heading, and
-# the weekly `deep-check` schedule runs R CMD check on R release, oldrel,
-# devel and the declared 4.1 floor.
+# GitLab CI for sitemapr: fleet-ci's template, pinned by commit SHA (seor
+# ADR 0012, fleet-ci README "The CI template"). The template owns the event
+# table, the jobs and the images; this file sets only the package's switches
+# and adds its x-floor job. A push to main or a branch, and a merge request,
+# create no pipeline: the merge gate is the local one (.fleet-ci/gate, run by
+# the .fleet-ci/pre-push hook). T2 runs on the deep-check schedule
+# (SCHEDULE_KIND=deep-check), T3 on a RELEASE=1 web pipeline and a v* tag.
+# design/ci.md has the whole picture and the gaps the migration accepted.
 #
-# Scope of the `pages` job: publish the pkgdown site, and nothing else. DESCRIPTION advertises a
-# documentation URL, `R CMD check --as-cran` fetches every declared URL, and
-# until this file existed nothing had ever published one (`GET
-# /projects/:id/pages` reported `deployments: []`). That is the whole problem
-# this file solves (SITE-rysgulhf).
-#
-# `Rscript tools/verify.R` under the pre-push hook remains the SINGLE
-# definition of "verified", exactly as AGENTS.md and docs/repo-hygiene.md say;
-# `scripts/check-citation.py` runs beside it on the same hook. The `check` job
-# below does not reimplement that chain — it shells out to the identical
-# command, so CI and the hook cannot disagree about what "verified" means. It
-# still is not a substitute for the hook: `only_allow_merge_if_pipeline_succeeds`
-# is false, and `main`'s branch protection limits who may push or merge
-# (Maintainers), not what, so this pipeline is a second opinion, not a gate in
-# front of `main`. A split pipeline (separate
-# `guards`/`lint`/`docs`/`check` jobs plus `coverage` and `readme`) was
-# proposed on SITE-fxkbboia and dropped on 2026-09-30: seor's ADR 0005
-# (SEOR-pgammbgo) settled the fleet on folding cheap jobs into one, because
-# per-job runner pickup, not compute, dominated wall time. So the README
-# check rides in `check` and the NEWS check in `citation-version`; only
-# coverage, which re-runs the whole test suite, is a job of its own.
-#
-# Runner: `seor-local-docker` IS attached to this project (confirmed via the
-# GitLab runners API 2026-09-22, `runner_type: project_type`, `status:
-# online`). It accepts untagged jobs (`run_untagged: true`), but `default:`
-# still names its `local-docker` tag so the dependency on it is explicit
-# (SEOR-hhtzaknn). It is one of several self-hosted Docker runners
-# registered from a single Mac's `~/.gitlab-runner/config.toml` — not a
-# GitLab-hosted shared runner — and is also the runner five other repos in
-# the fleet use (design/adr/0003 in seor, SEOR-gpafxhua). That host's
-# `concurrent` setting is 4, not 1 (raised from 2 on 2026-09-23), so jobs
-# from different repos can run at the same time rather than strictly
-# queuing one at a time; they still contend for that one machine's CPU and
-# network, which is a real constraint, just not the one "concurrency 1"
-# described.
-
-stages:
-  - verify
-  - deploy
-  - audit
-
-default:
-  # The fleet's jobs run only on the self-hosted Docker runners on the
-  # maintainer's Mac, which carry this tag. Naming it makes that dependency
-  # explicit: while the Mac sleeps, jobs sit pending and then fail as
-  # `stuck_pending_no_matching_runners`, which is infrastructure, not code
-  # (seor design/stuck-pending-runbook.md; SEOR-hhtzaknn).
-  tags: [local-docker]
-
-# The shared R setup: every job that runs R extends `.r`. It was `default:`
-# until SEOR-dpjdwhbi, which moved it here because its before_script now
-# installs pandoc with apt and dpkg, and `default:` hands its before_script to
-# every job, whatever its image (seor design/fleet-standard.md, "CI on every
-# push to `main`"). `citation-version` (python:3.14-alpine) and `floor-check`
-# (its own before_script) do not extend it.
-.r:
-  # Pinned to a minor R series rather than `latest`, so an upstream R release
-  # cannot turn this red on a day nothing in the package changed. Matches the
-  # image the sibling pagerankr/pslr pipelines run on, so the runner host needs
-  # no additional one-off `docker pull --platform linux/arm64 rocker/r-ver:4.6`.
-  image: rocker/r-ver:4.6
-  variables:
-    # The pandoc every R job runs, installed in before_script below.
-    # scripts/check-toolchain.R reads this line and fails the pre-push gate
-    # when the local pandoc differs; seor's scripts/check-fleet-standard.py
-    # checks it against the fleet's version (seor design/fleet-standard.md,
-    # "CI on every push to `main`"; SEOR-egfbijyi, SEOR-dpjdwhbi). It is not
-    # the only place the version lives. A bump moves these together, in one
-    # change:
-    #   - this PANDOC_VERSION;
-    #   - both sha256 digests in before_script below (amd64, arm64), the
-    #     release's own published values;
-    #   - README.md, re-knit under the new pandoc;
-    #   - PANDOC_PIN in seor's scripts/check-fleet-standard.py, the fleet's
-    #     version, which every member's pin is checked against.
-    PANDOC_VERSION: "3.10"
-  before_script:
-    - mkdir -p "$R_LIBS_USER"
-    # Add CRAN itself BEHIND the image's p3m repo.
-    #
-    # rocker/r-ver points `install.packages()` at the Posit binary repo (p3m)
-    # for this image's Ubuntu release, so R packages normally arrive prebuilt.
-    # But p3m lags CRAN by up to a day or more for a new release, and there is
-    # no snapshot date that fixes it: measured ~38 h after rurl 3.0.1 was
-    # published, the `2026-09-01` snapshot, the same-day `2026-09-09` snapshot
-    # and `__linux__/noble/latest` ALL still served rurl 1.2.0, while
-    # cloud.r-project.org served 3.0.1. sitemapr declares `rurl (>= 3.0.1)`, so
-    # from p3m alone that dependency is unresolvable at any coordinate and the
-    # job dies with "Can't install dependency rurl (>= 3.0.1)".
-    #
-    # p3m stays FIRST so everything else still arrives as a binary — resolving
-    # the whole Suggests set from source would otherwise dominate the job.
-    # CRAN is a source-only fallback for the handful of packages p3m has not
-    # synced yet; `available.packages()` unions the two and takes the highest
-    # version, so on any day p3m is current this line changes nothing.
-    #
-    # Appended to Rprofile.site rather than rewriting it, so rocker's
-    # HTTPUserAgent line — the one that makes p3m serve binaries instead of
-    # source — survives, and this later `options()` call wins.
-    # Proven in pagerankr at cfdef3c.
-    - |
-      Rscript -e '
-      current <- getOption("repos")[["CRAN"]]
-      if (is.null(current) || !nzchar(current) || identical(current, "@CRAN@")) {
-        stop("Expected a repo in Rprofile.site, found: ", current, call. = FALSE)
-      }
-      line <- sprintf("options(repos = c(P3M = %s, CRAN = %s))",
-                      dQuote(current, FALSE),
-                      dQuote("https://cloud.r-project.org", FALSE))
-      cat(line, "\n", sep = "", file = file.path(R.home(), "etc", "Rprofile.site"),
-          append = TRUE)'
-    - Rscript -e 'cat("Effective repos:\n"); print(getOption("repos"))'
-    # Self-evidencing check for the R_LIBS fix below (SEOR-dyzgzyot): print
-    # .libPaths() on every job so a future change to this image, or to the
-    # variables below, that puts the cache dir anywhere but first is visible
-    # in the log instead of failing silently -- the exact way this broke
-    # before: the cache archived and restored fine, it was just always empty,
-    # because R never installed anything into it.
-    - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
-    # rocker/r-ver ships neither pandoc nor curl. apt's pandoc is the fallback
-    # the block below leaves in place; curl and ca-certificates fetch the
-    # pinned one.
-    - >
-      apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
-      --no-install-recommends curl ca-certificates pandoc
-    # pandoc is PINNED, in every R job, as the fleet standard requires (seor
-    # design/fleet-standard.md, "CI on every push to `main`"; SEOR-egfbijyi).
-    # Its markdown writer reflows text and pads tables differently between
-    # versions, so README.md is byte-stable only under the pandoc that knit it,
-    # PANDOC_VERSION above. Until SEOR-dpjdwhbi, `check`, `deep-check` and
-    # `pages` each installed apt's pandoc by hand, so `check`'s README drift
-    # step knit with whatever apt shipped.
-    #
-    # The release .deb is installed over the apt pandoc above. The two sha256
-    # values are the release's own published digests, as seor records them;
-    # what else moves with them on a bump is listed at PANDOC_VERSION above.
-    # A failed or mismatched download only warns and leaves the apt pandoc in
-    # place, so every job still runs and reports, and README drift `check`
-    # reports after that warning is suspect. Nothing unverified is ever
-    # installed. The download retries and has a ceiling: --max-time (which
-    # the fleet checker requires) bounds each attempt and --retry-max-time the
-    # retries, so a stalled CDN reaches that warning in about seven minutes at
-    # most instead of hanging every R job.
-    #
-    # `apt-mark hold pandoc`, only after a successful `dpkg -i`: no later apt
-    # step replaces the pin. An upgrade leaves it, and an install that needs
-    # another pandoc fails loudly. Where apt's pandoc is older than the pin, as
-    # on rocker images, apt would not replace it anyway; the hold is the fleet's
-    # canonical shape. A failed hold only warns, so it never stops a gate (seor
-    # design/fleet-standard.md; SEOR-vzupmeqj).
-    - |
-      ARCH=$(dpkg --print-architecture)
-      case "$ARCH" in
-        amd64) PANDOC_SHA256=d502599878eb29af3ae5f0cb5d559134df96534125d452c7a0674a5bad2c5ecf ;;
-        arm64) PANDOC_SHA256=b651c8bfd5a0a2f6650d6c0830131747ef67a1d9c0475b1399626611419e2205 ;;
-        *) PANDOC_SHA256=unknown ;;
-      esac
-      if curl -fsSL --retry 3 --retry-delay 5 --retry-max-time 300 --connect-timeout 20 --max-time 120 \
-        -o /tmp/pandoc.deb "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-${ARCH}.deb" \
-        && echo "${PANDOC_SHA256}  /tmp/pandoc.deb" | sha256sum -c - \
-        && dpkg -i /tmp/pandoc.deb; then
-        apt-mark hold pandoc || echo "WARNING: pandoc ${PANDOC_VERSION} installed but not held; a later apt step may replace it"
-        echo "pandoc ${PANDOC_VERSION} installed"
-      else
-        echo "WARNING: pandoc ${PANDOC_VERSION} not installed; this job runs on the apt pandoc"
-      fi
-      pandoc --version | sed -n 1p
-    # pak from r-lib's own binary repository, not the image's repos. The
-    # runners are arm64, and p3m serves no arm64 binaries for the 4.5, devel
-    # and 4.1.3 deep-check images, so `install.packages("pak")` built pak from
-    # source there, compiled `curl` against libcurl headers those images lack,
-    # failed with only a warning, and the next step died on "there is no
-    # package called 'pak'" (schedule pipeline 2909390988; punycoder hit the
-    # same in pipeline 2894951198, and seor took this fix). The r-lib repo serves a
-    # self-contained build for every R version and architecture, so every job
-    # takes the same path (floor-check, which installs without pak, sets its
-    # own before_script). Once pak is in, PKG_SYSREQS below has it apt-install
-    # libcurl and the other headers the package's own dependencies need.
-    - >
-      Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
-      install.packages("pak", repos = sprintf(
-      "https://r-lib.github.io/p/pak/stable/%s/%s/%s",
-      .Platform$pkgType, R.Version()$os, R.Version()$arch))'
-  cache:
-    # Keyed on DESCRIPTION: the library only needs rebuilding when the declared
-    # dependencies move.
-    key:
-      files:
-        - DESCRIPTION
-    paths:
-      - .cache/R
+# Bump the pin by changing `ref:` and re-running fleet-ci's bin/vendor at the
+# same SHA, in one merge request: .fleet-ci/VERSION must equal `ref:`.
+include:
+  - project: bart-turczynski/fleet-ci
+    ref: 864e5386511de38b0dff594ba3118a800f662cc7
+    file: templates/r-package.yml
 
 variables:
-  R_LIBS_USER: "$CI_PROJECT_DIR/.cache/R"
-  # `R_LIBS_USER` alone does NOT make the cache work. rocker's Renviron.site
-  # sets `R_LIBS=${R_LIBS-'…site-library:…library'}`, which puts the container's
-  # own site library first in `.libPaths()` and leaves `.cache/R` third — so pak
-  # installs into the container, `.cache/R` is archived EMPTY, and every job
-  # re-downloads the full dependency set while the log still reports
-  # "Successfully extracted cache". Setting `R_LIBS` wins because that
-  # Renviron.site default defers to an already-set value.
-  R_LIBS: "$CI_PROJECT_DIR/.cache/R:/usr/local/lib/R/site-library:/usr/local/lib/R/library"
-  # pak resolves Ubuntu system requirements itself; the image runs as root, so
-  # it can act on them. Saves hand-maintaining an apt list.
-  PKG_SYSREQS: "true"
-  GIT_DEPTH: "0"
-
-# Exactly one pipeline per unit of work: the one on `main`. The rule set
-# below SUPERSEDES an earlier one that only suppressed the branch pipeline
-# when its merge request was still open (the standard GitLab duplicate-
-# pipeline guard). That guard was not enough: this fleet's slice flow
-# (branch -> commit -> push -> MR -> merge -> delete, AGENTS.md) fires THREE
-# pipelines per unit - branch, merge-request, and main - and the fleet's
-# self-hosted runners (see above), all registered on one Mac, serve eight
-# projects at `concurrent = 4` (not 1 - design/adr/0003 in seor,
-# SEOR-gpafxhua), so several of those pipelines CAN run at once rather than
-# strictly queuing one at a time - but they are still contending for one
-# machine's finite CPU and network, so extra pipelines are still waste, just
-# not the "everything queues serially" waste this comment originally
-# described. Two of the three are useless: the branch pipeline frequently
-# starts only after the slice flow has already deleted the branch, and dies
-# at `get_sources` with exit 128; the merge-request pipeline for an MR that
-# is already merged has repeatedly outlived its own branch and held one of
-# the runner's four slots for tens of minutes - once over half an hour -
-# while `main`'s pipeline, the one that actually verifies anything, sat
-# pending behind whichever slot was free. The
-# superseded guard above never touched that second case, because it only
-# ever suppressed the branch pipeline. Decided fleet-wide on SEOR-bmgkzhvy
-# (2026-09-22, applied to every repo but pslr, whose manual-only gate is
-# deliberate): suppress BOTH the branch and merge-request pipelines and run
-# CI only on tags and pushes to the default branch.
-#
-# Costs, named rather than dropped quietly:
-# - No CI result is visible before a merge lands. That costs nothing here in
-#   practice: `only_allow_merge_if_pipeline_succeeds` is false, `main` is a
-#   protected branch (Maintainer role gates push/merge, not CI status - see
-#   the fleet-wide correction on SEOR-bmgkzhvy), and the local
-#   `Rscript tools/verify.R` pre-push gate is what actually blocks bad code,
-#   and it runs before the push ever happens.
-# - A feature-branch push gets no pipeline at all. That is the intent.
-# - An API-triggered pipeline on any branch OTHER than `main` creates nothing
-#   (it falls through to the final `when: never`), so `glab ci run` is not a
-#   way around the line above.
-# - A pipeline started by hand from Build > Pipelines > Run pipeline IS
-#   admitted, on any ref, and runs `check` and `citation-version` against it.
-#   That is the escape hatch: with no branch pipeline and no MR pipeline, it
-#   is the only way to get a server-side answer about a branch before merging
-#   it. It cannot fire on its own, so it does not reintroduce the pile-up
-#   this block exists to prevent, which was push- and merge-request-driven.
-#   `pages` is pinned to the default branch, so the hatch verifies a branch
-#   and never publishes one. This file never had a `web` rule of its own, so
-#   nothing is being restored here - it is being granted, to match the fleet.
-# - The `coverage` job's cobertura report feeds GitLab's per-line diff
-#   annotations only on an MR pipeline, which this file never creates; the
-#   job still drives the coverage badge and fails `main` below 95%.
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: never
-    - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - when: never
-
-# CITATION.cff's `version:` and .zenodo.json's `"version"` must name the
-# release DESCRIPTION's Version points at (X.Y.Z -> X.Y.Z; X.Y.Z.9000 ->
-# X.Y.Z), plus every URL those two files declare must also appear in
-# DESCRIPTION's URL field. sitemapr is conformant today; this job exists so it
-# stays that way. Ported from seor, where the rule is design/adr/0001 and
-# design/adr/0002.
-#
-# Offline and stdlib-only, so it does not extend `.r`: neither the R image, the
-# R `before_script` nor the DESCRIPTION-keyed cache exists on
-# python:3.14-alpine. It costs seconds.
-#
-# The same job runs scripts/check-bugreports.py, the equally offline gate that
-# holds DESCRIPTION's BugReports:, codemeta.json and every tracker link on
-# /-/work_items (seor's ADR 0011:
-# https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md).
-#
-# It also runs scripts/check-news.py, the news-terse pre-push hook: NEWS.md
-# bullets are one terse line, user-facing changes only (seor's
-# design/fleet-standard.md, "NEWS.md bullets").
-#
-# It also runs the news-version check, seor's job of that name folded in here
-# (ADR 0005 in seor: no runner pickup for a second of shell): the top NEWS.md
-# heading must read "(development version)" or exactly the DESCRIPTION
-# Version, which catches a stale heading left behind at release. busybox
-# grep and sed are enough.
-citation-version:
-  stage: verify
-  image: python:3.14-alpine
-  script:
-    - python3 scripts/check-citation.py --self-test
-    - python3 scripts/check-citation.py
-    - python3 scripts/check-bugreports.py --self-test
-    - python3 scripts/check-bugreports.py
-    - python3 scripts/check-news.py --self-test
-    - python3 scripts/check-news.py NEWS.md
-    - |
-      set -eu
-      version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION | head -n 1)"
-      heading="$(grep -m 1 '^# ' NEWS.md | sed 's/^#[[:space:]]*sitemapr[[:space:]]*//')"
-      echo "DESCRIPTION Version : '$version'"
-      echo "Top NEWS.md heading : '$heading'"
-      if [ "$heading" != "(development version)" ] && [ "$heading" != "$version" ]; then
-        echo "The top NEWS.md heading is neither '(development version)' nor the DESCRIPTION Version. Update NEWS.md."
-        exit 1
-      fi
-
-# `R CMD check --as-cran` plus the whole DEFAULT `tools/verify.R` chain —
-# docs-reproducibility, the findings-registry guard, the R-floor guard, the
-# air/.lintr line-width agreement guard, spelling, the CRAN-incoming guard,
-# lintr, the URL check, then `check` itself — as ONE job, by running the bare `Rscript tools/verify.R` the pre-push hook
-# runs with no arguments, so CI checks everything the gate checks.
-#
-# Then the README drift check the fleet standard puts on every push
-# (SEOR-dunwqfkj). tools/verify.R's own `readme` stage stays opt-in on the
-# hook, because it needs the network; here it runs as seor's `readme` job
-# does, after the chain, reusing this job's library and pandoc rather than
-# paying for a job of its own.
-check:
-  extends: .r
-  stage: verify
-  script:
-    # R CMD check builds the vignettes through rmarkdown, which shells out to
-    # pandoc; `.r` installs the pinned one, which the README drift check at
-    # the end needs too.
-    # git for the README diff at the end; rocker/r-ver does not ship it.
-    - apt-get update -qq && apt-get install -y --no-install-recommends git
-    # Full Suggests, not just Imports: the `check` stage runs the testthat
-    # suite and builds the vignettes, both of which reach into Suggests.
-    # rcmdcheck, lintr, spelling and the pinned roxygen2 are dev tooling the
-    # verify stages need, not declared dependencies of the package itself —
-    # same split the `pages` job below makes for pkgdown.
-    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
-    - |
-      Rscript -e '
-      pak::pkg_install(c(
-        "devtools",
-        "lintr",
-        "rcmdcheck",
-        "spelling",
-        paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]])
-      ))'
-    - Rscript tools/verify.R
-    - Rscript -e 'devtools::build_readme()'
-    # Blank-line-only differences don't count: pandoc versions disagree about
-    # the blank line after `<!-- badges: start -->` (seor SEOR-oaqnafzs). The
-    # test reads the diff's output, not `--exit-code`, which git 2.43 still
-    # sets on a blank-only diff under --ignore-blank-lines (SEOR-kaqtnovh).
-    - |
-      readme_diff=$(git diff --ignore-blank-lines -- README.md)
-      if [ -n "$readme_diff" ]; then
-        printf '%s\n' "$readme_diff"
-        echo "README.md is out of sync with README.Rmd. Run devtools::build_readme() and commit the result."
-        exit 1
-      fi
-
-# Coverage, reported through GitLab natively: the `coverage:` regex drives the
-# badge, the cobertura artifact the diff annotations. The fleet floor is 95%
-# total coverage and is never lowered; a package under it adds tests (seor ADR
-# 0007). sitemapr holds 100%, which tools/verify.R's opt-in `coverage` stage
-# enforces line by line before a release; this job is the softer floor every
-# push must clear. Its own job, not a step of `check`: it re-runs the whole
-# test suite, so folding it in would double that job's wall time.
-coverage:
-  extends: .r
-  stage: verify
-  script:
-    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
-    - Rscript -e 'pak::pkg_install("covr")'
-    - >
-      Rscript -e 'cov <- covr::package_coverage(quiet = FALSE);
-      covr::to_cobertura(cov);
-      pct <- covr::percent_coverage(cov);
-      cat(sprintf("Coverage: %.2f%%\n", pct));
-      if (pct < 95) stop(sprintf("coverage %.2f%% is below the fleet floor of 95%%", pct), call. = FALSE)'
-  coverage: '/Coverage: (\d+\.\d+)%/'
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: cobertura.xml
-
-# The weekly release-shaped check (seor design/fleet-standard.md,
-# "deep-check"): `R CMD check --as-cran` through the same `check` stage of
-# tools/verify.R, on R release, oldrel and devel. Bump the release and oldrel
-# tags when a new minor R ships. The leg at the declared floor is its own job,
-# `floor-check` below.
-#
-# Only a schedule that sets SCHEDULE_KIND=deep-check runs it (a variable on
-# the schedule itself, never a project variable, which every schedule would
-# inherit); any other schedule falls to `when: never`. A scheduled run is
-# BLOCKING. A hand-started `web` pipeline offers it as a manual, non-blocking
-# job, as the audits below do.
-#
-# Each leg starts from an empty library (`cache: []`): the shared cache holds
-# binaries built for one R, and loading them under another fails in ways that
-# read like package bugs.
-# The rules both deep-check jobs share, as a template rather than a YAML
-# anchor: seor's fleet checker follows `extends:` but reads an anchor only as
-# a whole top-level block.
-.deep-check-rules:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: manual
-      allow_failure: true
-    - when: never
-
-deep-check:
-  extends: [.r, .deep-check-rules]
-  stage: verify
-  image: rocker/r-ver:$R_VERSION
-  cache: []
-  parallel:
-    matrix:
-      - R_VERSION: ["4.6", "4.5", "devel"]
-  script:
-    # qpdf: R 4.5's --as-cran raises a WARNING, "'qpdf' is needed for checks
-    # on size reduction of PDFs", when the binary is absent, and the check
-    # stage's error_on = "warning" turns that red (pipeline 2909482009, the 4.5
-    # leg). R 4.6 does not ask, which is why `check` on the default image never
-    # needed it. No rocker/r-ver image ships qpdf; robotstxtr's and punycoder's
-    # full-check install it too. pandoc comes from `.r`.
-    - apt-get update -qq && apt-get install -y --no-install-recommends qpdf
-    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
-    - Rscript -e 'pak::pkg_install("rcmdcheck")'
-    - Rscript tools/verify.R check
+  # sitemapr has no compiled code (no src/), which the sanitizer leg exists
+  # for; the former CI had no sanitizer job either.
+  FLEET_SANITIZERS: "false"
+  # The template's t2-floor installs every dependency from one dated
+  # snapshot, and sitemapr's floor closure cannot come from one: rurl (>=
+  # 3.0.1) and the other fleet packages postdate the last snapshot whose
+  # curl still builds against the libcurl of R 4.1.3's image. So the floor
+  # leg is x-floor, on .t2-job, in its place.
+  FLEET_FLOOR: "false"
 
 # The deep-check leg at the declared R floor, `Depends: R (>= 4.1.0)`, in
-# punycoder's and robotstxtr's floor-check shape (seor design/fleet-standard.md,
-# "A leg at the declared R floor"). 4.1.3 is the last 4.1 patch and the oldest
-# minor rocker publishes an arm64 image for, which the runner needs; 4.0.5 has
-# none. A separate job rather than a matrix row, because old R needs
-# old-enough dependencies: as a row it resolved through pak against the
-# image's snapshot with CRAN behind it, got curl 8.0.0, and that failed to
-# compile against Ubuntu 20.04's libcurl 7.68 with `CURLINFO_EFFECTIVE_METHOD
-# undeclared` (pipeline 2909482009).
+# place of the template's t2-floor (FLEET_FLOOR above): the former
+# `floor-check` job, unchanged but for its rules, which .t2-job now gives.
+# 4.1.3 is the last 4.1 patch and the oldest minor rocker publishes an arm64
+# image for, which the runner needs; 4.0.5 has none.
 #
 # - Third-party packages come from one dated Posit Package Manager snapshot,
 #   FLOOR_SNAPSHOT, installed with base install.packages() (source builds; the
@@ -461,38 +37,40 @@ deep-check:
 #   the first snapshot carrying httr2 1.2.0, which robotstxtr (a Suggests the
 #   robots tests need) requires, while its curl is still 6.4.0, which builds
 #   against libcurl 7.68 (every curl since 7.0.0 wants libcurl >= 7.73), and
-#   its bit64 predates 4.8.0, which gcc 9 rejects. The snapshot lives in this
-#   job alone, so it cannot conflict with what the matrix legs install.
+#   its bit64 predates 4.8.0, which gcc 9 rejects.
 # - The fleet packages postdate that snapshot, so they come after it: rurl
 #   (DESCRIPTION wants >= 3.0.1), punycoder and pslr from current CRAN,
 #   robotstxtr (>= 0.3.0, not on CRAN) from the fleet's r-universe. All declare
 #   R >= 4.1 or lower, and their own dependencies are already installed from
 #   the snapshot by then.
 # - Only what the check needs is installed: the Imports, the test and vignette
-#   Suggests, and rcmdcheck. oysteR and rosv serve only the scheduled audits,
-#   whose tests skip without them, so _R_CHECK_FORCE_SUGGESTS_=false lets
-#   --as-cran report them as a NOTE instead of stopping.
-# - Vignettes are neither built nor checked: no pandoc in this job, and the
-#   vignette exercises the same functions the tests do. Otherwise this is the
-#   `check` stage of tools/verify.R: --as-cran with CRAN incoming (the two
-#   R_CRAN_* variables point it at cloud.r-project.org rather than the
-#   snapshot), error_on = "warning", the same 300s download timeout, and a
-#   guard on R CMD check's own exit status, because rcmdcheck reads a check
-#   that halted partway as 0/0/0 and returns normally (SEOR-maavnxdm).
-# - Its own before_script, not `.r`'s: pak and the p3m/CRAN repos `.r` sets up
-#   are what this job exists to avoid.
-floor-check:
-  extends: .deep-check-rules
-  stage: verify
+#   Suggests, and rcmdcheck. oysteR and rosv serve only the audits, whose
+#   tests skip without them, so _R_CHECK_FORCE_SUGGESTS_=false lets --as-cran
+#   report them as a NOTE instead of stopping.
+# - Vignettes are neither built nor checked: no pandoc in this image, and the
+#   vignette exercises the same functions the tests do. The check is --as-cran
+#   with CRAN incoming off (_R_CHECK_CRAN_INCOMING_ below; the two R_CRAN_*
+#   variables point any CRAN metadata read at cloud.r-project.org rather than
+#   the snapshot), error_on = "warning", a 300s download timeout (the
+#   archive.rds stall, SITE-xolykhjm), and a guard on R CMD check's own exit
+#   status, because rcmdcheck reads a check that halted partway as 0/0/0 and
+#   returns normally (SEOR-maavnxdm).
+#
+# BLOCKING, like every T2 leg: a scheduled detector that cannot go red is
+# worthless.
+x-floor:
+  extends: .t2-job
   image: rocker/r-ver:4.1.3
   variables:
     FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/2025-07-15"
     R_CRAN_SRC: "https://cloud.r-project.org"
     R_CRAN_WEB: "https://cloud.r-project.org"
     _R_CHECK_FORCE_SUGGESTS_: "false"
-  before_script:
-    - mkdir -p "$R_LIBS_USER"
-    - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
+    # Incoming off: .t2-job runs this leg in v* tag pipelines too, where the
+    # incoming feasibility check's "Insufficient package version" (the tag's
+    # version already on CRAN) would fail it and so block `pages`. t2-ascran
+    # runs the incoming checks, on R release.
+    _R_CHECK_CRAN_INCOMING_: "false"
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends libcurl4-openssl-dev libssl-dev libxml2-dev zlib1g-dev pkg-config
     - >
@@ -510,148 +88,10 @@ floor-check:
     - >
       Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran", "--ignore-vignettes"),
       build_args = c("--no-manual", "--no-build-vignettes"),
-      error_on = "warning", env = c(R_DEFAULT_INTERNET_TIMEOUT = "300"));
+      error_on = "warning", check_dir = "check", env = c(R_DEFAULT_INTERNET_TIMEOUT = "300"));
       if (!identical(as.integer(res$status), 0L)) stop("R CMD check exited with status ", res$status, "; the run did not complete.", call. = FALSE)'
-
-# The docs site. Must be named `pages` and publish `public/` — that pairing is
-# what GitLab Pages deploys, not a convention this file chose. `_pkgdown.yml`
-# sets `destination: site` (the repo's `docs/` holds durable project context,
-# not generated output), hence the `site` -> `public` move rather than
-# pkgdown's default `docs` -> `public`.
-#
-# Default branch only: a site rebuilt from every merge request would publish
-# unreviewed docs to the same URL.
-#
-# Publishing here is necessary but NOT sufficient for the declared URL to
-# answer 200 to an anonymous client: that also needs the project's
-# `pages_access_level` to be `enabled` (it is), because `private` 403s whatever
-# is deployed. That setting lives in the project settings, an owner action,
-# not something this file can change.
-pages:
-  extends: .r
-  stage: deploy
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script:
-    # pkgdown renders the vignettes through rmarkdown, which shells out to
-    # pandoc; `.r` installs the pinned one.
-    # `dependencies = TRUE` pulls Suggests as well as Imports: pkgdown builds
-    # the vignettes (knitr, rmarkdown) and evaluates the examples, some of
-    # which reach for the optional `robotstxtr` engine. That one resolves via
-    # DESCRIPTION's `Remotes: gitlab::bart-turczynski/robotstxtr@v0.3.0`, so
-    # this step needs the robotstxtr project to stay publicly readable — pak
-    # reports a 403, not a missing package, if it is not.
-    - Rscript -e 'pak::local_install_dev_deps(dependencies = TRUE)'
-    - Rscript -e 'pak::pkg_install("pkgdown")'
-    # sitemapr itself must be INSTALLED, not merely loaded: `build_reference()`
-    # evaluates the examples, and those call `library(sitemapr)`. Building with
-    # `install = FALSE` and no installed copy fails at the first example with
-    # "there is no package called 'sitemapr'".
-    - Rscript -e 'pak::local_install(upgrade = FALSE)'
-    # pkgdown renders EVERY top-level .md into the site, so the agent
-    # instruction files were being published as AGENTS.html, CLAUDE.html and
-    # friends next to the reference -- internal working notes served as if
-    # they were user documentation, and indexable (SEOR-pibdjanz).
-    #
-    # A GOOD (keep) list, not a glob of known-bad names: scripts/filter-agent-md.sh
-    # moves every top-level *.md file out of this checkout unless it is on
-    # that script's keep list, so an unknown file defaults to private. This
-    # replaced an earlier `rm -f AGENTS*.md CLAUDE*.md FP_*.md`, which named
-    # the bad files and was fail-OPEN -- a new agent tool's instruction-file
-    # family (GEMINI.md, CODEX.md, ...) matched none of those three globs and
-    # would have published unnoticed, the same way the original leak reached
-    # four repos after being fixed in one (SEOR-wqxhftpv). See that script for
-    # the keep list itself and the fail-loud safety net behind it.
-    # CI-PIN: agent-md filter step below
-    - sh scripts/filter-agent-md.sh
-    - Rscript -e 'pkgdown::build_site(new_process = FALSE, install = FALSE)'
-    - mv site public
   artifacts:
+    when: always
     paths:
-      - public
-
-# ---------------------------------------------------------------------------
-# audit -- dependency vulnerability audits, on a schedule only (SEOR-fftbjnpl)
-#
-# Ported from seor's `osv-audit` / `security-audit`, with punycoder's
-# SCHEDULE_KIND selector. Before this, tests/testthat/test-security.R and
-# test-osv.R had no runner at all: every automated path (the pre-push hook,
-# the `check` job) reaches them through rcmdcheck, which does not set
-# NOT_CRAN, so both skip there (see test-security.R's header).
-#
-# SCHEDULE_KIND selects among schedule-triggered jobs. A scheduled pipeline
-# alone is not a selector: a job guarded only by
-# `$CI_PIPELINE_SOURCE == "schedule"` would fire on ANY schedule this project
-# ever gets. So each job below requires the schedule to carry the pipeline-
-# schedule variable `SCHEDULE_KIND=dependency-audit` (set on the schedule under
-# Build > Pipeline schedules > edit > Variables, not in this file). The
-# workflow: rules above admit a scheduled pipeline because it runs on the
-# default branch (`$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH`).
-#
-# OWNER GATE: this file cannot create the schedule. Until one exists on
-# `main` carrying SCHEDULE_KIND=dependency-audit, neither job runs unattended.
-# Both can also be started by hand from a `web` pipeline (manual, non-
-# blocking there, so a hand-started pipeline is never held on them).
-#
-# A scheduled run is BLOCKING: `allow_failure` is not set on the schedule
-# rule, because a detector that reports success when it fires is worthless.
-#
-# NOTE: `check`, `citation-version` and `pages` carry no rules of their own,
-# so a scheduled pipeline on `main` runs them too, alongside these audits.
-#
-# Both jobs INSTALL sitemapr rather than only loading it: test-osv.R resolves
-# the runtime closure from installed.packages(), where an uninstalled sitemapr
-# resolves to nothing and the test skips. `dependencies = TRUE` pulls
-# Suggests too, because testthat sources every setup-*.R file (the cucumber
-# step definitions) whatever the filter.
-# ---------------------------------------------------------------------------
-
-.dependency-audit:
-  stage: audit
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "dependency-audit"
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: manual
-      allow_failure: true
-    - when: never
-  variables:
-    # So skip_on_cran() cannot skip the audit silently. test_local() sets it
-    # too; kept explicit so the job does not depend on that detail.
-    NOT_CRAN: "true"
-
-# OSV database (https://osv.dev) via {rosv}. Needs no account, token or CI/CD
-# variable. Runs tests/testthat/test-osv.R against the runtime dependency
-# closure at installed versions.
-osv-audit:
-  extends: [.r, .dependency-audit]
-  script:
-    - Rscript -e 'pak::pak(c("any::rosv", "any::testthat"))'
-    - Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
-    - Rscript -e 'pak::local_install(upgrade = FALSE)'
-    - Rscript -e 'testthat::test_local(filter = "osv", stop_on_failure = TRUE)'
-
-# Sonatype OSS Index via {oysteR}. OSS Index rejects anonymous requests with
-# HTTP 401, so this job needs two CI/CD variables (Settings > CI/CD >
-# Variables): OSSINDEX_USER is the literal `x` and OSSINDEX_TOKEN a Sonatype
-# Guide personal access token (OSS Index moved to Guide). Guide's docs say the
-# username is ignored for a PAT; it is not: the account email returns 401, `x`
-# returns 200. Only a legacy OSS Index API token takes the account email.
-#
-# THIS JOB FAILS WHEN THEY ARE ABSENT, ON PURPOSE. OSSINDEX_AUDIT_REQUIRED
-# turns each missing precondition in tests/testthat/test-security.R (no
-# oysteR, no credentials) into a loud failure instead of a skip, so the job
-# cannot report success having audited nothing. It is set here and nowhere
-# else, so local runs, the pre-push gate and `check` still skip. The two
-# allow-listed curl advisories in tests/testthat/helper-security.R still
-# apply: an advisory outside that list fails, and so does a listed one that
-# is no longer reported.
-security-audit:
-  extends: [.r, .dependency-audit]
-  variables:
-    NOT_CRAN: "true"
-    OSSINDEX_AUDIT_REQUIRED: "true"
-  script:
-    - Rscript -e 'pak::pak(c("any::oysteR", "any::testthat"))'
-    - Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
-    - Rscript -e 'pak::local_install(upgrade = FALSE)'
-    - Rscript -e 'testthat::test_local(filter = "security", stop_on_failure = TRUE)'
+      - check/
+    expire_in: 1 week

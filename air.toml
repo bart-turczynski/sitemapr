@@ -9,4 +9,6 @@ line-ending = "auto"
 # Mirror .lintr's exclusions: data-raw/ holds dev/reproducibility scripts
 # (schema build + parity oracle) held to functional correctness, not package
 # style. Keep air off them so the formatter and linter agree on package source.
-exclude = ["data-raw"]
+# .fleet-ci/ is fleet-ci's bin/vendor output, which seor's fleet checker
+# requires byte for byte; re-run bin/vendor rather than reformatting it.
+exclude = ["data-raw", ".fleet-ci"]
