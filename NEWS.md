@@ -66,6 +66,7 @@ First development release: a deterministic toolkit for reading and validating XM
 * `report_sitemap()` now renders each finding's remediation hint, context, ruleset and provenance, with diagnostic provenance visually distinct (ADR-009).
 * A new **Checks** section lists each check as passed, reported an issue, or not exercised, counting a layer as run only on positive evidence.
 * A new **Recommendations** section flags absent or stale `lastmod`, ignored `priority` and `changefreq`, and documents nearing protocol size bounds.
+* `report_sitemap()` links a URL only when its scheme is `http` or `https`; any other value shows as plain text.
 * The findings tibble may carry a `layers_run` attribute naming layers that ran without leaving rows, such as `"robots"` and `"schema"`.
 
 ## Network safety
