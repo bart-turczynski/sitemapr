@@ -182,8 +182,9 @@ environment variable is set, and both default to `FALSE`. CRAN sets them:
 Setting the variables locally would not be enough: the spelling check calls the
 `aspell` program, which neither this machine nor the CI image has.
 
-**How to apply.** The `incoming` stage (`verify_incoming()` in
-`tools/verify.R`) repeats both checks offline. It runs spelling's hunspell en_US
+**How to apply.** The `incoming` gate (`verify_incoming()` in
+`tools/check-incoming.R`, formerly a stage of `tools/verify.R`) repeats both
+checks offline. It runs spelling's hunspell en_US
 over the same text after CRAN's own ignore patterns, and it reads
 `.Rbuildignore` to judge a link. Hunspell is not CRAN's aspell, so a word one
 knows and the other doesn't can still slip through either way. Treat the

@@ -122,11 +122,14 @@ mirror_failed=0
 
 if git remote get-url "$MIRROR_REMOTE" >/dev/null 2>&1; then
 	echo "==> mirroring to $MIRROR_REMOTE ($(git remote get-url "$MIRROR_REMOTE"))"
-	# --no-verify skips the pre-push verify gate on purpose. That gate runs
-	# `R CMD check` and takes minutes, but the deeper reason is that gating a
-	# backup on a green tree is backwards: a broken tree is exactly when the
-	# copy matters, and a lint failure must never be able to stop one.
-	git push --mirror --no-verify "$MIRROR_REMOTE" || mirror_failed=1
+	# No --no-verify: fleet-ci's pre-push hook skips a push whose URL is a
+	# local path, as the backup mirror's is, without running the gate or the
+	# pre-commit pre-push stage (fleet-ci README, "Local mirrors are not
+	# gated"). That matters because gating a backup on a green tree is
+	# backwards: a broken tree is exactly when the copy matters, and a lint
+	# failure must never be able to stop one. Under pre-commit's migration
+	# mode the pre-commit pre-push stage still runs (design/ci.md).
+	git push --mirror "$MIRROR_REMOTE" || mirror_failed=1
 else
 	echo "==> no '$MIRROR_REMOTE' remote configured, skipping the mirror" >&2
 fi
@@ -137,16 +140,14 @@ fi
 # unpushed, so the next merge leaves local and origin diverged over a generated
 # file, long after the run that caused it.
 #
-# Pushing it through the pre-push gate costs ~200s and buys provably nothing.
-# `^docs$` is in .Rbuildignore, so R CMD check never sees this file; the docs
-# stage reads man/ + NAMESPACE, registry reads docs/findings-registry.csv, and
-# lint reads R/. No stage of the gate can observe it.
+# It goes through the pre-push gate like any push. The commit touches only
+# docs/tracker-snapshot.md, which fleet-ci's classifier calls docs-only, so
+# the gate runs its docs tier, seconds rather than the full R CMD check.
 #
-# THE EXEMPTION IS BOUNDED ON PURPOSE. A bare `git push --no-verify` would carry
-# out every other unpushed commit ungated too -- real code riding out on the
-# back of a snapshot refresh. So the push happens only when the snapshot commit
-# is the single unpushed commit and is exactly the one made above. Anything else
-# leaves it for a normal push to carry through the gate.
+# THE PUSH IS BOUNDED ON PURPOSE. It happens only when the snapshot commit is
+# the single unpushed commit and is exactly the one made above, so a backup
+# run never carries other work out to origin on the back of a snapshot
+# refresh. Anything else leaves it for a normal push with the rest.
 #
 # HOW THE GUARD IS TESTED, and not in place. Copy this script into a throwaway
 # repository whose `origin` and `backup` are local bare repos, stub
@@ -179,11 +180,11 @@ if [ -n "$snapshot_commit" ] && git remote get-url "$ORIGIN_REMOTE" >/dev/null 2
 		ahead=$(git rev-list --count "$upstream..HEAD")
 		if [ "$ahead" = "1" ] && [ "$(git rev-parse HEAD)" = "$snapshot_commit" ]; then
 			echo "==> publishing the snapshot commit to $upstream"
-			git push --no-verify "$ORIGIN_REMOTE" "$branch" || publish_failed=1
+			git push "$ORIGIN_REMOTE" "$branch" || publish_failed=1
 		else
 			echo "==> $ahead unpushed commit(s) on $branch, so the snapshot"
 			echo "    commit is not pushed. A normal push will carry it"
-			echo "    through the verify gate with the rest."
+			echo "    through the gate with the rest."
 		fi
 	fi
 fi
