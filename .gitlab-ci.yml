@@ -27,7 +27,8 @@ variables:
 
 # The deep-check leg at the declared R floor, `Depends: R (>= 4.1.0)`, in
 # place of the template's t2-floor (FLEET_FLOOR above): the former
-# `floor-check` job, unchanged but for its rules, which .t2-job now gives.
+# `floor-check` job, but for its rules, which .t2-job now gives, and robotstxtr's
+# source.
 # 4.1.3 is the last 4.1 patch and the oldest minor rocker publishes an arm64
 # image for, which the runner needs; 4.0.5 has none.
 #
@@ -107,4 +108,4 @@ x-robotstxtr-head:
   variables:
     FLEET_JOB_SCHEDULE: deep-check
   script:
-    - Rscript tools/check-robotstxtr-head.R
+    - fleet-tools Rscript tools/check-robotstxtr-head.R

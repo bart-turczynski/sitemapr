@@ -9,18 +9,26 @@
 # reverse dependency, so this says so early.
 #
 # The fleet's r-universe builds main, and supplies ssrfr, which is on no other
-# repository yet. Both go in a temporary library. Run from the package root,
-# with sitemapr's dependencies installed.
+# repository yet. Everything goes in a temporary library. Run from the package
+# root, with sitemapr's dependencies installed.
 
 universe <- "https://bart-turczynski.r-universe.dev"
 lib <- tempfile("robotstxtr-head-")
 dir.create(lib)
+# In CI the dependencies are in the template's run library (FLEET_RUN_LIB).
+.libPaths(c(lib, Sys.getenv("FLEET_RUN_LIB"), .libPaths()))
+# Only these two come from r-universe, without dependencies: it builds every
+# fleet package's main, and a failure here has to be robotstxtr's.
+utils::install.packages(
+  c("cpp11", "curl", "pslr", "raddr", "rurl"),
+  lib = lib
+)
 utils::install.packages(
   c("ssrfr", "robotstxtr"),
   lib = lib,
-  repos = c(universe, getOption("repos"))
+  repos = universe,
+  dependencies = FALSE
 )
-.libPaths(c(lib, .libPaths()))
 
 # install.packages() only warns when a package fails, and the release already
 # in the normal library would then pass unnoticed.

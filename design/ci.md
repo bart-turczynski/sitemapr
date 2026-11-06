@@ -93,7 +93,8 @@ would inherit it.
   dated snapshot, and sitemapr's floor closure cannot come from one: rurl
   (>= 3.0.1) and the other fleet packages postdate the last snapshot whose
   curl builds against R 4.1.3's libcurl. `x-floor` (on `.t2-job`) keeps the
-  former `floor-check` unchanged; `.gitlab-ci.yml` has the detail.
+  former `floor-check`, with robotstxtr from CRAN; `.gitlab-ci.yml` has the
+  detail.
 - **No sanitizer leg (`FLEET_SANITIZERS: "false"`).** sitemapr has no
   compiled code; the former CI had none either.
 - **The Turkish-locale test runs in T1 and `t2-locale` only.**
