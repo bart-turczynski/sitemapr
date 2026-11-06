@@ -1,9 +1,9 @@
 # GitLab CI for sitemapr: fleet-ci's template, pinned by commit SHA (seor
 # ADR 0012, fleet-ci README "The CI template"). The template owns the event
 # table, the jobs and the images; this file sets only the package's switches
-# and adds its x-floor and x-robotstxtr-head jobs. A push to main or a branch, and a merge request,
-# create no pipeline: the merge gate is the local one (.fleet-ci/gate, run by
-# the .fleet-ci/pre-push hook). T2 runs on the deep-check schedule
+# and adds its x-floor and x-robotstxtr-head jobs. A push to main or a branch,
+# and a merge request, create no pipeline: the merge gate is the local one
+# (.fleet-ci/gate, run by the .fleet-ci/pre-push hook). T2 runs on the deep-check schedule
 # (SCHEDULE_KIND=deep-check), T3 on a RELEASE=1 web pipeline and a v* tag.
 # design/ci.md has the whole picture and the gaps the migration accepted.
 #
@@ -27,8 +27,8 @@ variables:
 
 # The deep-check leg at the declared R floor, `Depends: R (>= 4.1.0)`, in
 # place of the template's t2-floor (FLEET_FLOOR above): the former
-# `floor-check` job, but for its rules, which .t2-job now gives, and robotstxtr's
-# source.
+# `floor-check` job, but for its rules, which .t2-job now gives, and
+# robotstxtr's source.
 # 4.1.3 is the last 4.1 patch and the oldest minor rocker publishes an arm64
 # image for, which the runner needs; 4.0.5 has none.
 #
@@ -41,11 +41,13 @@ variables:
 #   its bit64 predates 4.8.0, which gcc 9 rejects.
 # - The fleet packages postdate that snapshot, so they come after it: rurl
 #   (DESCRIPTION wants >= 3.0.1), punycoder and pslr from current CRAN,
-#   and robotstxtr from current CRAN. Not the fleet's r-universe, which builds
-#   robotstxtr's main: that needs ssrfr, which needs curl >= 7.0.0, and this
-#   image's libcurl stops at curl 6.4.0. x-robotstxtr-head covers main. All
-#   declare R >= 4.1 or lower, and their own dependencies are already installed
-#   from the snapshot by then.
+#   and robotstxtr 0.3.1 from ROBOTSTXTR_SNAPSHOT. Not newer: robotstxtr's main
+#   needs ssrfr, which needs curl >= 7.0.0, and this image's libcurl stops at
+#   curl 6.4.0, so the next robotstxtr release cannot install here. Dated, so
+#   that release cannot turn this blocking leg red; x-robotstxtr-head covers
+#   main. Lift the pin when the floor image can build curl 7. All declare
+#   R >= 4.1 or lower, and their own dependencies are already installed from
+#   the snapshot by then.
 # - Only what the check needs is installed: the Imports, the test and vignette
 #   Suggests, and rcmdcheck. oysteR and rosv serve only the audits, whose
 #   tests skip without them, so _R_CHECK_FORCE_SUGGESTS_=false lets --as-cran
@@ -66,6 +68,7 @@ x-floor:
   image: rocker/r-ver:4.1.3
   variables:
     FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/2025-07-15"
+    ROBOTSTXTR_SNAPSHOT: "https://packagemanager.posit.co/cran/2026-11-02"
     R_CRAN_SRC: "https://cloud.r-project.org"
     R_CRAN_WEB: "https://cloud.r-project.org"
     _R_CHECK_FORCE_SUGGESTS_: "false"
@@ -81,8 +84,10 @@ x-floor:
       "stringi", "digest", "cpp11", "Rcpp",
       "cucumber", "testthat", "withr", "knitr", "rmarkdown", "rcmdcheck"),
       repos = Sys.getenv("FLOOR_SNAPSHOT"), Ncpus = 4L);
-      install.packages(c("punycoder", "pslr", "rurl", "robotstxtr"),
+      install.packages(c("punycoder", "pslr", "rurl"),
       repos = "https://cloud.r-project.org", Ncpus = 4L);
+      install.packages("robotstxtr", repos = Sys.getenv("ROBOTSTXTR_SNAPSHOT"),
+      dependencies = FALSE);
       stopifnot(all(vapply(c("httr2", "xml2", "rurl", "robotstxtr", "cucumber", "testthat", "rcmdcheck"),
       requireNamespace, NA, quietly = TRUE)));
       print(R.version.string)'
@@ -102,10 +107,11 @@ x-floor:
 # never in a tag or release pipeline: a sibling's unreleased commit must not
 # block `pages` or a sitemapr release.
 x-robotstxtr-head:
-  extends:
-    - .fleet-r
-    - .schedule-job
+  extends: .schedule-job
+  image: $FLEET_RELEASE_IMAGE
   variables:
     FLEET_JOB_SCHEDULE: deep-check
+  before_script:
+    - !reference [.fleet-r, before_script]
   script:
     - fleet-tools Rscript tools/check-robotstxtr-head.R

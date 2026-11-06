@@ -17,14 +17,13 @@ lib <- tempfile("robotstxtr-head-")
 dir.create(lib)
 # In CI the dependencies are in the template's run library (FLEET_RUN_LIB).
 .libPaths(c(lib, Sys.getenv("FLEET_RUN_LIB"), .libPaths()))
-# Only these two come from r-universe, without dependencies: it builds every
-# fleet package's main, and a failure here has to be robotstxtr's.
+# ssrfr's and robotstxtr's dependencies come from CRAN, so a failure here has to
+# be robotstxtr's: r-universe builds every fleet package's main.
+cran <- c("cpp11", "curl", "pslr", "raddr", "rurl")
+head <- c("ssrfr", "robotstxtr")
+utils::install.packages(cran, lib = lib)
 utils::install.packages(
-  c("cpp11", "curl", "pslr", "raddr", "rurl"),
-  lib = lib
-)
-utils::install.packages(
-  c("ssrfr", "robotstxtr"),
+  head,
   lib = lib,
   repos = universe,
   dependencies = FALSE
@@ -32,9 +31,9 @@ utils::install.packages(
 
 # install.packages() only warns when a package fails, and the release already
 # in the normal library would then pass unnoticed.
-installed <- rownames(utils::installed.packages(lib.loc = lib))
-if (!all(c("ssrfr", "robotstxtr") %in% installed)) {
-  stop("robotstxtr or ssrfr did not install from ", universe, call. = FALSE)
+missing <- setdiff(c(cran, head), list.files(lib))
+if (length(missing) > 0L) {
+  stop("did not install: ", toString(missing), call. = FALSE)
 }
 message(
   "robotstxtr ",

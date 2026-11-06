@@ -40,6 +40,14 @@ repos:
         exclude: ^(\.fleet-ci/|tests/testthat/fixtures/corpus/|README\.md$)
       - id: check-merge-conflict
       - id: check-yaml
+        exclude: ^\.gitlab-ci\.yml$
+      # .gitlab-ci.yml with --unsafe: syntax only. Its x-* jobs use GitLab's
+      # `!reference` tag, which the safe loader cannot construct. GitLab's CI
+      # lint API and fleet-ci's bin/rules-sim read that file in full.
+      - id: check-yaml
+        name: check yaml (.gitlab-ci.yml, syntax only)
+        args: [--unsafe]
+        files: ^\.gitlab-ci\.yml$
       # air.toml is the only TOML in the tree, and it drives the air-format
       # hook below. Unparseable TOML there would otherwise reach main and
       # surface as a formatter failure on someone else's machine.

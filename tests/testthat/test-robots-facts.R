@@ -278,20 +278,39 @@ test_that("evaluation leaves robotstxtr's ssrf_guard at its default", {
   # robotstxtr is removing the argument (ROBO-jzoptbrw). Passing it would then
   # be an unused-argument error, which robots_evaluate_facts() turns into a
   # warning and empty facts, so every robots check would drop out.
-  seen <- NULL
+  seen <- new.env(parent = emptyenv())
   local_mocked_bindings(
     robots_evaluate_url_v1 = function(...) {
-      seen <<- names(list(...))
+      seen$args <- names(list(...))
       stop("stop after capturing the arguments")
     },
     .package = "robotstxtr"
   )
   suppressWarnings(robots_evaluate_facts("https://allow.example/ok"))
-  expect_true("robots_product_token" %in% seen)
-  expect_false("ssrf_guard" %in% seen)
+  expect_true("robots_product_token" %in% seen$args)
+  expect_false("ssrf_guard" %in% seen$args)
 })
 
-test_that("a transport error leaves the URL undetermined, not the facts empty", {
+test_that("robotstxtr's default guard refuses a loopback robots.txt", {
+  skip_if_not_installed("robotstxtr")
+  # sitemapr's SSRF posture on this fetch now rests on that default (ADR-003).
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+  facts <- httr2::with_mocked_responses(
+    function(req) {
+      calls$n <- calls$n + 1L
+      httr2::response(status_code = 200L, url = req$url, body = raw(0))
+    },
+    robots_evaluate_facts("http://127.0.0.1/x")
+  )
+  expect_identical(calls$n, 0L)
+  expect_identical(
+    robots_decision_for(facts, "http://127.0.0.1/x"),
+    "undetermined"
+  )
+})
+
+test_that("a transport error leaves the URL undetermined", {
   skip_if_not_installed("robotstxtr")
   # Pins helper-robots-transport.R's failure cause: one robotstxtr cannot map
   # raises an invariant error, which would empty the facts here.
