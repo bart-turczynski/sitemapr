@@ -1,7 +1,7 @@
 # GitLab CI for sitemapr: fleet-ci's template, pinned by commit SHA (seor
 # ADR 0012, fleet-ci README "The CI template"). The template owns the event
 # table, the jobs and the images; this file sets only the package's switches
-# and adds its x-floor job. A push to main or a branch, and a merge request,
+# and adds its x-floor and x-robotstxtr-head jobs. A push to main or a branch, and a merge request,
 # create no pipeline: the merge gate is the local one (.fleet-ci/gate, run by
 # the .fleet-ci/pre-push hook). T2 runs on the deep-check schedule
 # (SCHEDULE_KIND=deep-check), T3 on a RELEASE=1 web pipeline and a v* tag.
@@ -40,9 +40,9 @@ variables:
 #   its bit64 predates 4.8.0, which gcc 9 rejects.
 # - The fleet packages postdate that snapshot, so they come after it: rurl
 #   (DESCRIPTION wants >= 3.0.1), punycoder and pslr from current CRAN,
-#   robotstxtr from the fleet's r-universe, which builds its main branch, with
-#   ssrfr, which is on no other repository yet. On purpose: this is the one leg
-#   that tests sitemapr against robotstxtr's head, not CRAN's release. All
+#   and robotstxtr from current CRAN. Not the fleet's r-universe, which builds
+#   robotstxtr's main: that needs ssrfr, which needs curl >= 7.0.0, and this
+#   image's libcurl stops at curl 6.4.0. x-robotstxtr-head covers main. All
 #   declare R >= 4.1 or lower, and their own dependencies are already installed
 #   from the snapshot by then.
 # - Only what the check needs is installed: the Imports, the test and vignette
@@ -80,10 +80,8 @@ x-floor:
       "stringi", "digest", "cpp11", "Rcpp",
       "cucumber", "testthat", "withr", "knitr", "rmarkdown", "rcmdcheck"),
       repos = Sys.getenv("FLOOR_SNAPSHOT"), Ncpus = 4L);
-      install.packages(c("punycoder", "pslr", "rurl"),
+      install.packages(c("punycoder", "pslr", "rurl", "robotstxtr"),
       repos = "https://cloud.r-project.org", Ncpus = 4L);
-      install.packages("robotstxtr",
-      repos = "https://bart-turczynski.r-universe.dev", Ncpus = 4L);
       stopifnot(all(vapply(c("httr2", "xml2", "rurl", "robotstxtr", "cucumber", "testthat", "rcmdcheck"),
       requireNamespace, NA, quietly = TRUE)));
       print(R.version.string)'
@@ -97,3 +95,16 @@ x-floor:
     paths:
       - check/
     expire_in: 1 week
+
+# sitemapr's tests against robotstxtr's main branch, which no other leg reaches
+# (tools/check-robotstxtr-head.R says why). On the deep-check schedule only,
+# never in a tag or release pipeline: a sibling's unreleased commit must not
+# block `pages` or a sitemapr release.
+x-robotstxtr-head:
+  extends:
+    - .fleet-r
+    - .schedule-job
+  variables:
+    FLEET_JOB_SCHEDULE: deep-check
+  script:
+    - Rscript tools/check-robotstxtr-head.R

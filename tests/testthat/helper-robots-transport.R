@@ -70,13 +70,15 @@ robots_mock_prepare_hop <- function(url, policy, from = NULL) {
 }
 
 robots_mock_fetch <- function(binding) {
-  request <- httr2::req_error(
-    httr2::request(binding$url),
-    is_error = function(resp) FALSE
+  # The mock is called directly: httr2 reads a NULL answer as "not mocked" and
+  # goes to the network, which these tests must never do.
+  mock <- getOption("httr2_mock")
+  resp <- tryCatch(
+    mock(httr2::request(binding$url)),
+    error = function(cnd) NULL
   )
-  resp <- tryCatch(httr2::req_perform(request), error = function(cnd) NULL)
   if (is.null(resp)) {
-    return(robots_ssrfr_failure("connect", binding$hop))
+    return(robots_ssrfr_failure("connect-failed", binding$hop))
   }
   status <- httr2::resp_status(resp)
   body <- if (httr2::resp_has_body(resp)) httr2::resp_body_raw(resp) else raw()

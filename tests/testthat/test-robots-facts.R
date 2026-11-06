@@ -291,6 +291,21 @@ test_that("evaluation leaves robotstxtr's ssrf_guard at its default", {
   expect_false("ssrf_guard" %in% seen)
 })
 
+test_that("a transport error leaves the URL undetermined, not the facts empty", {
+  skip_if_not_installed("robotstxtr")
+  # Pins helper-robots-transport.R's failure cause: one robotstxtr cannot map
+  # raises an invariant error, which would empty the facts here.
+  facts <- httr2::with_mocked_responses(
+    function(req) stop("connection refused"),
+    robots_evaluate_facts("https://boom.example/y")
+  )
+  expect_identical(
+    robots_decision_for(facts, "https://boom.example/y"),
+    "undetermined"
+  )
+  expect_identical(facts$urls, "https://boom.example/y")
+})
+
 test_that("the facts row view matches the legacy facade row-for-row", {
   skip_if_not_installed("robotstxtr")
   locs <- rf_locs()
