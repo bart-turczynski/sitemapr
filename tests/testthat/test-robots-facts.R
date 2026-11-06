@@ -273,6 +273,58 @@ rf_view_cols <- function() {
   )
 }
 
+test_that("evaluation leaves robotstxtr's ssrf_guard at its default", {
+  skip_if_not_installed("robotstxtr")
+  # robotstxtr is removing the argument (ROBO-jzoptbrw). Passing it would then
+  # be an unused-argument error, which robots_evaluate_facts() turns into a
+  # warning and empty facts, so every robots check would drop out.
+  seen <- new.env(parent = emptyenv())
+  local_mocked_bindings(
+    robots_evaluate_url_v1 = function(...) {
+      seen$args <- names(list(...))
+      stop("stop after capturing the arguments")
+    },
+    .package = "robotstxtr"
+  )
+  suppressWarnings(robots_evaluate_facts("https://allow.example/ok"))
+  expect_true("robots_product_token" %in% seen$args)
+  expect_false("ssrf_guard" %in% seen$args)
+})
+
+test_that("robotstxtr's default guard refuses a loopback robots.txt", {
+  skip_if_not_installed("robotstxtr")
+  # sitemapr's SSRF posture on this fetch now rests on that default (ADR-003).
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+  facts <- httr2::with_mocked_responses(
+    function(req) {
+      calls$n <- calls$n + 1L
+      httr2::response(status_code = 200L, url = req$url, body = raw(0))
+    },
+    robots_evaluate_facts("http://127.0.0.1/x")
+  )
+  expect_identical(calls$n, 0L)
+  expect_identical(
+    robots_decision_for(facts, "http://127.0.0.1/x"),
+    "undetermined"
+  )
+})
+
+test_that("a transport error leaves the URL undetermined", {
+  skip_if_not_installed("robotstxtr")
+  # Pins helper-robots-transport.R's failure cause: one robotstxtr cannot map
+  # raises an invariant error, which would empty the facts here.
+  facts <- httr2::with_mocked_responses(
+    function(req) stop("connection refused"),
+    robots_evaluate_facts("https://boom.example/y")
+  )
+  expect_identical(
+    robots_decision_for(facts, "https://boom.example/y"),
+    "undetermined"
+  )
+  expect_identical(facts$urls, "https://boom.example/y")
+})
+
 test_that("the facts row view matches the legacy facade row-for-row", {
   skip_if_not_installed("robotstxtr")
   locs <- rf_locs()
@@ -280,7 +332,7 @@ test_that("the facts row view matches the legacy facade row-for-row", {
   new <- rf_with(robots_evaluate_facts(locs))$view
   # OLD path: the legacy facade E.5 called before E.1b.
   old <- rf_with(
-    robotstxtr::allowed_by_robots_url(locs, user_agent = "*", ssrf_guard = TRUE)
+    robotstxtr::allowed_by_robots_url(locs, user_agent = "*")
   )$results
 
   for (col in rf_view_cols()) {
@@ -312,7 +364,7 @@ test_that("findings derived from facts equal the pre-refactor findings", {
 
   # Reconstruct the pre-E.1b derivation directly off the legacy facade.
   old_decisions <- rf_with(
-    robotstxtr::allowed_by_robots_url(locs, user_agent = "*", ssrf_guard = TRUE)
+    robotstxtr::allowed_by_robots_url(locs, user_agent = "*")
   )
   res <- old_decisions$results
   # The per-row builders are inlined here on purpose. SITE-wlmodqza replaced

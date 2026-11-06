@@ -205,8 +205,7 @@ robots_evaluate_facts <- function(locs, context = robots_context()) {
       testable,
       robots_product_token = context$product_token,
       robots_policy_ruleset = context$policy_ruleset,
-      matcher_backend = context$matcher_backend,
-      ssrf_guard = TRUE
+      matcher_backend = context$matcher_backend
     ),
     error = function(cnd) {
       robots_engine_failed_warn(cnd)
