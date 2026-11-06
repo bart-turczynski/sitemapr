@@ -14,9 +14,10 @@
 # faithful matcher AND the HTTP-status -> policy semantics (a 404/410 is
 # allow-all, a 5xx/timeout/network failure or an SSRF block is indeterminate),
 # and it fetches each distinct origin's robots.txt exactly once. sitemapr does
-# NOT reimplement fetching or matching. The `ssrf_guard = TRUE` opt-out is left
-# at its default so the robots.txt fetch honors the same SSRF posture as the
-# rest of sitemapr (ADR-003; robotstxtr ROBO-quovenef).
+# NOT reimplement fetching or matching. robotstxtr's guard stays at its default,
+# on, so the robots.txt fetch honors the same SSRF posture as the rest of
+# sitemapr (ADR-003; robotstxtr ROBO-quovenef). sitemapr does not pass
+# `ssrf_guard`: robotstxtr is removing it (ROBO-jzoptbrw).
 #
 # Since E.1b (SITE-kwkggijf) evaluation itself lives in R/robots-facts.R and
 # routes through the v1 engine contract, so the robots axes and `matcher_status`

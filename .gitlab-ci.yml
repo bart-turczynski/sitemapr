@@ -40,9 +40,11 @@ variables:
 #   its bit64 predates 4.8.0, which gcc 9 rejects.
 # - The fleet packages postdate that snapshot, so they come after it: rurl
 #   (DESCRIPTION wants >= 3.0.1), punycoder and pslr from current CRAN,
-#   robotstxtr (>= 0.3.0, not on CRAN) from the fleet's r-universe. All declare
-#   R >= 4.1 or lower, and their own dependencies are already installed from
-#   the snapshot by then.
+#   robotstxtr from the fleet's r-universe, which builds its main branch, with
+#   ssrfr, which is on no other repository yet. On purpose: this is the one leg
+#   that tests sitemapr against robotstxtr's head, not CRAN's release. All
+#   declare R >= 4.1 or lower, and their own dependencies are already installed
+#   from the snapshot by then.
 # - Only what the check needs is installed: the Imports, the test and vignette
 #   Suggests, and rcmdcheck. oysteR and rosv serve only the audits, whose
 #   tests skip without them, so _R_CHECK_FORCE_SUGGESTS_=false lets --as-cran
