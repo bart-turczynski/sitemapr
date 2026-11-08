@@ -82,7 +82,8 @@ instead:
   connection is made at either level: for an internal address the safety
   level changes the label, never what the fetch dials. The one thing
   `"crawler"` reaches that `"strict"` does not is the target of a downgrade
-  redirect, which is a public address the guard still checks. `unreachable_local` is neither `safety_refused` nor
+  redirect. The guard checks that target like every other hop, so a downgrade
+  to an internal address is not dialed either and is `unreachable_local`. `unreachable_local` is neither `safety_refused` nor
   `transport_fail`, and occurs under `"crawler"` only.
 - A **URL-shape** refusal (`scheme`, `userinfo`, `port`, `parse`,
   `numeric-literal`, `malformed-address`) stays `safety_refused`.
@@ -126,7 +127,12 @@ policy verdict only when all of these hold:
   cell is tagged `documented` (ADR-009 §0). No `inferred` or
   `application_choice` reading qualifies;
 - the retained prefix is long enough to prove the documented condition. A prefix
-  that only might cross the engine's limit does not qualify;
+  that only might cross the engine's limit does not qualify. `body_truncated =
+  TRUE` means the server sent more than `stored_bytes`, so the file is strictly
+  longer than its prefix;
+- the cut is robotstxtr's own size ceiling (`termination_reason = ceiling`). A
+  deadline, a transport failure or a safety refusal never qualifies, whatever
+  was received before it;
 - the cell is recorded in robotstxtr's engine-profiles.md with its threshold and
   source, and published in the engine contract's policy table.
 
@@ -135,7 +141,7 @@ robotstxtr's to own and are quoted here only to fix what this ADR permits:
 
 | Ruleset | Condition | Result | robotstxtr slice |
 |---|---|---|---|
-| `yandex` | `stored_bytes ≥ 512000`: over "500 KB" under either reading of the unit | `allow_all` ("considered open") | 8, ROBO-arrtietl |
+| `yandex` | `stored_bytes ≥ 512000` with `body_truncated`: the file is longer than 512,000 bytes, so over "500 KB" under either reading of the unit | `allow_all` ("considered open") | 8, ROBO-arrtietl |
 | `google` | `stored_bytes ≥ 512000`: the prefix holds Google's whole 500 KiB parse window | `use_rules`, matched on the first 512,000 bytes only (`matcher_status` and `url_decision` set) | 9, ROBO-ptibdnvy |
 
 **The Google window is 512,000 bytes, not 524,288.** Google documents "500
@@ -145,7 +151,9 @@ kibibytes (KiB)", which is 500 × 1,024 = 512,000 bytes; robotstxtr's own
 bytes)", and `match_google_v1()` reads 524,288 bytes, which is 512 KiB. A rule
 between bytes 512,000 and 524,288 would then give a verdict Google ignores. This
 ADR permits only the documented window: a match past byte 512,000 is not a
-`documented` reading. robotstxtr corrects the figure before slice 9 ships
+`documented` reading. Google does not document how it parses a line that the
+limit cuts in two. robotstxtr's engine-profiles.md states its handling of that
+line and tags it apart from the `documented` window, before slice 9 ships. robotstxtr corrects the figure before slice 9 ships
 (robotstxtr ROBO-phfbpfiy).
 
 Every other ruleset (`rfc9309`, `assumed_rfc9309`, `bing`), and a prefix below
