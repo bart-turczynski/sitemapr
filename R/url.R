@@ -86,7 +86,28 @@ rurl_parse <- function(urls) {
     case_handling = "lower_host",
     path_encoding = "encode"
   )
-  parsed[, url_adapter_cols, drop = FALSE]
+  parsed <- parsed[, url_adapter_cols, drop = FALSE]
+  parsed$port <- url_drop_default_port(parsed$scheme, parsed$port)
+  parsed
+}
+
+# A scheme's default port names the same origin as no port, so both paths
+# report it as NA, as rurl's WHATWG default does (WHATWG URL, special schemes).
+# rurl releases before that default kept it; normalizing here keeps the port
+# column, and the fast/rurl agreement, the same under either.
+url_default_ports <- c(
+  http = 80L,
+  https = 443L,
+  ws = 80L,
+  wss = 443L,
+  ftp = 21L
+)
+
+url_drop_default_port <- function(scheme, port) {
+  port <- as.integer(port)
+  def <- unname(url_default_ports[ascii_lower(as.character(scheme))])
+  port[!is.na(port) & !is.na(def) & port == def] <- NA_integer_
+  port
 }
 
 # Cheap, vectorized first cut: a URL MIGHT need rurl if it is not pure ASCII, or
@@ -132,7 +153,9 @@ url_query_is_noop <- function(query) {
 url_host_is_dns_name <- function(host) {
   ok <- !is.na(host) & nzchar(host) & grepl("^[A-Za-z0-9.-]+$", host)
   last <- sub("^.*\\.", "", host)
-  ok & grepl("[A-Za-z]", last)
+  # A 0x hex last label sends the host to WHATWG's IPv4 parser, so it is no
+  # DNS name ("0x7f.0x1").
+  ok & grepl("[A-Za-z]", last) & !grepl("^0[xX][0-9a-fA-F]*$", last)
 }
 
 url_fast_authority <- function(auth) {
@@ -273,7 +296,7 @@ url_fast_rows <- function(urls, fc) {
     original_url = as.character(urls),
     scheme = fc$scheme,
     host = fc$host,
-    port = fc$port,
+    port = url_drop_default_port(fc$scheme, fc$port),
     path = fc$path,
     query = fc$query,
     fragment = fc$fragment,

@@ -104,7 +104,17 @@ any of the following:
   blocklist.
 - **Numeric/octal literals:** reject hosts encoded as raw decimal integers,
   hex integers, or octal octets (e.g., `0x7f000001`, `017700000001`,
-  `2130706433`)
+  `2130706433`), and every other host whose last label is a decimal or `0x`
+  hex number but which is not a canonical dotted quad: the short and mixed
+  forms `127.1`, `1.2.3`, `0x7f.1` (amended 2026-11-08). That is the WHATWG
+  IPv4 parser's "ends in a number" test; rurl's WHATWG default parses these
+  hosts into addresses, and libcurl dials them. A host that reaches a dotted
+  quad only through a percent-escape or a UTS #46 mapping (`1.2.%33`,
+  `8%2e8`, fullwidth digits) is refused the same way.
+- **Backslash in the authority:** refused as `malformed-address` (amended
+  2026-11-08). WHATWG ends the authority at a backslash and libcurl does not,
+  so `http://evil.example\@127.0.0.1/` names `evil.example` to rurl and
+  `127.0.0.1` to libcurl.
 - **Non-HTTP(S) schemes:** any scheme other than `http` or `https`
 
 The guard runs on **parsed host and IP components from `rurl`** — it does not

@@ -659,6 +659,68 @@ test_that("octal IPv4 literal is rejected as numeric-literal", {
   expect_identical(res$reason, "numeric-literal")
 })
 
+test_that("short and mixed IPv4 literals are rejected as numeric-literal", {
+  # WHATWG's IPv4 parser, rurl's default since ADR 0020, reads a host ending in
+  # a number as an address: 1.2.3 is 1.2.0.3 and 0x7f.1 is 127.0.0.1. Each is
+  # refused on its raw form, whichever address it names and whether or not
+  # the installed rurl parses it.
+  for (url in c(
+    "http://1.2.3/",
+    "http://1.2.3./",
+    "http://127.1/",
+    "http://10.1/",
+    "http://0x7f.1/",
+    "http://0x08.8.8.8/",
+    "http://192.168.257/",
+    "http://999.1.1.1/",
+    "http://example.0x/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "numeric-literal", info = url)
+  }
+})
+
+test_that("an escaped or mapped numeric host is rejected as numeric-literal", {
+  # The raw-host test sees "1.2.%33"; the WHATWG view sees the dotted quad
+  # 1.2.0.3 it decodes to, which the raw host does not spell.
+  for (url in c(
+    "http://1.2.%33/",
+    "http://1.2.3%2e/",
+    "http://8%2e8/",
+    "http://8\u30028/",
+    "http://\uff11.\uff12.\uff13/"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "numeric-literal", info = url)
+  }
+})
+
+test_that("a backslash in the authority is refused as malformed-address", {
+  # WHATWG ends the authority at the backslash (host evil.example); libcurl
+  # keeps it in the userinfo and dials 127.0.0.1.
+  for (url in c(
+    "http://evil.example\\@127.0.0.1/",
+    "http://1.2.3.4\\@example.com/",
+    "https://example.com\\/x"
+  )) {
+    res <- guard(url)
+    expect_false(res$allowed, info = url)
+    expect_identical(res$reason, "malformed-address", info = url)
+  }
+  expect_true(guard("http://example.com/a\\b")$allowed)
+})
+
+test_that("canonical dotted quads and names with digits are not numeric", {
+  expect_true(guard("http://1.2.3.4/")$allowed)
+  expect_true(guard("http://1.2.3.4./")$allowed)
+  expect_true(guard("http://123.example.com/")$allowed)
+  expect_true(guard("http://example.com1/")$allowed)
+  res <- guard("http://169.254.169.254./")
+  expect_identical(res$reason, "cloud-metadata")
+})
+
 test_that("octal-dotted IPv4 literal is rejected as numeric-literal", {
   # 0177.0.0.1 == 127.0.0.1 with a leading-zero (octal) first octet.
   res <- sitemapr_test_ns$ssrf_check(
@@ -872,7 +934,6 @@ test_that("a raw host rurl cannot parse is refused as malformed-address", {
     "http://[2606::1]x/",
     "http://[2606::1]:80x/",
     "http://example.com:8080abc/",
-    "http://1.2.3/",
     "http://exa<mple.com/"
   )) {
     res <- guard(url)

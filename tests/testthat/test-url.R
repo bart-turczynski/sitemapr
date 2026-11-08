@@ -138,6 +138,31 @@ test_that("a mismatched default port (http:443) is not collapsed", {
 # and only invokes rurl where canonicalization can change the URL. The fast path
 # must be byte-identical to rurl on every column sitemapr consumes.
 
+test_that("a default port is NA on the fast path and the rurl path alike", {
+  urls <- c(
+    "https://example.com:443/x",
+    "http://example.com:80/",
+    "HTTP://example.com:80/",
+    "https://example.com:8443/x",
+    "http://example.com:443/",
+    "https://café.example:443/x",
+    "http://1.2.3.4:80/",
+    "ftp://example.com:21/f"
+  )
+  want <- c(NA, NA, NA, 8443L, 443L, NA, NA, NA)
+  expect_identical(sitemapr_test_ns$parse_url_adapter(urls)$port, want)
+  expect_identical(sitemapr_test_ns$rurl_parse(urls)$port, want)
+})
+
+test_that("a 0x hex last label is not a fast-path DNS name", {
+  expect_identical(
+    sitemapr_test_ns$url_host_is_dns_name(
+      c("0x7f.0x1", "1.0xa", "example.0x", "example.com", "a.0xg")
+    ),
+    c(FALSE, FALSE, FALSE, TRUE, TRUE)
+  )
+})
+
 test_that("parse_url_adapter fast path matches rurl on read columns", {
   read_cols <- c(
     "original_url",
