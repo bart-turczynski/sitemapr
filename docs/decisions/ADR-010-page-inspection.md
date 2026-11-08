@@ -9,6 +9,7 @@
   `docs/decisions/ADR-003-network-safety-policy.md` (SSRF guard, resource
   ceilings — **amended by this ADR, §2/§3**),
   `docs/decisions/ADR-007-api-entry-points.md` (public entry points / `probe_url()`),
+  `docs/decisions/ADR-011-robots-safety-level-and-cut-file-meaning.md` (amends §2(a) below),
   `docs/findings-registry.csv` (the pinned `PAGE_*` codes and their severities),
   SITE-ndwnfyer (this ADR), SITE-ihycidfl (Layer E epic).
 
@@ -97,7 +98,9 @@ reached body ceiling uniformly to `incomplete`. Split it by intent:
 
 `partial` is never `allow_all` / `disallow_all` and never an engine verdict;
 per ADR-009 §2's state table a `use_rules` result over a `partial`/unusable body
-carries `matcher_status = not_evaluated`, `url_decision` absent.
+carries `matcher_status = not_evaluated`, `url_decision` absent. (Amended
+2026-11-09 by ADR-011 §2: a robots ruleset may give a ceiling-cut robots.txt its
+engine's documented reading. The page cap's `partial` is unchanged.)
 
 **(b) Page-cap `partial` semantics.** The per-page body cap (single-MB range,
 caller-overridable; §1 budget) is a **truncate-and-retain** bound: on reaching it,

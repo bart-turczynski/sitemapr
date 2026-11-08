@@ -1,11 +1,16 @@
 # ADR-009: Per-engine validation profiles (rulesets, outcomes, capability negotiation)
 
 - Status: Accepted (amended 2026-07-19 by ADR-010 — §3 body-ceiling rule split
-  by intent: intentional page-cap truncation → `partial`, no-usable-body → `incomplete`)
+  by intent: intentional page-cap truncation → `partial`, no-usable-body → `incomplete`;
+  amended 2026-11-09 by ADR-011 — §3 safety precedence holds under robotstxtr
+  `safety_level = "strict"`; a ruleset may give a ceiling-cut robots.txt its documented
+  meaning)
 - Date: 2026-07-16
 - Deciders: Bart Turczyński
 - Related: `docs/decisions/ADR-010-page-inspection.md` (page-fetch body contract —
-  amends §3 below), `docs/decisions/ADR-003-network-safety-policy.md` (safety precedence),
+  amends §3 below), `docs/decisions/ADR-011-robots-safety-level-and-cut-file-meaning.md`
+  (robots safety level, ceiling-cut robots.txt — amends §2 and §3 below),
+  `docs/decisions/ADR-003-network-safety-policy.md` (safety precedence),
   `docs/decisions/ADR-006-robots-sitemap-discovery.md`, `docs/findings-contract.md` +
   `docs/findings-registry.csv` (the cross-repo findings contract this mirrors),
   robotstxtr `design/PRD.md` (matcher scope / non-goals),
@@ -104,7 +109,8 @@ A robots result is not a single enum. It is five independent fields:
 - `source_kind` — `fetched` | `supplied` | `local` (where the body came from — orthogonal to whether
   it is usable).
 - `evidence_status` — `usable_body` | `partial` | `incomplete` | `http_status` | `http_protocol_error` |
-  `redirect_over_budget` | `transport_fail` | `safety_refused` | `not_applicable`. This value set is
+  `redirect_over_budget` | `transport_fail` | `safety_refused` | `unreachable_local` (robotstxtr,
+  `safety_level = "crawler"` only; ADR-011 §1) | `not_applicable`. This value set is
   **versioned**, and robotstxtr owns robots-specific extensions to it (the semantic invariants in this
   §2 remain ADR-owned). A `usable_body` with `source_kind ∈ {supplied, local}` resolves to
   `policy_action = use_rules` as an `application_choice` (no fetch status to interpret); the use-rules
@@ -133,6 +139,9 @@ current default-no-match decision, not an absent verdict):
 | use-rules, backend, no matching rule | `resolved` | `use_rules` | `available` | `allow` (default) |
 | use-rules, backend, matching rule | `resolved` | `use_rules` | `available` | `allow` / `deny` |
 
+A ceiling-cut robots.txt with `evidence_status = incomplete` may resolve as ADR-011 §2 permits
+(amended 2026-11-09); every other `incomplete` row takes the first row.
+
 ### 3. Safety precedence: safety and resource limits are never crawler policy
 
 Local safety and resource controls **dominate** and are reported as their own outcomes, never
@@ -140,17 +149,25 @@ reinterpreted as an engine allow/deny:
 
 - SSRF blocks, scheme restriction, and HTTPS→HTTP downgrade rejection → `evidence_status =
   safety_refused` (ADR-003 governs the guard). This class is reserved for those three refusals; a
-  resource-ceiling discard is **not** `safety_refused` (ADR-010 §3).
+  resource-ceiling discard is **not** `safety_refused` (ADR-010 §3). This holds under robotstxtr
+  `safety_level = "strict"` and for every fetch sitemapr makes itself. Under `"crawler"`, a
+  downgrade is followed and an address-class refusal is `unreachable_local` (amended 2026-11-09 by
+  ADR-011 §1).
 - Fetch budget / deadline / body ceiling reached → `evidence_status` splits **by intent** (amended
   2026-07-19 by ADR-010 §2):
   - an **intentional per-page truncate-and-retain cap** (ADR-010's page path) → `partial` — the body
     was cut at the page cap but the **retained head-region prefix is usable**, so an absence read
     from it is `unknown`, never `missing`;
   - a **deadline / transport failure with no usable body**, and the **500 MB per-resource discard
-    backstop** (ADR-003 §3) → `incomplete` — no usable body.
+    backstop** (ADR-003 §3) → `incomplete` — no usable body. A robots.txt 2xx cut at the ceiling
+    keeps its prefix and stays `incomplete`; a ruleset may still read that prefix as ADR-011 §2
+    permits.
 
   Neither is ever `allow_all` / `disallow_all`; a `use_rules` result over a `partial`/unusable body
-  keeps `matcher_status = not_evaluated`, `url_decision` absent (§2 state table).
+  keeps `matcher_status = not_evaluated`, `url_decision` absent (§2 state table). Both halves of
+  that sentence, the `allow_all` / `disallow_all` ban and the `not_evaluated` matcher status, give
+  way for a ceiling-cut robots.txt that a ruleset reads by its engine's documented size rule
+  (amended 2026-11-09 by ADR-011 §2).
 
 The fetch layer accepts **caller acquisition + safety limits only**; per-engine parse limits and
 excess-content behavior belong to the interpretation layer, not the fetch layer.

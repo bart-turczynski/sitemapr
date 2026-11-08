@@ -1,12 +1,12 @@
 # ADR-011: The robots safety level, and an engine's documented meaning for a ceiling-cut robots.txt
 
-- Status: Proposed
+- Status: Accepted (2026-11-09)
 - Date: 2026-11-08
 - Deciders: Bart Turczyński
 - Related: `docs/decisions/ADR-009-per-engine-validation-profiles.md` (§2 state
-  table, §3 safety precedence; **amended by this ADR on acceptance**),
+  table, §3 safety precedence; **amended by this ADR**),
   `docs/decisions/ADR-010-page-inspection.md` (§2(a), which restates the ADR-009
-  §3 body-ceiling rule; **amended by this ADR on acceptance**),
+  §3 body-ceiling rule; **amended by this ADR**),
   `docs/decisions/ADR-003-network-safety-policy.md` (the guard; unchanged),
   robotstxtr `design/adr/0001-safety-level-vs-engine-ruleset.md` (accepted
   2026-11-05, robotstxtr MR !83, ROBO-xdlzicrq; slice 6 is this ADR),
@@ -215,9 +215,9 @@ does today. Conservatism declines to claim an allow; it never invents a deny.
   discriminator the v1 fields do not carry (`R/robots-facts.R`), and the finding
   never claims a deny.
 
-### Changes to ADR-009 and ADR-010 on acceptance
+### Changes to ADR-009 and ADR-010
 
-Apply these when the maintainer accepts this ADR, and not before:
+Applied on acceptance, 2026-11-09:
 
 1. **ADR-009 header.** Extend the Status line with "amended <date> by ADR-011 —
    §3 safety precedence holds under robotstxtr `safety_level = "strict"`; a
