@@ -154,6 +154,15 @@ test_that("a default port is NA on the fast path and the rurl path alike", {
   expect_identical(sitemapr_test_ns$rurl_parse(urls)$port, want)
 })
 
+test_that("a 0x hex last label is not a fast-path DNS name", {
+  expect_identical(
+    sitemapr_test_ns$url_host_is_dns_name(
+      c("0x7f.0x1", "1.0xa", "example.0x", "example.com", "a.0xg")
+    ),
+    c(FALSE, FALSE, FALSE, TRUE, TRUE)
+  )
+})
+
 test_that("parse_url_adapter fast path matches rurl on read columns", {
   read_cols <- c(
     "original_url",

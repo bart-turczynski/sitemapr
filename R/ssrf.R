@@ -423,8 +423,10 @@ ssrf_result <- function(allowed, reason = NA_character_) {
 # label is decimal digits or a 0x hex number, the WHATWG IPv4 parser's "ends
 # in a number" test: that covers the single-integer, octal, short (`1.2.3`,
 # `127.1`) and mixed (`0x7f.1`) forms, which rurl's WHATWG default parses
-# into an address and libcurl dials (rurl ADR 0020). The caller strips
-# trailing dots first.
+# into an address and libcurl dials (rurl ADR 0020). The caller strips every
+# trailing dot first, so `1.2.3..` is refused too, where WHATWG drops only one
+# and reads a domain: stricter, and closed. An escaped or mapped spelling is
+# the WHATWG second look's to refuse.
 ssrf_numeric_literal_blocked <- function(raw_host) {
   raw <- ssrf_strip_brackets(if (is.na(raw_host)) "" else raw_host)
   if (
@@ -596,6 +598,15 @@ ssrf_check_parsed <- function(parsed_row) {
   if (is.na(scheme)) {
     scheme <- ssrf_raw_scheme_of(original_url)
   }
+  # A backslash before the first "/", "?" or "#" ends the authority under
+  # WHATWG, which reads it as "/" in a special scheme, but not under libcurl,
+  # which keeps it in the userinfo: rurl's WHATWG default reports host
+  # "evil.example" for "http://evil.example\@127.0.0.1/" while libcurl dials
+  # 127.0.0.1. No valid authority holds one (RFC 3986 §3.2), so it fails closed,
+  # before any host is classified, under every rurl.
+  if (ssrf_authority_has_backslash(original_url)) {
+    return(ssrf_result(FALSE, "malformed-address"))
+  }
   raw_host <- ssrf_raw_host_of(original_url)
   verdict <- ssrf_check(
     host = host,
@@ -604,6 +615,16 @@ ssrf_check_parsed <- function(parsed_row) {
     raw_host = raw_host
   )
   ssrf_whatwg_second_look(verdict, original_url, host, scheme)
+}
+
+# Does the raw URL carry a backslash in its authority, as libcurl delimits it
+# (from "scheme://" to the first "/", "?" or "#")?
+ssrf_authority_has_backslash <- function(url) {
+  if (length(url) != 1L || is.na(url) || !nzchar(url)) {
+    return(FALSE)
+  }
+  after_scheme <- sub("^[a-zA-Z][a-zA-Z0-9+.-]*://", "", url)
+  grepl("\\", sub("[/?#].*$", "", after_scheme), fixed = TRUE)
 }
 
 # The host rurl reports by default is not always the host libcurl connects to.
@@ -638,7 +659,18 @@ ssrf_whatwg_second_look <- function(verdict, url, host, scheme) {
   }
   whatwg <- ascii_lower(whatwg)
   second <- ssrf_check(host = whatwg, scheme = scheme, raw_host = whatwg)
-  if (isTRUE(second$allowed)) verdict else second
+  if (!isTRUE(second$allowed)) {
+    return(second)
+  }
+  # A dotted quad the raw host does not spell canonically is a numeric literal
+  # behind an escape or a mapping ("1.2.%33", "8%2e8", fullwidth digits), which
+  # the raw-host test cannot see (ADR-003). A blocked range keeps its own
+  # reason above.
+  raw <- ssrf_strip_trailing_dots(ssrf_raw_host_of(url))
+  if (ssrf_is_dotted_quad(whatwg) && !identical(ascii_lower(raw), whatwg)) {
+    return(ssrf_result(FALSE, "numeric-literal"))
+  }
+  verdict
 }
 
 # Could libcurl's UTS #46 mapping turn this host into a different one? TRUE

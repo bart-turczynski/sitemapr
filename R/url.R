@@ -153,7 +153,9 @@ url_query_is_noop <- function(query) {
 url_host_is_dns_name <- function(host) {
   ok <- !is.na(host) & nzchar(host) & grepl("^[A-Za-z0-9.-]+$", host)
   last <- sub("^.*\\.", "", host)
-  ok & grepl("[A-Za-z]", last)
+  # A 0x hex last label sends the host to WHATWG's IPv4 parser, so it is no
+  # DNS name ("0x7f.0x1").
+  ok & grepl("[A-Za-z]", last) & !grepl("^0[xX][0-9a-fA-F]*$", last)
 }
 
 url_fast_authority <- function(auth) {
