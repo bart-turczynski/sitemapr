@@ -418,8 +418,13 @@ ssrf_result <- function(allowed, reason = NA_character_) {
 # Does the raw (pre-normalization) host use a numeric/hex/octal obfuscation
 # form that is NOT a canonical dotted-quad? rurl normalizes such literals into a
 # clean dotted-quad, so the obfuscation is only visible in the raw host. The
-# stricter ADR-003 interpretation applies: any all-numeric / hex / leading-zero
-# octal literal that is not a canonical dotted-quad is rejected outright.
+# stricter ADR-003 interpretation applies: any numeric literal that is not a
+# canonical dotted-quad is rejected outright. A host is numeric when its last
+# label is decimal digits or a 0x hex number, the WHATWG IPv4 parser's "ends
+# in a number" test: that covers the single-integer, octal, short (`1.2.3`,
+# `127.1`) and mixed (`0x7f.1`) forms, which rurl's WHATWG default parses
+# into an address and libcurl dials (rurl ADR 0020). The caller strips
+# trailing dots first.
 ssrf_numeric_literal_blocked <- function(raw_host) {
   raw <- ssrf_strip_brackets(if (is.na(raw_host)) "" else raw_host)
   if (
@@ -427,9 +432,8 @@ ssrf_numeric_literal_blocked <- function(raw_host) {
   ) {
     return(FALSE)
   }
-  grepl("^0[xX][0-9a-fA-F]+$", raw) || # hex single-integer form
-    grepl("^[0-9]+$", raw) || # raw decimal single-integer form
-    grepl("^0[0-7]+(\\.0?[0-7]*){1,3}$", raw) # octal-style dotted form
+  last <- sub("^.*\\.", "", raw)
+  grepl("^([0-9]+|0[xX][0-9a-fA-F]*)$", last)
 }
 
 # Drop the trailing dots of a fully qualified spelling. "metadata.google.
