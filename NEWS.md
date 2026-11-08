@@ -78,7 +78,8 @@ First development release: a deterministic toolkit for reading and validating XM
 * The guard decides IPv6 link-local and AWS metadata addresses by value, so leading-zero spellings agree (SITE-mhfmtdxa).
 * The guard blocks more spellings of the GCP metadata host, including a trailing dot, the bare `metadata`, and UTS #46 equivalents (SITE-rafvyfvp).
 * The guard fails closed on hosts it cannot parse and blocks further cloud-metadata endpoints (SITE-jtluuybg).
-* The guard refuses short and mixed IPv4 spellings such as `127.1`, `1.2.3` and `0x7f.1` as `numeric-literal` (WHATWG URL, host parsing).
+* The guard refuses short, mixed and escaped IPv4 spellings such as `127.1`, `0x7f.1` and `1.2.%33` as `numeric-literal` (WHATWG URL, host parsing).
+* The guard refuses a URL with a backslash in its authority, which WHATWG and libcurl split differently (RFC 3986 §3.2).
 
 ## Request customization
 
