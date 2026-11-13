@@ -196,14 +196,16 @@ robots_candidates <- function(
   user_agent,
   net_limits,
   policy,
-  throttle_state = NULL
+  throttle_state = NULL,
+  robots_txt = NULL
 ) {
   urls <- discover_robots_sitemaps(
     origin,
     user_agent = user_agent,
     net_limits = net_limits,
     policy = policy,
-    throttle_state = throttle_state
+    throttle_state = throttle_state,
+    robots_txt = robots_txt
   )
   if (length(urls) == 0L) {
     return(NULL)
@@ -265,7 +267,8 @@ assemble_candidates <- function(
   policy,
   use_known_paths,
   use_robots,
-  throttle_state = NULL
+  throttle_state = NULL,
+  robots_txt = NULL
 ) {
   parts <- list()
 
@@ -276,7 +279,8 @@ assemble_candidates <- function(
       user_agent,
       net_limits,
       policy,
-      throttle_state
+      throttle_state,
+      robots_txt
     )
   }
 
@@ -314,7 +318,8 @@ assemble_candidates <- function(
 #' (provenance `robots`) and the guessed-path catalog (provenance
 #' `guessed-path`), each toggled by `use_robots` / `use_known_paths`. robots.txt
 #' is fetched only
-#' for its `Sitemap:` directives; robots rules (`Disallow`/`Allow`) are never
+#' for its `Sitemap:` directives, and not at all when `robots_txt` supplies its
+#' text; robots rules (`Disallow`/`Allow`) are never
 #' applied (ADR-006).
 #'
 #' The fetch record for each evaluated response (carrying the body attribute) is
@@ -340,7 +345,8 @@ discover_candidates <- function(
   policy = request_policy(),
   use_known_paths = TRUE,
   use_robots = TRUE,
-  throttle_state = NULL
+  throttle_state = NULL,
+  robots_txt = NULL
 ) {
   # Entry points pin first; this is the backstop for one that forgets.
   policy <- request_policy_pin(policy, create_source_records(root, as = "site"))
@@ -359,7 +365,8 @@ discover_candidates <- function(
     policy = policy,
     use_known_paths = use_known_paths,
     use_robots = use_robots,
-    throttle_state = throttle_state
+    throttle_state = throttle_state,
+    robots_txt = robots_txt
   )
 
   outcomes <- lapply(seq_len(nrow(cand)), function(i) {

@@ -432,7 +432,8 @@ robots.txt `Sitemap:` directives → generic guessed paths → CMS-oriented gues
 default `use_robots = TRUE`); the guessed-path catalog is also enabled by default
 (`use_known_paths = TRUE`). robots *rule application* (`Disallow`/`Allow`)
 remains out of scope (ADR-002). Directives take precedence over catalog guesses
-on dedupe.
+on dedupe. A caller-supplied `robots_txt` text replaces the robots.txt fetch;
+its directives are then fetched and classified like a fetched file's.
 
 Generic guess catalog (≥): `/sitemap.xml`, `/sitemap_index.xml`,
 `/sitemap-index.xml`, `/sitemap.xml.gz`, `/sitemap.txt`, `/sitemap/index.xml`,

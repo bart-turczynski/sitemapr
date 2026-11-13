@@ -73,18 +73,52 @@ parse_robots_sitemaps <- function(text) {
   good[!duplicated(keys)]
 }
 
+# Check a caller-supplied robots.txt body (`sitemap_tree(robots_txt = )`): NULL
+# (fetch `<origin>/robots.txt` as usual) or a character vector with no NA,
+# whose elements are joined as lines. Returns the text, or NULL.
+check_robots_txt <- function(robots_txt) {
+  if (is.null(robots_txt)) {
+    return(NULL)
+  }
+  if (!is.character(robots_txt) || anyNA(robots_txt)) {
+    rlang::abort(
+      "`robots_txt` must be NULL or a character vector of robots.txt text.",
+      class = "sitemapr_bad_input"
+    )
+  }
+  # Declared-latin1 text converts; text that still is not UTF-8 would make
+  # split_lines() return NA and silently read as "no directives".
+  robots_txt <- enc2utf8(robots_txt)
+  if (!all(validUTF8(robots_txt))) {
+    rlang::abort(
+      "`robots_txt` must be valid UTF-8 text.",
+      class = "sitemapr_bad_input"
+    )
+  }
+  # A leading byte-order mark is not whitespace and would hide a first-line
+  # directive, as it would in a fetched body (text_as_string() strips it).
+  sub("^\ufeff", "", paste(robots_txt, collapse = "\n"))
+}
+
 # Fetch and harvest `Sitemap:` URLs from an origin's robots.txt. Fetch failures
 # are swallowed gracefully (an SSRF block, transport failure, or non-2xx status
 # yields no URLs, never an error), mirroring discovery's candidate handling — a
 # missing or unreachable robots.txt simply contributes nothing. Returns an
 # ordered, deduplicated character vector of sitemap URLs (possibly empty).
+# `robots_txt`, already checked by check_robots_txt(), replaces the fetch.
 discover_robots_sitemaps <- function(
   origin,
   user_agent = default_user_agent(),
   net_limits = fetch_limits(),
   policy = request_policy(),
-  throttle_state = NULL
+  throttle_state = NULL,
+  robots_txt = NULL
 ) {
+  # Supplied text stands in for the fetched file: no request is made, and the
+  # declared URLs then go through the same candidate fetch as discovery's.
+  if (!is.null(robots_txt)) {
+    return(parse_robots_sitemaps(robots_txt))
+  }
   url <- robots_txt_url(origin)
   rec <- tryCatch(
     withCallingHandlers(

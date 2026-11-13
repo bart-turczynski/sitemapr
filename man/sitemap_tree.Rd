@@ -14,7 +14,8 @@ sitemap_tree(
   net_limits = fetch_limits(),
   index_limits = NULL,
   policy = request_policy(),
-  max_active = NULL
+  max_active = NULL,
+  robots_txt = NULL
 )
 }
 \arguments{
@@ -60,6 +61,13 @@ is typical) fetches up to that many independent child sitemaps at once.
 Concurrency changes only \emph{when} a child's bytes arrive, never the row
 order or budget-truncation point — the result is byte-identical to
 sequential mode.}
+
+\item{robots_txt}{Optional robots.txt text (a string, or a character vector
+of lines) to read in place of fetching \verb{<origin>/robots.txt}. Its
+\verb{Sitemap:} directives become the \code{"robots"} rows, each fetched and expanded
+exactly as those of a fetched robots.txt would be; \code{x} names the site.
+Combine with \code{use_known_paths = FALSE} for one row per declared sitemap
+(plus any index children). Requires \code{from = "root"} and \code{use_robots = TRUE}. Default \code{NULL} fetches robots.txt.}
 }
 \value{
 A tibble with one row per evaluated sitemap (and per expanded index
@@ -82,7 +90,9 @@ WordPress/Shopify), classifying each candidate. A guessed path that 404s
 is a \code{rejected} \code{not-found} row, never a validation finding, and a single
 unreachable guess never fails the call. Robots rules (\code{Disallow}/\code{Allow})
 are never applied — only the \verb{Sitemap:} directive is read (ADR-006). Turn
-either source off with \code{use_robots} / \code{use_known_paths}.}
+either source off with \code{use_robots} / \code{use_known_paths}. To check the
+sitemaps a robots.txt you hold declares (a draft not yet deployed, or a
+body you fetched yourself), pass its text as \code{robots_txt}.}
 \item{\code{from = "sitemap"}}{\code{x} is an exact sitemap or sitemapindex URL.
 \code{sitemap_tree()} fetches that one URL (no catalog, no guessing) and, if
 it is a \code{sitemapindex}, expands it. The root row carries provenance
@@ -105,6 +115,13 @@ yourself (no network for the root), use \code{\link[=sitemap_tree_from_bytes]{si
 
 # Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
 # sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
+
+# Check the sitemaps a draft robots.txt declares, before deploying it.
+# sitemap_tree(
+#   "https://example.com",
+#   robots_txt = "Sitemap: https://example.com/news.xml",
+#   use_known_paths = FALSE
+# )
 }
 \seealso{
 \code{\link[=sitemap_tree_from_bytes]{sitemap_tree_from_bytes()}} to discover from already-fetched bytes.
