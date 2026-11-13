@@ -86,6 +86,15 @@ check_robots_txt <- function(robots_txt) {
       class = "sitemapr_bad_input"
     )
   }
+  # Declared-latin1 text converts; text that still is not UTF-8 would make
+  # split_lines() return NA and silently read as "no directives".
+  robots_txt <- enc2utf8(robots_txt)
+  if (!all(validUTF8(robots_txt))) {
+    rlang::abort(
+      "`robots_txt` must be valid UTF-8 text.",
+      class = "sitemapr_bad_input"
+    )
+  }
   # A leading byte-order mark is not whitespace and would hide a first-line
   # directive, as it would in a fetched body (text_as_string() strips it).
   sub("^\ufeff", "", paste(robots_txt, collapse = "\n"))

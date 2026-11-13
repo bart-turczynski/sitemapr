@@ -397,7 +397,7 @@ test_that("supplied robots_txt accepts lines and a leading BOM", {
   )))
   tree <- sitemap_tree(
     "https://ex.com",
-    robots_txt = c("﻿Sitemap: https://ex.com/a.xml", "User-agent: *"),
+    robots_txt = c("\ufeffSitemap: https://ex.com/a.xml", "User-agent: *"),
     use_known_paths = FALSE
   )
   expect_identical(tree$sitemap_url, "https://ex.com/a.xml")
@@ -457,6 +457,15 @@ test_that("robots_txt rejects bad input and contradictory arguments", {
       from = "sitemap",
       robots_txt = "Sitemap: https://ex.com/a.xml"
     ),
+    class = "sitemapr_bad_input"
+  )
+})
+
+test_that("robots_txt that is not valid UTF-8 aborts rather than reading empty", {
+  latin1 <- "Sitemap: https://ex.com/a.xml\n# caf\xe9"
+  Encoding(latin1) <- "bytes"
+  expect_error(
+    sitemap_tree("https://ex.com", robots_txt = latin1),
     class = "sitemapr_bad_input"
   )
 })
