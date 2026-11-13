@@ -381,7 +381,11 @@ test_that("supplied robots_txt yields one row per declared sitemap", {
 })
 
 test_that("supplied robots_txt matches discovery from the fetched file", {
-  body <- "Sitemap: https://ex.com/custom/deep.xml\nSitemap: https://ex.com/x.xml"
+  body <- paste(
+    "Sitemap: https://ex.com/custom/deep.xml",
+    "Sitemap: https://ex.com/x.xml",
+    sep = "\n"
+  )
   httr2::local_mocked_responses(robots_mock(list(
     "https://ex.com/robots.txt" = body,
     "https://ex.com/custom/deep.xml" = robots_urlset("https://ex.com/1")
@@ -462,7 +466,7 @@ test_that("robots_txt rejects bad input and contradictory arguments", {
   )
 })
 
-test_that("robots_txt that is not valid UTF-8 aborts rather than reading empty", {
+test_that("non-UTF-8 robots_txt aborts rather than reading empty", {
   latin1 <- "Sitemap: https://ex.com/a.xml\n# caf\xe9"
   Encoding(latin1) <- "bytes"
   expect_error(
