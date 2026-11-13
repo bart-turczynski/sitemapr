@@ -235,7 +235,7 @@ sitemap_tree_from_root <- function(
 #' @param robots_txt Optional robots.txt text (a string, or a character vector
 #'   of lines) to read in place of fetching `<origin>/robots.txt`. Its
 #'   `Sitemap:` directives become the `"robots"` rows, each fetched and expanded
-#'   exactly as a fetched robots.txt's would be; `x` still names the site.
+#'   exactly as those of a fetched robots.txt would be; `x` names the site.
 #'   Combine with `use_known_paths = FALSE` for one row per declared sitemap
 #'   (plus any index children). Requires `from = "root"` and `use_robots =
 #'   TRUE`. Default `NULL` fetches robots.txt.

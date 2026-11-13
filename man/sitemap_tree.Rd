@@ -65,7 +65,7 @@ sequential mode.}
 \item{robots_txt}{Optional robots.txt text (a string, or a character vector
 of lines) to read in place of fetching \verb{<origin>/robots.txt}. Its
 \verb{Sitemap:} directives become the \code{"robots"} rows, each fetched and expanded
-exactly as a fetched robots.txt's would be; \code{x} still names the site.
+exactly as those of a fetched robots.txt would be; \code{x} names the site.
 Combine with \code{use_known_paths = FALSE} for one row per declared sitemap
 (plus any index children). Requires \code{from = "root"} and \code{use_robots = TRUE}. Default \code{NULL} fetches robots.txt.}
 }

@@ -339,7 +339,8 @@ test_that("sitemap_tree threads the policy to robots.txt and its candidate", {
 
 test_that("supplied robots_txt yields one row per declared sitemap", {
   # The origin's own robots.txt is never requested: a hit on it fails the test.
-  requested <- character(0)
+  seen <- new.env(parent = emptyenv())
+  seen$urls <- character(0)
   served <- robots_mock(list(
     "https://ex.com/robots.txt" = "Sitemap: https://ex.com/deployed.xml",
     "https://ex.com/a.xml" = robots_urlset("https://ex.com/1"),
@@ -349,7 +350,7 @@ test_that("supplied robots_txt yields one row per declared sitemap", {
     )
   ))
   httr2::local_mocked_responses(function(req) {
-    requested <<- c(requested, req$url)
+    seen$urls <- c(seen$urls, req$url)
     served(req)
   })
   draft <- paste(
@@ -364,7 +365,7 @@ test_that("supplied robots_txt yields one row per declared sitemap", {
     robots_txt = draft,
     use_known_paths = FALSE
   )
-  expect_false("https://ex.com/robots.txt" %in% requested)
+  expect_false("https://ex.com/robots.txt" %in% seen$urls)
   expect_identical(
     tree$sitemap_url,
     c(
