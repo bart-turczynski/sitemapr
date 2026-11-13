@@ -334,3 +334,129 @@ test_that("sitemap_tree threads the policy to robots.txt and its candidate", {
   expect_true("https://ex.com/robots.txt" %in% sink$urls)
   expect_true("https://ex.com/deep.xml" %in% sink$urls)
 })
+
+# ---- sitemap_tree(robots_txt = ): supplied robots.txt text (SITE-zaerllaz) ---
+
+test_that("supplied robots_txt yields one row per declared sitemap", {
+  # The origin's own robots.txt is never requested: a hit on it fails the test.
+  requested <- character(0)
+  served <- robots_mock(list(
+    "https://ex.com/robots.txt" = "Sitemap: https://ex.com/deployed.xml",
+    "https://ex.com/a.xml" = robots_urlset("https://ex.com/1"),
+    "https://ex.com/b.xml" = robots_urlset(
+      "https://ex.com/1",
+      "https://ex.com/2"
+    )
+  ))
+  httr2::local_mocked_responses(function(req) {
+    requested <<- c(requested, req$url)
+    served(req)
+  })
+  draft <- paste(
+    "User-agent: *",
+    "Sitemap: https://ex.com/a.xml",
+    "Sitemap: https://ex.com/b.xml",
+    "Sitemap: https://ex.com/missing.xml",
+    sep = "\n"
+  )
+  tree <- sitemap_tree(
+    "https://ex.com",
+    robots_txt = draft,
+    use_known_paths = FALSE
+  )
+  expect_false("https://ex.com/robots.txt" %in% requested)
+  expect_identical(
+    tree$sitemap_url,
+    c(
+      "https://ex.com/a.xml",
+      "https://ex.com/b.xml",
+      "https://ex.com/missing.xml"
+    )
+  )
+  expect_true(all(tree$provenance == "robots"))
+  expect_identical(tree$status, c("accepted", "accepted", "rejected"))
+  expect_identical(tree$reason, c("robots", "robots", "not-found"))
+  expect_identical(tree$page_count, c(1L, 2L, NA))
+})
+
+test_that("supplied robots_txt matches discovery from the fetched file", {
+  body <- "Sitemap: https://ex.com/custom/deep.xml\nSitemap: https://ex.com/x.xml"
+  httr2::local_mocked_responses(robots_mock(list(
+    "https://ex.com/robots.txt" = body,
+    "https://ex.com/custom/deep.xml" = robots_urlset("https://ex.com/1")
+  )))
+  expect_identical(
+    sitemap_tree("https://ex.com", robots_txt = body),
+    sitemap_tree("https://ex.com")
+  )
+})
+
+test_that("supplied robots_txt accepts lines and a leading BOM", {
+  httr2::local_mocked_responses(robots_mock(list(
+    "https://ex.com/a.xml" = robots_urlset("https://ex.com/1")
+  )))
+  tree <- sitemap_tree(
+    "https://ex.com",
+    robots_txt = c("﻿Sitemap: https://ex.com/a.xml", "User-agent: *"),
+    use_known_paths = FALSE
+  )
+  expect_identical(tree$sitemap_url, "https://ex.com/a.xml")
+  expect_identical(tree$status, "accepted")
+})
+
+test_that("a supplied robots-declared index is expanded", {
+  index <- paste0(
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "<sitemap><loc>https://ex.com/child.xml</loc></sitemap>",
+    "</sitemapindex>"
+  )
+  httr2::local_mocked_responses(robots_mock(list(
+    "https://ex.com/idx.xml" = index,
+    "https://ex.com/child.xml" = robots_urlset("https://ex.com/1")
+  )))
+  tree <- sitemap_tree(
+    "https://ex.com",
+    robots_txt = "Sitemap: https://ex.com/idx.xml",
+    use_known_paths = FALSE
+  )
+  expect_identical(tree$depth, c(0L, 1L))
+  expect_identical(tree$parent_sitemap[[2L]], "https://ex.com/idx.xml")
+})
+
+test_that("supplied robots_txt with no directives yields an empty tree", {
+  httr2::local_mocked_responses(robots_mock(list()))
+  tree <- sitemap_tree(
+    "https://ex.com",
+    robots_txt = "User-agent: *\nDisallow: /",
+    use_known_paths = FALSE
+  )
+  expect_identical(nrow(tree), 0L)
+  expect_named(tree, sitemap_tree_cols())
+})
+
+test_that("robots_txt rejects bad input and contradictory arguments", {
+  expect_error(
+    sitemap_tree("https://ex.com", robots_txt = NA_character_),
+    class = "sitemapr_bad_input"
+  )
+  expect_error(
+    sitemap_tree("https://ex.com", robots_txt = 1),
+    class = "sitemapr_bad_input"
+  )
+  expect_error(
+    sitemap_tree(
+      "https://ex.com",
+      robots_txt = "Sitemap: x",
+      use_robots = FALSE
+    ),
+    class = "sitemapr_bad_input"
+  )
+  expect_error(
+    sitemap_tree(
+      "https://ex.com/sitemap.xml",
+      from = "sitemap",
+      robots_txt = "Sitemap: https://ex.com/a.xml"
+    ),
+    class = "sitemapr_bad_input"
+  )
+})

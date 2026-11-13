@@ -138,7 +138,8 @@ sitemap_tree_from_root <- function(
   net_limits,
   index_limits,
   policy,
-  throttle_state = NULL
+  throttle_state = NULL,
+  robots_txt = NULL
 ) {
   # ADR-008 §6: one per-host throttle store for the WHOLE walk, so discovery and
   # every same-host index expansion share a single per-host bucket rather than
@@ -159,7 +160,8 @@ sitemap_tree_from_root <- function(
     policy = policy,
     use_known_paths = use_known_paths,
     use_robots = use_robots,
-    throttle_state = throttle_state
+    throttle_state = throttle_state,
+    robots_txt = robots_txt
   )
   records <- attr(disc, "records")
   expanded <- sitemap_tree_expansions(
@@ -204,7 +206,9 @@ sitemap_tree_from_root <- function(
 #'     is a `rejected` `not-found` row, never a validation finding, and a single
 #'     unreachable guess never fails the call. Robots rules (`Disallow`/`Allow`)
 #'     are never applied — only the `Sitemap:` directive is read (ADR-006). Turn
-#'     either source off with `use_robots` / `use_known_paths`.}
+#'     either source off with `use_robots` / `use_known_paths`. To check the
+#'     sitemaps a robots.txt you hold declares (a draft not yet deployed, or a
+#'     body you fetched yourself), pass its text as `robots_txt`.}
 #'   \item{`from = "sitemap"`}{`x` is an exact sitemap or sitemapindex URL.
 #'     `sitemap_tree()` fetches that one URL (no catalog, no guessing) and, if
 #'     it is a `sitemapindex`, expands it. The root row carries provenance
@@ -228,6 +232,13 @@ sitemap_tree_from_root <- function(
 #'   `Sitemap:` directive it lists (provenance `"robots"`), deduplicated against
 #'   the guessed paths. Default `TRUE`. Robots rules (`Disallow`/`Allow`) are
 #'   never applied — only the `Sitemap:` directive is read.
+#' @param robots_txt Optional robots.txt text (a string, or a character vector
+#'   of lines) to read in place of fetching `<origin>/robots.txt`. Its
+#'   `Sitemap:` directives become the `"robots"` rows, each fetched and expanded
+#'   exactly as a fetched robots.txt's would be; `x` still names the site.
+#'   Combine with `use_known_paths = FALSE` for one row per declared sitemap
+#'   (plus any index children). Requires `from = "root"` and `use_robots =
+#'   TRUE`. Default `NULL` fetches robots.txt.
 #' @param use_known_paths When `from = "root"`, try the guessed-path catalog
 #'   (provenance `"guessed-path"`). Default `TRUE`. Set both `use_robots` and
 #'   `use_known_paths` to `FALSE` for an empty tree.
@@ -252,6 +263,13 @@ sitemap_tree_from_root <- function(
 #'
 #' # Fetch and expand one exact sitemap URL, skipping the guessed-path catalog.
 #' # sitemap_tree("https://example.com/sitemap_index.xml", from = "sitemap")
+#'
+#' # Check the sitemaps a draft robots.txt declares, before deploying it.
+#' # sitemap_tree(
+#' #   "https://example.com",
+#' #   robots_txt = "Sitemap: https://example.com/news.xml",
+#' #   use_known_paths = FALSE
+#' # )
 sitemap_tree <- function(
   x,
   from = c("root", "sitemap"),
@@ -262,9 +280,19 @@ sitemap_tree <- function(
   net_limits = fetch_limits(),
   index_limits = NULL,
   policy = request_policy(),
-  max_active = NULL
+  max_active = NULL,
+  robots_txt = NULL
 ) {
   from <- match.arg(from)
+  robots_txt <- check_robots_txt(robots_txt)
+  if (
+    !is.null(robots_txt) && !(identical(from, "root") && isTRUE(use_robots))
+  ) {
+    rlang::abort(
+      "`robots_txt` needs `from = \"root\"` and `use_robots = TRUE`.",
+      class = "sitemapr_bad_input"
+    )
+  }
   policy <- policy_set_max_active(policy, max_active)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
@@ -288,6 +316,7 @@ sitemap_tree <- function(
     limits,
     net_limits,
     index_limits,
-    policy
+    policy,
+    robots_txt = robots_txt
   )
 }
