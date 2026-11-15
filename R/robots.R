@@ -100,12 +100,29 @@ check_robots_txt <- function(robots_txt) {
   sub("^\ufeff", "", paste(robots_txt, collapse = "\n"))
 }
 
+# Check `robots_txt` and that it fits the call: it replaces robots discovery,
+# so it needs `from = "root"` and `use_robots = TRUE`. Returns the checked
+# text, or NULL. Shared by sitemap_tree() and audit_sitemap().
+check_robots_txt_call <- function(robots_txt, from, use_robots) {
+  robots_txt <- check_robots_txt(robots_txt)
+  if (
+    !is.null(robots_txt) && !(identical(from, "root") && isTRUE(use_robots))
+  ) {
+    rlang::abort(
+      "`robots_txt` needs `from = \"root\"` and `use_robots = TRUE`.",
+      class = "sitemapr_bad_input"
+    )
+  }
+  robots_txt
+}
+
 # Fetch and harvest `Sitemap:` URLs from an origin's robots.txt. Fetch failures
 # are swallowed gracefully (an SSRF block, transport failure, or non-2xx status
 # yields no URLs, never an error), mirroring discovery's candidate handling — a
 # missing or unreachable robots.txt simply contributes nothing. Returns an
 # ordered, deduplicated character vector of sitemap URLs (possibly empty).
-# `robots_txt`, already checked by check_robots_txt(), replaces the fetch.
+# `robots_txt`, already checked by check_robots_txt(), replaces the fetch. A
+# fetched file's URLs carry the file's final URL as `attr(, "robots_url")`.
 discover_robots_sitemaps <- function(
   origin,
   user_agent = default_user_agent(),
@@ -137,6 +154,7 @@ discover_robots_sitemaps <- function(
   if (is.null(rec) || !is.na(rec$error_class)) {
     return(character(0))
   }
+  robots_url <- as.character(rec$final_url)
   body <- attr(rec, "body")
   if (is.null(body) || length(body) == 0L) {
     return(character(0))
@@ -148,5 +166,9 @@ discover_robots_sitemaps <- function(
   if (is.null(text)) {
     return(character(0))
   }
-  parse_robots_sitemaps(text)
+  urls <- parse_robots_sitemaps(text)
+  if (length(urls) > 0L) {
+    attr(urls, "robots_url") <- robots_url
+  }
+  urls
 }

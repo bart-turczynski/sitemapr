@@ -316,7 +316,8 @@ still ignore an incomplete cluster.
 Emitted under `layer = "discovery"` by `audit_sitemap(from = "root")`
 (ADR-012).
 - `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST` — a robots.txt (fetched, or the
-  caller's `robots_txt`) declares a sitemap on another host than its own.
+  caller's `robots_txt`) declares a sitemap on another host than its own,
+  after any redirect of the robots.txt itself.
   sitemaps.org accepts a cross-host sitemap when the robots.txt declares it, so
   this is evidence for the reader, not a defect (`info`). Emitted whether or not
   the declared sitemap works. `evidence.excerpt` names the declaring source,
@@ -324,7 +325,8 @@ Emitted under `layer = "discovery"` by `audit_sitemap(from = "root")`
 
 A robots-declared sitemap that fails during root discovery reuses the codes a
 submitted sitemap would get, at their registered severity and layer:
-`FETCH_FAILED` for a non-2xx status, an unreachable host or a blocked address;
+`FETCH_TIMEOUT` for a timeout, `FETCH_FAILED` for a non-2xx status, an
+unreachable host or a blocked address;
 `UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT` and
 `UNSUPPORTED_MALFORMED_GZIP` for a body that is not a sitemap. `subject_ref`
 stays the sitemap URL, and the message names the robots.txt that declared it.

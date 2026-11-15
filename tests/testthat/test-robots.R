@@ -105,10 +105,10 @@ test_that("discover_robots_sitemaps returns URLs from a fetched robots.txt", {
   httr2::local_mocked_responses(robots_mock(list(
     "https://ex.com/robots.txt" = "Sitemap: https://ex.com/a.xml"
   )))
-  expect_identical(
-    discover_robots_sitemaps("https://ex.com"),
-    "https://ex.com/a.xml"
-  )
+  urls <- discover_robots_sitemaps("https://ex.com")
+  expect_identical(as.character(urls), "https://ex.com/a.xml")
+  # The file the directives came from rides along for root audits.
+  expect_identical(attr(urls, "robots_url"), "https://ex.com/robots.txt")
 })
 
 test_that("discover_robots_sitemaps returns empty on a missing robots.txt", {
@@ -197,10 +197,10 @@ test_that("a UTF-8 BOM does not hide a first-line Sitemap directive", {
       )
     )
   })
-  expect_identical(
-    discover_robots_sitemaps("https://ex.com"),
-    "https://ex.com/a.xml"
-  )
+  urls <- discover_robots_sitemaps("https://ex.com")
+  expect_identical(as.character(urls), "https://ex.com/a.xml")
+  # The file the directives came from rides along for root audits.
+  expect_identical(attr(urls, "robots_url"), "https://ex.com/robots.txt")
 })
 
 test_that("decode_text_or_null degrades where text_as_string aborts", {

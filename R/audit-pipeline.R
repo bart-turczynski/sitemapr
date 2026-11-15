@@ -656,14 +656,14 @@ audit_combine_trees <- function(parts) {
 #'
 #' \itemize{
 #'   \item a robots-declared sitemap is always audited. One that fails to fetch
-#'     (a non-2xx status, an unreachable host, a blocked address) is a
-#'     `FETCH_FAILED` finding, and its source-level findings
-#'     (`UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT`,
-#'     `UNSUPPORTED_MALFORMED_GZIP`, `FETCH_FAILED`) name the robots.txt that
-#'     declared it;
-#'   \item a robots-declared sitemap on another host than the site's yields the
-#'     info finding `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST`, whether or not it
-#'     works;
+#'     is the fetch finding a submitted sitemap would get (`FETCH_TIMEOUT`, or
+#'     `FETCH_FAILED` for a non-2xx status, an unreachable host or a blocked
+#'     address), and its source-level findings (those, and
+#'     `UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT`,
+#'     `UNSUPPORTED_MALFORMED_GZIP`) name the robots.txt that declared it;
+#'   \item a robots-declared sitemap on another host than the robots.txt that
+#'     declares it yields the info finding
+#'     `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST`, whether or not it works;
 #'   \item a guessed path is audited only when its body is a recognized sitemap
 #'     format (gzip, a `urlset` or `sitemapindex`, a feed, or text holding a
 #'     URL). A guess that 404s, or answers with an HTML page or another XML
@@ -769,15 +769,7 @@ audit_sitemap <- function(
       class = "sitemapr_bad_input"
     )
   }
-  robots_txt <- check_robots_txt(robots_txt)
-  if (
-    !is.null(robots_txt) && !(identical(from, "root") && isTRUE(use_robots))
-  ) {
-    rlang::abort(
-      "`robots_txt` needs `from = \"root\"` and `use_robots = TRUE`.",
-      class = "sitemapr_bad_input"
-    )
-  }
+  robots_txt <- check_robots_txt_call(robots_txt, from, use_robots)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }

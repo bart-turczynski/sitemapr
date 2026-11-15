@@ -41,16 +41,28 @@ audit_guess_qualifies <- function(rec) {
     any(grepl("^\\s*https?://\\S+\\s*$", split_lines(text), perl = TRUE))
 }
 
-# Where the declaration came from, as findings name it: the robots.txt URL
-# that was fetched, or the caller's supplied text.
-audit_robots_source <- function(origin, robots_txt) {
-  if (is.null(robots_txt)) robots_txt_url(origin) else "supplied robots_txt"
+# Where a declaration came from, as findings name it: the robots.txt it was
+# read from, after any redirect, or the caller's supplied text.
+audit_robots_source <- function(robots_url, origin, robots_txt) {
+  if (!is.null(robots_txt)) {
+    return("supplied robots_txt")
+  }
+  if (is.na(robots_url)) robots_txt_url(origin) else robots_url
 }
 
-# The host of an absolute URL, lower-cased; NA when it does not parse.
+# The host of an absolute URL in the site-entrypoint normal form (IDNA, then
+# lower-cased, as create_source_records() spells an origin), so two spellings
+# of one host compare equal; NA when it does not parse.
 audit_url_host <- function(url) {
-  host <- parse_url_adapter(url)$host[[1L]]
-  if (is.na(host)) NA_character_ else ascii_lower(host)
+  origin <- tryCatch(
+    create_source_records(url, as = "site")$normalized_url[[1L]],
+    error = function(e) NA_character_
+  )
+  if (is.na(origin)) {
+    return(NA_character_)
+  }
+  host <- parse_url_adapter(origin)$host[[1L]]
+  if (is.na(host)) NA_character_ else host
 }
 
 # DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST for one declared sitemap, or NULL when it
@@ -92,18 +104,27 @@ audit_cross_host_finding <- function(url, site_host, declared_in) {
   )
 }
 
-# FETCH_FAILED for a robots-declared sitemap discovery rejected: a non-2xx
-# status, an unreachable host or an SSRF block. Same code, severity and layer
-# as a submitted sitemap that fails to fetch; the robots provenance rides in
-# the message and the evidence excerpt.
-audit_declared_fetch_finding <- function(url, reason, http_status, declared) {
+# The fetch finding for a robots-declared sitemap discovery rejected: the code a
+# submitted sitemap would get for the same outcome (fetch_failure_code()), so a
+# timeout is FETCH_TIMEOUT and a non-2xx status, an unreachable host or an SSRF
+# block FETCH_FAILED, all `fatal` in the fetch layer. The robots provenance
+# rides in the message and the evidence excerpt.
+audit_declared_fetch_finding <- function(
+  url,
+  reason,
+  http_status,
+  declared,
+  cnd = NULL
+) {
   why <- if (!is.na(http_status)) {
     sprintf("HTTP %d", http_status)
+  } else if (!is.null(cnd)) {
+    sprintf("%s (%s)", reason, conditionMessage(cnd))
   } else {
     reason
   }
   tibble::tibble(
-    code = "FETCH_FAILED",
+    code = fetch_failure_code(cnd),
     severity = "fatal",
     layer = "fetch",
     subject_type = "source",
@@ -126,10 +147,13 @@ audit_declared_fetch_finding <- function(url, reason, http_status, declared) {
 # findings alone says where the sitemap was declared. Per-entry and protocol
 # findings keep their messages: they are about the document, not about how it
 # was found.
-audit_attribute_robots <- function(findings, url, declared_in) {
+# `urls` holds every spelling the audit may have used for the sitemap: the
+# declared URL, its normalized form and the post-redirect URL.
+audit_attribute_robots <- function(findings, urls, declared_in) {
+  refs <- vapply(urls, sitemap_subject_ref, character(1L), USE.NAMES = FALSE)
   hit <- findings$subject_type == "source" &
     findings$layer %in% c("fetch", "classification", "decompression") &
-    findings$subject_ref == sitemap_subject_ref(url)
+    findings$subject_ref %in% refs
   if (any(hit)) {
     findings$message[hit] <- paste0(
       findings$message[hit],
@@ -157,6 +181,18 @@ audit_root_row_facts <- function(rec, status, url) {
   list(page_count = as.integer(pages), gzip = gzip)
 }
 
+# The audit expands an index under the URL it resolved to; sitemap_tree() names
+# the children's parent by the candidate URL. Re-parent the direct children of a
+# redirected candidate so the two trees agree.
+audit_reparent_tree <- function(tree, final_url, candidate_url) {
+  if (nrow(tree) == 0L || is.na(final_url) || final_url == candidate_url) {
+    return(tree)
+  }
+  moved <- tree$depth == 1L & tree$parent_sitemap %in% final_url
+  tree$parent_sitemap[moved] <- candidate_url
+  tree
+}
+
 audit_sitemap_root <- function(
   x,
   mode,
@@ -179,7 +215,6 @@ audit_sitemap_root <- function(
   origin <- site$normalized_url[[1L]]
   policy <- request_policy_pin(policy, site)
   site_host <- audit_url_host(origin)
-  declared_in <- audit_robots_source(origin, robots_txt)
 
   disc <- discover_candidates(
     x,
@@ -191,6 +226,7 @@ audit_sitemap_root <- function(
     robots_txt = robots_txt
   )
   records <- attr(disc, "records")
+  conditions <- attr(disc, "conditions")
 
   outs <- list()
   own <- list()
@@ -208,9 +244,18 @@ audit_sitemap_root <- function(
     gzip[i] <- facts$gzip
 
     if (declared) {
+      robots_url <- disc$robots_url[[i]]
+      declared_in <- audit_robots_source(robots_url, origin, robots_txt)
+      # The robots.txt's own host, after any redirect (apex to www): the
+      # declaration is cross-host only against the file that made it.
+      robots_host <- if (is.na(robots_url)) {
+        site_host
+      } else {
+        audit_url_host(robots_url)
+      }
       own[[length(own) + 1L]] <- audit_cross_host_finding(
         url,
-        site_host,
+        robots_host,
         declared_in
       )
     }
@@ -220,7 +265,8 @@ audit_sitemap_root <- function(
           url,
           disc$reason[[i]],
           disc$http_status[[i]],
-          declared_in
+          declared_in,
+          cnd = conditions[[i]]
         )
       }
       next
@@ -228,8 +274,9 @@ audit_sitemap_root <- function(
     if (!declared && !audit_guess_qualifies(rec)) {
       next
     }
+    src <- create_source_records(url, as = "sitemap")[1L, , drop = FALSE]
     out <- suppressWarnings(audit_one_source(
-      create_source_records(url, as = "sitemap")[1L, , drop = FALSE],
+      src,
       mode = mode,
       user_agent = user_agent,
       limits = limits,
@@ -238,9 +285,15 @@ audit_sitemap_root <- function(
       strm = strm,
       rec = rec
     ))
+    final_url <- disc$final_url[[i]]
     if (declared) {
-      out$findings <- audit_attribute_robots(out$findings, url, declared_in)
+      out$findings <- audit_attribute_robots(
+        out$findings,
+        unique(c(url, src$normalized_url[[1L]], final_url)),
+        declared_in
+      )
     }
+    out$tree <- audit_reparent_tree(out$tree, final_url, url)
     outs[[length(outs) + 1L]] <- out
   }
 
@@ -262,12 +315,17 @@ audit_sitemap_root <- function(
       assemble_findings(own, mode)
     ))
   }
-  # Discovery ran whether or not it found anything; nothing else in the result
-  # proves that, so the run manifest records it (R/layers-run.R).
-  combined$findings <- findings_stamp_layers(
-    combined$findings,
-    union(findings_layers_run(combined$findings), "discovery")
-  )
+  # The discovery checks ran only if robots.txt was read: supplied, or fetched
+  # and declaring at least one sitemap. A robots.txt that failed to fetch, or
+  # `use_robots = FALSE`, leaves them unproven, so the report shows them as not
+  # exercised rather than passed (understating, never overstating).
+  robots_read <- !is.null(robots_txt) || any(disc$provenance == "robots")
+  if (isTRUE(use_robots) && robots_read) {
+    combined$findings <- findings_stamp_layers(
+      combined$findings,
+      union(findings_layers_run(combined$findings), "discovery")
+    )
+  }
   combined$tree <- audit_combine_trees(list(base, combined$tree))
   combined
 }

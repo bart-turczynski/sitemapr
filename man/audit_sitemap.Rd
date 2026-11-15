@@ -109,14 +109,14 @@ fetched, and the result also carries discovery's own findings (ADR-012):
 
 \itemize{
 \item a robots-declared sitemap is always audited. One that fails to fetch
-(a non-2xx status, an unreachable host, a blocked address) is a
-\code{FETCH_FAILED} finding, and its source-level findings
-(\code{UNSUPPORTED_HTML_MASQUERADE}, \code{UNSUPPORTED_ROOT},
-\code{UNSUPPORTED_MALFORMED_GZIP}, \code{FETCH_FAILED}) name the robots.txt that
-declared it;
-\item a robots-declared sitemap on another host than the site's yields the
-info finding \code{DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST}, whether or not it
-works;
+is the fetch finding a submitted sitemap would get (\code{FETCH_TIMEOUT}, or
+\code{FETCH_FAILED} for a non-2xx status, an unreachable host or a blocked
+address), and its source-level findings (those, and
+\code{UNSUPPORTED_HTML_MASQUERADE}, \code{UNSUPPORTED_ROOT},
+\code{UNSUPPORTED_MALFORMED_GZIP}) name the robots.txt that declared it;
+\item a robots-declared sitemap on another host than the robots.txt that
+declares it yields the info finding
+\code{DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST}, whether or not it works;
 \item a guessed path is audited only when its body is a recognized sitemap
 format (gzip, a \code{urlset} or \code{sitemapindex}, a feed, or text holding a
 URL). A guess that 404s, or answers with an HTML page or another XML

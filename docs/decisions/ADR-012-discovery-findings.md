@@ -43,8 +43,10 @@ discovery exports.
    a tree row and is never a finding. This extends the spec rule "a guess that
    404s is never a finding" (`docs/sitemap-spec.md` §9) to soft 404s.
 4. **Codes.** A failing declared sitemap reuses the code a submitted sitemap
-   gets, at its registered severity **and layer**: `FETCH_FAILED` (fetch,
-   fatal) for a non-2xx status, an unreachable host or a blocked address;
+   gets, at its registered severity **and layer**: `FETCH_TIMEOUT` and
+   `FETCH_BODY_CEILING_EXCEEDED` where the fetch ended that way, `FETCH_FAILED`
+   (fetch, fatal) for a non-2xx status, an unreachable host or a blocked
+   address;
    `UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT` and
    `UNSUPPORTED_MALFORMED_GZIP` for a body that is not a sitemap. A code carries
    one layer in `findings-registry.csv`, which the sibling port shares, so
@@ -52,18 +54,26 @@ discovery exports.
    never aborts the audit.
 5. **One new code.** `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST` (`info`, layer
    `discovery`, subject type `source`), for a declared sitemap whose host
-   differs from the site's. It is emitted whether or not that sitemap works.
+   differs from the host of the robots.txt that declares it, after any redirect
+   (an apex robots.txt that redirects to `www` is compared as `www`); supplied
+   text is compared against the site's host. It is emitted whether or not that
+   sitemap works.
    sitemaps.org accepts a cross-host sitemap when the robots.txt declares it, so
    the finding is evidence for the reader, not a defect.
-6. **Provenance.** `subject_ref` stays the sitemap URL. The declaring source,
-   the robots.txt URL or `"supplied robots_txt"`, is named in the message of
+6. **Provenance.** `subject_ref` stays the sitemap URL, after any redirect, as
+   for a submitted sitemap. The declaring source, the robots.txt's final URL
+   or `"supplied robots_txt"`, is named in the message of
    each source-level finding (fetch, classification, decompression) of a
    declared sitemap. It is also named in the evidence excerpt of the two
    findings discovery builds itself, `FETCH_FAILED` and the cross-host code.
    Findings of the audited sitemap keep their own excerpts.
-7. **Run manifest.** A root audit stamps `discovery` in `attr(findings,
+7. **Run manifest.** A root audit that read a robots.txt (supplied, or fetched
+   and declaring a sitemap) stamps `discovery` in `attr(findings,
    "layers_run")`, so the report's Checks section can show a clean discovery as
-   passed rather than not exercised.
+   passed. Without one (`use_robots = FALSE`, or a robots.txt that failed to
+   fetch) the discovery checks stay not exercised: the report understates
+   rather than overstates. An ordinary `from = "sitemap"` report now lists
+   discovery as not exercised, because the layer has an active check.
 
 ## Consequences
 
@@ -77,3 +87,8 @@ discovery exports.
 - Options not taken: a new export such as `validate_robots_sitemaps()` (ADR-007
   argues against it), and a `findings` attribute on `sitemap_tree()` (hidden
   from a consumer that reads only findings).
+- Known limits, left for later: root mode takes no `discovery_limits()` (the
+  default candidate cap applies); an accepted body is parsed once for the tree's
+  page count and again by the audit; index children do not share discovery's
+  per-host throttle bucket (ADR-008 §6); and a robots.txt that fails to fetch
+  is no finding (`DISCOVERY_ROBOTS_FAILED` stays validator-only).

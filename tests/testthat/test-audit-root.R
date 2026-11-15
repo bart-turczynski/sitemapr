@@ -12,14 +12,36 @@ root_urlset <- function(...) {
 }
 
 # A mock serving `body_map` (URL -> character or raw body). A URL in `status`
-# answers with that status; a URL in `fail` raises a transport error; any
+# answers with that status; one in `redirect` with a 301 to its value; one in
+# `fail` raises a transport error and one in `timeout` an httr2 timeout; any
 # other URL is a 404. Every request URL is recorded in `seen$urls`.
-root_mock <- function(body_map, status = list(), fail = character(0), seen) {
+root_mock <- function(
+  body_map,
+  status = list(),
+  fail = character(0),
+  seen,
+  redirect = list(),
+  timeout = character(0)
+) {
   seen$urls <- character(0)
   function(req) {
     seen$urls <- c(seen$urls, req$url)
     if (req$url %in% fail) {
       stop("connection refused")
+    }
+    if (req$url %in% timeout) {
+      rlang::abort(
+        "Timeout was reached",
+        class = c("httr2_timeout", "httr2_failure", "httr2_error")
+      )
+    }
+    to <- redirect[[req$url]]
+    if (!is.null(to)) {
+      return(httr2::response(
+        status_code = 301L,
+        url = req$url,
+        headers = list(Location = to)
+      ))
     }
     code <- status[[req$url]]
     if (!is.null(code)) {
@@ -194,8 +216,23 @@ test_that("a guess that 404s is never a finding", {
   audit <- audit_sitemap("https://ex.com", from = "root")
   expect_identical(nrow(audit_findings(audit)), 0L)
   expect_true(all(audit_tree(audit)$status == "rejected"))
-  # A clean discovery still records that it ran, for the report's Checks.
+  # No robots.txt was read, so the discovery checks are not claimed as run.
+  expect_false("discovery" %in% findings_layers_run(audit_findings(audit)))
+})
+
+test_that("a robots.txt that was read marks discovery as run", {
+  seen <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(root_mock(
+    list(
+      "https://ex.com/robots.txt" = "Sitemap: https://ex.com/s.xml",
+      "https://ex.com/s.xml" = root_urlset("https://ex.com/a")
+    ),
+    seen = seen
+  ))
+  audit <- audit_sitemap("https://ex.com", from = "root")
   expect_true("discovery" %in% findings_layers_run(audit_findings(audit)))
+  off <- audit_sitemap("https://ex.com", from = "root", use_robots = FALSE)
+  expect_false("discovery" %in% findings_layers_run(audit_findings(off)))
 })
 
 # ---- cross-host declarations (SITE-zczpxmow) ---------------------------------
@@ -330,4 +367,107 @@ test_that("root mode rejects bad input and contradictory arguments", {
     ),
     class = "sitemapr_bad_input"
   )
+})
+
+# ---- redirects, timeouts and host spellings (review of !121) ----------------
+
+test_that("a redirected declared index keeps the tree as sitemap_tree()", {
+  index <- paste0(
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "<sitemap><loc>https://ex.com/child.xml</loc></sitemap>",
+    "</sitemapindex>"
+  )
+  seen <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(root_mock(
+    list(
+      "https://ex.com/robots.txt" = "Sitemap: https://ex.com/s.xml",
+      "https://ex.com/real.xml" = index,
+      "https://ex.com/child.xml" = root_urlset("https://ex.com/a")
+    ),
+    redirect = list("https://ex.com/s.xml" = "https://ex.com/real.xml"),
+    seen = seen
+  ))
+  audit <- audit_sitemap("https://ex.com", from = "root")
+  tree <- audit_tree(audit)
+  expect_identical(tree, sitemap_tree("https://ex.com"))
+  expect_identical(
+    tree$parent_sitemap[tree$depth == 1L],
+    "https://ex.com/s.xml"
+  )
+})
+
+test_that("a redirected declared HTML page still names the robots.txt", {
+  seen <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(root_mock(
+    list(
+      "https://ex.com/robots.txt" = "Sitemap: https://EX.com/s.xml",
+      "https://ex.com/page.html" = html_page
+    ),
+    redirect = list("https://EX.com/s.xml" = "https://ex.com/page.html"),
+    seen = seen
+  ))
+  audit <- audit_sitemap(
+    "https://ex.com",
+    from = "root",
+    use_known_paths = FALSE
+  )
+  f <- audit_findings(audit)
+  f <- f[f$code == "UNSUPPORTED_HTML_MASQUERADE", , drop = FALSE]
+  expect_identical(nrow(f), 1L)
+  expect_match(f$message, paste0("Declared in ", robots_url), fixed = TRUE)
+  # The upper-case host is the same host, not a cross-host declaration.
+  codes <- audit_findings(audit)$code
+  expect_false("DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST" %in% codes)
+})
+
+test_that("cross-host compares against the robots.txt actually read", {
+  # ex.com/robots.txt redirects to www.ex.com, which declares its own sitemap:
+  # same host as the file that declares it, so no info finding.
+  seen <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(root_mock(
+    list(
+      "https://www.ex.com/robots.txt" = "Sitemap: https://www.ex.com/s.xml",
+      "https://www.ex.com/s.xml" = "<catalog/>"
+    ),
+    redirect = list(
+      "https://ex.com/robots.txt" = "https://www.ex.com/robots.txt"
+    ),
+    seen = seen
+  ))
+  audit <- audit_sitemap(
+    "https://ex.com",
+    from = "root",
+    use_known_paths = FALSE
+  )
+  f <- audit_findings(audit)
+  expect_false("DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST" %in% f$code)
+  root <- f[f$code == "UNSUPPORTED_ROOT", , drop = FALSE]
+  expect_match(
+    root$message,
+    "Declared in https://www.ex.com/robots.txt",
+    fixed = TRUE
+  )
+})
+
+test_that("a declared sitemap that times out is FETCH_TIMEOUT", {
+  seen <- new.env(parent = emptyenv())
+  httr2::local_mocked_responses(root_mock(
+    list("https://ex.com/robots.txt" = "Sitemap: https://ex.com/slow.xml"),
+    timeout = "https://ex.com/slow.xml",
+    seen = seen
+  ))
+  audit <- audit_sitemap(
+    "https://ex.com",
+    from = "root",
+    use_known_paths = FALSE
+  )
+  f <- source_findings(audit, "https://ex.com/slow.xml")
+  expect_identical(f$code, "FETCH_TIMEOUT")
+  expect_identical(f$severity, "fatal")
+  expect_match(f$message, robots_url, fixed = TRUE)
+})
+
+test_that("hosts compare in their normalized spelling", {
+  expect_identical(audit_url_host("https://EX.com:8443/a"), "ex.com")
+  expect_true(is.na(audit_url_host("not a url")))
 })
