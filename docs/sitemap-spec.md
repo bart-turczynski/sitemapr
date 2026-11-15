@@ -434,6 +434,10 @@ default `use_robots = TRUE`); the guessed-path catalog is also enabled by defaul
 remains out of scope (ADR-002). Directives take precedence over catalog guesses
 on dedupe. A caller-supplied `robots_txt` text replaces the robots.txt fetch;
 its directives are then fetched and classified like a fetched file's.
+`audit_sitemap(from = "root")` turns discovery into findings (ADR-012): a
+declared sitemap that fails is a finding, and a guessed path is audited only
+when its body is a recognized sitemap format, so a soft-404 HTML page at a
+guessed path is no more a finding than a 404.
 
 Generic guess catalog (≥): `/sitemap.xml`, `/sitemap_index.xml`,
 `/sitemap-index.xml`, `/sitemap.xml.gz`, `/sitemap.txt`, `/sitemap/index.xml`,

@@ -23,9 +23,13 @@
 # public ten-column contract (schema v1), so a column would be a contract
 # migration.
 #
-# Only the two layers above are recorded. The mechanism generalizes — a new
-# layer needs one `layer_sink_record()` call where it executes — but recording a
-# layer the inference already proves buys nothing. Note that the ARCHIVE path is
+# A third, `discovery`, is stamped by audit_sitemap(from = "root")
+# (R/audit-root.R): a clean discovery leaves no finding, like a clean robots
+# run.
+#
+# No other layer is recorded. The mechanism generalizes — a new layer needs one
+# `layer_sink_record()` call where it executes — but recording a layer the
+# inference already proves buys nothing. Note that the ARCHIVE path is
 # not one of them: `validate_archive_parts()` reaches no `validate_schema()`
 # call, so a `.tar.gz` genuinely does not schema-validate and its `schema =
 # FALSE` is honest rather than an understatement.

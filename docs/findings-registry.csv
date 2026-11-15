@@ -10,6 +10,7 @@ FETCH_BODY_CEILING_EXCEEDED,fatal,fetch,source,FALSE,active,,FETCH_BODY_CEILING_
 FETCH_BODY_TOO_LARGE,error,fetch,source,FALSE,validator-only,,FETCH_BODY_TOO_LARGE,baseline
 FETCH_HTTP_CHARSET_NOT_UTF8,error,fetch,source,FALSE,validator-only,,FETCH_HTTP_CHARSET_NOT_UTF8,baseline
 DISCOVERY_ROBOTS_FAILED,warning,discovery,source,FALSE,validator-only,,DISCOVERY_ROBOTS_FAILED,baseline
+DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST,info,discovery,source,FALSE,active,,,baseline
 UNSUPPORTED_ROOT,error,classification,source,FALSE,active,,UNSUPPORTED_ROOT,baseline
 UNSUPPORTED_HTML_MASQUERADE,error,classification,source,FALSE,active,,UNSUPPORTED_HTML_MASQUERADE,baseline
 UNSUPPORTED_FEED,error,classification,index-child,FALSE,active,,,baseline

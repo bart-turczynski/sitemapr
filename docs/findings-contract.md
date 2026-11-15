@@ -58,7 +58,7 @@ The `layer` column is constrained to this fixed set:
 |---|---|
 | `"input"` | Entrypoint normalization; format of the user-supplied argument |
 | `"fetch"` | Network request, redirect chain, SSRF guard, timeout, body limit |
-| `"discovery"` | Guessed-path candidate evaluation |
+| `"discovery"` | Candidate discovery from a site root: robots.txt `Sitemap:` declarations and guessed paths |
 | `"classification"` | Byte-level format sniffing and encoding checks |
 | `"decompression"` | Gzip / archive extraction |
 | `"schema"` | XSD Layer C validation |
@@ -311,6 +311,25 @@ still ignore an incomplete cluster.
   or more conflicting language tokens across the corpus. Comparison is
   case-insensitive (BCP 47), so a pure casing difference is left to
   `HREFLANG_NONSTANDARD_CASE`, not treated as a language conflict.
+
+### Discovery codes (`DISCOVERY_*`)
+Emitted under `layer = "discovery"` by `audit_sitemap(from = "root")`
+(ADR-012).
+- `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST` — a robots.txt (fetched, or the
+  caller's `robots_txt`) declares a sitemap on another host than its own.
+  sitemaps.org accepts a cross-host sitemap when the robots.txt declares it, so
+  this is evidence for the reader, not a defect (`info`). Emitted whether or not
+  the declared sitemap works. `evidence.excerpt` names the declaring source,
+  the sitemap and both hosts.
+
+A robots-declared sitemap that fails during root discovery reuses the codes a
+submitted sitemap would get, at their registered severity and layer:
+`FETCH_FAILED` for a non-2xx status, an unreachable host or a blocked address;
+`UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT` and
+`UNSUPPORTED_MALFORMED_GZIP` for a body that is not a sitemap. `subject_ref`
+stays the sitemap URL, and the message names the robots.txt that declared it.
+A guessed path that 404s, or that serves HTML or another XML root, is never a
+finding.
 
 ### Classification / unsupported input codes
 - `UNSUPPORTED_ROOT` — root element is neither `urlset` nor `sitemapindex`
@@ -643,7 +662,7 @@ against. sitemapr publishes both through one exported accessor,
 | `contract_id` | `sitemapr.findings/v2` | Findings-contract generation |
 | `contract_version` | `2` | The ten pinned columns plus the ADR-009 additive ruleset fields |
 | `legacy_contract_version` | `1` | The ten pinned columns alone |
-| `registry_revision` | `2026-08-08` | Revision of `findings-registry.csv` |
+| `registry_revision` | `2026-11-15` | Revision of `findings-registry.csv` |
 | `ruleset_revisions` | all four at `2026-07-16` | Same values `ruleset_revision()` returns singly |
 | `sibling_versions` | `sitemap-validator >= 1.0.0, < 2.0.0`; `robotstxtr >= 0.3.0, < 0.4.0` | Ranges this build is known to work against |
 
