@@ -54,8 +54,8 @@ report_layer_ran <- function(urls, sources, findings) {
     # A transport outcome — an HTTP status, or the error class of a failed
     # attempt — means a fetch happened. A local file records neither.
     fetch = any(!is.na(sources$status) | !is.na(sources$error_class)),
-    # Robots.txt-based discovery is its own entry point, never part of a
-    # single-source read, so a report can never prove it ran.
+    # Discovery runs only under audit_sitemap(from = "root"), which records it
+    # in the run manifest below; a single-source result cannot prove it.
     discovery = FALSE,
     # Every source that parsed had its bytes sniffed and classified.
     classification = any(parsed),

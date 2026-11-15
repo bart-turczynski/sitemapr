@@ -372,6 +372,8 @@ test_that("a run that exercises every layer has no not-exercised note", {
     c("warning", "warning"),
     c("robots", "page")
   )
+  # Discovery is proven only by the run manifest a root audit stamps.
+  attr(findings, "layers_run") <- "discovery"
   html <- render_string("full", urls = urls, findings = findings)
 
   expect_match(html, "checks passed", fixed = TRUE)

@@ -13,7 +13,11 @@ audit_sitemap(
   policy = request_policy(),
   collect = TRUE,
   on_urls = NULL,
-  max_active = NULL
+  max_active = NULL,
+  from = c("sitemap", "root"),
+  use_robots = TRUE,
+  use_known_paths = TRUE,
+  robots_txt = NULL
 )
 }
 \arguments{
@@ -59,6 +63,14 @@ is typical) fetches up to that many independent child sitemaps at once.
 Concurrency changes only \emph{when} a child's bytes arrive, never the row
 order or budget-truncation point — the result is byte-identical to
 sequential mode.}
+
+\item{from}{\code{"sitemap"} (the default): \code{x} is one or more sitemap URLs or
+local files. \code{"root"}: \code{x} is a single site-root URL, discovered first.}
+
+\item{use_robots, use_known_paths, robots_txt}{With \code{from = "root"}, the
+discovery sources, as in \code{\link[=sitemap_tree]{sitemap_tree()}}. \code{robots_txt} supplies the
+robots.txt text instead of fetching it, so the findings name
+\code{"supplied robots_txt"} as the declaring source.}
 }
 \value{
 A \code{\link[=sitemap_audit]{sitemap_audit()}} object: a classed list with the components
@@ -88,6 +100,32 @@ problems, and — for an expanded sitemap index — the discovery tree. A
 source-level failure (an unreachable source, a corrupt archive, an
 unsupported root) is recorded as a problem and a fetch-layer finding rather
 than aborting the whole audit, so every source stays attributable.
+
+With \code{from = "root"}, \code{x} is a site root instead, and the audit starts with
+the discovery \code{\link[=sitemap_tree]{sitemap_tree()}} runs: robots.txt \verb{Sitemap:} directives (or the
+text you pass as \code{robots_txt}) and the guessed-path catalog. Each candidate
+discovery accepted is then audited from the response discovery already
+fetched, and the result also carries discovery's own findings (ADR-012):
+
+\itemize{
+\item a robots-declared sitemap is always audited. One that fails to fetch
+is the fetch finding a submitted sitemap would get (\code{FETCH_TIMEOUT}, or
+\code{FETCH_FAILED} for a non-2xx status, an unreachable host or a blocked
+address), and its source-level findings (those, and
+\code{UNSUPPORTED_HTML_MASQUERADE}, \code{UNSUPPORTED_ROOT},
+\code{UNSUPPORTED_MALFORMED_GZIP}) name the robots.txt that declared it;
+\item a robots-declared sitemap on another host than the robots.txt that
+declares it yields the info finding
+\code{DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST}, whether or not it works;
+\item a guessed path is audited only when its body is a recognized sitemap
+format (gzip, a \code{urlset} or \code{sitemapindex}, a feed, or text holding a
+URL). A guess that 404s, or answers with an HTML page or another XML
+root, stays a row of \code{audit_tree()} (\code{rejected}, or \code{accepted} with no
+page count) and is never a finding.
+}
+
+\code{audit_tree()} then holds the discovery tree, with every candidate and any
+expanded index children, as \code{\link[=sitemap_tree]{sitemap_tree()}} would return it.
 }
 \examples{
 xml <- paste0(
@@ -115,6 +153,17 @@ streamed <- audit_sitemap(
 )
 seen
 attr(audit_urls(streamed), "streamed_row_count")
+
+# Audit a site from its root: discovery, then every declared sitemap.
+# audit_findings(audit_sitemap("https://example.com", from = "root"))
+
+# Check what a draft robots.txt declares before deploying it.
+# audit_sitemap(
+#   "https://example.com",
+#   from = "root",
+#   robots_txt = "Sitemap: https://example.com/news.xml",
+#   use_known_paths = FALSE
+# )
 }
 \seealso{
 \code{\link[=read_sitemap]{read_sitemap()}} and \code{\link[=validate_sitemap]{validate_sitemap()}} for the equivalent

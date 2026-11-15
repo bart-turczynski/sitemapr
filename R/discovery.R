@@ -137,8 +137,9 @@ classify_candidate <- function(kind, source, rec, provenance = "guessed-path") {
 # Fetch one candidate, suppressing the expected non-2xx warning (a missing
 # guessed path is normal during discovery), and turn a transport/SSRF/timeout
 # ABORT into a rejected outcome instead of letting it fail the whole discovery.
-# Returns list(rec, status, reason, http_status, final_url); `rec` is the fetch
-# record (carrying the body attribute) for an evaluated response, else NULL.
+# Returns list(rec, status, reason, http_status, final_url, cnd); `rec` is the
+# fetch record (carrying the body attribute) for an evaluated response, else
+# NULL, and `cnd` the aborting condition (a timeout, an SSRF block) or NULL.
 fetch_candidate <- function(
   candidate_url,
   kind,
@@ -161,10 +162,13 @@ fetch_candidate <- function(
       sitemapr_http_error = function(w) invokeRestart("muffleWarning")
     ),
     sitemapr_ssrf_blocked = function(e) {
-      structure(list(reason = "blocked"), class = "discovery_abort")
+      structure(list(reason = "blocked", cnd = e), class = "discovery_abort")
     },
     error = function(e) {
-      structure(list(reason = "unreachable"), class = "discovery_abort")
+      structure(
+        list(reason = "unreachable", cnd = e),
+        class = "discovery_abort"
+      )
     }
   )
 
@@ -174,7 +178,8 @@ fetch_candidate <- function(
       status = "rejected",
       reason = rec$reason,
       http_status = NA_integer_,
-      final_url = NA_character_
+      final_url = NA_character_,
+      cnd = rec$cnd
     ))
   }
 
@@ -184,7 +189,8 @@ fetch_candidate <- function(
     status = cls$status,
     reason = cls$reason,
     http_status = cls$http_status,
-    final_url = as.character(rec$final_url)
+    final_url = as.character(rec$final_url),
+    cnd = NULL
   )
 }
 
@@ -210,12 +216,19 @@ robots_candidates <- function(
   if (length(urls) == 0L) {
     return(NULL)
   }
+  # The robots.txt the directives were read from, after any redirect (NA for
+  # supplied text): a root audit names it and compares hosts against it.
+  robots_url <- attr(urls, "robots_url", exact = TRUE)
+  if (is.null(robots_url)) {
+    robots_url <- NA_character_
+  }
   data.frame(
-    candidate_url = urls,
+    candidate_url = as.character(urls),
     catalog_path = NA_character_,
     kind = "robots",
     source = NA_character_,
     provenance = "robots",
+    robots_url = robots_url,
     loc_key = vapply(
       urls,
       function(u) build_loc_key(parse_url_adapter(u)),
@@ -235,6 +248,7 @@ empty_discovery_candidates <- function(root) {
     kind = character(0),
     source = character(0),
     provenance = character(0),
+    robots_url = character(0),
     loc_key = character(0)
   )
 }
@@ -247,6 +261,7 @@ guessed_path_candidates <- function(root, catalog, limits) {
     kind = g$kind,
     source = g$source,
     provenance = "guessed-path",
+    robots_url = NA_character_,
     loc_key = g$loc_key,
     stringsAsFactors = FALSE
   )
@@ -332,8 +347,10 @@ assemble_candidates <- function(
 #' @inheritParams sitemap_tree
 #' @return A tibble with one row per evaluated candidate and columns
 #'   `candidate_url`, `catalog_path`, `kind`, `source`, `provenance`, `status`,
-#'   `reason`, `http_status`, and `final_url`. The `records` attribute holds the
-#'   parallel list of fetch records.
+#'   `reason`, `http_status`, `final_url` and `robots_url` (the robots.txt a
+#'   `robots` candidate was read from, after redirects; NA otherwise). The
+#'   `records` attribute holds the parallel list of fetch records and the
+#'   `conditions` attribute the aborting condition of each, or NULL.
 #' @keywords internal
 #' @noRd
 discover_candidates <- function(
@@ -391,8 +408,10 @@ discover_candidates <- function(
     status = vapply(outcomes, `[[`, character(1L), "status"),
     reason = vapply(outcomes, `[[`, character(1L), "reason"),
     http_status = vapply(outcomes, `[[`, integer(1L), "http_status"),
-    final_url = vapply(outcomes, `[[`, character(1L), "final_url")
+    final_url = vapply(outcomes, `[[`, character(1L), "final_url"),
+    robots_url = as.character(cand$robots_url)
   )
   attr(result, "records") <- lapply(outcomes, `[[`, "rec")
+  attr(result, "conditions") <- lapply(outcomes, `[[`, "cnd")
   result
 }

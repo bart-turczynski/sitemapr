@@ -38,6 +38,8 @@ First development release: a deterministic toolkit for reading and validating XM
 
 * `sitemap_tree()` discovers a site's sitemaps from a root URL as a tree of accepted and rejected candidates.
 * Candidates come from robots.txt `Sitemap:` directives, explicit seeds, and an ordered catalog of guessed paths; `sitemap_tree_from_bytes()` classifies an already-fetched document (ADR-006).
+* `audit_sitemap(from = "root")` audits a site from its root: a robots-declared sitemap that fails becomes a finding naming the robots.txt, and a recognized guess is audited (ADR-012).
+* `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST` (info) notes a robots.txt that declares a sitemap on another host.
 * `sitemap_tree(robots_txt =)` checks the sitemaps a robots.txt text you supply declares, such as a draft not yet deployed, without fetching the site's own.
 * `probe_url()` reports what a single URL is without expanding it, and returns fetch or parse failures in a `sitemapr_probe` record rather than raising them.
 

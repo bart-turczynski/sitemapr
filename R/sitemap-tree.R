@@ -284,15 +284,7 @@ sitemap_tree <- function(
   robots_txt = NULL
 ) {
   from <- match.arg(from)
-  robots_txt <- check_robots_txt(robots_txt)
-  if (
-    !is.null(robots_txt) && !(identical(from, "root") && isTRUE(use_robots))
-  ) {
-    rlang::abort(
-      "`robots_txt` needs `from = \"root\"` and `use_robots = TRUE`.",
-      class = "sitemapr_bad_input"
-    )
-  }
+  robots_txt <- check_robots_txt_call(robots_txt, from, use_robots)
   policy <- policy_set_max_active(policy, max_active)
   if (is.null(index_limits)) {
     index_limits <- index_limits()

@@ -36,13 +36,21 @@ audit_resolve_source <- function(
   limits,
   index_limits,
   policy,
-  strm = NULL
+  strm = NULL,
+  rec = NULL
 ) {
   policy <- request_policy_pin(policy, source)
   is_local <- isTRUE(source$is_local_file[[1L]])
   target <- source$normalized_url[[1L]]
 
-  read_bytes <- audit_fetch_bytes(source, is_local, user_agent, limits, policy)
+  read_bytes <- audit_fetch_bytes(
+    source,
+    is_local,
+    user_agent,
+    limits,
+    policy,
+    rec = rec
+  )
   bytes_raw <- read_bytes$bytes
   final_url <- read_bytes$final_url
   root_meta <- read_bytes$root_meta
@@ -86,8 +94,16 @@ audit_resolve_source <- function(
 # skipped), and the read-side root source-metadata record. A non-2xx terminal
 # status raises `sitemapr_entrypoint_error`, mirroring read_sitemap()/
 # validate_sitemap(); the pipeline catches it per source so the failure is
-# attributable rather than fatal to the whole audit.
-audit_fetch_bytes <- function(source, is_local, user_agent, limits, policy) {
+# attributable rather than fatal to the whole audit. `rec`, a 2xx fetch record
+# root discovery already made (R/audit-root.R), stands in for the fetch.
+audit_fetch_bytes <- function(
+  source,
+  is_local,
+  user_agent,
+  limits,
+  policy,
+  rec = NULL
+) {
   if (is_local) {
     target <- source$normalized_url[[1L]]
     assert_local_readable(target)
@@ -106,12 +122,14 @@ audit_fetch_bytes <- function(source, is_local, user_agent, limits, policy) {
     return(list(bytes = bytes, final_url = NA_character_, root_meta = meta))
   }
 
-  rec <- fetch_source(
-    source,
-    user_agent = user_agent,
-    limits = limits,
-    policy = policy
-  )
+  if (is.null(rec)) {
+    rec <- fetch_source(
+      source,
+      user_agent = user_agent,
+      limits = limits,
+      policy = policy
+    )
+  }
   if (!is.na(rec$error_class)) {
     rlang::abort(
       sprintf(
@@ -541,7 +559,8 @@ audit_one_source <- function(
   limits,
   index_limits,
   policy,
-  strm = NULL
+  strm = NULL,
+  rec = NULL
 ) {
   # A streaming-callback failure is a caller error, not a source failure: let it
   # abort cleanly (with its source context) rather than being demoted to a
@@ -553,7 +572,8 @@ audit_one_source <- function(
       limits = limits,
       index_limits = index_limits,
       policy = policy,
-      strm = strm
+      strm = strm,
+      rec = rec
     ),
     error = function(cnd) {
       if (inherits(cnd, "sitemapr_stream_callback_error")) {
@@ -628,6 +648,32 @@ audit_combine_trees <- function(parts) {
 #' unsupported root) is recorded as a problem and a fetch-layer finding rather
 #' than aborting the whole audit, so every source stays attributable.
 #'
+#' With `from = "root"`, `x` is a site root instead, and the audit starts with
+#' the discovery [sitemap_tree()] runs: robots.txt `Sitemap:` directives (or the
+#' text you pass as `robots_txt`) and the guessed-path catalog. Each candidate
+#' discovery accepted is then audited from the response discovery already
+#' fetched, and the result also carries discovery's own findings (ADR-012):
+#'
+#' \itemize{
+#'   \item a robots-declared sitemap is always audited. One that fails to fetch
+#'     is the fetch finding a submitted sitemap would get (`FETCH_TIMEOUT`, or
+#'     `FETCH_FAILED` for a non-2xx status, an unreachable host or a blocked
+#'     address), and its source-level findings (those, and
+#'     `UNSUPPORTED_HTML_MASQUERADE`, `UNSUPPORTED_ROOT`,
+#'     `UNSUPPORTED_MALFORMED_GZIP`) name the robots.txt that declared it;
+#'   \item a robots-declared sitemap on another host than the robots.txt that
+#'     declares it yields the info finding
+#'     `DISCOVERY_ROBOTS_SITEMAP_CROSS_HOST`, whether or not it works;
+#'   \item a guessed path is audited only when its body is a recognized sitemap
+#'     format (gzip, a `urlset` or `sitemapindex`, a feed, or text holding a
+#'     URL). A guess that 404s, or answers with an HTML page or another XML
+#'     root, stays a row of `audit_tree()` (`rejected`, or `accepted` with no
+#'     page count) and is never a finding.
+#' }
+#'
+#' `audit_tree()` then holds the discovery tree, with every candidate and any
+#' expanded index children, as [sitemap_tree()] would return it.
+#'
 #' @param mode `"strict"` (the default) or `"non-strict"`, passed through to the
 #'   findings projection exactly as [validate_sitemap()] uses it.
 #' @param collect When `TRUE` (the default) the tidy URL rows from every source
@@ -643,6 +689,12 @@ audit_combine_trees <- function(parts) {
 #'   (as if `collect = FALSE`). An error thrown by the callback aborts the audit
 #'   cleanly with a classed `sitemapr_stream_callback_error` condition naming
 #'   the leaf; the accumulator is not left half-updated.
+#' @param from `"sitemap"` (the default): `x` is one or more sitemap URLs or
+#'   local files. `"root"`: `x` is a single site-root URL, discovered first.
+#' @param use_robots,use_known_paths,robots_txt With `from = "root"`, the
+#'   discovery sources, as in [sitemap_tree()]. `robots_txt` supplies the
+#'   robots.txt text instead of fetching it, so the findings name
+#'   `"supplied robots_txt"` as the declaring source.
 #' @inheritParams read_sitemap
 #' @return A [sitemap_audit()] object: a classed list with the components
 #'   `urls`, `findings`, `sources`, `problems`, and `tree`. Access them with
@@ -682,6 +734,17 @@ audit_combine_trees <- function(parts) {
 #' )
 #' seen
 #' attr(audit_urls(streamed), "streamed_row_count")
+#'
+#' # Audit a site from its root: discovery, then every declared sitemap.
+#' # audit_findings(audit_sitemap("https://example.com", from = "root"))
+#'
+#' # Check what a draft robots.txt declares before deploying it.
+#' # audit_sitemap(
+#' #   "https://example.com",
+#' #   from = "root",
+#' #   robots_txt = "Sitemap: https://example.com/news.xml",
+#' #   use_known_paths = FALSE
+#' # )
 audit_sitemap <- function(
   x,
   mode = c("strict", "non-strict"),
@@ -691,9 +754,14 @@ audit_sitemap <- function(
   policy = request_policy(),
   collect = TRUE,
   on_urls = NULL,
-  max_active = NULL
+  max_active = NULL,
+  from = c("sitemap", "root"),
+  use_robots = TRUE,
+  use_known_paths = TRUE,
+  robots_txt = NULL
 ) {
   mode <- match.arg(mode)
+  from <- match.arg(from)
   policy <- policy_set_max_active(policy, max_active)
   if (!is.null(on_urls) && !is.function(on_urls)) {
     rlang::abort(
@@ -701,7 +769,7 @@ audit_sitemap <- function(
       class = "sitemapr_bad_input"
     )
   }
-  sources <- sitemap_public_source_records(x)
+  robots_txt <- check_robots_txt_call(robots_txt, from, use_robots)
   if (is.null(index_limits)) {
     index_limits <- index_limits()
   }
@@ -716,7 +784,21 @@ audit_sitemap <- function(
   # Mirror read_sitemap()/validate_sitemap(): a scalar source is projected
   # directly (so the outputs are byte-for-byte the scalar read/validate output),
   # while a submitted vector is combined the same way the batch paths combine.
-  combined <- if (length(x) == 1L) {
+  combined <- if (identical(from, "root")) {
+    audit_sitemap_root(
+      x,
+      mode = mode,
+      user_agent = user_agent,
+      limits = limits,
+      index_limits = index_limits,
+      policy = policy,
+      strm = strm,
+      use_robots = use_robots,
+      use_known_paths = use_known_paths,
+      robots_txt = robots_txt
+    )
+  } else if (length(x) == 1L) {
+    sources <- sitemap_public_source_records(x)
     out <- audit_one_source(
       sources[1L, , drop = FALSE],
       mode = mode,
@@ -735,7 +817,7 @@ audit_sitemap <- function(
     )
   } else {
     audit_sitemap_batch(
-      sources,
+      sitemap_public_source_records(x),
       mode = mode,
       user_agent = user_agent,
       limits = limits,
@@ -772,14 +854,8 @@ audit_sitemap_batch <- function(
   policy,
   strm = NULL
 ) {
-  row_parts <- list()
-  source_parts <- list()
-  problem_parts <- list()
-  tree_parts <- list()
-  finding_parts <- list()
-
-  for (i in seq_len(nrow(sources))) {
-    out <- suppressWarnings(audit_one_source(
+  outs <- lapply(seq_len(nrow(sources)), function(i) {
+    suppressWarnings(audit_one_source(
       sources[i, , drop = FALSE],
       mode = mode,
       user_agent = user_agent,
@@ -788,23 +864,24 @@ audit_sitemap_batch <- function(
       policy = policy,
       strm = strm
     ))
-    row_parts[[length(row_parts) + 1L]] <- out$rows
-    source_parts[[length(source_parts) + 1L]] <- out$sources
-    problem_parts[[length(problem_parts) + 1L]] <- out$problems
-    tree_parts[[length(tree_parts) + 1L]] <- out$tree
-    finding_parts[[length(finding_parts) + 1L]] <- out$findings
-  }
+  })
+  audit_combine_outputs(outs)
+}
 
-  rows <- if (length(row_parts) == 0L) {
+# Combine per-source audit outputs the way read_sitemap_batch() and
+# validate_sitemap_batch() combine theirs. Shared by the batch path and root
+# discovery (R/audit-root.R); an empty list yields every empty schema.
+audit_combine_outputs <- function(outs) {
+  rows <- if (length(outs) == 0L) {
     empty_sitemap_rows()
   } else {
-    do.call(rbind, row_parts)
+    do.call(rbind, lapply(outs, `[[`, "rows"))
   }
   list(
     rows = rows,
-    findings = combine_findings_contracts(finding_parts),
-    sources = combine_source_metadata(source_parts),
-    problems = combine_problems(problem_parts),
-    tree = audit_combine_trees(tree_parts)
+    findings = combine_findings_contracts(lapply(outs, `[[`, "findings")),
+    sources = combine_source_metadata(lapply(outs, `[[`, "sources")),
+    problems = combine_problems(lapply(outs, `[[`, "problems")),
+    tree = audit_combine_trees(lapply(outs, `[[`, "tree"))
   )
 }

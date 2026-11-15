@@ -680,13 +680,7 @@ index_protocol_parts <- function(
 # Build a fetch-layer finding for a source that failed during batched
 # validation. Scalar validate_sitemap() calls still propagate these conditions.
 validate_failure_finding <- function(source, cnd) {
-  code <- if (inherits(cnd, "sitemapr_timeout")) {
-    "FETCH_TIMEOUT"
-  } else if (inherits(cnd, "sitemapr_body_ceiling")) {
-    "FETCH_BODY_CEILING_EXCEEDED"
-  } else {
-    "FETCH_FAILED"
-  }
+  code <- fetch_failure_code(cnd)
   subject <- source$normalized_url[[1L]]
   tibble::tibble(
     code = code,
@@ -702,6 +696,20 @@ validate_failure_finding <- function(source, cnd) {
     evidence = list(finding_evidence(excerpt = subject)),
     is_strict_only = FALSE
   )
+}
+
+# The fetch code for a condition that ended a source's fetch: the specific
+# timeout and body-ceiling codes, else FETCH_FAILED (a non-2xx status, a
+# transport failure, an SSRF block). NULL, a fetch that returned a non-2xx
+# record without aborting, is FETCH_FAILED too. Every one is `fatal`.
+fetch_failure_code <- function(cnd) {
+  if (inherits(cnd, "sitemapr_timeout")) {
+    "FETCH_TIMEOUT"
+  } else if (inherits(cnd, "sitemapr_body_ceiling")) {
+    "FETCH_BODY_CEILING_EXCEEDED"
+  } else {
+    "FETCH_FAILED"
+  }
 }
 
 # Widen the public robots argument to a `robots_context()`. Two shapes reach
