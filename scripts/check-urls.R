@@ -17,7 +17,8 @@
 # file's verify_classify_urls(), verify_url_self_test() and verify_urls(),
 # which had already dropped the /-/issues 404 exemption (SEOR-sptibjph, seor
 # ADR 0011).
-# The r-universe helpers below come from ssrfr's copy (SEOR-uzqwlehl).
+# Since then, SEOR-uzqwlehl brought in ssrfr's r-universe check: its helpers,
+# verify_classify_urls()'s `confirmed` argument and their self-test cases.
 #
 # It runs in the gate's full tier ahead of R CMD check, so a dead link is
 # reported in seconds rather than after the full check.
@@ -117,7 +118,7 @@ r_universe_api_url <- function(url) {
         return(NA_character_)
       }
       base <- sprintf("https://%s.r-universe.dev/api/packages", x[[2L]])
-      if (nzchar(x[[4L]])) paste0(base, "/", x[[4L]]) else base
+      if (nzchar(x[[4L]])) sprintf("%s/%s", base, x[[4L]]) else base
     },
     ""
   )
@@ -218,7 +219,7 @@ verify_url_self_test <- function() {
       list(row("https://o.r-universe.dev", "403"), "challenged", TRUE),
       list(row(ru, "403", "Forbidden"), "red", FALSE), # a missing package
       list(row(ru, "404", "Not Found"), "red", TRUE),
-      list(row(paste0(ru, "/doc/x.html"), "403"), "red", TRUE),
+      list(row(sprintf("%s/doc/x.html", ru), "403"), "red", TRUE),
       list(row("https://o.r-universe.dev.x.example/pkg", "403"), "red", TRUE),
       list(row(br, "403", "Forbidden"), "red", TRUE), # GitLab stays red
       list(row(ru, "403", new = "https://x.example/"), "red", TRUE),
@@ -269,9 +270,11 @@ verify_url_self_test <- function() {
       "https://o.r-universe.dev/api/packages/pkg" = list(200L, ""),
       "https://o.r-universe.dev/api/packages/plain" = list(200L, ""),
       "https://o.r-universe.dev/api/packages/gone" = list(404L, ""),
-      "https://o.r-universe.dev/api/packages/moved" = list(301L, ""),
-      stop("unreachable")
+      "https://o.r-universe.dev/api/packages/moved" = list(301L, "")
     )
+    if (is.null(answer)) {
+      stop("unexpected URL in the fake fetch: ", u, call. = FALSE)
+    }
     structure(answer[[2L]], status = answer[[1L]])
   }
   got <- r_universe_confirms(
