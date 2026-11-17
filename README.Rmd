@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# sitemapr
+# sitemapr <img src="man/figures/logo.png" align="right" height="139" alt="hex logo, white on black" />
 
 <!-- badges: start -->
 [![r-universe](https://bart-turczynski.r-universe.dev/sitemapr/badges/version)](https://bart-turczynski.r-universe.dev/sitemapr)

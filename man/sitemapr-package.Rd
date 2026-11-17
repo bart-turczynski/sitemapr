@@ -6,6 +6,8 @@
 \alias{sitemapr-package}
 \title{sitemapr: Parse and Validate XML Sitemaps}
 \description{
+\if{html}{\figure{logo.svg}{options: style='float: right' alt='logo' width='120'}}
+
 A deterministic toolkit for reading and validating XML, text, and index sitemaps against the Sitemap Protocol 0.9 and related W3C and RFC standards. It parses sitemap sources into tidy data frames, expands sitemap indexes, and reports schema and protocol findings with stable, reproducible output.
 }
 \examples{
